@@ -1451,26 +1451,34 @@ export function registerAllHandlers(win: BrowserWindow): void {
   registerGitHubHandlers();
 
   // --- File links ---
+  // Terminal links pass ~/ paths through unexpanded; only main knows the home directory.
+  // Concatenate rather than path.join so a "~/../" path still fails validatePath's ".." check.
+  const expandHome = (p: string): string => (p.startsWith('~/') ? os.homedir() + p.slice(1) : p);
+
   ipcMain.handle(IPC.OpenPath, (_e, args) => {
-    validatePath(args.filePath, 'filePath');
+    assertString(args.filePath, 'filePath');
+    const filePath = expandHome(args.filePath);
+    validatePath(filePath, 'filePath');
     // Block executable extensions to prevent accidental code execution
     const dangerous = /\.(sh|bash|exe|bat|cmd|app|command|desktop|appimage|run)$/i;
-    if (dangerous.test(args.filePath)) {
+    if (dangerous.test(filePath)) {
       throw new Error('Cannot open executable files');
     }
-    return shell.openPath(args.filePath);
+    return shell.openPath(filePath);
   });
 
   ipcMain.handle(IPC.ReadFileText, async (_e, args) => {
-    validatePath(args.filePath, 'filePath');
-    if (!/\.md$/i.test(args.filePath)) {
+    assertString(args.filePath, 'filePath');
+    const filePath = expandHome(args.filePath);
+    validatePath(filePath, 'filePath');
+    if (!/\.md$/i.test(filePath)) {
       throw new Error('Only .md files can be read');
     }
-    const stat = await fs.promises.stat(args.filePath);
+    const stat = await fs.promises.stat(filePath);
     if (stat.size > 2 * 1024 * 1024) {
       throw new Error('File too large to preview (max 2 MB)');
     }
-    return fs.promises.readFile(args.filePath, 'utf8');
+    return fs.promises.readFile(filePath, 'utf8');
   });
 
   ipcMain.handle(IPC.ReadFileTourContext, (_e, args) => {

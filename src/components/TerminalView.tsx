@@ -532,8 +532,9 @@ export function TerminalView(props: TerminalViewProps) {
               if (!modifierHeld) return;
               // Strip line:col suffix for opening
               const filePath = link.text.replace(/:\d+(:\d+)?$/, '');
-              // Resolve relative paths against the task's working directory
-              const resolved = filePath.startsWith('/') ? filePath : `${props.cwd}/${filePath}`;
+              // Resolve relative paths against the task's working directory; the main
+              // process expands ~/ because the renderer doesn't know the home directory.
+              const resolved = /^~?\//.test(filePath) ? filePath : `${props.cwd}/${filePath}`;
               // .md files open in viewer; Shift held = open externally instead
               if (/\.md$/i.test(resolved) && props.onFileLink && !event.shiftKey) {
                 props.onFileLink(resolved);
