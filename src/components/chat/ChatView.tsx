@@ -36,6 +36,8 @@ export interface ChatProps {
   onReloadModels: () => Promise<void>;
   onDraft: (text: string) => void;
   onSend: (text: string, images: ChatImage[]) => Promise<void>;
+  /** Runs a `!` draft as a shell command; omitted where the agent cannot record one. */
+  onShell?: (command: string) => Promise<void>;
   onStop: () => Promise<void>;
   onRespond: RespondToRequest;
   onActions: (actions: ChatActions) => void;
@@ -100,11 +102,24 @@ function Conversation(props: { chat: ChatProps; threadId: string }) {
   const focus = () => textarea?.focus();
   // Whoever sends a message wants to see it land and the answer arrive.
   createEffect(on(composer.pendingMessage, (sent) => sent && toLatest?.()));
+  // Reloaded commands are never running, so only one the user starts scrolls the log.
+  createEffect(
+    on(
+      () =>
+        chat.state.items.some(
+          (item) => item.kind === 'shell' && item.activity?.status === 'running',
+        ),
+      (running) => running && toLatest?.(),
+    ),
+  );
   onMount(() =>
     chat.onActions({
       focus,
+      // The field hides a shell draft's `!`, so an empty field there is still a draft.
       focusRequest: () =>
-        !textarea?.value.trim() && focusRequestCard(root?.querySelector('.chat-request')),
+        !textarea?.value.trim() &&
+        !composer.shellMode() &&
+        focusRequestCard(root?.querySelector('.chat-request')),
       send: () => composer.send(),
     }),
   );

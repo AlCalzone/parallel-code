@@ -1,6 +1,7 @@
 export interface ChatItem {
   id: string;
-  kind: 'user' | 'assistant' | 'tool';
+  /** 'shell' is a command the user ran with `!`; it carries a command activity. */
+  kind: 'user' | 'assistant' | 'tool' | 'shell';
   text: string;
   images?: ChatImage[];
   activity?: {

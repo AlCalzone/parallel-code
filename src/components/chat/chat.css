@@ -1208,3 +1208,38 @@
   cursor: pointer;
   font-size: 12px;
 }
+
+/* A `!` draft runs as typed, so the box turns into a terminal: its background,
+   and monospace, since spacing and quoting matter in a command. A mode, not an
+   alert, so no accent colour. */
+.chat-composer.chat-composer-shell {
+  background: var(--task-panel-bg, var(--bg-elevated));
+}
+.chat-composer-shell textarea {
+  padding-left: 0;
+  font-family: var(--font-mono);
+}
+/* The prompt sits on the first line, a space before the command. Red, as the
+   terminal agents mark their `!` prompt; the user asked to match them. */
+.chat-shell-prompt {
+  align-self: flex-start;
+  padding-left: 8px;
+  color: var(--error);
+  font: 600 13px/22px var(--font-mono);
+}
+/* The user's own command, so it lines up with their messages, but reads as
+   output: monospace and as wide as the log. */
+.chat-shell-turn .chat-command {
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-radius: var(--radius-sm);
+  background: var(--chat-surface);
+  font: 12px/1.5 var(--font-mono);
+}
+.chat-shell-turn[data-status='failed'] .chat-speaker {
+  color: var(--error);
+}

@@ -16,7 +16,7 @@ import type {
 } from '../../../electron/shared/agent-chat-types';
 import { errMessage, warn } from '../../lib/log';
 import { CheckIcon, CopyIcon } from '../icons';
-import { ActivityGroup, type ActivityActions } from './ActivityGroup';
+import { ActivityGroup, CommandOutput, type ActivityActions } from './ActivityGroup';
 import { createChatMarkdown } from './chat-markdown';
 import { createReveal } from './create-reveal';
 
@@ -74,6 +74,41 @@ function UserMessage(props: { item: ChatItem; sending?: boolean }) {
       <Show when={!props.sending}>
         <div class="chat-message-actions">
           <CopyButton text={props.item.text} />
+        </div>
+      </Show>
+    </div>
+  );
+}
+
+const shellStatus = { running: 'Running…', failed: 'Failed', interrupted: 'Stopped' } as const;
+
+/** A command the user ran with `!`: theirs, so it sits with their messages, and
+ *  apart from the agent's activity, which collapses. */
+function ShellMessage(props: { item: ChatItem }) {
+  const activity = () => props.item.activity;
+  const status = () => {
+    const current = activity();
+    if (!current) return '';
+    const label =
+      current.status in shellStatus ? shellStatus[current.status as keyof typeof shellStatus] : '';
+    const exit = current.exitCode ? `exit ${current.exitCode}` : '';
+    return [label, exit].filter(Boolean).join(' · ');
+  };
+  return (
+    <div
+      data-chat-id={props.item.id}
+      class="chat-user-turn chat-shell-turn"
+      data-status={activity()?.status}
+    >
+      <span class="chat-speaker">You · Shell{status() ? ` · ${status()}` : ''}</span>
+      <CommandOutput
+        command={activity()?.command ?? ''}
+        output={props.item.text}
+        running={activity()?.status === 'running'}
+      />
+      <Show when={activity()?.status !== 'running' && props.item.text}>
+        <div class="chat-message-actions">
+          <CopyButton text={props.item.text} label="Copy output" />
         </div>
       </Show>
     </div>
@@ -144,6 +179,9 @@ function TranscriptEntry(props: TranscriptProps & { item: ChatItem; index: numbe
     <Switch>
       <Match when={props.item.kind === 'user'}>
         <UserMessage item={props.item} />
+      </Match>
+      <Match when={props.item.kind === 'shell'}>
+        <ShellMessage item={props.item} />
       </Match>
       <Match when={props.item.kind === 'assistant'}>
         <AssistantMessage item={props.item} streaming={streaming()} />

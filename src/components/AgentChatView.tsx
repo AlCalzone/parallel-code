@@ -51,7 +51,8 @@ export function AgentChatView(props: {
   channel.onmessage = (next) => {
     if (disposed || !store.agents[props.agentId]) return;
     batch(() => {
-      const firstPrompt = next.items.find((item) => item.kind === 'user');
+      // A `!` command starts a conversation as surely as a message does.
+      const firstPrompt = next.items.find((item) => item.kind === 'user' || item.kind === 'shell');
       if (
         next.threadId &&
         firstPrompt &&
@@ -64,7 +65,11 @@ export function AgentChatView(props: {
           {
             threadId: next.threadId,
             provider: provider() ?? 'codex',
-            title: firstPrompt.text.slice(0, 100) || 'Image conversation',
+            title:
+              (firstPrompt.kind === 'shell'
+                ? `!${firstPrompt.activity?.command ?? ''}`
+                : firstPrompt.text
+              ).slice(0, 100) || 'Image conversation',
             updatedAt: Date.now(),
           },
         ]);
@@ -74,7 +79,7 @@ export function AgentChatView(props: {
       if (
         next.threadId &&
         next.threadId !== props.task[sessionKey()] &&
-        (provider() === 'codex' || next.items.some((item) => item.kind === 'user'))
+        (provider() === 'codex' || firstPrompt)
       ) {
         setStore('tasks', props.task.id, sessionKey(), next.threadId);
         void saveState();
@@ -160,6 +165,9 @@ export function AgentChatView(props: {
       setError(String(error));
       throw error;
     }
+  }
+  async function runShell(command: string) {
+    await invoke(IPC.AgentChat, { action: 'shell', agentId: props.agentId, command });
   }
   const relativePath = (path: string) =>
     path.startsWith(`${props.task.worktreePath}/`)
@@ -309,6 +317,7 @@ export function AgentChatView(props: {
               permissionMode={current().permissionMode ?? props.task.chatPermissionMode}
               permissionsDisabled={props.task.skipPermissions}
               onPermissionMode={provider() === 'claude' ? selectPermissionMode : undefined}
+              onShell={provider() === 'claude' ? runShell : undefined}
               agentName={agentName()}
               state={current()}
               memoryScope={props.task}

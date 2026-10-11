@@ -347,6 +347,35 @@ describe('Codex chat view', () => {
     expect(task().codexChatThreadId).toBe('saved-thread');
   });
 
+  it('remembers a Claude conversation that so far holds only ! commands', async () => {
+    setStore('agents', 'agent-1', 'def', 'id', 'claude-code');
+    setStore('agents', 'agent-1', 'def', 'command', 'claude');
+    dispose = render(() => <AgentChatView task={task()} agentId="agent-1" active />, container);
+    await tick();
+    mocks.channel?.onmessage?.(
+      state({
+        threadId: 'claude-shell',
+        items: [
+          {
+            id: 's',
+            kind: 'shell',
+            text: 'On branch main',
+            activity: {
+              type: 'command',
+              label: 'git status',
+              command: 'git status',
+              status: 'completed',
+            },
+          },
+        ],
+      }),
+    );
+    expect(task().claudeChatSessionId).toBe('claude-shell');
+    expect(task().chatSessions).toContainEqual(
+      expect.objectContaining({ threadId: 'claude-shell', title: '!git status' }),
+    );
+  });
+
   it('starts a fresh conversation and forgets the session it replaced', async () => {
     dispose = render(() => <AgentChatView task={task()} agentId="agent-1" active />, container);
     await tick();

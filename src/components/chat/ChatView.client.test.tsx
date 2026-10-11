@@ -243,6 +243,10 @@ it('lets the app hand the keyboard to a pending question', async () => {
     expect(composer().value).toBe('Keep my draft');
     expect(actions()?.focusRequest()).toBe(false);
     expect(document.activeElement).toBe(sidebar);
+    // A bare `!` leaves the field empty, but it is still the user's shell draft.
+    await update({ draft: '!', onShell: vi.fn(async () => {}) });
+    expect(composer().value).toBe('');
+    expect(actions()?.focusRequest()).toBe(false);
     // Coming back to the chat otherwise answers it from the keyboard.
     await update({ draft: '' });
     expect(actions()?.focusRequest()).toBe(true);
@@ -1113,4 +1117,177 @@ it('includes uncategorized tool work alongside file and command summaries', asyn
   expect(container.querySelector('.chat-activity-label')?.textContent).toBe(
     '1 file inspected · 1 other operation',
   );
+});
+
+it('runs a ! draft as a shell command and keeps attachments for the next message', async () => {
+  const shell = vi.fn(async () => {});
+  await update({ draft: '', onShell: shell });
+  expect(composer().placeholder).toContain('! for a shell command');
+  await drop([screenshot()]);
+  await type('!git status');
+  expect(composer().closest('.chat-composer')?.classList.contains('chat-composer-shell')).toBe(
+    true,
+  );
+  // Entering shell mode must not add a row: the composer never jumps.
+  expect(container.querySelector('.chat-composer-status')).toBeNull();
+  expect(button('Run command').title).toContain('Claude sees the output');
+  await act(() => button('Run command').click());
+  expect(shell).toHaveBeenCalledWith('git status');
+  expect(send).not.toHaveBeenCalled();
+  expect(composer().value).toBe('');
+  // A command appears in the log once it starts; no sending copy stands in for it.
+  expect(container.querySelector('.chat-user-sending')).toBeNull();
+  expect(container.querySelector('img')).not.toBeNull();
+});
+
+it('shows the ! as a prompt beside the command, and Backspace before it leaves shell mode', async () => {
+  await update({ draft: '', onShell: vi.fn(async () => {}) });
+  await type('!');
+  const prompt = () => container.querySelector('.chat-shell-prompt');
+  expect(prompt()?.textContent).toBe('!');
+  expect(composer().value).toBe('');
+  await type('ls');
+  expect(composer().value).toBe('ls');
+  expect(props.draft).toBe('!ls');
+  composer().setSelectionRange(0, 0);
+  expect(press('Backspace')).toBe(false);
+  await settle();
+  expect(props.draft).toBe('ls');
+  expect(prompt()).toBeNull();
+  expect(composer().value).toBe('ls');
+});
+
+it('keeps the caret on the command when a ! is typed before it', async () => {
+  await update({ draft: 'ls -la', onShell: vi.fn(async () => {}) });
+  const input = composer();
+  input.value = '!ls -la';
+  input.setSelectionRange(1, 1);
+  await act(() => input.dispatchEvent(new InputEvent('input', { data: '!', bubbles: true })));
+  expect(props.draft).toBe('!ls -la');
+  expect(input.value).toBe('ls -la');
+  expect([input.selectionStart, input.selectionEnd]).toEqual([0, 0]);
+});
+
+it('shows only the command for a ! draft with leading space or a second bang', async () => {
+  await update({ draft: '  !ls', onShell: vi.fn(async () => {}) });
+  expect(composer().value).toBe('ls');
+  await update({ draft: '!!x' });
+  expect(composer().value).toBe('!x');
+  composer().setSelectionRange(0, 0);
+  press('Backspace');
+  await settle();
+  // One bang per Backspace, as in the terminal; `!x` is still a command.
+  expect(props.draft).toBe('!x');
+  expect(composer().value).toBe('x');
+});
+
+it('leaves shell mode on Backspace only with the caret at the start and no composition', async () => {
+  await update({ draft: '!ls', onShell: vi.fn(async () => {}) });
+  composer().setSelectionRange(0, 2);
+  expect(press('Backspace')).toBe(true);
+  composer().setSelectionRange(0, 0);
+  expect(press('Backspace', { isComposing: true })).toBe(true);
+  await settle();
+  expect(props.draft).toBe('!ls');
+});
+
+it('queues a ! command while the agent works and runs it once it is ready', async () => {
+  const shell = vi.fn(async () => {});
+  await update({
+    draft: '!npm test',
+    onShell: shell,
+    state: { ...props.state, status: 'working' },
+  });
+  await act(() => button('Queue command').click());
+  expect(container.querySelector('[aria-label="Queued messages"]')?.textContent).toContain(
+    '!npm test',
+  );
+  expect(shell).not.toHaveBeenCalled();
+  await update({ state: { ...props.state, status: 'ready' } });
+  expect(shell).toHaveBeenCalledWith('npm test');
+});
+
+it('sends a ! message to the agent when the chat cannot run commands', async () => {
+  await update({ draft: '!important' });
+  expect(composer().closest('.chat-composer')?.classList.contains('chat-composer-shell')).toBe(
+    false,
+  );
+  await act(() => enter());
+  expect(send).toHaveBeenCalledWith('!important', []);
+});
+
+it('shows a command the user ran with its output, apart from agent activity', async () => {
+  await update({
+    state: {
+      ...props.state,
+      items: [
+        ...props.state.items,
+        {
+          id: 's',
+          kind: 'shell',
+          text: 'boom',
+          activity: {
+            type: 'command',
+            label: 'make',
+            command: 'make',
+            status: 'failed',
+            exitCode: 2,
+          },
+        },
+      ],
+    },
+  });
+  const turn = container.querySelector('.chat-shell-turn');
+  expect(turn?.querySelector('.chat-speaker')?.textContent).toBe('You · Shell · Failed · exit 2');
+  expect(turn?.querySelector('pre')?.textContent).toBe('$ make\nboom');
+  expect(container.querySelector('.chat-tool')).toBeNull();
+});
+
+it('names Stop for the command while one runs', async () => {
+  await update({
+    state: {
+      ...props.state,
+      status: 'working',
+      items: [
+        {
+          id: 's',
+          kind: 'shell',
+          text: '',
+          activity: { type: 'command', label: 'sleep 9', command: 'sleep 9', status: 'running' },
+        },
+      ],
+    },
+  });
+  expect(button('Stop command')).toBeDefined();
+});
+
+it('offers no Run for a ! with no command after it', async () => {
+  await update({ draft: '!', onShell: vi.fn(async () => {}) });
+  expect(button('Run command').disabled).toBe(true);
+  await update({ draft: '!ls' });
+  expect(button('Run command').disabled).toBe(false);
+});
+
+it('brings a command the user starts into view', async () => {
+  await update({ draft: '', onShell: vi.fn(async () => {}) });
+  const log = container.querySelector<HTMLElement>('.chat-scroll');
+  if (!log) throw new Error('Missing log');
+  Object.defineProperty(log, 'scrollHeight', { configurable: true, value: 900 });
+  log.scrollTop = 0;
+  await update({
+    state: {
+      ...props.state,
+      status: 'working',
+      items: [
+        ...props.state.items,
+        {
+          id: 's',
+          kind: 'shell',
+          text: '',
+          activity: { type: 'command', label: 'ls', command: 'ls', status: 'running' },
+        },
+      ],
+    },
+  });
+  expect(log.scrollTop).toBe(900);
 });

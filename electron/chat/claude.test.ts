@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -524,6 +524,170 @@ describe('Claude chat adapter', () => {
     expect(h.chat.state.items.map(({ kind, text }) => ({ kind, text }))).toEqual([
       { kind: 'user', text: '/model claude-fable-5-1' },
       { kind: 'assistant', text: 'Set model to `claude-fable-5-1`' },
+    ]);
+  });
+
+  it('runs a ! command in the worktree and records it without starting a turn', async () => {
+    const cwd = mkdtempSync(join(settingsDir, 'shell-'));
+    const h = harness([], undefined, { cwd });
+    await h.chat.start();
+    const running = h.chat.runShell('pwd; echo oops >&2; exit 3');
+    expect(h.chat.state.status).toBe('working');
+    expect(h.chat.state.items[0]).toMatchObject({
+      kind: 'shell',
+      activity: { command: 'pwd; echo oops >&2; exit 3', status: 'running' },
+    });
+    await running;
+    await vi.waitFor(() => expect(h.chat.state.items[0].activity?.status).toBe('failed'));
+    const item = h.chat.state.items[0];
+    expect(item.text).toContain(cwd);
+    expect(item.text).toContain('oops');
+    expect(item.activity).toMatchObject({ status: 'failed', exitCode: 3 });
+    const prompt = h.sdk.query.mock.calls[0][0].prompt as AsyncIterable<SDKUserMessage>;
+    const { value } = await prompt[Symbol.asyncIterator]().next();
+    expect(value).toMatchObject({ uuid: item.id, shouldQuery: false });
+    expect(value?.message.content).toBe(
+      `<bash-input>pwd; echo oops >&2; exit 3</bash-input>\n<bash-stdout>${cwd}\n</bash-stdout><bash-stderr>oops\n\nExit code 3</bash-stderr>`,
+    );
+    // The CLI's replay of the entry must not show the command a second time, and
+    // the chat stays busy until the CLI has the entry, so no prompt can overtake it.
+    await h.emit({ ...value, isReplay: true });
+    expect(h.chat.state.items).toHaveLength(1);
+    expect(h.chat.state.status).toBe('working');
+    await h.emit({ type: 'result', is_error: false });
+    expect(h.chat.state.status).toBe('ready');
+  });
+
+  it('stops a running ! command and tells the model it was stopped', async () => {
+    const h = harness([], undefined, { cwd: settingsDir });
+    await h.chat.start();
+    // Returns once the command starts, so the composer is free to queue a follow-up.
+    await h.chat.runShell('echo started; sleep 30');
+    expect(h.chat.state.items[0].activity?.status).toBe('running');
+    await vi.waitFor(() => expect(h.chat.state.items[0]?.text).toContain('started'));
+    await h.chat.interrupt();
+    await vi.waitFor(() => expect(h.chat.state.items[0].activity?.status).toBe('interrupted'));
+    expect(h.controls.interrupt).not.toHaveBeenCalled();
+    const prompt = h.sdk.query.mock.calls[0][0].prompt as AsyncIterable<SDKUserMessage>;
+    const { value } = await prompt[Symbol.asyncIterator]().next();
+    expect(value?.message.content).toContain('Stopped by the user.');
+  });
+
+  it('gives the model command output without terminal colours', async () => {
+    const h = harness([], undefined, { cwd: settingsDir });
+    await h.chat.start();
+    await h.chat.runShell("printf '\\033[31mred\\033[0m'");
+    const prompt = h.sdk.query.mock.calls[0][0].prompt as AsyncIterable<SDKUserMessage>;
+    const { value } = await prompt[Symbol.asyncIterator]().next();
+    expect(value?.message.content).toContain('<bash-stdout>red</bash-stdout>');
+  });
+
+  it('ends background jobs a ! command left behind when the chat closes', async () => {
+    const cwd = mkdtempSync(join(settingsDir, 'shell-'));
+    const h = harness([], undefined, { cwd });
+    await h.chat.start();
+    await h.chat.runShell('(sleep 30 & echo $! > job.pid); echo started');
+    await vi.waitFor(() => expect(h.chat.state.items[0].activity?.status).toBe('completed'));
+    const pid = Number(readFileSync(join(cwd, 'job.pid'), 'utf8'));
+    expect(() => process.kill(pid, 0)).not.toThrow();
+    h.chat.stop();
+    await vi.waitFor(() => expect(() => process.kill(pid, 0)).toThrow());
+  });
+
+  it('refuses a ! command while Claude is answering', async () => {
+    const h = harness();
+    await h.chat.start();
+    await h.send();
+    await expect(h.chat.runShell('ls')).rejects.toThrow('Wait for Claude to finish');
+  });
+
+  it("shows ! commands from the transcript, including the terminal's two-turn form", async () => {
+    const h = harness(
+      [
+        {
+          type: 'user',
+          uuid: 'terminal-command',
+          message: { role: 'user', content: '<bash-input>git status</bash-input>' },
+        },
+        {
+          type: 'user',
+          uuid: 'terminal-output',
+          message: {
+            role: 'user',
+            content: '<bash-stdout>On branch main</bash-stdout><bash-stderr></bash-stderr>',
+          },
+        },
+        {
+          type: 'user',
+          uuid: 'chat-command',
+          message: {
+            role: 'user',
+            content:
+              '<bash-input>false</bash-input>\n<bash-stdout></bash-stdout><bash-stderr>Exit code 1</bash-stderr>',
+          },
+        },
+        {
+          type: 'user',
+          uuid: 'killed-command',
+          message: {
+            role: 'user',
+            content:
+              '<bash-input>make</bash-input>\n<bash-stdout></bash-stdout><bash-stderr>Exit code unknown</bash-stderr>',
+          },
+        },
+        {
+          type: 'user',
+          uuid: 'stopped-command',
+          message: {
+            role: 'user',
+            content:
+              '<bash-input>npm run dev</bash-input>\n<bash-stdout>\u001b[32mready\u001b[0m\n</bash-stdout><bash-stderr>Stopped by the user.</bash-stderr>',
+          },
+        },
+      ] as unknown as SessionMessage[],
+      'saved-session',
+    );
+    await h.chat.start();
+    expect(
+      h.chat.state.items.map(({ kind, text, activity }) => ({ kind, text, activity })),
+    ).toEqual([
+      {
+        kind: 'shell',
+        text: 'On branch main',
+        activity: {
+          type: 'command',
+          label: 'git status',
+          command: 'git status',
+          status: 'completed',
+        },
+      },
+      // A reload shows a command the way it looked when it ran.
+      {
+        kind: 'shell',
+        text: '',
+        activity: {
+          type: 'command',
+          label: 'false',
+          command: 'false',
+          status: 'failed',
+          exitCode: 1,
+        },
+      },
+      {
+        kind: 'shell',
+        text: '',
+        activity: { type: 'command', label: 'make', command: 'make', status: 'failed' },
+      },
+      {
+        kind: 'shell',
+        text: 'ready',
+        activity: {
+          type: 'command',
+          label: 'npm run dev',
+          command: 'npm run dev',
+          status: 'interrupted',
+        },
+      },
     ]);
   });
 
