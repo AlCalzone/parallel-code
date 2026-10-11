@@ -21,6 +21,47 @@ interface Browsing {
   count: number;
 }
 
+/** Measure soft wraps using the same text layout as the textarea. */
+function onVisualEdge(area: HTMLTextAreaElement, up: boolean): boolean {
+  const caret = area.selectionStart;
+  const edge = up ? 0 : area.value.length;
+  if (caret === edge || !area.clientWidth || area.wrap === 'off') return true;
+  const style = getComputedStyle(area);
+  const mirror = document.createElement('div');
+  for (const property of [
+    'font',
+    'letter-spacing',
+    'word-spacing',
+    'text-indent',
+    'text-transform',
+    'tab-size',
+    'word-break',
+    'overflow-wrap',
+    'direction',
+  ]) {
+    mirror.style.setProperty(property, style.getPropertyValue(property));
+  }
+  mirror.style.position = 'fixed';
+  mirror.style.visibility = 'hidden';
+  mirror.style.whiteSpace = 'pre-wrap';
+  mirror.style.width = `${area.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)}px`;
+  // Keep a final empty line measurable without changing the text before it.
+  const text = document.createTextNode(`${area.value}\u200b`);
+  mirror.append(text);
+  document.body.append(mirror);
+  try {
+    const range = document.createRange();
+    range.setStart(text, caret);
+    range.collapse(true);
+    const caretTop = range.getBoundingClientRect().top;
+    range.setStart(text, edge);
+    range.collapse(true);
+    return Math.abs(caretTop - range.getBoundingClientRect().top) < 1;
+  } finally {
+    mirror.remove();
+  }
+}
+
 /**
  * Shell-style recall of earlier messages with ArrowUp / ArrowDown. Arrows only
  * recall while the caret is on the first / last line, so multi-line drafts
@@ -69,7 +110,7 @@ export function createInputHistory(options: InputHistoryOptions): InputHistory {
     const onEdge = up
       ? !area.value.slice(0, caret).includes('\n')
       : !area.value.slice(caret).includes('\n');
-    if (!onEdge || (up && !entries.length)) return false;
+    if (!onEdge || (up && !entries.length) || !onVisualEdge(area, up)) return false;
     const text = step(up ? -1 : 1, entries);
     if (text === undefined) return false;
     event.preventDefault();
