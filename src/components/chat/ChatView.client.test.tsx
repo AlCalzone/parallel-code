@@ -342,6 +342,99 @@ it('interrupts first and waits for confirmed idle before sending a follow-up', a
   expect(send).toHaveBeenCalledTimes(1);
 });
 
+it.each([{ key: 'Escape' }, { key: 'c', ctrlKey: true }])(
+  'interrupts with $key while preserving the draft and pausing queued messages',
+  async (shortcut) => {
+    await update({ state: { ...props.state, status: 'working' } });
+    await act(() => button('Queue message').click());
+    await update({ draft: 'Unsent follow-up' });
+    const event = new KeyboardEvent('keydown', {
+      ...shortcut,
+      bubbles: true,
+      cancelable: true,
+    });
+    await act(() => composer().dispatchEvent(event));
+    expect(event.defaultPrevented).toBe(true);
+    expect(props.onStop).toHaveBeenCalledTimes(1);
+    expect(props.draft).toBe('Unsent follow-up');
+    await update({ state: { ...props.state, status: 'ready' } });
+    expect(send).not.toHaveBeenCalled();
+    expect(container.querySelector('.chat-queue')?.textContent).toContain('Queue paused');
+  },
+);
+
+it('keeps Ctrl+C available for copying selected draft text', async () => {
+  await update({ state: { ...props.state, status: 'working' } });
+  composer().setSelectionRange(0, 4);
+  const event = new KeyboardEvent('keydown', {
+    key: 'c',
+    ctrlKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  await act(() => composer().dispatchEvent(event));
+  expect(event.defaultPrevented).toBe(false);
+  expect(props.onStop).not.toHaveBeenCalled();
+});
+
+it.each([
+  { key: 'Escape', isComposing: true },
+  { key: 'Escape', repeat: true },
+  { key: 'c', metaKey: true },
+  { key: 'c', ctrlKey: true, shiftKey: true },
+])('does not interrupt for composing, repeated, or other shortcuts: %j', async (shortcut) => {
+  await update({ state: { ...props.state, status: 'working' } });
+  await act(() =>
+    composer().dispatchEvent(
+      new KeyboardEvent('keydown', {
+        ...shortcut,
+        bubbles: true,
+        cancelable: true,
+      }),
+    ),
+  );
+  expect(props.onStop).not.toHaveBeenCalled();
+});
+
+it('leaves Escape alone when idle and dismisses command completion before interrupting', async () => {
+  await act(() =>
+    composer().dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+      }),
+    ),
+  );
+  expect(props.onStop).not.toHaveBeenCalled();
+  await update({
+    draft: '/',
+    state: {
+      ...props.state,
+      status: 'working',
+      commands: [{ name: 'help', description: 'Help', argumentHint: '' }],
+    },
+  });
+  await act(() =>
+    composer().dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+      }),
+    ),
+  );
+  expect(props.onStop).not.toHaveBeenCalled();
+  expect(composer().getAttribute('aria-expanded')).toBe('false');
+  await act(() =>
+    composer().dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+      }),
+    ),
+  );
+  expect(props.onStop).toHaveBeenCalledTimes(1);
+});
+
 it('preserves the draft if interruption fails', async () => {
   await update({
     state: { ...props.state, status: 'working' },
