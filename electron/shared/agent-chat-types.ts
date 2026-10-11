@@ -78,11 +78,20 @@ export interface ChatModel {
   supportedReasoningEfforts: { reasoningEffort: string; description: string }[];
 }
 
+/** A slash command or skill the agent accepts as a message starting with `/name`. */
+export interface ChatCommand {
+  name: string;
+  description: string;
+  argumentHint: string;
+}
+
 export interface AgentChatState {
   model?: string;
   reasoningEffort?: string;
   models?: ChatModel[];
   modelsError?: string;
+  /** What the composer offers after a leading `/`; absent when the agent lists none. */
+  commands?: ChatCommand[];
   threadId?: string;
   status: 'starting' | 'ready' | 'working' | 'closed';
   items: ChatItem[];

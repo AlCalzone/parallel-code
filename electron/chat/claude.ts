@@ -8,6 +8,7 @@ import type {
 } from '@anthropic-ai/claude-agent-sdk';
 import type {
   AgentChatState,
+  ChatCommand,
   ChatDecision,
   ChatItem,
   ChatImage,
@@ -34,6 +35,22 @@ const record = (value: unknown): Record<string, unknown> =>
     ? (value as Record<string, unknown>)
     : {};
 const string = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+/** The CLI's slash commands and skills, as listed at startup and after each change. */
+function chatCommands(value: unknown): ChatCommand[] {
+  return (Array.isArray(value) ? value : []).flatMap((entry) => {
+    const command = record(entry);
+    const name = string(command.name);
+    if (!name) return [];
+    return [
+      {
+        name,
+        description: string(command.description),
+        argumentHint: string(command.argumentHint),
+      },
+    ];
+  });
+}
 const contentText = (value: unknown): string =>
   typeof value === 'string'
     ? value
@@ -175,7 +192,8 @@ export class ClaudeChat implements AgentChat {
       },
     });
     this.reading = this.read();
-    await this.query.initializationResult();
+    const initialized = await this.query.initializationResult();
+    this.state.commands = chatCommands(record(initialized).commands);
     if (this.isClosed())
       throw new Error(this.state.error ?? 'Claude disconnected while connecting.');
     await this.loadModels();
@@ -579,6 +597,9 @@ export class ClaudeChat implements AgentChat {
       // changed it, which makes the note on how the launch mode was chosen stale.
       if (reported && reported !== this.launchedMode) this.state.permissionNote = undefined;
       this.state.permissionMode = reported || this.state.permissionMode;
+    } else if (message.type === 'system' && message.subtype === 'commands_changed') {
+      // Skills found mid-session, e.g. in a subdirectory the agent moved into.
+      this.state.commands = chatCommands(message.commands);
     } else if (message.type === 'stream_event') {
       this.acceptSend();
       const event = record(message.event);

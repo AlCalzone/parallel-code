@@ -485,6 +485,96 @@ it('keeps a typed @ when the file search closes without a choice', async () => {
   expect(composer().selectionStart).toBe('Keep my drafta@ @'.length);
 });
 
+const commands = [
+  { name: 'review-pr', description: 'Review a pull request', argumentHint: '' },
+  { name: 'review', description: 'Review the diff', argumentHint: '<pr>' },
+  { name: 'compact', description: 'Summarize the conversation', argumentHint: '' },
+  { name: 'pr-comments', description: 'Show PR comments', argumentHint: '' },
+  { name: 'plugin:docx', description: 'Edit Word files', argumentHint: '' },
+];
+/** Presses a key in the composer; true when nothing handled it. */
+const press = (key: string, init: KeyboardEventInit = {}) =>
+  composer().dispatchEvent(
+    new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }),
+  );
+const suggestions = () =>
+  Array.from(container.querySelectorAll('[role="option"]'), (option) => ({
+    text: option.textContent,
+    selected: option.getAttribute('aria-selected') === 'true',
+  }));
+
+it('completes slash commands and skills like a terminal', async () => {
+  await update({ draft: '', state: { ...props.state, commands } });
+  expect(composer().placeholder).toContain('/ for commands');
+  expect(composer().getAttribute('aria-expanded')).toBe('false');
+  await type('/r');
+  expect(composer().getAttribute('aria-expanded')).toBe('true');
+  // Names that only contain the query, such as pr-comments, are left out.
+  expect(suggestions()).toEqual([
+    { text: '/review-prReview a pull request', selected: true },
+    { text: '/review <pr>Review the diff', selected: false },
+  ]);
+  await act(() => press('ArrowUp'));
+  expect(suggestions().map((option) => option.selected)).toEqual([false, true]);
+  await act(() => press('ArrowDown'));
+  expect(suggestions().map((option) => option.selected)).toEqual([true, false]);
+  await act(() => press('Tab'));
+  expect(props.draft).toBe('/review-pr ');
+  expect(suggestions()).toEqual([]);
+  expect(send).not.toHaveBeenCalled();
+
+  await update({ draft: '' });
+  await type('/comp');
+  await act(() => enter());
+  expect(props.draft).toBe('/compact ');
+  expect(send).not.toHaveBeenCalled();
+  await act(() => enter());
+  expect(send).toHaveBeenCalledWith('/compact', []);
+
+  // A plugin skill matches by its own name as well as by the plugin's.
+  await update({ draft: '' });
+  await type('/docx');
+  expect(suggestions()).toEqual([{ text: '/plugin:docxEdit Word files', selected: true }]);
+  const option = container.querySelector<HTMLElement>('[role="option"]');
+  await act(() => option?.click());
+  expect(props.draft).toBe('/plugin:docx ');
+});
+
+it('sends a fully typed command and leaves a dismissed or unmatched slash alone', async () => {
+  await update({ draft: '', state: { ...props.state, commands } });
+  await type('/review');
+  // The exact name goes first, even though the agent lists review-pr before it.
+  expect(suggestions()[0]).toEqual({ text: '/review <pr>Review the diff', selected: true });
+  await act(() => enter());
+  expect(send).toHaveBeenLastCalledWith('/review', []);
+  // A name typed in other case is corrected rather than sent as the agent might not know it.
+  await update({ draft: '' });
+  await type('/Compact');
+  await act(() => enter());
+  expect(props.draft).toBe('/compact ');
+  expect(send).toHaveBeenLastCalledWith('/review', []);
+
+  await update({ draft: '' });
+  await type('/re');
+  expect(press('Tab', { shiftKey: true })).toBe(true);
+  expect(press('Tab', { ctrlKey: true })).toBe(true);
+  expect(props.draft).toBe('/re');
+  await act(() => press('Escape'));
+  expect(suggestions()).toEqual([]);
+  await type('v');
+  expect(suggestions()).toHaveLength(2);
+  await act(() => press('Escape'));
+  await act(() => enter());
+  expect(send).toHaveBeenLastCalledWith('/rev', []);
+
+  await update({ draft: '' });
+  await type('/src/app.ts');
+  expect(suggestions()).toEqual([]);
+  await update({ draft: '' });
+  await type('/re and /re');
+  expect(suggestions()).toEqual([]);
+});
+
 it('puts the caret where the @ was when a file is picked mid-draft', async () => {
   await update({ onListFiles: async () => ['src/app.ts'] });
   const input = composer();

@@ -131,6 +131,31 @@ describe('Claude chat adapter', () => {
     expect(h.controls.getContextUsage).toHaveBeenCalledTimes(3);
   });
 
+  it('lists the slash commands and skills the CLI reports, and replaces them when they change', async () => {
+    const h = harness();
+    h.controls.initializationResult.mockResolvedValueOnce({
+      commands: [
+        { name: 'review', description: 'Review the diff', argumentHint: '<pr>' },
+        { name: '', description: 'Nameless entries are dropped', argumentHint: '' },
+      ],
+    } as never);
+    await h.chat.start();
+    expect(h.chat.state.commands).toEqual([
+      { name: 'review', description: 'Review the diff', argumentHint: '<pr>' },
+    ]);
+    await h.emit({
+      type: 'system',
+      subtype: 'commands_changed',
+      commands: [{ name: 'deploy', description: 'Ship it' }],
+    });
+    expect(h.chat.state.commands).toEqual([
+      { name: 'deploy', description: 'Ship it', argumentHint: '' },
+    ]);
+    expect(h.publish).toHaveBeenLastCalledWith(
+      expect.objectContaining({ commands: h.chat.state.commands }),
+    );
+  });
+
   it('ignores stale context responses and reports unavailable summaries without failing chat', async () => {
     const h = harness();
     let release = (_value: { totalTokens: number; rawMaxTokens: number }) => {};

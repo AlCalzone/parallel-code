@@ -5,6 +5,7 @@ import { ContextMeter } from './ContextMeter';
 import { MoreMenu, type MoreMenuItem } from './MoreMenu';
 import { mod } from '../../lib/platform';
 import { createFileMention } from './file-mention';
+import { CommandList, createCommandComplete } from './command-complete';
 import type { Composer as ComposerState } from './composer-state';
 import { ModelPicker, PermissionPicker } from './ModelPicker';
 import { Progress } from './Progress';
@@ -109,7 +110,7 @@ export function Composer(props: ComposerProps) {
     })),
   ];
   const placeholder = () =>
-    `${working() ? 'Add a follow-up' : `Message ${props.agentName}`}… Shift+Enter for a new line${props.onListFiles ? ', @ for files' : ''}`;
+    `${working() ? 'Add a follow-up' : `Message ${props.agentName}`}… Shift+Enter for a new line${props.onListFiles ? ', @ for files' : ''}${props.state.commands?.length ? ', / for commands' : ''}`;
   const hasContent = () => !!props.draft.trim() || c.images().length > 0 || c.files().length > 0;
   const busy = () => c.sending() || c.readingImages() || c.stopping();
   let textarea: HTMLTextAreaElement | undefined;
@@ -118,6 +119,11 @@ export function Composer(props: ComposerProps) {
     draft: () => props.draft,
     onDraft: (text) => props.onDraft(text),
     files: () => c.files(),
+  });
+  const commands = createCommandComplete({
+    commands: () => props.state.commands,
+    draft: () => props.draft,
+    onDraft: (text) => props.onDraft(text),
   });
   return (
     <div class="chat-composer-dock">
@@ -146,6 +152,7 @@ export function Composer(props: ComposerProps) {
           {c.error()}
         </div>
       </Show>
+      <CommandList complete={commands} />
       <div class="chat-composer">
         <div class="chat-composer-row">
           <textarea
@@ -155,6 +162,12 @@ export function Composer(props: ComposerProps) {
             }}
             aria-label={`Message ${props.agentName}`}
             placeholder={placeholder()}
+            role="combobox"
+            aria-autocomplete="list"
+            aria-haspopup="listbox"
+            aria-expanded={commands.matches().length > 0}
+            aria-controls={commands.matches().length ? commands.listId : undefined}
+            aria-activedescendant={commands.activeId()}
             disabled={props.disabled}
             value={props.draft}
             onInput={(event) => {
@@ -162,6 +175,7 @@ export function Composer(props: ComposerProps) {
               if (props.onListFiles) mention.onInput(event);
             }}
             onKeyDown={(event) => {
+              if (commands.onKeyDown(event)) return;
               if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
                 event.preventDefault();
                 event.stopPropagation();
