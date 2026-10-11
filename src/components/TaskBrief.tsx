@@ -20,7 +20,16 @@ import {
 import { showNotification } from '../store/notification';
 import { store } from '../store/core';
 import type { Task } from '../store/types';
-import { AlertIcon, CheckIcon, DiffIcon, PlusIcon, ShieldIcon } from './icons';
+import {
+  AlertIcon,
+  CheckIcon,
+  CircleCheckIcon,
+  DiffIcon,
+  PlusIcon,
+  ScreenNormalIcon,
+  ShieldIcon,
+  TargetIcon,
+} from './icons';
 
 /** Scores below this are the one score colour on the card; sections colour only their icons. */
 const LOW_SCORE = 60;
@@ -49,12 +58,23 @@ function hasPendingDecisions(task: Task): boolean {
   return task.brief?.brief?.decided.some((item) => !task.brief?.decisions[item.text]) ?? false;
 }
 
+// The bar is dense, so the usual scores show as icons; any other label stays as text.
+const SCORE_ICONS = new Map<string, SectionIcon>([
+  ['correct', TargetIcon],
+  ['complete', CircleCheckIcon],
+  ['minimal', ScreenNormalIcon],
+]);
+
 function scoreColor(score: number, stale: boolean): string {
   if (stale) return theme.fgSubtle;
   return score < LOW_SCORE ? theme.warning : theme.fg;
 }
 
-type SectionIcon = (props: { size?: number; style?: JSX.CSSProperties }) => JSX.Element;
+type SectionIcon = (props: {
+  size?: number;
+  title?: string;
+  style?: JSX.CSSProperties;
+}) => JSX.Element;
 
 /**
  * An icon and colour per section, so each list is recognisable at a glance. The
@@ -241,17 +261,45 @@ export function TaskBriefBar(props: TaskBriefBarProps) {
         >
           {headline()}
         </span>
-        <BriefCounts task={props.task} />
-        <For each={props.task.confidence?.scores ?? []}>
-          {(score) => (
-            <span style={{ 'flex-shrink': '0', color: theme.fgMuted }}>
-              {score.label}{' '}
-              <span style={{ 'font-family': MONO, color: scoreColor(score.score, stale()) }}>
-                {score.score}%
-              </span>
+        {/* Counts above scores, so the icons share the headline's two lines. */}
+        <span
+          style={{
+            display: 'flex',
+            'flex-direction': 'column',
+            'align-items': 'flex-end',
+            gap: '2px',
+            'flex-shrink': '0',
+          }}
+        >
+          <BriefCounts task={props.task} />
+          <Show when={props.task.confidence?.scores.length}>
+            <span style={{ display: 'flex', gap: '8px' }}>
+              <For each={props.task.confidence?.scores ?? []}>
+                {(score) => (
+                  <span
+                    role="img"
+                    aria-label={`${score.label} ${score.score}%`}
+                    title={score.label}
+                    style={{
+                      'flex-shrink': '0',
+                      display: 'inline-flex',
+                      'align-items': 'center',
+                      gap: '4px',
+                      color: theme.fgMuted,
+                    }}
+                  >
+                    <Show when={SCORE_ICONS.get(score.label.toLowerCase())} fallback={score.label}>
+                      {(icon) => <Dynamic component={icon()} size={11} />}
+                    </Show>
+                    <span style={{ 'font-family': MONO, color: scoreColor(score.score, stale()) }}>
+                      {score.score}%
+                    </span>
+                  </span>
+                )}
+              </For>
             </span>
-          )}
-        </For>
+          </Show>
+        </span>
         <Show when={stale()}>
           <span style={{ 'flex-shrink': '0', color: theme.fgSubtle, 'font-style': 'italic' }}>
             out of date

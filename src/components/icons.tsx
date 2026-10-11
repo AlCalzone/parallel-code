@@ -510,3 +510,29 @@ export function ActivityIcon(props: IconProps): JSX.Element {
     </SvgIcon>
   );
 }
+
+export function TargetIcon(props: IconProps): JSX.Element {
+  return (
+    <SvgIcon {...props}>
+      <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <circle cx="8" cy="8" r="1" />
+    </SvgIcon>
+  );
+}
+
+export function CircleCheckIcon(props: IconProps): JSX.Element {
+  return (
+    <SvgIcon {...props}>
+      <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <path
+        d="M5.25 8.25l1.75 1.75 3.75-3.75"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </SvgIcon>
+  );
+}

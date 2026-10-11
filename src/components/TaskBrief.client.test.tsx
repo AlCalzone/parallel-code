@@ -95,10 +95,23 @@ describe('TaskBriefBar', () => {
   it('shows the headline and scores compactly and marks a rating the code moved past', () => {
     const { bar } = mount(baseTask());
     expect(bar.textContent).toContain('Deduplicate by event ID or invoice ID?');
-    expect(bar.textContent).toContain('Correct 70%');
-    expect(bar.textContent).toContain('Complete 40%');
+    expect(bar.querySelector('[aria-label="Correct 70%"]')?.getAttribute('title')).toBe('Correct');
+    expect(bar.querySelector('[aria-label="Complete 40%"] svg')).not.toBeNull();
     expect(bar.textContent).toContain('out of date');
     expect(bar.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('keeps unknown score labels as text', () => {
+    const task = baseTask();
+    const confidence = task.confidence;
+    if (!confidence) throw new Error('Missing rating');
+    const { bar } = mount({
+      ...task,
+      confidence: { ...confidence, scores: [{ label: 'toString', score: 50, why: 'Odd.' }] },
+    });
+    const score = bar.querySelector('[aria-label="toString 50%"]');
+    expect(score?.textContent).toBe('toString50%');
+    expect(score?.querySelector('svg')).toBeNull();
   });
 
   it('counts changed, open and decided items on the bar, rating gaps included', () => {
