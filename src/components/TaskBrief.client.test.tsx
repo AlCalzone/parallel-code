@@ -101,6 +101,39 @@ describe('TaskBriefBar', () => {
     expect(bar.getAttribute('aria-expanded')).toBe('false');
   });
 
+  it('counts changed, open and decided items on the bar, rating gaps included', () => {
+    const task = baseTask();
+    const confidence = task.confidence;
+    if (!confidence) throw new Error('Missing rating');
+    const { bar } = mount({
+      ...task,
+      confidence: { ...confidence, findings: [{ kind: 'gap', text: 'No dedupe test.' }] },
+    });
+    const counts = bar.querySelector('[aria-label$="decided"]');
+    expect(counts?.getAttribute('aria-label')).toBe('1 changed, 2 open, 1 decided');
+    expect(counts?.textContent).toBe('121');
+  });
+
+  it('quietens the decided count once every decision is handled', () => {
+    const { bar } = mount(baseTask());
+    const decidedIcon = () =>
+      bar.querySelector<SVGElement>('[aria-label$="decided"] > span:last-child svg');
+    expect(decidedIcon()?.style.color).not.toBe('var(--fg-muted)');
+    lastSetState?.('brief', 'decisions', { 'Used BullMQ.': 'kept' });
+    expect(decidedIcon()?.style.color).toBe('var(--fg-muted)');
+  });
+
+  it('leaves empty sections out of the bar counts', () => {
+    const task = baseTask();
+    const brief = task.brief;
+    if (!brief) throw new Error('Missing brief');
+    const { bar } = mount({
+      ...task,
+      brief: { ...brief, brief: { ...brief.brief, open: [], decided: [] } },
+    });
+    expect(bar.querySelector('[aria-label="1 changed"]')?.textContent).toBe('1');
+  });
+
   it('opens the full brief with rating findings merged into the sections', () => {
     const { bar, onFileClick } = mount(baseTask());
     bar.click();

@@ -2293,6 +2293,19 @@ textarea::placeholder {
   pointer-events: auto;
 }
 
+/* Decision Keep/Change buttons appear the same way, so open decisions read as
+   text rather than a wall of buttons. They stay in flow, unlike the chips: an
+   overlay would cover the decision being judged, and swapping it for the
+   shorter "Kept" line would pull the rows below up by a whole row. */
+.brief-item .brief-item-actions {
+  opacity: 0;
+  pointer-events: none;
+}
+.brief-item:is(:hover, :focus-within) .brief-item-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 /* Task names wrap to two lines rather than being cut mid-word — at sidebar
    widths, similar names are otherwise indistinguishable. */
 .task-item-name {

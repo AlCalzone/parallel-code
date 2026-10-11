@@ -38,6 +38,17 @@ function findingItems(findings: readonly ConfidenceFinding[], kinds: string[]): 
     .map((f) => ({ text: f.text, ...(f.file && { file: f.file }), fromRating: true }));
 }
 
+/** Open questions plus the rating's gaps and risks, as the card lists them. */
+function openItems(task: Task): CardItem[] {
+  const findings = task.confidence?.findings ?? [];
+  return [...(task.brief?.brief?.open ?? []), ...findingItems(findings, ['gap', 'risk'])];
+}
+
+// Decisions the user has kept or changed no longer need their attention.
+function hasPendingDecisions(task: Task): boolean {
+  return task.brief?.brief?.decided.some((item) => !task.brief?.decisions[item.text]) ?? false;
+}
+
 function scoreColor(score: number, stale: boolean): string {
   if (stale) return theme.fgSubtle;
   return score < LOW_SCORE ? theme.warning : theme.fg;
@@ -230,6 +241,7 @@ export function TaskBriefBar(props: TaskBriefBarProps) {
         >
           {headline()}
         </span>
+        <BriefCounts task={props.task} />
         <For each={props.task.confidence?.scores ?? []}>
           {(score) => (
             <span style={{ 'flex-shrink': '0', color: theme.fgMuted }}>
@@ -295,6 +307,54 @@ export function TaskBriefBar(props: TaskBriefBarProps) {
         </Portal>
       </Show>
     </>
+  );
+}
+
+/**
+ * Section counts on the closed bar, so a brief with items to read is visible
+ * without opening it. Icons match the card's section headings.
+ */
+function BriefCounts(props: { task: Task }) {
+  const counts = () => {
+    const brief = props.task.brief?.brief;
+    if (!brief) return [];
+    const all = [
+      { kind: 'changed', count: brief.changed.length },
+      { kind: 'open', count: openItems(props.task).length },
+      { kind: 'decided', count: brief.decided.length },
+    ] as const;
+    return all.filter((c) => c.count > 0);
+  };
+  const label = () =>
+    counts()
+      .map((c) => `${c.count} ${c.kind}`)
+      .join(', ');
+  // Decisions already handled quieten their icon, as they do on the card.
+  const iconColor = (kind: keyof typeof SECTIONS) =>
+    kind === 'decided' && !hasPendingDecisions(props.task) ? theme.fgMuted : SECTIONS[kind].color;
+
+  return (
+    <Show when={counts().length}>
+      <span
+        role="img"
+        aria-label={label()}
+        title={label()}
+        style={{ display: 'flex', gap: '8px', 'flex-shrink': '0', color: theme.fgMuted }}
+      >
+        <For each={counts()}>
+          {(c) => (
+            <span style={{ display: 'inline-flex', 'align-items': 'center', gap: '3px' }}>
+              <Dynamic
+                component={SECTIONS[c.kind].icon}
+                size={11}
+                style={{ color: iconColor(c.kind) }}
+              />
+              <span style={{ 'font-family': MONO }}>{c.count}</span>
+            </span>
+          )}
+        </For>
+      </span>
+    </Show>
   );
 }
 
@@ -449,7 +509,7 @@ function DecisionRow(props: {
   };
 
   return (
-    <li style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
+    <li class="brief-item" style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
       <span
         style={{
           'font-size': sf(12),
@@ -461,7 +521,7 @@ function DecisionRow(props: {
         {props.item.text}
       </span>
       <Show when={!state() && !editing()}>
-        <span style={{ display: 'flex', gap: '6px' }}>
+        <span class="brief-item-actions" style={{ display: 'flex', gap: '6px' }}>
           <button
             type="button"
             style={quietButton}
@@ -550,11 +610,9 @@ function TaskBriefCard(props: {
   onCleanup(() => clearInterval(ticker));
   const brief = () => props.task.brief?.brief;
   const findings = () => props.task.confidence?.findings ?? [];
-  const open = () => [...(brief()?.open ?? []), ...findingItems(findings(), ['gap', 'risk'])];
+  const open = () => openItems(props.task);
   const extra = () => [...(brief()?.extra ?? []), ...findingItems(findings(), ['extra'])];
-  // Decisions the user has kept or changed no longer need their attention.
-  const pendingDecisions = () =>
-    brief()?.decided.some((item) => !props.task.brief?.decisions[item.text]) ?? false;
+  const pendingDecisions = () => hasPendingDecisions(props.task);
 
   const rate = async () => {
     if (rating()) return;
