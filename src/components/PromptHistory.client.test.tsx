@@ -7,7 +7,6 @@ let dispose: (() => void) | undefined;
 afterEach(() => {
   dispose?.();
   document.body.replaceChildren();
-  vi.useRealTimers();
 });
 
 function mount(overrides: Partial<Task> = {}) {
@@ -41,8 +40,7 @@ function mount(overrides: Partial<Task> = {}) {
 }
 
 describe('PromptHistory', () => {
-  it('shows complete prompt text in order on hover and retains it while entering the popover', () => {
-    vi.useFakeTimers();
+  it('shows complete prompt text in order on click, not on hover, and toggles closed', () => {
     const { button } = mount({
       lastPrompt: 'Second prompt',
       promptHistory: [
@@ -52,6 +50,8 @@ describe('PromptHistory', () => {
       ],
     });
     button.dispatchEvent(new MouseEvent('mouseenter'));
+    expect(document.querySelector('[role="region"]')).toBeNull();
+    button.click();
     const popover = document.querySelector('[role="region"]');
     expect(popover).not.toBeNull();
     expect([...document.querySelectorAll('li p')].map((p) => p.textContent)).toEqual([
@@ -63,11 +63,8 @@ describe('PromptHistory', () => {
     // Entries carry only their time and text; untimed legacy entries show just text.
     expect([...document.querySelectorAll('li')].map((li) => li.children.length)).toEqual([2, 1, 1]);
     button.dispatchEvent(new MouseEvent('mouseleave'));
-    popover?.dispatchEvent(new MouseEvent('mouseenter'));
-    vi.advanceTimersByTime(200);
     expect(document.querySelector('[role="region"]')).not.toBeNull();
-    popover?.dispatchEvent(new MouseEvent('mouseleave'));
-    vi.advanceTimersByTime(200);
+    button.click();
     expect(document.querySelector('[role="region"]')).toBeNull();
   });
 
