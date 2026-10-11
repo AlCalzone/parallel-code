@@ -90,6 +90,14 @@ export function rearmDocumentAgents(task: Task): void {
   }
 }
 
+/** The document agent waits for an answer: Claude says so through hooks, the rest through terminal output. */
+export function isDocumentAgentWaiting(projectId: string): boolean {
+  const agentIds = store.tasks[documentAgentTaskId(projectId)]?.agentIds ?? [];
+  return agentIds.some(
+    (id) => getAgentHookStatus(id)?.state === 'waiting' || isAgentAskingQuestion(id),
+  );
+}
+
 /**
  * Hands `text` to the workspace's selected agent, bringing its tab up first.
  * A first agent that is still booting, busy or asking something gets it

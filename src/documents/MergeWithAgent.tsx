@@ -92,10 +92,7 @@ export function MergeWithAgent(props: {
 
   return (
     <section class="docws-merge-panel" aria-label="Merge with agent" on:keydown={onKeyDown}>
-      <p>
-        One agent reads the proposals you pick, as diffs against the base, and drafts a single
-        merged proposal. It shows up in Runs for you to review; nothing is accepted for you.
-      </p>
+      <p>Drafts one merged proposal from the ones you pick. It appears in Runs for review.</p>
       <div class="docws-merge-row" role="group" aria-label="Proposals to merge">
         <For each={mergeable()}>
           {(candidate) => (

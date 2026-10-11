@@ -3,12 +3,14 @@ import { store } from '../store/core';
 import {
   activeDocumentPath,
   addDocumentAnnotation,
+  saveDocumentNoteDraft,
   buildCandidateSpecs,
   dispatchDocumentRun,
   documentMainAgentId,
   documentModelChoices,
   documentStore,
   setDocumentMainAgent,
+  setDocumentComposerDraft,
   setDocumentModelChoice,
   withModelChoice,
   type ComposerMode,
@@ -20,6 +22,7 @@ import type { DocumentBlock } from './markdown-blocks';
 import { getProject } from '../store/projects';
 import { showNotification } from '../store/notification';
 import { errMessage } from '../lib/log';
+import { focusAnnotation, setRailTab } from './workspace-ui';
 import { MAX_DOCUMENT_CANDIDATES, documentAgentSupport } from '../../electron/documents/shared';
 import type { AgentDef } from '../ipc/types';
 import type { DocumentModelChoice } from '../store/types';
@@ -52,24 +55,22 @@ function wholeDocumentSelection(blocks: DocumentBlock[]): DocumentSelection {
   };
 }
 
-/**
- * The popover that turns a passage into work: a task for the interactive
- * session or for one-shot candidates, a note, or a question. It opens over
- * the prose when a passage is picked or a task on the whole document is asked
- * for, and goes away once the work is handed off or dismissed. The main
- * session is preselected with one candidate so the fast path is select, type,
- * Enter.
- */
+/** Opens only after a passage action, with one reviewed suggestion as the default. */
 export function RunComposer(props: RunComposerProps) {
   let textareaRef: HTMLTextAreaElement | undefined;
   const draft = untrack(() => documentStore.composerDraft);
   const [instruction, setInstruction] = createSignal(draft?.text ?? '');
-  const [mode, setMode] = createSignal<ComposerMode>('proposals');
+  const [mode, setMode] = createSignal<ComposerMode>(draft?.mode ?? 'proposals');
+  const [compare, setCompare] = createSignal(false);
   // Task and proposals are one instruction with two destinations: the agent's
   // session, or headless candidates. They share the textarea and the placeholder.
   const isTask = () => mode() === 'task' || mode() === 'proposals';
   const oneshot = () => mode() === 'proposals';
   const [saving, setSaving] = createSignal(false);
+  const noteSaving = () =>
+    mode() === 'note' && documentStore.composerDraft?.noteSaveStatus === 'saving';
+  const noteSaveFailed = () =>
+    mode() === 'note' && documentStore.composerDraft?.noteSaveStatus === 'error';
   const [sending, setSending] = createSignal(false);
   // Just opened on a passage: shown at full strength until focus leaves it.
   const [fresh, setFresh] = createSignal(false);
@@ -105,12 +106,31 @@ export function RunComposer(props: RunComposerProps) {
     agents().filter((a) => a.available !== false && documentAgentSupport(a.id).resume),
   );
 
+  const [singleAgentId, setSingleAgentId] = createSignal(mainAgentId());
+  const singleAgent = () =>
+    agents().find(
+      (a) =>
+        a.id === singleAgentId() && a.available !== false && documentAgentSupport(a.id).headless,
+    ) ?? agents().find((a) => a.available !== false && documentAgentSupport(a.id).headless);
+
+  function singlePicks() {
+    const agent = singleAgent();
+    return agent ? [{ agent, count: 1 }] : [];
+  }
+
   // Agents and counts alone: the model rows key off this, so typing a model
   // name does not rebuild them.
   const layout = createMemo(() =>
-    agents()
-      .filter((a) => (counts()[a.id] ?? 0) > 0)
-      .map((agent) => ({ agent, count: counts()[agent.id] })),
+    compare()
+      ? agents()
+          .filter(
+            (a) =>
+              (counts()[a.id] ?? 0) > 0 &&
+              a.available !== false &&
+              documentAgentSupport(a.id).headless,
+          )
+          .map((agent) => ({ agent, count: counts()[agent.id] }))
+      : singlePicks(),
   );
   const picks = (): DispatchSelection[] =>
     layout().map((pick) => ({ ...pick, choices: choices()[pick.agent.id] ?? [] }));
@@ -126,44 +146,81 @@ export function RunComposer(props: RunComposerProps) {
     });
   });
   const total = createMemo(() => picks().reduce((n, p) => n + p.count, 0));
+  // The count on the control follows the real candidate total, so a tweak made
+  // in Options is reflected rather than contradicted.
+  const alternatives = () => (compare() ? Math.min(Math.max(total(), 1), 3) : 1);
   const canRun = () =>
     instruction().trim().length > 0 &&
     total() > 0 &&
     total() <= MAX_DOCUMENT_CANDIDATES &&
     !documentStore.dispatching;
-  const canAnnotate = () => instruction().trim().length > 0 && hasPassage() && !saving();
+  const canAsk = () => instruction().trim().length > 0 && hasPassage() && !saving() && !!askAgent();
   const installed = createMemo(() => agents().filter((a) => a.available !== false));
   const canSend = () =>
     instruction().trim().length > 0 && !!project() && installed().length > 0 && !sending();
-  const askAgent = () => agents().find((a) => a.id === askAgentId()) ?? resumable()[0];
+  const askAgents = createMemo(() =>
+    agents().filter((a) => a.available !== false && documentAgentSupport(a.id).headless),
+  );
+  const askAgent = () => askAgents().find((a) => a.id === askAgentId()) ?? askAgents()[0];
 
-  /** Notes and questions never touch the document: they are saved beside it. */
-  async function annotate() {
-    if (!canAnnotate()) return;
+  /**
+   * A question is saved beside the document, never into it, and answered by
+   * the chosen agent.
+   */
+  async function askAgentAbout() {
+    if (!canAsk()) return;
     setSaving(true);
     try {
-      const s = selection();
-      const anchor = createAnchor(
-        props.blocks,
-        s.startBlock,
-        s.endBlock,
-        activeDocumentPath() ?? project()?.documentPath ?? '',
-        documentStore.snapshot?.headSha ?? null,
-      );
-      const saved = await addDocumentAnnotation(
-        mode() === 'question' ? 'question' : 'note',
-        instruction().trim(),
-        anchor,
-        mode() === 'question' ? { askWith: askAgent() } : {},
-      );
-      if (saved) finish();
+      const saved = await addDocumentAnnotation('question', instruction().trim(), passageAnchor(), {
+        askWith: askAgent(),
+      });
+      if (saved) {
+        finish();
+        focusAnnotation(saved.id);
+      }
     } finally {
       setSaving(false);
     }
   }
 
+  function passageAnchor() {
+    const s = selection();
+    return createAnchor(
+      props.blocks,
+      s.startBlock,
+      s.endBlock,
+      activeDocumentPath() ?? project()?.documentPath ?? '',
+      documentStore.snapshot?.headSha ?? null,
+    );
+  }
+
+  async function saveNote(close = false) {
+    if (!hasPassage() || !instruction().trim()) return;
+    const projectId = documentStore.projectId;
+    const path = activeDocumentPath();
+    const saved = await saveDocumentNoteDraft(passageAnchor());
+    if (
+      close &&
+      saved &&
+      documentStore.projectId === projectId &&
+      documentStore.view === 'document' &&
+      activeDocumentPath() === path &&
+      !documentStore.composerDraft
+    )
+      props.onClose();
+  }
+
+  function close() {
+    // After a failed save the draft is already backed up; Close must not retry
+    // forever and trap the composer open.
+    if (noteSaveFailed()) props.onClose();
+    else if (mode() === 'note' && instruction().trim() && hasPassage()) void saveNote(true);
+    else props.onClose();
+  }
+
   function submit() {
-    if (!isTask()) void annotate();
+    if (mode() === 'note') void saveNote(true);
+    else if (mode() === 'question') void askAgentAbout();
     else if (oneshot()) void run();
     else void send();
   }
@@ -175,13 +232,20 @@ export function RunComposer(props: RunComposerProps) {
     props.selection ? `${props.selection.startBlock}-${props.selection.endBlock}` : null;
   createEffect(
     on(
-      () => [pickedRange(), documentStore.composerDraft] as const,
-      ([range, d]) => {
+      () =>
+        [
+          pickedRange(),
+          documentStore.composerDraft?.id,
+          documentStore.composerDraft?.mode,
+          documentStore.composerDraft?.annotationId,
+        ] as const,
+      ([range]) => {
+        const d = documentStore.composerDraft;
         if (!range && !d) {
           setFresh(false);
           return;
         }
-        if (d?.text) setInstruction(d.text);
+        if (d) setInstruction(d.text);
         if (d?.mode) setMode(d.mode);
         setFresh(true);
         requestAnimationFrame(() => textareaRef?.focus({ preventScroll: true }));
@@ -189,8 +253,29 @@ export function RunComposer(props: RunComposerProps) {
     ),
   );
 
+  function changeMode(next: ComposerMode) {
+    setMode(next);
+    setDocumentComposerDraft({ ...documentStore.composerDraft, text: instruction(), mode: next });
+  }
+
   function handleFocusOut(e: FocusEvent) {
     if (!rootRef?.contains(e.relatedTarget as Node | null)) setFresh(false);
+  }
+
+  /** 1 is a single proposal; more drafts spread over the main agent first, then the others. */
+  function setAlternatives(n: number) {
+    if (n <= 1) return setCompare(false);
+    const eligible = agents()
+      .filter((a) => a.available !== false && documentAgentSupport(a.id).headless)
+      .sort((a, b) => Number(b.id === mainAgentId()) - Number(a.id === mainAgentId()));
+    if (eligible.length === 0) return;
+    const next: Record<string, number> = {};
+    for (let i = 0; i < n; i++) {
+      const id = eligible[i % eligible.length].id;
+      next[id] = (next[id] ?? 0) + 1;
+    }
+    setCounts(next);
+    setCompare(true);
   }
 
   function without(counts: Record<string, number>, id: string): Record<string, number> {
@@ -223,6 +308,7 @@ export function RunComposer(props: RunComposerProps) {
     try {
       await dispatchDocumentRun(instruction().trim(), picks(), selection());
       finish();
+      setRailTab('runs');
     } catch (err) {
       showNotification(errMessage(err));
     }
@@ -243,6 +329,8 @@ export function RunComposer(props: RunComposerProps) {
     try {
       await sendToDocumentAgent(p, text);
       finish();
+      // The agent's reply lands in the panel, which may be collapsed.
+      setRailTab('agent');
     } catch (err) {
       showNotification(errMessage(err));
     } finally {
@@ -250,7 +338,7 @@ export function RunComposer(props: RunComposerProps) {
     }
   }
 
-  /** Work was handed off: clear the draft and the passage, keep the popover. */
+  /** Work was handed off: close the composer and clear its passage. */
   function finish() {
     setInstruction('');
     props.onClose();
@@ -262,11 +350,11 @@ export function RunComposer(props: RunComposerProps) {
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      props.onClose();
-      textareaRef?.blur();
+      close();
       return;
     }
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter') e.stopPropagation();
+    if (e.key === 'Enter' && !e.shiftKey && (mode() !== 'note' || e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       // The task terminal underneath treats Enter as its send shortcut.
       e.stopPropagation();
@@ -274,27 +362,27 @@ export function RunComposer(props: RunComposerProps) {
     }
   }
 
-  const verb = () => {
-    if (mode() === 'note') return 'save';
-    if (mode() === 'question') return 'ask';
-    return oneshot() ? 'run' : 'send';
-  };
-  const keys = () => `Enter to ${verb()} · Esc to clear`;
-
   /** What the chosen mode does with the passage, said once beside the button. */
   const hint = () => {
-    if (!isTask()) return 'Saved beside the document, never into it';
-    if (!oneshot()) return 'The agent edits your document directly.';
-    const cap = total() > MAX_DOCUMENT_CANDIDATES ? ` · max ${MAX_DOCUMENT_CANDIDATES}` : '';
-    return `Your document changes only when you accept a proposal.${cap}`;
+    if (!isTask() && !hasPassage())
+      return 'Select a passage in the document to attach this draft. Your text is kept.';
+    if (!isTask()) return '';
+    if (!oneshot()) return 'Edits the document directly.';
+    return total() > MAX_DOCUMENT_CANDIDATES ? `Max ${MAX_DOCUMENT_CANDIDATES} candidates.` : '';
   };
 
   const scopeLabel = () => {
     const s = selection();
-    if (s.wholeDocument) return 'Whole document';
+    if (s.wholeDocument) return isTask() ? 'Whole document' : 'Choose a passage';
     const lines =
       s.startLine === s.endLine ? `line ${s.startLine}` : `lines ${s.startLine}–${s.endLine}`;
-    return s.heading ? `${lines} · ${s.heading}` : lines;
+    const label =
+      s.startBlock === s.endBlock
+        ? props.blocks[s.startBlock]?.type === 'paragraph'
+          ? 'Selected paragraph'
+          : 'Selected block'
+        : 'Selected passage';
+    return `${label} · ${s.heading ?? lines}`;
   };
 
   return (
@@ -302,253 +390,288 @@ export function RunComposer(props: RunComposerProps) {
       ref={rootRef}
       class="docws-composer"
       role="dialog"
-      aria-label="Work on the selected passage"
-      classList={{ 'is-scoped': hasPassage(), 'is-fresh': fresh() }}
+      aria-label={
+        mode() === 'note'
+          ? 'Add comment'
+          : mode() === 'question'
+            ? 'Ask about this passage'
+            : 'Rewrite'
+      }
+      classList={{ 'is-scoped': hasPassage(), 'is-fresh': fresh(), 'is-note': mode() === 'note' }}
       onFocusOut={handleFocusOut}
     >
       <div class="docws-composer-head">
-        <span class="docws-mode-tabs" role="tablist" aria-label="What to do with the passage">
-          <button
-            type="button"
-            class="docws-tab"
-            role="tab"
-            aria-selected={mode() === 'task'}
-            title="The agent edits your document directly"
-            onClick={() => setMode('task')}
-          >
-            <ActionIcon kind="task" />
-            Edit with agent
-          </button>
-          <button
-            type="button"
-            class="docws-tab"
-            role="tab"
-            aria-selected={mode() === 'proposals'}
-            title="Agents draft candidates; review them before accepting"
-            onClick={() => setMode('proposals')}
-          >
-            <ActionIcon kind="proposals" />
-            Proposals
-          </button>
-          <button
-            type="button"
-            class="docws-tab"
-            role="tab"
-            aria-selected={mode() === 'note'}
-            disabled={!hasPassage()}
-            title={
-              !hasPassage()
-                ? 'Notes attach to a passage: pick one first'
-                : 'Write a note beside this passage'
-            }
-            onClick={() => setMode('note')}
-          >
+        <span class="docws-composer-title">
+          <Show when={mode() === 'note'} fallback={mode() === 'question' ? 'Ask' : 'Rewrite'}>
             <ActionIcon kind="note" />
-            Note
-          </button>
-          <button
-            type="button"
-            class="docws-tab"
-            role="tab"
-            aria-selected={mode() === 'question'}
-            disabled={!hasPassage()}
-            title={
-              !hasPassage()
-                ? 'Questions attach to a passage: pick one first'
-                : 'Ask an agent about this passage; the answer goes into a bubble'
-            }
-            onClick={() => setMode('question')}
-          >
-            <ActionIcon kind="question" />
-            Ask
-          </button>
+          </Show>
         </span>
-        <span class="docws-composer-scope" title={scopeLabel()}>
-          {scopeLabel()}
-        </span>
+        <Show when={mode() !== 'note' && !hasPassage()}>
+          <span class="docws-composer-scope" title={scopeLabel()}>
+            {scopeLabel()}
+          </span>
+        </Show>
+        <Show when={mode() === 'note'}>
+          <span class="docws-note-status" role="status">
+            {noteSaving() ? 'Saving…' : noteSaveFailed() ? 'Not saved' : ''}
+          </span>
+          <Show when={noteSaveFailed()}>
+            <button type="button" class="docws-btn docws-btn-sm" onClick={() => void saveNote()}>
+              Retry
+            </button>
+          </Show>
+        </Show>
         <button
           type="button"
           class="docws-composer-close"
-          aria-label={hasPassage() ? 'Clear the passage' : 'Close'}
-          title={hasPassage() ? 'Let go of the passage and close · Esc' : 'Close · Esc'}
-          onClick={() => props.onClose()}
+          aria-label="Close"
+          title="Close · Esc"
+          onClick={close}
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
             <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
           </svg>
         </button>
       </div>
-      <Show when={hasPassage()}>
-        <div class="docws-composer-quote">{selection().quote.slice(0, 400)}</div>
+      <Show when={hasPassage() && mode() !== 'note'}>
+        <div class="docws-composer-quote" title={scopeLabel()}>
+          {selection().quote.slice(0, 400)}
+        </div>
       </Show>
       <textarea
         ref={textareaRef}
-        aria-label="Instruction"
+        aria-label={
+          mode() === 'note' ? 'Comment' : mode() === 'question' ? 'Question' : 'Instruction'
+        }
         onKeyDown={handleKeyDown}
+        disabled={noteSaving()}
+        onBlur={(e) => {
+          // Leaving the window (alt-tab, devtools) is not leaving the note.
+          if (!document.hasFocus()) return;
+          if (mode() === 'note' && !rootRef?.contains(e.relatedTarget as Node | null))
+            void saveNote();
+        }}
         placeholder={
           isTask()
             ? hasPassage()
-              ? 'What should change here? e.g. find a simpler architecture, challenge these assumptions…'
-              : 'What should change in this document? Pick a passage to narrow it down.'
-            : mode() === 'note'
-              ? 'A note to yourself about this passage. It never changes the document.'
-              : 'A question about this passage. The answer lands in a bubble, not in the document.'
+              ? 'What should change?'
+              : 'What should change in this document?'
+            : mode() === 'question'
+              ? 'What would you like to know?'
+              : 'Add a comment…'
         }
         value={instruction()}
-        onInput={(e) => setInstruction(e.currentTarget.value)}
+        onInput={(e) => {
+          setInstruction(e.currentTarget.value);
+          setDocumentComposerDraft({
+            ...documentStore.composerDraft,
+            text: instruction(),
+            mode: mode(),
+          });
+        }}
       />
-      <Show when={mode() === 'question'}>
-        <div class="docws-agent-row" role="radiogroup" aria-label="Agent to ask">
-          <For each={agents().filter((a) => documentAgentSupport(a.id).headless)}>
-            {(agent) => (
-              <button
-                type="button"
-                class="docws-agent-chip"
-                role="radio"
-                aria-checked={askAgent()?.id === agent.id}
-                aria-pressed={askAgent()?.id === agent.id}
-                disabled={agent.available === false}
-                title={
-                  agent.available === false ? 'Not installed' : 'Reads the document, cannot edit it'
-                }
-                onClick={() => setAskAgentId(agent.id)}
-              >
-                {agent.name}
-              </button>
-            )}
-          </For>
-        </div>
-      </Show>
-      {/* Proposals: who drafts them is the decision, so the agents are in
-          plain view; model and main-session tuning sits one click away. */}
       <Show when={oneshot()}>
-        <div class="docws-proposal-panel">
-          <div class="docws-proposal-head">
-            <span
-              class="docws-proposal-count"
-              classList={{ 'is-over': total() > MAX_DOCUMENT_CANDIDATES }}
-            >
-              {total()} of {MAX_DOCUMENT_CANDIDATES} candidates
-            </span>
-            <span class="docws-composer-hint">
-              Click an agent to add or drop it, its count to draft more than once.
-            </span>
-          </div>
-          <div class="docws-agent-row" role="group" aria-label="Agents">
-            <For each={agents()}>
-              {(agent) => {
-                const support = documentAgentSupport(agent.id);
-                const enabled = () => support.headless && agent.available !== false;
-                const count = () => counts()[agent.id] ?? 0;
-                const title = () =>
-                  !support.headless
-                    ? 'No headless mode known for this agent'
-                    : agent.available === false
-                      ? 'Not installed'
-                      : agent.id === mainAgentId()
-                        ? 'Main session (resumes previous context)'
-                        : 'One-shot alternate';
-                return (
-                  <div class="docws-agent-pick" classList={{ 'is-on': count() > 0 }}>
-                    <button
-                      type="button"
-                      class="docws-agent-chip"
-                      aria-pressed={count() > 0}
-                      disabled={!enabled()}
-                      title={title()}
-                      onClick={() => toggleAgent(agent)}
-                    >
-                      {agent.name}
-                      <Show when={agent.id === mainAgentId() && support.resume}>
-                        <span class="docws-main-badge">main</span>
-                      </Show>
-                    </button>
-                    <Show when={count() > 0}>
-                      <button
-                        type="button"
-                        class="docws-count-btn"
-                        aria-label={`Candidates from ${agent.name}: ${count()}`}
-                        title={`${count()} candidate${count() === 1 ? '' : 's'} from this agent · click for ${(count() % MAX_PER_AGENT) + 1}`}
-                        onClick={(e) => bump(agent, e)}
-                      >
-                        ×{count()}
-                      </button>
-                    </Show>
-                  </div>
-                );
-              }}
-            </For>
-          </div>
-          <details class="docws-proposal-options">
-            <summary>Models and main session</summary>
-            <label>
-              Main session{' '}
+        <details class="docws-proposal-options">
+          <summary>
+            Options · {total()} suggestion{total() === 1 ? '' : 's'}
+          </summary>
+          <Show when={oneshot()}>
+            <Show when={!compare()}>
+              <label class="docws-option-field">
+                Agent
+                <select
+                  class="docws-select"
+                  value={singleAgent()?.id ?? ''}
+                  onChange={(e) => setSingleAgentId(e.currentTarget.value)}
+                >
+                  <For
+                    each={agents().filter(
+                      (a) => a.available !== false && documentAgentSupport(a.id).headless,
+                    )}
+                  >
+                    {(agent) => <option value={agent.id}>{agent.name}</option>}
+                  </For>
+                </select>
+              </label>
+            </Show>
+            <Show when={compare()}>
+              <div class="docws-proposal-panel">
+                <div class="docws-proposal-head">
+                  <span
+                    class="docws-proposal-count"
+                    classList={{ 'is-over': total() > MAX_DOCUMENT_CANDIDATES }}
+                  >
+                    {total()} of {MAX_DOCUMENT_CANDIDATES} candidates
+                  </span>
+                  <span class="docws-composer-hint">
+                    Click an agent to add or drop it, its count to draft more than once.
+                  </span>
+                </div>
+                <div class="docws-agent-row" role="group" aria-label="Agents">
+                  <For each={agents()}>
+                    {(agent) => {
+                      const support = documentAgentSupport(agent.id);
+                      const enabled = () => support.headless && agent.available !== false;
+                      const count = () => counts()[agent.id] ?? 0;
+                      const title = () =>
+                        !support.headless
+                          ? 'No headless mode known for this agent'
+                          : agent.available === false
+                            ? 'Not installed'
+                            : agent.id === mainAgentId()
+                              ? 'Main session (resumes previous context)'
+                              : 'One-shot alternate';
+                      return (
+                        <div class="docws-agent-pick" classList={{ 'is-on': count() > 0 }}>
+                          <button
+                            type="button"
+                            class="docws-agent-chip"
+                            aria-pressed={count() > 0}
+                            disabled={!enabled()}
+                            title={title()}
+                            onClick={() => toggleAgent(agent)}
+                          >
+                            {agent.name}
+                            <Show when={agent.id === mainAgentId() && support.resume}>
+                              <span class="docws-main-badge">main</span>
+                            </Show>
+                          </button>
+                          <Show when={count() > 0}>
+                            <button
+                              type="button"
+                              class="docws-count-btn"
+                              aria-label={`Candidates from ${agent.name}: ${count()}`}
+                              title={`${count()} candidate${count() === 1 ? '' : 's'} from this agent · click for ${(count() % MAX_PER_AGENT) + 1}`}
+                              onClick={(e) => bump(agent, e)}
+                            >
+                              ×{count()}
+                            </button>
+                          </Show>
+                        </div>
+                      );
+                    }}
+                  </For>
+                </div>
+              </div>
+            </Show>
+            <details class="docws-proposal-options">
+              <summary>Model and session</summary>
+              <label>
+                Main session{' '}
+                <select
+                  class="docws-select"
+                  value={mainAgentId()}
+                  onChange={(e) => {
+                    const next = e.currentTarget.value;
+                    const prevMain = mainAgentId();
+                    setDocumentMainAgent(next);
+                    setCounts((prev) =>
+                      prev[prevMain] && !prev[next]
+                        ? { ...without(prev, prevMain), [next]: prev[prevMain] }
+                        : prev,
+                    );
+                  }}
+                >
+                  <For each={resumable()}>{(a) => <option value={a.id}>{a.name}</option>}</For>
+                </select>
+              </label>
+              <Show when={slots().length > 0}>
+                <ModelRows slots={slots()} choice={choice} onChoice={setChoice} />
+              </Show>
+            </details>
+          </Show>
+        </details>
+      </Show>
+      <Show when={!isTask() && (hint() || mode() === 'question')}>
+        <div class="docws-composer-footer">
+          <Show when={hint()}>
+            <span class="docws-composer-hint">{hint()}</span>
+          </Show>
+          <Show when={mode() === 'question'}>
+            <Show when={askAgents().length > 1}>
               <select
                 class="docws-select"
-                value={mainAgentId()}
-                onChange={(e) => {
-                  const next = e.currentTarget.value;
-                  const prevMain = mainAgentId();
-                  setDocumentMainAgent(next);
-                  setCounts((prev) =>
-                    prev[prevMain] && !prev[next]
-                      ? { ...without(prev, prevMain), [next]: prev[prevMain] }
-                      : prev,
-                  );
-                }}
+                aria-label="Agent to ask"
+                value={askAgent()?.id ?? ''}
+                onChange={(e) => setAskAgentId(e.currentTarget.value)}
               >
-                <For each={resumable()}>{(a) => <option value={a.id}>{a.name}</option>}</For>
+                <For each={askAgents()}>
+                  {(agent) => <option value={agent.id}>{agent.name}</option>}
+                </For>
               </select>
-            </label>
-            <Show when={slots().length > 0}>
-              <ModelRows slots={slots()} choice={choice} onChoice={setChoice} />
             </Show>
-          </details>
-        </div>
-      </Show>
-      <div class="docws-composer-footer">
-        <span class="docws-composer-hint">{hint()}</span>
-        <span>{keys()}</span>
-        <Show
-          when={isTask()}
-          fallback={
             <button
               type="button"
               class="docws-btn docws-btn-sm docws-btn-primary"
-              disabled={!canAnnotate()}
-              onClick={() => void annotate()}
+              disabled={!canAsk()}
+              title={
+                askAgent()
+                  ? `${askAgent()?.name} answers beside the passage`
+                  : 'No agent is available.'
+              }
+              onClick={() => void askAgentAbout()}
             >
-              {saving() ? 'Saving…' : mode() === 'note' ? 'Save note' : 'Ask'}
-            </button>
-          }
-        >
-          <Show
-            when={oneshot()}
-            fallback={
-              <button
-                type="button"
-                class="docws-btn docws-btn-sm docws-btn-primary"
-                disabled={!canSend()}
-                title={installed().length === 0 ? 'No agent is installed.' : undefined}
-                onClick={() => void send()}
-              >
-                <SendIcon size={12} />
-                Send to agent
-              </button>
-            }
-          >
-            <button
-              type="button"
-              class="docws-btn docws-btn-sm docws-btn-primary"
-              disabled={!canRun()}
-              onClick={() => void run()}
-            >
-              <SparkleIcon size={12} />
-              {documentStore.dispatching ? 'Starting…' : 'Generate proposals'}
+              {saving() ? 'Asking…' : 'Ask'}
             </button>
           </Show>
-        </Show>
-      </div>
+        </div>
+      </Show>
+      <Show when={isTask()}>
+        <div class="docws-composer-footer">
+          <Show when={hint()}>
+            <span class="docws-composer-hint">{hint()}</span>
+          </Show>
+          <span class="docws-tabs" role="group" aria-label="After rewriting">
+            <button
+              type="button"
+              class="docws-tab"
+              aria-pressed={oneshot()}
+              title="Draft proposals to review before anything changes"
+              onClick={() => changeMode('proposals')}
+            >
+              Review first
+            </button>
+            <button
+              type="button"
+              class="docws-tab"
+              aria-pressed={!oneshot()}
+              title="Send the instruction to the agent, which edits the document"
+              onClick={() => changeMode('task')}
+            >
+              Apply directly
+            </button>
+          </span>
+          <Show when={oneshot()}>
+            <span class="docws-tabs" role="group" aria-label="Alternatives">
+              <For each={[1, 2, 3]}>
+                {(n) => (
+                  <button
+                    type="button"
+                    class="docws-tab"
+                    aria-pressed={alternatives() === n}
+                    title={n === 1 ? 'One proposal' : `Compare ${n} alternatives`}
+                    onClick={() => setAlternatives(n)}
+                  >
+                    {n}
+                  </button>
+                )}
+              </For>
+            </span>
+          </Show>
+          <button
+            type="button"
+            class="docws-btn docws-btn-sm docws-btn-primary"
+            disabled={oneshot() ? !canRun() : !canSend()}
+            title={!oneshot() && installed().length === 0 ? 'No agent is installed.' : undefined}
+            onClick={() => submit()}
+          >
+            <Show when={oneshot()} fallback={<SendIcon size={12} />}>
+              <SparkleIcon size={12} />
+            </Show>
+            {documentStore.dispatching ? 'Starting…' : 'Rewrite'}
+          </button>
+        </div>
+      </Show>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPathTree } from './path-tree';
+import { buildPathTree, pushRecentPath } from './path-tree';
 
 describe('buildPathTree', () => {
   it('nests folders before files, both sorted by name', () => {
@@ -11,5 +11,16 @@ describe('buildPathTree', () => {
 
   it('is empty for no paths', () => {
     expect(buildPathTree([])).toEqual([]);
+  });
+});
+
+describe('pushRecentPath', () => {
+  it('moves a reopened file to the front without duplicating it', () => {
+    expect(pushRecentPath(['a.md', 'b.md', 'c.md'], 'b.md')).toEqual(['b.md', 'a.md', 'c.md']);
+  });
+
+  it('keeps only the five newest', () => {
+    const recent = ['a', 'b', 'c', 'd', 'e'];
+    expect(pushRecentPath(recent, 'f')).toEqual(['f', 'a', 'b', 'c', 'd']);
   });
 });

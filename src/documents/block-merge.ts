@@ -56,6 +56,33 @@ export function blockHunks(diff: { base: BlockChange[]; candidate: BlockChange[]
   return hunks;
 }
 
+/**
+ * The candidate's blocks with the base blocks it drops or rewrites kept in
+ * place, marked `removed`: one document read as tracked changes.
+ */
+export function trackedBlocks(
+  base: readonly DocumentBlock[],
+  candidate: readonly DocumentBlock[],
+  diff: { base: BlockChange[]; candidate: BlockChange[] },
+): { blocks: DocumentBlock[]; changes: BlockChange[] } {
+  const hunks = blockHunks(diff);
+  const blocks: DocumentBlock[] = [];
+  const changes: BlockChange[] = [];
+  for (let j = 0; j <= candidate.length; j++) {
+    for (const hunk of hunks.filter((h) => h.candStart === j)) {
+      for (const block of base.slice(hunk.baseStart, hunk.baseEnd)) {
+        blocks.push(block);
+        changes.push('removed');
+      }
+    }
+    if (j < candidate.length) {
+      blocks.push(candidate[j]);
+      changes.push(diff.candidate[j]);
+    }
+  }
+  return { blocks, changes };
+}
+
 export type HunkKind = 'rewrite' | 'insertion' | 'deletion';
 
 export function hunkKind(hunk: BlockHunk): HunkKind {

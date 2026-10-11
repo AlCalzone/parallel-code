@@ -1,12 +1,17 @@
 import { render } from 'solid-js/web';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setStore } from '../store/core';
 import { RunComposer } from './RunComposer';
 import type { DocumentBlock } from './markdown-blocks';
-import type { DocumentSelection } from './store';
+import { setDocumentComposerDraft, type DocumentSelection } from './store';
+import { workspaceUi, resetWorkspaceUi } from './workspace-ui';
 
-const { addDocumentAnnotation } = vi.hoisted(() => ({
+const { addDocumentAnnotation, saveDocumentNoteDraft } = vi.hoisted(() => ({
   addDocumentAnnotation: vi.fn(async () => ({ id: 'saved-1' })),
+  saveDocumentNoteDraft: vi.fn(async () => {
+    setDocumentComposerDraft(null);
+    return true;
+  }),
 }));
 
 vi.mock('./agent-task', () => ({
@@ -16,14 +21,31 @@ vi.mock('./agent-task', () => ({
 vi.mock('./store', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./store')>()),
   addDocumentAnnotation,
+  saveDocumentNoteDraft,
 }));
 
 const disposers: Array<() => void> = [];
+
+beforeEach(() => {
+  setStore('availableAgents', [
+    {
+      id: 'codex',
+      name: 'Codex',
+      command: 'codex',
+      args: [],
+      resume_args: [],
+      skip_permissions_args: [],
+      description: '',
+    },
+  ]);
+});
 
 afterEach(() => {
   while (disposers.length > 0) disposers.pop()?.();
   document.body.replaceChildren();
   setStore({ projects: [], availableAgents: [] });
+  setDocumentComposerDraft(null);
+  resetWorkspaceUi();
   vi.clearAllMocks();
 });
 
@@ -48,12 +70,6 @@ const passage: DocumentSelection = {
   wholeDocument: false,
 };
 
-function tab(host: HTMLElement, label: string): HTMLButtonElement | undefined {
-  return Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(
-    (t) => t.textContent?.trim() === label,
-  );
-}
-
 function type(host: HTMLElement, text: string): HTMLTextAreaElement {
   const textarea = host.querySelector('textarea') as HTMLTextAreaElement;
   textarea.value = text;
@@ -61,8 +77,14 @@ function type(host: HTMLElement, text: string): HTMLTextAreaElement {
   return textarea;
 }
 
-function pressEnter(textarea: HTMLTextAreaElement): void {
-  textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+function askButton(host: HTMLElement): HTMLButtonElement | null {
+  return (
+    Array.from(host.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Ask') ?? null
+  );
+}
+
+function pressEnter(textarea: HTMLTextAreaElement, ctrlKey = false): void {
+  textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, ctrlKey }));
 }
 
 describe('RunComposer while an input method is composing', () => {
@@ -72,22 +94,24 @@ describe('RunComposer while an input method is composing', () => {
     disposers.push(
       render(() => <RunComposer selection={passage} blocks={blocks} onClose={() => {}} />, host),
     );
-    tab(host, 'Note')?.click();
+    setDocumentComposerDraft({ text: '', mode: 'note' });
     const textarea = type(host, '注意');
 
     textarea.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, isComposing: true }),
     );
     await Promise.resolve();
-    expect(addDocumentAnnotation).not.toHaveBeenCalled();
+    expect(saveDocumentNoteDraft).not.toHaveBeenCalled();
 
     pressEnter(textarea);
-    await vi.waitFor(() => expect(addDocumentAnnotation).toHaveBeenCalledOnce());
+    expect(saveDocumentNoteDraft).not.toHaveBeenCalled();
+    pressEnter(textarea, true);
+    await vi.waitFor(() => expect(saveDocumentNoteDraft).toHaveBeenCalledOnce());
   });
 });
 
-describe('RunComposer after a note or question is saved', () => {
-  it('empties the instruction so the next passage opens on a blank composer', async () => {
+describe('RunComposer after a comment or question is saved', () => {
+  it('asks an agent from the Ask composer and drops a comment draft it took over', async () => {
     const onClose = vi.fn();
     const host = document.createElement('div');
     document.body.append(host);
@@ -95,21 +119,37 @@ describe('RunComposer after a note or question is saved', () => {
       render(() => <RunComposer selection={passage} blocks={blocks} onClose={onClose} />, host),
     );
 
-    tab(host, 'Ask')?.click();
+    setDocumentComposerDraft({ text: '', mode: 'question' });
     const textarea = type(host, 'Why is this here?');
-    pressEnter(textarea);
+    askButton(host)?.click();
     await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
 
     expect(addDocumentAnnotation).toHaveBeenCalledWith(
       'question',
       'Why is this here?',
       expect.anything(),
-      { askWith: undefined },
+      { askWith: expect.objectContaining({ id: 'codex' }) },
     );
+    // The comment is not also autosaved on the way out.
+    expect(saveDocumentNoteDraft).not.toHaveBeenCalled();
     expect(textarea.value).toBe('');
+    expect(workspaceUi.focusedAnnotationId).toBe('saved-1');
   });
 
-  it('empties the instruction for a saved note too', async () => {
+  it('keeps Ask off until there is text for it', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    disposers.push(
+      render(() => <RunComposer selection={passage} blocks={blocks} onClose={() => {}} />, host),
+    );
+    setDocumentComposerDraft({ text: '', mode: 'question' });
+
+    expect(askButton(host)?.disabled).toBe(true);
+    type(host, 'Why?');
+    expect(askButton(host)?.disabled).toBe(false);
+  });
+
+  it('saves a comment with the existing shortcut and offers no Ask beside it', async () => {
     const onClose = vi.fn();
     const host = document.createElement('div');
     document.body.append(host);
@@ -117,12 +157,20 @@ describe('RunComposer after a note or question is saved', () => {
       render(() => <RunComposer selection={passage} blocks={blocks} onClose={onClose} />, host),
     );
 
-    tab(host, 'Note')?.click();
+    setDocumentComposerDraft({ text: '', mode: 'note' });
     const textarea = type(host, 'Revisit this paragraph.');
-    pressEnter(textarea);
+    expect(host.querySelector('details')).toBeNull();
+    expect(host.querySelector('[role="tablist"]')).toBeNull();
+    expect(host.querySelector('.docws-composer-quote')).toBeNull();
+    expect(host.querySelector('.docws-composer-scope')).toBeNull();
+    expect(Array.from(host.querySelectorAll('button')).map((b) => b.textContent?.trim())).toEqual([
+      '',
+    ]);
+    pressEnter(textarea, true);
     await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
 
-    expect(textarea.value).toBe('');
+    expect(saveDocumentNoteDraft).toHaveBeenCalledOnce();
+    expect(addDocumentAnnotation).not.toHaveBeenCalled();
   });
 
   it('keeps the text when saving failed, so nothing typed is lost', async () => {
@@ -134,12 +182,36 @@ describe('RunComposer after a note or question is saved', () => {
       render(() => <RunComposer selection={passage} blocks={blocks} onClose={onClose} />, host),
     );
 
-    tab(host, 'Ask')?.click();
+    setDocumentComposerDraft({ text: '', mode: 'question' });
     const textarea = type(host, 'Why is this here?');
-    pressEnter(textarea);
+    askButton(host)?.click();
     await vi.waitFor(() => expect(addDocumentAnnotation).toHaveBeenCalled());
 
     expect(onClose).not.toHaveBeenCalled();
     expect(textarea.value).toBe('Why is this here?');
+  });
+
+  it('sends a question with the save shortcut and never autosaves it as a comment', async () => {
+    const onClose = vi.fn();
+    const host = document.createElement('div');
+    document.body.append(host);
+    disposers.push(
+      render(() => <RunComposer selection={passage} blocks={blocks} onClose={onClose} />, host),
+    );
+
+    setDocumentComposerDraft({ text: '', mode: 'question' });
+    expect(host.querySelector('[aria-label="Ask about this passage"]')).not.toBeNull();
+    const textarea = type(host, 'Is this still true?');
+    textarea.dispatchEvent(new FocusEvent('blur'));
+    pressEnter(textarea, true);
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
+
+    expect(addDocumentAnnotation).toHaveBeenCalledWith(
+      'question',
+      'Is this still true?',
+      expect.anything(),
+      { askWith: expect.objectContaining({ id: 'codex' }) },
+    );
+    expect(saveDocumentNoteDraft).not.toHaveBeenCalled();
   });
 });

@@ -81,7 +81,7 @@ describe('RightPanel', () => {
     const terminal = host.querySelector('.terminal-stub');
     expect(terminal?.getAttribute('data-visible')).toBe('true');
 
-    tab(host, 'Files')?.click();
+    tab(host, 'Comments')?.click();
     expect(terminal?.getAttribute('data-visible')).toBe('false');
 
     tab(host, 'Agent')?.click();

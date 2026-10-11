@@ -93,7 +93,7 @@ export function CandidateOutputDialog() {
     <Dialog
       open={!!target()}
       onClose={() => openCandidateOutput(null)}
-      width="min(900px, 92vw)"
+      width="min(760px, 92vw)"
       labelledBy={`${id}-label ${id}-agent`}
       describedBy={`${id}-instruction`}
     >

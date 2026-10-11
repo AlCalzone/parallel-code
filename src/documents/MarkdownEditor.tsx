@@ -1,4 +1,4 @@
-import { Show, createEffect, createSignal, onCleanup, untrack } from 'solid-js';
+import { Show, createEffect, createSignal, on, onCleanup, untrack } from 'solid-js';
 import { IPC } from '../../electron/ipc/channels';
 import { TaskCanvasEditor } from '../components/TaskCanvasEditor';
 import type { CanvasDraft, CanvasEditorApi, CanvasWrite } from '../components/TaskCanvasEditor';
@@ -19,6 +19,10 @@ interface MarkdownEditorProps {
   documentPath: string;
   source: string;
   missing: boolean;
+  /** Where to put the cursor; a new `seq` repeats the move to the same line. */
+  reveal?: { line: number; seq: number };
+  /** The move was made; the owner drops it so a remount does not repeat it. */
+  onRevealed?: () => void;
   onSaved: () => void | Promise<void>;
 }
 
@@ -99,6 +103,15 @@ function MarkdownEditorSession(
     latestDraft = draft;
     persistDraft(draft);
   }
+
+  // The editor mounts after this effect first runs, so `ref` replays the target.
+  const revealNow = () => {
+    const target = props.reveal;
+    if (!target || !editor) return;
+    editor.goToLine(target.line);
+    props.onRevealed?.();
+  };
+  createEffect(on(() => props.reveal?.seq, revealNow));
 
   createEffect(() => {
     const source = props.source;
@@ -186,6 +199,7 @@ function MarkdownEditorSession(
         onSelect={() => {}}
         ref={(api) => {
           editor = api;
+          revealNow();
           props.onReady(api.save);
         }}
       />

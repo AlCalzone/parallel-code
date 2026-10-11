@@ -79,21 +79,12 @@ describe('block hover actions', () => {
     const labels = Array.from(toolbar()?.querySelectorAll('button') ?? []).map((b) =>
       b.getAttribute('aria-label'),
     );
-    expect(labels).toEqual([
-      'Edit this block with agent',
-      'Proposals for this block',
-      'Note beside this block',
-      'Ask an agent about this block',
-      'Edit this block',
-    ]);
-
-    toolbar()?.querySelector<HTMLButtonElement>('[aria-label="Note beside this block"]')?.click();
-    toolbar()?.querySelector<HTMLButtonElement>('[aria-label="Proposals for this block"]')?.click();
-    toolbar()?.querySelector<HTMLButtonElement>('[aria-label="Edit this block"]')?.click();
-
-    expect(onAction).toHaveBeenNthCalledWith(1, 'note', 1);
-    expect(onAction).toHaveBeenNthCalledWith(2, 'proposals', 1);
-    expect(onAction).toHaveBeenNthCalledWith(3, 'edit', 1);
+    expect(labels).toEqual(['Rewrite with AI', 'Add comment', 'Ask about this passage']);
+    expect(toolbar()?.textContent).toContain('Comment');
+    toolbar()?.querySelector<HTMLButtonElement>('[aria-label="Add comment"]')?.click();
+    toolbar()?.querySelector<HTMLButtonElement>('[aria-label="Rewrite with AI"]')?.click();
+    expect(onAction).toHaveBeenNthCalledWith(1, 'note', 1, undefined);
+    expect(onAction).toHaveBeenNthCalledWith(2, 'proposals', 1, undefined);
     expect(onSelect).not.toHaveBeenCalled();
   });
 
@@ -110,25 +101,12 @@ describe('block hover actions', () => {
     expect(isOpen()).toBe(false);
   });
 
-  it('gives the task and edit actions different icons', () => {
-    mount();
-    const icon = (label: string) =>
-      toolbar()?.querySelector(`[aria-label="${label}"] path`)?.getAttribute('d');
-    expect(icon('Edit this block with agent')).not.toEqual(icon('Edit this block'));
-  });
-
-  it('keeps the toolbar for the other blocks while a passage is picked', () => {
-    const { host } = mount({ selection: { start: 1, end: 1 } });
-    expect(host.querySelector('[data-block-index="1"]')?.classList.contains('is-selected')).toBe(
-      true,
-    );
-
-    // The picked block has the composer up on it; the bar would only repeat it.
+  it('keeps actions scoped to the selected passage when the pointer moves elsewhere', () => {
+    const { host, onAction } = mount({ selection: { start: 0, end: 1 } });
     hover(host, 1);
-    expect(isOpen()).toBe(false);
-
-    hover(host, 0);
     expect(isOpen()).toBe(true);
+    toolbar()?.querySelector<HTMLButtonElement>('[aria-label="Add comment"]')?.click();
+    expect(onAction).toHaveBeenCalledWith('note', 1, { start: 0, end: 1 });
   });
 
   it('shows no toolbar when the viewer is not selectable', () => {

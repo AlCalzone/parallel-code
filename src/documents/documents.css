@@ -23,12 +23,15 @@
   color: var(--fg);
 }
 
+/* One bar: where you are, what you can do to the document, then the window's
+   own controls. It wraps rather than clipping when the workspace is narrow. */
 .docws-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  container: docws-header / inline-size;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px 8px;
+  gap: 6px 10px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-elevated);
   flex-shrink: 0;
@@ -40,6 +43,19 @@
   display: flex;
   align-items: center;
   gap: 2px;
+  margin-left: auto;
+}
+
+.docws-header-tools {
+  position: relative;
+  display: flex;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+/* The path dims while the document loads instead of a chip pushing it over. */
+.docws-header[aria-busy='true'] .docws-file-path {
+  opacity: 0.6;
 }
 
 .docws-header-actions .docws-btn {
@@ -58,13 +74,9 @@
   background: var(--bg-hover);
 }
 
-.docws-header-actions .docws-close:hover {
-  color: var(--error);
-}
-
 .docws-navigation {
-  grid-column: 1 / -1;
   display: flex;
+  flex: 0 1 auto;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -75,11 +87,19 @@
   flex-shrink: 0;
 }
 
+.docws-files-anchor {
+  position: relative;
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 220px;
+}
+
 .docws-file-path {
   display: flex;
-  flex: 1;
+  flex: 0 1 auto;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 4px;
   min-width: 0;
   padding: 4px 0;
@@ -110,33 +130,27 @@
   flex-shrink: 0;
 }
 
-.docws-status {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
 /* The header itself is the window drag region. Carve out every possible
    control so the entire remaining background behaves consistently. These
    declarations also protect controls that overlap the native title strip. */
 .docws-header button,
+.docws-header label,
 .docws-header input,
 .docws-header select,
 .docws-header textarea,
-.docws-header a {
+.docws-header a,
+.docws-files-popover {
   -webkit-app-region: no-drag;
 }
 
 .docws-title {
   display: flex;
   min-width: 0;
-  max-width: 100%;
+  max-width: 160px;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 /* The name gives way first, on one line; the buttons after it keep their
@@ -154,7 +168,7 @@
 }
 
 /* File names remain available at every width; History carries branch details. */
-@container (max-width: 960px) {
+@container docws-header (max-width: 960px) {
   .docws-navigation .docws-head-chip {
     display: none;
   }
@@ -283,20 +297,18 @@
 }
 
 .docws-btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-text);
+  background: transparent;
+  border-color: var(--border);
+  color: var(--fg);
   font-weight: 600;
 }
 
 .docws-btn-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--bg-hover);
 }
 
-/* Dimming the accent alone still reads as a live button; take the colour away. */
+/* Keep disabled primary actions quieter than available actions. */
 .docws-btn-primary:disabled {
-  background: var(--bg-hover);
-  border-color: var(--border);
   color: var(--fg-muted);
 }
 
@@ -307,6 +319,33 @@
 .docws-btn-sm {
   padding: 3px 8px;
   font-size: 12px;
+}
+
+.docws-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.docws-icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.docws-icon-btn.docws-btn-danger {
+  color: var(--fg-muted);
+}
+
+.docws-icon-btn.docws-btn-danger:hover {
+  color: var(--error);
 }
 
 .docws-dialog-title {
@@ -427,6 +466,81 @@
   white-space: nowrap;
 }
 
+/* Waiting for the reader, at the top of the document: plain text and a plain
+   button, since the panel's tabs already carry the loud flags. */
+/* In flow rather than overlaid, so it never hides the opening lines: it
+   arrives as new content, and scroll anchoring keeps the prose in view still
+   when the reader is further down. Sticky keeps it visible while scrolling. */
+.docws-attention {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--island-bg);
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.docws-attention-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The project's files, dropped from the path button in the header. */
+.docws-files-popover {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  right: 0;
+  width: min(360px, 90vw);
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.3);
+}
+
+.docws-files-filter {
+  margin: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.docws-files-section {
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  overflow: auto;
+}
+
+.docws-files-section .docws-rail-title {
+  padding: 2px 10px;
+}
+
+.docws-files-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.docws-tree-row.is-active {
+  background: var(--bg-hover);
+}
+
 /* ── File tree ── */
 
 .docws-files {
@@ -511,7 +625,6 @@
    the composer can float over the column instead of pushing the prose down. */
 .docws-doc-main {
   container-type: inline-size;
-  container-name: document-pane;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -531,13 +644,19 @@
   position: relative;
   max-width: 800px;
   margin: 0 auto;
-  padding: 20px clamp(16px, 4cqi, 32px) 280px;
+  padding: 20px 40px 280px;
 }
 
 /* Full width is a choice, remembered across workspaces: wide tables and
    diagrams get the whole column instead of a reading measure. */
 .docws-doc.is-full-width {
   max-width: none;
+}
+
+.docws-content {
+  /* Keep authored stacking contexts below workspace controls. This wrapper is
+     outside the scope of the document's own styles. */
+  isolation: isolate;
 }
 
 /* The shared dialog prose style caps itself at 720px, which is hidden inside
@@ -614,21 +733,6 @@
 .docws-tab[aria-pressed='true'] {
   color: var(--accent);
   background: var(--bg-input);
-}
-
-/* White canvas is what a browser gives a page by default; a page that sets its
-   own background paints over it. */
-.docws-html-viewport {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.docws-html-preview {
-  display: block;
-  border: 0;
-  background: #fff;
-  transform-origin: top left;
 }
 
 .docws-content:not(.docws-page) .doc-block {
@@ -847,8 +951,9 @@
 
 .docws-block-action {
   position: relative;
-  width: 22px;
-  height: 22px;
+  height: 28px;
+  gap: 5px;
+  font: 12px var(--font-ui);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -857,7 +962,7 @@
   background: transparent;
   color: var(--fg-muted);
   cursor: pointer;
-  padding: 0;
+  padding: 0 7px;
 }
 
 .docws-block-action:hover,
@@ -868,21 +973,6 @@
 
 .docws-block-action:active {
   transform: translateY(1px);
-}
-
-/* Editing the source is a different kind of act from briefing an agent. */
-.docws-block-action[data-kind='edit'] {
-  margin-left: 5px;
-}
-
-.docws-block-action[data-kind='edit']::before {
-  content: '';
-  position: absolute;
-  left: -4px;
-  top: 4px;
-  bottom: 4px;
-  width: 1px;
-  background: var(--border);
 }
 
 /* The label as an instant tooltip: the native one takes a second, and the
@@ -974,31 +1064,26 @@
 }
 
 .docws-toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 3;
   display: flex;
+  flex: 1;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
-  padding: 7px 10px;
-  min-height: 42px;
-  background: var(--island-bg);
-  border-bottom: 1px solid var(--border-subtle);
+  min-width: 0;
   font-size: 12px;
   color: var(--fg-muted);
 }
 
-/* The view tabs lead the toolbar and must not drift with what shows on the
-   right; Full width goes away in the page view. */
+/* The Markdown view tabs lead the toolbar and must not drift with what
+   shows on the right. */
 .docws-toolbar .docws-tabs {
   margin-left: 0;
 }
 
-/* The hint is the one thing in the toolbar that can give way: on one line,
-   cut short, so the buttons keep their row in a narrow column. */
+/* The label is the one thing in the toolbar that can give way: on one line,
+   cut short to nothing before the buttons wrap to a second row. */
 .docws-toolbar-label {
-  flex: 1 1 100px;
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1014,17 +1099,18 @@
   border-color: var(--border-focus);
 }
 
-@container document-pane (max-width: 600px) {
-  .docws-toolbar-label {
+/* Below a wide workspace (the default is 960px) the project name and the
+   labels that repeat an icon give way first. The document's actions still
+   wrap to a second row at the default width. */
+@container docws-header (max-width: 1100px) {
+  .docws-title,
+  .docws-toolbar-label,
+  .docws-width-label {
     display: none;
   }
 }
 
-@container document-pane (max-width: 380px) {
-  .docws-width-label {
-    display: none;
-  }
-
+@container docws-header (max-width: 640px) {
   .docws-toolbar {
     gap: 5px;
     padding-inline: 6px;
@@ -1081,15 +1167,9 @@
   bottom: 0;
   display: flex;
   justify-content: center;
-  padding: 0 24px 18px;
+  padding: 0 24px 12px;
   pointer-events: none;
   z-index: 8;
-}
-
-/* Kept mounted while previewing, so a half-typed instruction survives the
-   toggle; the sandboxed render has no passage to act on. */
-.docws-composer-layer.is-hidden {
-  display: none;
 }
 
 /* Hung off the picked passage; the pane sets `top`. */
@@ -1099,17 +1179,17 @@
 
 .docws-composer {
   pointer-events: auto;
-  width: min(760px, 100%);
+  width: min(480px, 100%);
   max-height: min(60vh, 560px, calc(var(--docws-composer-space, 100vh) - 18px));
   overflow-y: auto;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft);
-  padding: 12px 14px;
+  padding: 6px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   transition: border-color 160ms ease;
 }
 
@@ -1124,7 +1204,7 @@
   flex-shrink: 0;
 }
 
-/* What to do, and where: the tabs, the passage, and a way out. Never wraps;
+/* The chosen action, passage, and a way out. Never wraps;
    a long heading in the scope gives way instead. */
 .docws-composer-head {
   display: flex;
@@ -1134,8 +1214,20 @@
   color: var(--fg-subtle);
 }
 
-/* What the instruction will act on. A shade louder than the rest of the
-   header: it is the one thing here that changes as you pick. */
+.docws-composer-title {
+  display: inline-flex;
+  align-items: center;
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.docws-note-status {
+  flex: 1;
+  text-align: right;
+  color: var(--fg-muted);
+}
+
+/* The selected passage gives way to the action and close button. */
 .docws-composer-scope {
   flex: 1;
   min-width: 0;
@@ -1147,6 +1239,7 @@
 }
 
 .docws-composer-close {
+  margin-left: auto;
   flex: none;
   width: 24px;
   height: 24px;
@@ -1172,7 +1265,7 @@
 .docws-composer-quote {
   font-size: 12px;
   color: var(--fg-muted);
-  border-left: 3px solid var(--accent);
+  border-left: 2px solid var(--border);
   padding-left: 8px;
   overflow: hidden;
   white-space: nowrap;
@@ -1182,7 +1275,7 @@
 
 .docws-composer textarea {
   width: 100%;
-  min-height: 64px;
+  min-height: 52px;
   resize: vertical;
   background: var(--bg-input);
   border: 1px solid var(--border);
@@ -1208,8 +1301,8 @@
 .docws-proposal-panel {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 6px;
+  padding: 6px 8px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--bg-input) 60%, transparent);
@@ -1250,11 +1343,11 @@
 
 .docws-proposal-options summary {
   cursor: pointer;
-  padding: 4px 0;
+  padding: 2px 0;
 }
 
 .docws-proposal-options[open] > :not(summary) {
-  margin-top: 10px;
+  margin-top: 6px;
 }
 
 .docws-proposal-options > label {
@@ -1262,7 +1355,7 @@
 }
 
 .docws-refinement {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .docws-refinement p {
@@ -1271,14 +1364,14 @@
 }
 
 .docws-refinement textarea {
-  min-height: 72px;
-  margin-bottom: 8px;
+  min-height: 56px;
+  margin-bottom: 6px;
 }
 
 .docws-block-editor {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   color: var(--fg);
 }
 
@@ -1296,10 +1389,10 @@
 }
 
 .docws-block-editor textarea {
-  min-height: 180px;
+  min-height: 120px;
   max-height: 55vh;
   resize: vertical;
-  padding: 12px;
+  padding: 8px 10px;
   background: var(--bg-input);
   color: var(--fg);
   border: 1px solid var(--border);
@@ -1377,6 +1470,20 @@
   color: var(--fg-subtle);
 }
 
+/* Compact toggles beside Rewrite; the button alone takes the right edge. */
+.docws-composer-footer .docws-tabs {
+  margin-left: 0;
+}
+
+.docws-composer-footer .docws-tab {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.docws-composer-footer .docws-btn-primary {
+  margin-left: auto;
+}
+
 .docws-model-rows {
   display: flex;
   flex-direction: column;
@@ -1436,8 +1543,16 @@
   text-overflow: ellipsis;
 }
 
+.docws-composer-footer .docws-composer-hint {
+  white-space: normal;
+}
+
 .docws-composer-footer > :not(.docws-composer-hint) {
   flex: none;
+}
+
+.docws-composer-footer > button {
+  margin-left: auto;
 }
 
 .docws-select {
@@ -1561,7 +1676,7 @@
 
 .docws-output-body {
   margin: 0;
-  min-height: 200px;
+  min-height: 120px;
   max-height: 60vh;
   overflow: auto;
   font-family: var(--font-mono);
@@ -1573,7 +1688,7 @@
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 10px;
+  padding: 8px;
 }
 
 .docws-candidate-head {
@@ -1675,7 +1790,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
+  padding: 6px 14px;
   border-bottom: 1px solid var(--border);
   user-select: none;
 }
@@ -1695,8 +1810,8 @@
 .docws-compare-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 18px;
+  gap: 10px;
+  padding: 5px 14px;
   border-bottom: 1px solid var(--border);
   font-size: 12px;
   color: var(--fg-muted);
@@ -2015,15 +2130,15 @@
 
 .docws-bubble {
   margin: 6px 0 10px 12px;
-  padding: 10px 12px;
+  padding: 6px 8px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: var(--task-panel-bg);
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.45;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   position: relative;
   outline: none;
 }
@@ -2085,17 +2200,40 @@
   text-decoration: line-through;
 }
 
-.docws-bubble-head {
+/* The note and its actions share one row, so there is no header bar. */
+.docws-bubble-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.docws-bubble-main .docws-bubble-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.docws-bubble-actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  margin: -2px -4px 0 0;
+  opacity: 0.55;
+}
+
+.docws-bubble:hover .docws-bubble-actions,
+.docws-bubble:focus-within .docws-bubble-actions {
+  opacity: 1;
+}
+
+/* Quiet footer for the badges and the stamp; the time is the one part that can
+   lose characters, so it gives way first and keeps the full stamp in its title. */
+.docws-bubble-meta {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 11px;
   color: var(--fg-subtle);
 }
-
-/* In a popover the head has to hold a badge, a time and three buttons on one
-   row: the time is the one part that can lose characters, so it gives way
-   first and keeps the full stamp in its title. */
 .docws-bubble-time {
   font-family: var(--font-mono);
   flex: 0 1 auto;
@@ -2238,7 +2376,6 @@
   width: min(440px, calc(100vw - 64px));
   max-height: 60vh;
   overflow-y: auto;
-  padding: 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--island-bg);
@@ -2262,12 +2399,17 @@
     visibility 0s;
 }
 
+/* The popover is the frame: its comments drop their own border and radius
+   instead of nesting a box in a box. */
 .docws-marker-pop .docws-bubble {
   margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 .docws-marker-pop .docws-bubble + .docws-bubble {
-  margin-top: 8px;
+  border-top: 1px solid var(--border-subtle);
 }
 
 /* The dot points at the passage from the margin; in the popover it has nothing
@@ -2276,13 +2418,21 @@
   display: none;
 }
 
+/* A passing offer, so it floats below the header instead of reflowing it,
+   under the document's actions rather than over the side panel. */
 .docws-undo {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 5;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 2px 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-soft);
   color: var(--fg);
 }
 
@@ -2291,29 +2441,6 @@
   padding: 10px 12px;
   border: 1px dashed var(--border);
   border-radius: var(--radius-md);
-}
-
-.docws-mode-tabs {
-  display: inline-flex;
-  gap: 2px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 2px;
-  /* A narrow column scrolls the strip rather than wrapping a label onto
-     three lines; the scope text beside it has already given way. */
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.docws-mode-tabs .docws-tab {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
-  font-size: 12px;
 }
 
 /* --- Partial acceptance --------------------------------------------------
@@ -2368,8 +2495,8 @@
 .docws-merge-panel {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 18px;
+  gap: 6px;
+  padding: 6px 14px;
   border-bottom: 1px solid var(--border);
   font-size: 12px;
 }
@@ -2381,7 +2508,7 @@
 }
 
 .docws-merge-panel textarea {
-  min-height: 64px;
+  min-height: 48px;
 }
 
 .docws-merge-row {
@@ -2507,4 +2634,92 @@
 
 .doc-block[hidden] {
   display: none;
+}
+
+/* Hiding the rail preserves its terminal and the user's split sizes. */
+.docws-split.is-rail-collapsed > .rp-cell:last-child,
+.docws-split.is-rail-collapsed > .resize-handle {
+  display: none;
+}
+
+.docws-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.docws-history-actions > span {
+  flex: 1;
+}
+
+.docws-notes-filter {
+  padding: 12px;
+}
+
+.docws-note-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  font: 13px/1.5 var(--font-ui);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.docws-note-entry:hover {
+  background: var(--bg-hover);
+}
+
+.docws-note-entry-quote {
+  color: var(--fg-muted);
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.docws-option-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 8px;
+}
+
+/* A single proposal read in the document: a plain bar, no attention colour. */
+.docws-inline-review-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.docws-inline-review-summary {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+  font-size: 13px;
 }

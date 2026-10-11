@@ -52,7 +52,7 @@ function projectRoot(): string {
   return project?.path ?? '';
 }
 
-async function fetchDocumentAt(sha: string, documentPath: string): Promise<string | null> {
+export async function fetchDocumentAt(sha: string, documentPath: string): Promise<string | null> {
   return invoke<string | null>(IPC.GetDocumentAtCommit, {
     projectRoot: projectRoot(),
     sha,

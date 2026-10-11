@@ -10,6 +10,7 @@ import {
   onCleanup,
   onMount,
 } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { store } from '../store/core';
 import { getProject, updateProject } from '../store/projects';
 import {
@@ -23,16 +24,16 @@ import {
   openDocumentFile,
   previousDocumentPath,
   refreshDocumentSnapshot,
-  reviewableRuns,
   setDocumentComposerDraft,
   setDocumentSelection,
   setDocumentView,
   setShowResolvedAnnotations,
-  openDocumentCompare,
   undoDeleteDocumentAnnotation,
+  type ComposerMode,
   type DocumentView,
+  inlineReview,
 } from './store';
-import { resetWorkspaceUi, setRailTab, workspaceUi } from './workspace-ui';
+import { resetWorkspaceUi, workspaceUi } from './workspace-ui';
 import {
   activateDocumentAgentTask,
   ensureDocumentAgentTask,
@@ -55,6 +56,9 @@ import { DocumentViewer, releasesSelection, selectionFromRange } from './Documen
 import { HistoryView } from './HistoryView';
 import { RunComposer } from './RunComposer';
 import { RightPanel } from './RightPanel';
+import { AttentionLine } from './AttentionLine';
+import { InlineReview } from './InlineReview';
+import { FilesPopover } from './FilesPopover';
 import { CandidateOutputDialog } from './CandidateOutputDialog';
 import { BlockEditor, type BlockEditTarget } from './BlockEditor';
 import { MarkdownEditor } from './MarkdownEditor';
@@ -65,7 +69,7 @@ import { DocumentIcon } from './DocumentIcon';
 import { ActionIcon } from './BlockActions';
 import { Dialog } from '../components/Dialog';
 import { openInEditor, revealItemInDir } from '../lib/shell';
-import { CloseIcon, PencilIcon, UndoIcon } from '../components/icons';
+import { PencilIcon, UndoIcon } from '../components/icons';
 import { setDocumentFullWidth, toggleTaskFocusMode } from '../store/ui';
 import { isTerminalPaneOnScreen } from '../lib/terminalPaneVisibility';
 import { errMessage } from '../lib/log';
@@ -75,9 +79,10 @@ import { showNotification } from '../store/notification';
 /** Space between the picked passage and the composer, and from the column's edges. */
 const COMPOSER_GAP = 8;
 
-function DocumentPane(props: { project: Project }) {
+function DocumentPane(props: { project: Project; toolbarSlot: HTMLElement | undefined }) {
   // Floating controls live under document.body, outside the tile's visibility/inert boundary.
   const floatingUiVisible = () => {
+    if (editingMarkdown()) return false;
     const taskId = documentAgentTaskId(props.project.id);
     return isTerminalPaneOnScreen({
       taskId,
@@ -126,7 +131,7 @@ function DocumentPane(props: { project: Project }) {
   });
   // The composer is up while there is something for it to do: a picked
   // passage, or a task asked for on the whole document.
-  const composerOpen = () => !!selection() || !!documentStore.composerDraft;
+  const composerOpen = () => !!documentStore.composerDraft;
 
   /** Open the source editor on a block; only blocks that map back to the source qualify. */
   function editBlock(block: DocumentBlock | null) {
@@ -173,7 +178,7 @@ function DocumentPane(props: { project: Project }) {
     });
   }
 
-  /** A bubble becomes a task: select its passage and open the composer with its text. */
+  /** "Rewrite from this": select its passage and open the composer with its text. */
   function makeTask(annotation: DocumentAnnotation) {
     const all = blocks.blocks();
     const loc = placed().located.get(annotation.id) ?? relocateAnchor(annotation.anchor, all);
@@ -181,7 +186,9 @@ function DocumentPane(props: { project: Project }) {
     const text = annotation.answer
       ? `${annotation.text}\n\nEarlier answer from ${annotation.answer.agentName}:\n${annotation.answer.text}`
       : annotation.text;
-    setDocumentComposerDraft({ text, annotationId: annotation.id });
+    // An open note draft would otherwise lend its mode and save this as a note.
+    const mode = documentStore.composerDraft?.mode === 'task' ? 'task' : 'proposals';
+    setDocumentComposerDraft({ text, annotationId: annotation.id, mode });
     setDocumentSelection({
       startBlock: loc.startBlock,
       endBlock: loc.endBlock,
@@ -244,10 +251,10 @@ function DocumentPane(props: { project: Project }) {
     return s ? `${s.startBlock}-${s.endBlock}-${s.wholeDocument ? 'all' : ''}` : null;
   };
   createEffect(
-    on([selectedRange, blocks.blocks], () => {
+    on([selectedRange, blocks.blocks, composerOpen], () => {
       const s = selection();
       requestAnimationFrame(() => {
-        if (s && !s.wholeDocument)
+        if (composerOpen() && s && !s.wholeDocument)
           blockElement(s.endBlock)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         placeComposer();
       });
@@ -273,39 +280,93 @@ function DocumentPane(props: { project: Project }) {
   });
 
   // A whole HTML page renders inline as element blocks in its own style, so it
-  // is worked on like any document. The sandboxed page render stays one click
-  // away for pages that lean on scripts or external stylesheets.
+  // is worked on like any document.
   const isHtml = createMemo(() => isHtmlDocument(documentStore.snapshot?.content));
-  const [htmlView, setHtmlView] = createSignal<'inline' | 'page'>('inline');
-  const showsPreview = () => isHtml() && htmlView() === 'page';
   const canEditMarkdown = () => isMarkdownPath(documentPath()) && !isHtml();
   const [markdownView, setMarkdownView] = createSignal<'preview' | 'edit'>('preview');
   const [editorOpened, setEditorOpened] = createSignal(false);
+  // Where the live editor puts its cursor; `seq` repeats a move to the same line.
+  const [reveal, setReveal] = createSignal<{ line: number; seq: number } | undefined>();
   const editingMarkdown = () => canEditMarkdown() && markdownView() === 'edit';
   // File identity, rather than the changing snapshot, owns the editor and its undo history.
   const editorKey = createMemo(() => JSON.stringify([props.project.path, documentPath()]));
   createEffect(
     on(editorKey, () => {
       const hasDraft = !!readMarkdownDraft(props.project.path, documentPath());
+      setReveal(undefined);
       setEditorOpened(hasDraft);
       setMarkdownView(hasDraft ? 'edit' : 'preview');
     }),
   );
 
+  // The inline review lives in the preview; the editor would hide it. The
+  // store has already saved the draft before it opens the review.
+  createEffect(
+    on(
+      () => !!inlineReview(),
+      (open) => {
+        if (open && editingMarkdown()) setMarkdownView('preview');
+      },
+    ),
+  );
+
+  // A Comments entry must reveal its passage, saving a Markdown draft first.
+  createEffect(
+    on(
+      () => workspaceUi.focusedAnnotationId,
+      (id) => {
+        if (!id) return;
+        afterSavingMarkdown(() => {
+          if (workspaceUi.focusedAnnotationId !== id) return;
+          setMarkdownView('preview');
+        });
+      },
+    ),
+  );
+
+  // Rendering and relocation can finish after the view switch or editor save.
+  createEffect(() => {
+    const id = workspaceUi.focusedAnnotationId;
+    if (!id || editingMarkdown()) return;
+    const loc = placed().located.get(id);
+    const frame = requestAnimationFrame(() => {
+      const target = loc
+        ? blockElement(loc.endBlock)
+        : docRef?.querySelector<HTMLElement>(`[data-annotation-id="${CSS.escape(id)}"]`);
+      target?.scrollIntoView({ block: 'center' });
+    });
+    onCleanup(() => cancelAnimationFrame(frame));
+  });
+
+  /** Typing into the file: opens the live editor, at a block's first line when one is picked. */
   function startEditing() {
-    setDocumentSelection(null);
-    setDocumentComposerDraft(null);
+    const s = selection();
+    const line = s && !s.wholeDocument ? s.startLine : undefined;
     setEditorOpened(true);
     setMarkdownView('edit');
-    requestAnimationFrame(() => mainRef?.querySelector<HTMLElement>('.cm-content')?.focus());
+    if (line !== undefined) setReveal({ line, seq: (reveal()?.seq ?? 0) + 1 });
+    else requestAnimationFrame(() => mainRef?.querySelector<HTMLElement>('.cm-content')?.focus());
   }
+
+  /** Opens a composer mode, carrying over any text typed in the current one. */
+  function openComposer(mode: ComposerMode) {
+    setDocumentComposerDraft({
+      ...documentStore.composerDraft,
+      text: documentStore.composerDraft?.text ?? '',
+      mode,
+    });
+  }
+  // A press would move focus out of an open comment first, and that blur saves
+  // the comment before its text moves to the new mode.
+  const keepComposerFocus = (e: MouseEvent) => e.preventDefault();
+  // Switching while a comment saves would post its text a second time.
+  const noteSaving = () => documentStore.composerDraft?.noteSaveStatus === 'saving';
+  const needsPassage = 'Select a passage first';
 
   const toolbarLabel = () => {
     if (editingMarkdown()) return 'Edit Markdown directly · autosaves when you pause';
-    if (showsPreview()) return 'Sandboxed render of the page — switch to Inline to scope a task';
     const s = selection();
-    if (!s || s.wholeDocument)
-      return 'Click a block, drag across blocks, or use § on a heading to work on a passage';
+    if (!s || s.wholeDocument) return '';
     return s.startLine === s.endLine
       ? `Selected line ${s.startLine}`
       : `Selected lines ${s.startLine}–${s.endLine}`;
@@ -313,157 +374,176 @@ function DocumentPane(props: { project: Project }) {
 
   return (
     <div class="docws-main docws-doc-main" ref={mainRef}>
-      <div class="docws-toolbar">
-        <Show when={canEditMarkdown() && documentStore.snapshot && !documentStore.snapshot.missing}>
-          <div class="docws-tabs" role="group" aria-label="Markdown view">
-            <button
-              type="button"
-              class="docws-tab"
-              aria-pressed={markdownView() === 'preview'}
-              onClick={() => afterSavingMarkdown(() => setMarkdownView('preview'))}
+      {/* The document's actions join the workspace header, so there is one bar. */}
+      <Show when={props.toolbarSlot}>
+        {(slot) => (
+          <Portal mount={slot()} ref={(el) => (el.className = 'docws-toolbar')}>
+            <Show
+              when={canEditMarkdown() && documentStore.snapshot && !documentStore.snapshot.missing}
             >
-              Preview
-            </button>
-            <button
-              type="button"
-              class="docws-tab"
-              aria-pressed={markdownView() === 'edit'}
-              onClick={startEditing}
-            >
-              Edit
-            </button>
-          </div>
-        </Show>
-        <Show when={isHtml()}>
-          <span class="docws-tabs">
-            <button
-              type="button"
-              class="docws-tab"
-              aria-selected={htmlView() === 'inline'}
-              title="The page as blocks you can select and scope tasks to"
-              onClick={() => setHtmlView('inline')}
-            >
-              Inline
-            </button>
-            <button
-              type="button"
-              class="docws-tab"
-              aria-selected={htmlView() === 'page'}
-              title="The page in a sandboxed frame, exactly as a browser shows it"
-              onClick={() => setHtmlView('page')}
-            >
-              Page
-            </button>
-          </span>
-        </Show>
-        <Show when={!showsPreview() && !composerOpen() && !editingMarkdown()}>
-          <button
-            type="button"
-            ref={reviseRef}
-            class="docws-btn docws-btn-sm docws-toolbar-task"
-            title="Open the composer on the whole document"
-            onClick={() => setDocumentComposerDraft({ text: '', mode: 'proposals' })}
-          >
-            <ActionIcon kind="proposals" />
-            Revise document
-          </button>
-        </Show>
-        <span class="docws-toolbar-label" title={toolbarLabel()}>
-          {toolbarLabel()}
-        </span>
-        <Show when={editableBlock() && !showsPreview() && !editingMarkdown()}>
-          <button
-            type="button"
-            class="docws-btn docws-btn-sm"
-            onClick={() => editBlock(editableBlock())}
-          >
-            <PencilIcon size={12} />
-            Edit block
-          </button>
-        </Show>
-        <Show when={documentStore.lastDeleted}>
-          <span class="docws-undo">
-            Deleted a {documentStore.lastDeleted?.kind}.
+              <div class="docws-tabs" role="group" aria-label="Markdown view">
+                <button
+                  type="button"
+                  class="docws-tab"
+                  aria-pressed={markdownView() === 'preview'}
+                  onClick={() => afterSavingMarkdown(() => setMarkdownView('preview'))}
+                >
+                  Preview
+                </button>
+                <button
+                  type="button"
+                  class="docws-tab"
+                  aria-pressed={markdownView() === 'edit'}
+                  title="Edit the Markdown source; starts at the selected passage"
+                  onClick={startEditing}
+                >
+                  Edit
+                </button>
+              </div>
+            </Show>
+            <Show when={!editingMarkdown()}>
+              <button
+                type="button"
+                ref={reviseRef}
+                class="docws-btn docws-btn-sm docws-toolbar-task"
+                disabled={noteSaving()}
+                title="Suggest changes to the selected passage or whole document"
+                onMouseDown={keepComposerFocus}
+                onClick={() => openComposer('proposals')}
+              >
+                <ActionIcon kind="proposals" />
+                Rewrite
+              </button>
+            </Show>
             <button
               type="button"
               class="docws-btn docws-btn-sm"
-              onClick={() => void undoDeleteDocumentAnnotation()}
+              disabled={!range() || editingMarkdown() || noteSaving()}
+              title={range() ? 'Comment on the selected passage' : needsPassage}
+              onMouseDown={keepComposerFocus}
+              onClick={() => openComposer('note')}
             >
-              <UndoIcon size={12} />
-              Undo
+              Comment
             </button>
-          </span>
-        </Show>
-        <span class="docws-toolbar-spacer" />
-        <div class="docws-zoom" role="group" aria-label="Document zoom and width">
-          <button
-            type="button"
-            class="docws-btn docws-btn-sm"
-            aria-label="Zoom out document"
-            title="Zoom out document"
-            disabled={zoom() <= 0.5}
-            onClick={() => setZoom(zoom() - 0.1)}
-          >
-            −
-          </button>
-          <button
-            type="button"
-            class="docws-btn docws-btn-sm"
-            aria-label="Reset document zoom"
-            title="Reset document zoom"
-            onClick={() => setZoom(1)}
-          >
-            {Math.round(zoom() * 100)}%
-          </button>
-          <button
-            type="button"
-            class="docws-btn docws-btn-sm"
-            aria-label="Zoom in document"
-            title="Zoom in document"
-            disabled={zoom() >= 2}
-            onClick={() => setZoom(zoom() + 0.1)}
-          >
-            +
-          </button>
-          <Show when={!showsPreview()}>
             <button
               type="button"
-              class="docws-btn docws-btn-sm docws-width-toggle"
-              aria-label="Full width"
-              aria-pressed={store.documentFullWidth}
-              title={
-                store.documentFullWidth
-                  ? 'Back to a reading width'
-                  : 'Let the document take the whole column'
-              }
-              onClick={() => setDocumentFullWidth(!store.documentFullWidth)}
+              class="docws-btn docws-btn-sm"
+              disabled={!range() || editingMarkdown() || noteSaving()}
+              title={range() ? 'Ask an agent about the selected passage' : needsPassage}
+              onMouseDown={keepComposerFocus}
+              onClick={() => openComposer('question')}
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                aria-hidden="true"
-              >
-                <path d="M2 3v10M14 3v10M5 8h6M6 6 4 8l2 2M10 6l2 2-2 2" />
-              </svg>
-              <span class="docws-width-label">Full width</span>
+              Ask
             </button>
-          </Show>
-        </div>
-        <Show when={resolvedCount() > 0 && !editingMarkdown()}>
-          <label class="docws-toggle" title="Resolved bubbles collapse to one line">
-            <input
-              type="checkbox"
-              checked={documentStore.showResolved}
-              onChange={(e) => setShowResolvedAnnotations(e.currentTarget.checked)}
-            />
-            {resolvedCount()} resolved
-          </label>
-        </Show>
-      </div>
+            <span class="docws-toolbar-label" title={toolbarLabel()}>
+              {toolbarLabel()}
+            </span>
+            <Show when={isHtml()}>
+              <button
+                type="button"
+                class="docws-btn docws-btn-sm"
+                style={{ visibility: editableBlock() ? 'visible' : 'hidden' }}
+                disabled={!editableBlock()}
+                onClick={() => editBlock(editableBlock())}
+              >
+                <PencilIcon size={12} />
+                Edit block
+              </button>
+            </Show>
+            <Show when={documentStore.lastDeleted}>
+              <span class="docws-undo">
+                Deleted a {documentStore.lastDeleted?.kind}.
+                <button
+                  type="button"
+                  class="docws-btn docws-btn-sm"
+                  onClick={() => void undoDeleteDocumentAnnotation()}
+                >
+                  <UndoIcon size={12} />
+                  Undo
+                </button>
+              </span>
+            </Show>
+            <span class="docws-toolbar-spacer" />
+            <div class="docws-zoom" role="group" aria-label="Document zoom and width">
+              <button
+                type="button"
+                class="docws-btn docws-btn-sm"
+                aria-label="Zoom out document"
+                title="Zoom out document"
+                disabled={zoom() <= 0.5}
+                onClick={() => setZoom(zoom() - 0.1)}
+              >
+                −
+              </button>
+              <button
+                type="button"
+                class="docws-btn docws-btn-sm"
+                aria-label="Reset document zoom"
+                title="Reset document zoom"
+                onClick={() => setZoom(1)}
+              >
+                {Math.round(zoom() * 100)}%
+              </button>
+              <button
+                type="button"
+                class="docws-btn docws-btn-sm"
+                aria-label="Zoom in document"
+                title="Zoom in document"
+                disabled={zoom() >= 2}
+                onClick={() => setZoom(zoom() + 0.1)}
+              >
+                +
+              </button>
+              {/* An HTML page already takes the whole column, so the toggle would do nothing. */}
+              <Show when={!isHtml()}>
+                <button
+                  type="button"
+                  class="docws-btn docws-btn-sm docws-width-toggle"
+                  aria-label="Full width"
+                  aria-pressed={store.documentFullWidth}
+                  title={
+                    store.documentFullWidth
+                      ? 'Back to a reading width'
+                      : 'Let the document take the whole column'
+                  }
+                  onClick={() => setDocumentFullWidth(!store.documentFullWidth)}
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    aria-hidden="true"
+                  >
+                    <path d="M2 3v10M14 3v10M5 8h6M6 6 4 8l2 2M10 6l2 2-2 2" />
+                  </svg>
+                  <span class="docws-width-label">Full width</span>
+                </button>
+              </Show>
+            </div>
+            {/* Kept in place once the document has comments, so resolving one
+                does not shift the bar. */}
+            <Show when={documentStore.annotations.some((a) => a.anchor.path === documentPath())}>
+              <label
+                class="docws-toggle"
+                title="Resolved bubbles collapse to one line"
+                style={{
+                  visibility: resolvedCount() > 0 && !editingMarkdown() ? 'visible' : 'hidden',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={documentStore.showResolved}
+                  onChange={(e) => setShowResolvedAnnotations(e.currentTarget.checked)}
+                />
+                {resolvedCount()} resolved
+              </label>
+            </Show>
+          </Portal>
+        )}
+      </Show>
       <Show when={documentStore.snapshot?.missing}>
         <div class="docws-older-banner">The document file is missing from the checkout.</div>
       </Show>
@@ -483,37 +563,22 @@ function DocumentPane(props: { project: Project }) {
                 documentPath={documentPath()}
                 source={documentStore.snapshot?.content ?? ''}
                 missing={documentStore.snapshot?.missing ?? false}
+                reveal={reveal()}
+                onRevealed={() => setReveal(undefined)}
                 onSaved={refreshDocumentSnapshot}
               />
             </div>
           )}
         </Show>
       </Show>
-      <Show when={showsPreview()}>
-        {/* Fully sandboxed: the page renders with its own CSS but gets no
-              scripts, no forms and no same-origin access to the app. */}
-        <div class="docws-html-viewport">
-          <iframe
-            class="docws-html-preview"
-            style={{
-              width: `${100 / zoom()}%`,
-              height: `${100 / zoom()}%`,
-              transform: `scale(${zoom()})`,
-            }}
-            sandbox=""
-            srcdoc={documentStore.snapshot?.content ?? ''}
-            title="HTML document preview"
-          />
-        </div>
-      </Show>
-      {/* Kept mounted while previewing so blocks, annotations and scroll
-            position survive the toggle. */}
+      {/* Kept mounted while the Markdown source is edited so blocks,
+            annotations and scroll position survive the switch. */}
       <div
         class="docws-scroll"
         ref={scrollRef}
-        classList={{ 'is-hidden': showsPreview() || editingMarkdown() }}
+        classList={{ 'is-hidden': editingMarkdown() }}
         onMouseUp={(e) => {
-          if (releasesSelection(e.target)) setDocumentSelection(null);
+          if (!composerOpen() && releasesSelection(e.target)) setDocumentSelection(null);
         }}
       >
         <div
@@ -525,54 +590,63 @@ function DocumentPane(props: { project: Project }) {
           }}
           classList={{ 'is-page': isHtml(), 'is-full-width': store.documentFullWidth }}
         >
+          <AttentionLine projectId={props.project.id} />
           <Show when={placed().detached.length > 0}>
             <div class="docws-detached-section">
-              <div class="docws-rail-title">Detached notes</div>
+              <div class="docws-rail-title">Detached comments</div>
               <div class="docws-empty" style={{ padding: '2px 0 6px' }}>
-                Their passages are no longer in the document. Resolve or delete them, or turn them
-                into a task on a new selection.
+                Their passages are no longer in the document. Resolve or delete them, or rewrite
+                from them on a new selection.
               </div>
               <For each={placed().detached}>
                 {(a) => <AnnotationBubble annotation={a} detached onMakeTask={makeTask} />}
               </For>
             </div>
           </Show>
-          <DocumentViewer
-            blocks={blocks.blocks()}
-            floatingUiVisible={floatingUiVisible()}
-            selectable
-            selection={range()}
-            onSelect={setDocumentSelection}
-            renderKey="main"
-            page={blocks.page()}
-            documentPath={documentPath()}
-            onNavigate={(path, anchor) => void navigate(path, anchor)}
-            onAction={(action, index) => {
-              if (action === 'edit') {
-                editBlock(blocks.blocks()[index] ?? null);
-                return;
-              }
-              batch(() => {
-                setDocumentSelection(
-                  selectionFromRange(blocks.blocks(), { start: index, end: index }),
+          <Show when={inlineReview()}>
+            {(review) => <InlineReview run={review().run} candidate={review().candidate} />}
+          </Show>
+          <div hidden={!!inlineReview()}>
+            <DocumentViewer
+              blocks={blocks.blocks()}
+              floatingUiVisible={floatingUiVisible()}
+              selectable
+              composerOpen={composerOpen()}
+              selection={range()}
+              onSelect={setDocumentSelection}
+              renderKey="main"
+              page={blocks.page()}
+              documentPath={documentPath()}
+              onNavigate={(path, anchor) => void navigate(path, anchor)}
+              onAction={(action, index, selectedRange) => {
+                batch(() => {
+                  setDocumentSelection(
+                    selectionFromRange(
+                      blocks.blocks(),
+                      selectedRange ?? { start: index, end: index },
+                    ),
+                  );
+                  setDocumentComposerDraft({
+                    text: documentStore.composerDraft?.text ?? '',
+                    mode: action,
+                  });
+                });
+              }}
+              hasMarker={(index) => (placed().byBlock.get(index)?.length ?? 0) > 0}
+              blockMarker={(index) => {
+                const annotations = placed().byBlock.get(index);
+                return (
+                  <Show when={annotations?.length}>
+                    <AnnotationMarker
+                      annotations={annotations ?? []}
+                      onMakeTask={makeTask}
+                      floatingUiVisible={floatingUiVisible()}
+                    />
+                  </Show>
                 );
-                setDocumentComposerDraft({ text: '', mode: action });
-              });
-            }}
-            hasMarker={(index) => (placed().byBlock.get(index)?.length ?? 0) > 0}
-            blockMarker={(index) => {
-              const annotations = placed().byBlock.get(index);
-              return (
-                <Show when={annotations?.length}>
-                  <AnnotationMarker
-                    annotations={annotations ?? []}
-                    onMakeTask={makeTask}
-                    floatingUiVisible={floatingUiVisible()}
-                  />
-                </Show>
-              );
-            }}
-          />
+              }}
+            />
+          </div>
           <Show
             when={
               blocks.blocks().length === 0 &&
@@ -607,7 +681,7 @@ function DocumentPane(props: { project: Project }) {
               if (layerRef === el) layerRef = undefined;
             });
           }}
-          classList={{ 'is-hidden': showsPreview(), 'is-anchored': anchorTop() !== null }}
+          classList={{ 'is-anchored': anchorTop() !== null }}
           style={{
             '--docws-composer-space': `${composerSpace()}px`,
             ...(anchorTop() !== null ? { top: `${anchorTop()}px`, bottom: 'auto' } : {}),
@@ -678,7 +752,8 @@ export function DocumentWorkspacePanel() {
         const frame = requestAnimationFrame(() => {
           const id = taskId();
           if (!id || !isActive() || panelRef.contains(document.activeElement)) return;
-          if (workspaceUi.railTab === 'agent') triggerFocus(`${id}:${getTaskFocusedPanel(id)}`);
+          if (!railCollapsed() && workspaceUi.railTab === 'agent')
+            triggerFocus(`${id}:${getTaskFocusedPanel(id)}`);
           if (!panelRef.contains(document.activeElement)) panelRef.focus({ preventScroll: true });
         });
         onCleanup(() => cancelAnimationFrame(frame));
@@ -693,9 +768,10 @@ export function DocumentWorkspacePanel() {
   });
   const [editing, setEditing] = createSignal<Project | null>(null);
   const [showEditActions, setShowEditActions] = createSignal(false);
+  const railCollapsed = () => project()?.documentPanelCollapsed !== false;
+  const [toolbarSlot, setToolbarSlot] = createSignal<HTMLElement>();
   const [editAction, setEditAction] = createSignal<'commit' | 'discard' | null>(null);
   const snapshot = () => documentStore.snapshot;
-  const reviewable = createMemo(() => reviewableRuns());
   const editorCommand = () => store.editorCommand.trim();
   const openPath = () => activeDocumentPath() ?? project()?.documentPath;
   const editorButtonLabel = () => {
@@ -805,10 +881,36 @@ export function DocumentWorkspacePanel() {
       content: () => (
         <>
           <Show when={documentStore.view === 'document' && project()}>
-            {(p) => <DocumentPane project={p()} />}
+            {(p) => <DocumentPane project={p()} toolbarSlot={toolbarSlot()} />}
           </Show>
           <Show when={documentStore.view === 'history'}>
             <div class="docws-main" style={{ overflow: 'hidden' }}>
+              <div class="docws-history-actions">
+                {/* Reserved when clean so the buttons do not shift. */}
+                <span style={{ visibility: snapshot()?.dirty ? 'visible' : 'hidden' }}>
+                  Changed since last version
+                </span>
+                <button
+                  type="button"
+                  class="docws-btn docws-btn-sm"
+                  disabled={!snapshot()?.dirty || !!editAction()}
+                  title="Save all tracked file changes in this project as a version"
+                  onClick={() => {
+                    setEditAction('commit');
+                    void commitDocumentEdits().finally(() => setEditAction(null));
+                  }}
+                >
+                  Save version
+                </button>
+                <button
+                  type="button"
+                  class="docws-btn docws-btn-sm"
+                  disabled={!snapshot()?.dirty || !!editAction()}
+                  onClick={() => setShowEditActions(true)}
+                >
+                  Restore last version…
+                </button>
+              </div>
               <HistoryView />
             </div>
           </Show>
@@ -821,12 +923,12 @@ export function DocumentWorkspacePanel() {
       get minSize() {
         return wide() ? 320 : 120;
       },
-      defaultSize: 420,
+      defaultSize: 360,
       // Keyed: the panel's children read the project from cleanups, which
       // must not go through an accessor while the workspace is closing.
       content: () => (
         <Show when={project()} keyed>
-          {(p) => <RightPanel project={p} />}
+          {(p) => <RightPanel project={p} visible={!railCollapsed()} />}
         </Show>
       ),
     },
@@ -843,11 +945,55 @@ export function DocumentWorkspacePanel() {
       onMouseDown={activate}
       onFocusIn={activate}
     >
-      <div class="docws-header" data-tauri-drag-region>
-        <div class="docws-title" title={project()?.name}>
-          <DocumentIcon />
-          <span>{project()?.name}</span>
+      <div class="docws-header" data-tauri-drag-region aria-busy={documentStore.loading}>
+        <div class="docws-navigation">
+          <span class="docws-title" title={project()?.name}>
+            <DocumentIcon />
+            <span>{project()?.name}</span>
+          </span>
+          <div class="docws-tabs" role="tablist" aria-label="Document views">
+            {tab('document', 'Document')}
+            {tab('history', 'History')}
+          </div>
+          <Show when={previousDocumentPath()}>
+            {(previous) => (
+              <button
+                type="button"
+                class="docws-btn docws-back"
+                title={`Back to ${previous()}`}
+                aria-label={`Back to ${previous()}`}
+                onClick={() => void goBackDocument()}
+              >
+                ←
+              </button>
+            )}
+          </Show>
+          <FilesPopover
+            projectRoot={project()?.path ?? ''}
+            openPath={openPath()}
+            recentPaths={project()?.documentRecentPaths ?? []}
+          />
+          <Show when={documentStore.view === 'history'}>
+            <span class="docws-head-chip" title="Checked-out branch and head commit">
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.493 2.493 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25Zm-6 0a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Zm8.25-.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z" />
+              </svg>
+              {snapshot()?.branch ?? 'detached'} ·{' '}
+              {snapshot()?.headSha?.slice(0, 7) ?? 'no commits'}
+            </span>
+          </Show>
         </div>
+        <div class="docws-header-tools" ref={setToolbarSlot} />
+        {/* aria-busy is not announced; this live region says what the dimmed path shows. */}
+        <span class="dialog-sr-only" role="status">
+          {documentStore.loading ? 'Loading document…' : ''}
+        </span>
         <div class="docws-header-actions">
           <button
             type="button"
@@ -909,86 +1055,56 @@ export function DocumentWorkspacePanel() {
           </button>
           <button
             type="button"
-            class="docws-btn docws-open-editor docws-close"
-            aria-label="Close document workspace"
-            title="Close document workspace"
-            onClick={() => closeDocumentWorkspace()}
+            class="docws-btn docws-open-editor"
+            aria-label="Side panel"
+            title={
+              railCollapsed()
+                ? 'Show the agent, runs and comments'
+                : 'Hide the agent, runs and comments'
+            }
+            aria-pressed={!railCollapsed()}
+            onClick={() => {
+              const p = project();
+              if (p) updateProject(p.id, { documentPanelCollapsed: !railCollapsed() });
+            }}
           >
-            <CloseIcon />
-          </button>
-        </div>
-        <div class="docws-navigation">
-          <div class="docws-tabs" role="tablist" aria-label="Document views">
-            {tab('document', 'Document')}
-            {tab('history', 'History')}
-          </div>
-          <Show when={previousDocumentPath()}>
-            {(previous) => (
-              <button
-                type="button"
-                class="docws-btn docws-back"
-                title={`Back to ${previous()}`}
-                aria-label={`Back to ${previous()}`}
-                onClick={() => void goBackDocument()}
-              >
-                ←
-              </button>
-            )}
-          </Show>
-          <button
-            type="button"
-            class="docws-file-path"
-            title={`Browse project files · ${openPath() ?? ''}`}
-            aria-label={`Browse project files: ${openPath() ?? ''}`}
-            onClick={() => setRailTab('files')}
-          >
-            <span>{openPath()}</span>
             <svg
-              width="12"
-              height="12"
+              width="16"
+              height="16"
               viewBox="0 0 16 16"
               fill="none"
               stroke="currentColor"
               stroke-width="1.5"
               aria-hidden="true"
             >
-              <path d="m5 6 3 3 3-3" />
+              <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" />
+              <path d="M10 2.75v10.5" />
             </svg>
           </button>
-          <span class="docws-head-chip" title="Checked-out branch and head commit">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.493 2.493 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25Zm-6 0a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Zm8.25-.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z" />
+          {/* Minimize, not close: the project stays open in the sidebar and the
+              workspace reopens from there, while an X on a task means closing it
+              for good. Comment drafts survive; the view and an unsent Rewrite or
+              Ask do not. */}
+          <button
+            type="button"
+            class="docws-btn docws-open-editor"
+            aria-label="Minimize document workspace"
+            title="Minimize · reopen from the sidebar"
+            onClick={() => closeDocumentWorkspace()}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              aria-hidden="true"
+            >
+              <path d="M3.5 12.25h9" />
             </svg>
-            {snapshot()?.branch ?? 'detached'} · {snapshot()?.headSha?.slice(0, 7) ?? 'no commits'}
-          </span>
+          </button>
         </div>
-        <Show when={snapshot()?.dirty || documentStore.loading || reviewable().length > 0}>
-          <div class="docws-status" role="status">
-            <Show when={snapshot()?.dirty}>
-              <button
-                type="button"
-                class="docws-head-chip is-warning is-action"
-                title="Commit or discard these edits"
-                onClick={() => setShowEditActions(true)}
-              >
-                uncommitted edits
-              </button>
-            </Show>
-            <Show when={documentStore.loading}>
-              <span class="docws-head-chip">loading…</span>
-            </Show>
-            <Show when={reviewable().length > 0}>
-              <button
-                type="button"
-                class="docws-btn docws-btn-sm docws-btn-primary"
-                title="Open the compare view"
-                onClick={() => openDocumentCompare(reviewable()[0].id)}
-              >
-                {reviewable().length} to review
-              </button>
-            </Show>
-          </div>
-        </Show>
       </div>
       <Show when={documentStore.error}>
         <div class="docws-banner docws-banner-error" role="alert">
@@ -997,6 +1113,7 @@ export function DocumentWorkspacePanel() {
       </Show>
       <div class="docws-body">
         <ResizablePanel
+          class={railCollapsed() ? 'docws-split is-rail-collapsed' : 'docws-split'}
           direction={wide() ? 'horizontal' : 'vertical'}
           persistKey={wide() ? 'docws' : 'docws:stack'}
           style={{ overflow: 'visible' }}
@@ -1015,11 +1132,11 @@ export function DocumentWorkspacePanel() {
         }}
       >
         <h2 id="docws-uncommitted-title" class="docws-dialog-title">
-          Commit or discard edits?
+          Restore the last saved version?
         </h2>
         <p id="docws-uncommitted-description" class="docws-dialog-message">
-          Commit saves tracked file changes as “Manual edits”. Discard restores tracked files to the
-          last commit and cannot be undone.
+          This replaces all tracked file changes in this project with the last saved version.
+          Changes since that version will be lost. This cannot be undone.
         </p>
         <div class="docws-dialog-actions">
           <button
@@ -1037,33 +1154,17 @@ export function DocumentWorkspacePanel() {
             disabled={!!editAction()}
             onClick={() => {
               setEditAction('discard');
-              void discardDocumentEdits().finally(() => {
-                setEditAction(null);
-                setShowEditActions(false);
-              });
+              void discardDocumentEdits()
+                .then((restored) => {
+                  if (restored) setShowEditActions(false);
+                })
+                .finally(() => setEditAction(null));
             }}
           >
             <Show when={editAction() === 'discard'}>
               <span class="inline-spinner" aria-hidden="true" />
             </Show>
-            Discard edits
-          </button>
-          <button
-            type="button"
-            class="docws-btn docws-btn-primary"
-            disabled={!!editAction()}
-            onClick={() => {
-              setEditAction('commit');
-              void commitDocumentEdits().finally(() => {
-                setEditAction(null);
-                setShowEditActions(false);
-              });
-            }}
-          >
-            <Show when={editAction() === 'commit'}>
-              <span class="inline-spinner" aria-hidden="true" />
-            </Show>
-            Commit edits
+            Restore last version
           </button>
         </div>
       </Dialog>

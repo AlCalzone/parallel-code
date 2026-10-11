@@ -7,6 +7,7 @@ import { applyBlockWrite } from '../lib/canvas-blocks';
 import { invoke } from '../lib/ipc';
 import { setStore, store } from '../store/core';
 import type { CanvasWrite } from '../components/TaskCanvasEditor';
+import { focusAnnotation } from './workspace-ui';
 import { DocumentWorkspacePanel } from './DocumentWorkspacePanel';
 import {
   closeDocumentWorkspace,
@@ -16,6 +17,8 @@ import {
   openDocumentCompare,
   setDocumentView,
   commitDocumentEdits,
+  addDocumentAnnotation,
+  setDocumentSelection,
 } from './store';
 
 vi.mock('../lib/ipc', () => ({
@@ -30,10 +33,13 @@ vi.mock('./RightPanel', () => ({ RightPanel: () => <div /> }));
 let dispose: (() => void) | undefined;
 let host: HTMLElement;
 let files: Record<string, string>;
+let dirty = false;
 
 beforeEach(() => {
   localStorage.clear();
+  dirty = false;
   files = { 'notes.md': '# Notes\n', 'other.markdown': '# Other\n', 'page.html': '<h1>HTML</h1>' };
+  vi.mocked(invoke).mockClear();
   vi.mocked(invoke).mockImplementation(async (channel, args) => {
     const path = String(args?.documentPath);
     if (channel === IPC.ReadDocument)
@@ -42,8 +48,9 @@ beforeEach(() => {
         missing: !(path in files),
         headSha: 'abc',
         branch: 'main',
-        dirty: false,
+        dirty,
       };
+    if (channel === IPC.SaveDocumentAnnotation) return args?.annotation;
     if (channel === IPC.WriteDocumentBlock) {
       const write = args as unknown as CanvasWrite;
       if (write.expectedContent !== files[path]) throw new Error('Document changed on disk');
@@ -68,6 +75,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // Leaving commits asynchronously; a dirty mock must not leak into the next test.
+  dirty = false;
   closeDocumentWorkspace();
   dispose?.();
   document.body.replaceChildren();
@@ -126,15 +135,69 @@ it('offers editing only for Markdown and saves before returning to Preview', asy
   expect(button('Edit')).toBeDefined();
 });
 
-it('keeps a draft when switching files and when closing the workspace immediately', async () => {
+it('keeps edits when switching files and when closing the workspace immediately', async () => {
   await mount();
   edit('Unfinished\n');
   await openDocumentFile('other.markdown');
+  await vi.waitFor(() => expect(files['notes.md']).toContain('Unfinished'));
   await openDocumentFile('notes.md');
-  expect(host.querySelector('.cm-content')?.textContent).toContain('Unfinished');
   closeDocumentWorkspace();
+  // Leaving flushes the editor, so the text lands in the file rather than a draft.
+  await vi.waitFor(() => expect(files['notes.md']).toContain('Unfinished'));
   await openDocumentWorkspace('docs');
-  expect(host.querySelector('.cm-content')?.textContent).toContain('Unfinished');
+  expect(documentStore.snapshot?.content).toContain('Unfinished');
+});
+
+const commits = () =>
+  vi.mocked(invoke).mock.calls.filter(([channel]) => channel === IPC.CommitDocumentEdits);
+
+it('records a version when the workspace closes with uncommitted edits', async () => {
+  await mount();
+  dirty = true;
+  closeDocumentWorkspace();
+  await vi.waitFor(() => expect(commits()).toHaveLength(1));
+  expect(commits()[0][1]).toEqual({ projectRoot: '/docs' });
+});
+
+it('records a version when switching documents with uncommitted edits', async () => {
+  await mount();
+  dirty = true;
+  await openDocumentFile('other.markdown');
+  await vi.waitFor(() => expect(commits()).toHaveLength(1));
+});
+
+it('leaves silently when closing or switching with nothing changed', async () => {
+  await mount();
+  await openDocumentFile('other.markdown');
+  closeDocumentWorkspace();
+  await vi.waitFor(() =>
+    expect(
+      vi.mocked(invoke).mock.calls.filter(([channel]) => channel === IPC.ReadDocument).length,
+    ).toBeGreaterThan(2),
+  );
+  // The commit is a no-op on a clean tree: nothing to announce.
+  await vi.waitFor(() => expect(commits().length).toBeGreaterThan(0));
+  expect(store.notification).toBeNull();
+});
+
+it("opens the live editor at the selected block's first line", async () => {
+  files['notes.md'] = '# Notes\n\nFirst.\n\nSecond paragraph.\n';
+  await mount();
+  setDocumentSelection({
+    startBlock: 2,
+    endBlock: 2,
+    startLine: 5,
+    endLine: 5,
+    quote: 'Second paragraph.',
+    heading: 'Notes',
+    wholeDocument: false,
+  });
+  button('Edit')?.click();
+  const content = host.querySelector<HTMLElement>('.cm-content');
+  const view = content && EditorView.findFromDOM(content);
+  if (!view) throw new Error('Editor view is missing');
+  expect(view.state.doc.lineAt(view.state.selection.main.head).number).toBe(5);
+  expect(host.textContent).not.toContain('Edit block');
 });
 
 it('flushes edits before opening comparison or history', async () => {
@@ -175,4 +238,47 @@ it('stays in Edit on save conflict and does not open a comparison against stale 
   await Promise.resolve();
   expect(documentStore.compareRunId).toBeNull();
   expect(files['notes.md']).toBe('# Agent revision\n');
+});
+
+async function addNote(path = 'notes.md') {
+  const note = await addDocumentAnnotation('note', 'A note to revisit', {
+    path,
+    baseSha: 'abc',
+    startLine: 1,
+    endLine: 1,
+    quote: path === 'notes.md' ? '# Notes' : '<h1>HTML</h1>',
+    prefix: '',
+    suffix: '',
+  });
+  if (!note) throw new Error('Note was not saved');
+  return note;
+}
+
+it('saves an editor draft and switches to Preview when revealing a note', async () => {
+  await mount();
+  const note = await addNote();
+  edit('New text\n\n');
+  focusAnnotation(note.id);
+  await vi.waitFor(() => expect(button('Preview')?.getAttribute('aria-pressed')).toBe('true'));
+  expect(files['notes.md']).toContain('New text');
+  expect(host.querySelector('.docws-scroll')?.classList.contains('is-hidden')).toBe(false);
+});
+
+it('keeps the editor visible if saving fails while revealing a note, and permits retry', async () => {
+  await mount();
+  const note = await addNote();
+  edit();
+  const original = vi.mocked(invoke).getMockImplementation();
+  if (!original) throw new Error('No IPC mock');
+  vi.mocked(invoke).mockImplementation(async (channel, args) => {
+    if (channel === IPC.WriteDocumentBlock) throw new Error('Save failed');
+    return original(channel, args);
+  });
+  focusAnnotation(note.id);
+  await vi.waitFor(() => expect(host.textContent).toContain('Save failed'));
+  expect(button('Edit')?.getAttribute('aria-pressed')).toBe('true');
+  expect(document.querySelector('.docws-marker-pop.is-open')).toBeNull();
+  vi.mocked(invoke).mockImplementation(original);
+  focusAnnotation(note.id);
+  await vi.waitFor(() => expect(button('Preview')?.getAttribute('aria-pressed')).toBe('true'));
 });

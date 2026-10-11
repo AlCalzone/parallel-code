@@ -118,8 +118,12 @@ export interface Project {
   documentPath?: string;
   /** Last file read in the document workspace, relative to the project. */
   documentOpenPath?: string;
+  /** Files opened most recently in the document workspace, newest first. */
+  documentRecentPaths?: string[];
   /** Preview scale; independent of the app and terminal zoom. */
   documentZoom?: number;
+  /** Keep the agent, notes and files panel out of the reading area until needed. */
+  documentPanelCollapsed?: boolean;
   /** Agent that owns the project's warm main session. */
   documentMainAgentId?: string;
   /** Resumable main sessions per agent id, with the base sha each last saw. */

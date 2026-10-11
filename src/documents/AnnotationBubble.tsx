@@ -1,5 +1,6 @@
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import { createHighlightedMarkdown } from '../lib/marked-shiki';
+import { mod } from '../lib/platform';
 import { store } from '../store/core';
 import { getProject } from '../store/projects';
 import {
@@ -14,7 +15,7 @@ import {
 import { documentAgentSupport } from '../../electron/documents/shared';
 import type { AgentDef } from '../ipc/types';
 import type { DocumentAnnotation } from './types';
-import { CheckIcon, CommentIcon, PlusIcon } from '../components/icons';
+import { CheckIcon, CommentIcon, PencilIcon, SparkleIcon, TrashIcon } from '../components/icons';
 
 /**
  * A follow-up continues an answered question as a new question on the same
@@ -107,19 +108,20 @@ interface AnnotationBubbleProps {
   onMakeTask: (annotation: DocumentAnnotation) => void;
 }
 
-/** Short enough to share the head's row with the bubble's buttons. */
+/** Short enough to sit beside the badges in the meta line. */
 function shortTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
 }
 
 /**
- * A note or a question beside the document. Resolved bubbles collapse to one
+ * A comment beside the document; a question is a comment an agent answers. Resolved bubbles collapse to one
  * line; Delete or Backspace on a focused bubble removes it, with undo in the
  * toolbar instead of a confirmation.
  */
 export function AnnotationBubble(props: AnnotationBubbleProps) {
   const [editing, setEditing] = createSignal(false);
   const [draft, setDraft] = createSignal('');
+  const [saving, setSaving] = createSignal(false);
   const answerHtml = createHighlightedMarkdown(() => props.annotation.answer?.text);
   const project = () => (documentStore.projectId ? getProject(documentStore.projectId) : undefined);
   const askAgents = createMemo(() =>
@@ -129,6 +131,12 @@ export function AnnotationBubble(props: AnnotationBubbleProps) {
   );
   const defaultAgent = () =>
     askAgents().find((a) => a.id === documentMainAgentId(project())) ?? askAgents()[0];
+  // The agent asked from this bubble; unknown after a remount, so no name is guessed.
+  const [askedAgent, setAskedAgent] = createSignal<AgentDef | undefined>();
+  function ask(agent: AgentDef) {
+    setAskedAgent(agent);
+    void askDocumentAnnotation(props.annotation.id, agent);
+  }
   const isQuestion = () => props.annotation.kind === 'question';
   const status = () => props.annotation.answerStatus;
   // A follow-up goes to whoever answered; the default agent stands in when that one is gone.
@@ -155,16 +163,23 @@ export function AnnotationBubble(props: AnnotationBubbleProps) {
     setEditing(true);
   }
 
-  function commitEdit() {
-    setEditing(false);
-    void updateDocumentAnnotationText(props.annotation.id, draft().trim() || props.annotation.text);
+  async function commitEdit() {
+    if (!draft().trim() || saving()) return;
+    setSaving(true);
+    try {
+      if (await updateDocumentAnnotationText(props.annotation.id, draft().trim()))
+        setEditing(false);
+    } finally {
+      setSaving(false);
+    }
   }
 
-  const kindLabel = () => (isQuestion() ? 'Question' : 'Note');
+  const kindLabel = () => (isQuestion() ? 'Question' : 'Comment');
 
   return (
     <div
       class="docws-bubble"
+      data-annotation-id={props.annotation.id}
       classList={{
         'is-resolved': props.annotation.resolved,
         'is-detached': props.detached === true,
@@ -189,92 +204,129 @@ export function AnnotationBubble(props: AnnotationBubbleProps) {
           </button>
         }
       >
-        <div class="docws-bubble-head">
-          <span class="docws-badge">{kindLabel()}</span>
-          <Show when={props.annotation.followUpOf}>
-            <span class="docws-badge" title="Continues an earlier question on this passage">
-              follow-up
-            </span>
-          </Show>
-          <Show when={props.detached}>
-            <span
-              class="docws-badge docws-badge-stale"
-              title="The passage this was attached to is no longer in the document"
-            >
-              detached
-            </span>
-          </Show>
-          <time
-            class="docws-bubble-time"
-            dateTime={props.annotation.createdAt}
-            title={new Date(props.annotation.createdAt).toLocaleString()}
-          >
-            {shortTime(props.annotation.createdAt)}
-          </time>
-          <span class="docws-spacer" />
-          <button
-            type="button"
-            class="docws-btn docws-btn-sm"
-            title="Resolve (r)"
-            onClick={() => void setDocumentAnnotationResolved(props.annotation.id, true)}
-          >
-            <CheckIcon size={12} />
-            Resolve
-          </button>
-          <button
-            type="button"
-            class="docws-btn docws-btn-sm"
-            title="Send this to an agent as a task on the passage"
-            onClick={() => props.onMakeTask(props.annotation)}
-          >
-            <PlusIcon size={12} />
-            Make task
-          </button>
-          <button
-            type="button"
-            class="docws-btn docws-btn-sm docws-btn-danger"
-            title="Delete (Del). Undo from the toolbar."
-            onClick={() => void deleteDocumentAnnotation(props.annotation.id)}
-          >
-            ×
-          </button>
-        </div>
         <Show when={props.detached}>
-          <div class="docws-bubble-quote" title="Passage as it was when the note was written">
+          <div class="docws-bubble-quote" title="Passage as it was when the comment was written">
             {props.annotation.anchor.quote.slice(0, 300)}
           </div>
         </Show>
         <Show
           when={!editing()}
           fallback={
-            <textarea
-              class="docws-note"
-              value={draft()}
-              onInput={(e) => setDraft(e.currentTarget.value)}
-              onBlur={commitEdit}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  e.stopPropagation();
-                  setEditing(false);
-                }
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  commitEdit();
-                }
-              }}
-              ref={(el) => requestAnimationFrame(() => el.focus())}
-            />
+            <div>
+              <textarea
+                class="docws-note"
+                aria-label="Edit comment"
+                disabled={saving()}
+                value={draft()}
+                onInput={(e) => setDraft(e.currentTarget.value)}
+                onKeyDown={(e) => {
+                  if (e.isComposing || e.keyCode === 229) return;
+                  if (e.key === 'Escape') {
+                    e.stopPropagation();
+                    setEditing(false);
+                  }
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void commitEdit();
+                  }
+                }}
+                ref={(el) => requestAnimationFrame(() => el.focus())}
+              />
+              <div class="docws-run-actions">
+                <button
+                  type="button"
+                  class="docws-btn docws-btn-sm docws-btn-primary"
+                  disabled={saving() || !draft().trim()}
+                  title={`${mod}+Enter to save`}
+                  onClick={() => void commitEdit()}
+                >
+                  {saving() ? 'Saving…' : 'Save comment'}
+                </button>
+                <button
+                  type="button"
+                  class="docws-btn docws-btn-sm"
+                  disabled={saving()}
+                  onClick={() => setEditing(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           }
         >
-          <div class="docws-bubble-text" onDblClick={startEdit} title="Double-click to edit">
-            {props.annotation.text}
+          <div class="docws-bubble-main">
+            <div class="docws-bubble-text" onDblClick={startEdit} title="Double-click to edit">
+              {props.annotation.text}
+            </div>
+            <div class="docws-bubble-actions">
+              <button
+                type="button"
+                class="docws-icon-btn"
+                aria-label={isQuestion() ? 'Edit question' : 'Edit comment'}
+                title={isQuestion() ? 'Edit question' : 'Edit comment'}
+                onClick={startEdit}
+              >
+                <PencilIcon size={12} />
+              </button>
+              <button
+                type="button"
+                class="docws-icon-btn"
+                aria-label="Resolve"
+                title="Resolve (r)"
+                onClick={() => void setDocumentAnnotationResolved(props.annotation.id, true)}
+              >
+                <CheckIcon size={12} />
+              </button>
+              <button
+                type="button"
+                class="docws-icon-btn"
+                aria-label="Rewrite from this"
+                title="Have an agent rewrite the passage from this comment"
+                onClick={() => props.onMakeTask(props.annotation)}
+              >
+                <SparkleIcon size={12} />
+              </button>
+              <button
+                type="button"
+                class="docws-icon-btn docws-btn-danger"
+                aria-label="Delete"
+                title="Delete (Del). Undo from the toolbar."
+                onClick={() => void deleteDocumentAnnotation(props.annotation.id)}
+              >
+                <TrashIcon size={12} />
+              </button>
+            </div>
+          </div>
+          <div class="docws-bubble-meta">
+            <Show when={props.annotation.followUpOf}>
+              <span class="docws-badge" title="Continues an earlier question on this passage">
+                follow-up
+              </span>
+            </Show>
+            <Show when={props.detached}>
+              <span
+                class="docws-badge docws-badge-stale"
+                title="The passage this was attached to is no longer in the document"
+              >
+                detached
+              </span>
+            </Show>
+            <time
+              class="docws-bubble-time"
+              dateTime={props.annotation.createdAt}
+              title={new Date(props.annotation.createdAt).toLocaleString()}
+            >
+              {shortTime(props.annotation.createdAt)}
+            </time>
           </div>
         </Show>
         <Show when={isQuestion()}>
           <div class="docws-bubble-answer">
             <Show when={status() === 'pending'}>
               <div class="docws-bubble-pending">
-                <span class="docws-dot docws-dot-running" /> Answering…
+                <span class="docws-dot docws-dot-running" /> Waiting for{' '}
+                {askedAgent()?.name ?? 'the agent'}…
               </div>
             </Show>
             <Show when={status() === 'failed'}>
@@ -308,7 +360,7 @@ export function AnnotationBubble(props: AnnotationBubbleProps) {
                       type="button"
                       class="docws-btn docws-btn-sm"
                       title={`${props.annotation.answer ? 'Ask again' : 'Ask'} ${agent.name}`}
-                      onClick={() => void askDocumentAnnotation(props.annotation.id, agent)}
+                      onClick={() => ask(agent)}
                     >
                       <CommentIcon size={12} />
                       {props.annotation.answer ? 'Ask again' : 'Ask'}

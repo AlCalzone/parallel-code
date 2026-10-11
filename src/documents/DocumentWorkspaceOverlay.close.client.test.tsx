@@ -93,8 +93,9 @@ async function open(): Promise<HTMLElement> {
 }
 
 describe('document panel lifetime', () => {
-  it('restores document prompt focus when selected by its number shortcut', async () => {
+  it('restores document prompt focus when its panel is open and selected by number', async () => {
     const host = await open();
+    setStore('projects', 0, 'documentPanelCollapsed', false);
     setStore('tasks', 'code', {
       id: 'code',
       name: 'Code',

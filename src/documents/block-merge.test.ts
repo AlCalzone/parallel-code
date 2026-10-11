@@ -15,6 +15,7 @@ import {
   hunkKind,
   hunkLabel,
   hunkLeadBlocks,
+  trackedBlocks,
   type BlockHunk,
 } from './block-merge';
 
@@ -280,5 +281,19 @@ describe('hunkLabel', () => {
       'Include this new passage at the end',
     ]);
     expect(hunkLabel(inserted.hunks[0])).toBe('Include this new passage');
+  });
+});
+
+describe('trackedBlocks', () => {
+  it('keeps removed and rewritten base blocks in place before their replacement', async () => {
+    const base = await renderDocumentBlocks('Keep.\n\nOld.\n\nDrop.\n\nEnd.\n');
+    const candidate = await renderDocumentBlocks('Keep.\n\nNew.\n\nEnd.\n\nAdded.\n');
+    const { blocks, changes } = trackedBlocks(base, candidate, diffBlocks(base, candidate));
+    const read = blocks.map((b, i) => `${changes[i]}:${b.raw.trim()}`);
+    expect(read.filter((r) => r.startsWith('removed:'))).toEqual(['removed:Old.', 'removed:Drop.']);
+    expect(read.indexOf('removed:Old.')).toBeLessThan(read.findIndex((r) => r.endsWith(':New.')));
+    expect(read[0]).toBe('same:Keep.');
+    expect(read.at(-1)).toMatch(/:Added\.$/);
+    expect(read.at(-1)).not.toMatch(/^(removed|same):/);
   });
 });

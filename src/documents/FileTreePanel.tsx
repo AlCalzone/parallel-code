@@ -10,6 +10,8 @@ const FILE_CAP = 5_000;
 
 interface FileTreePanelProps {
   projectRoot: string;
+  /** A file was picked; the host may close itself. */
+  onOpen?: () => void;
 }
 
 function Chevron(props: { open: boolean }) {
@@ -28,7 +30,7 @@ function Chevron(props: { open: boolean }) {
 }
 
 /**
- * Every file of the project as a tree, on the Files tab of the right panel.
+ * Every file of the project as a tree, in the popover under the header's file path.
  * Any file opens in the viewer, so a project's sources and notes are one
  * click apart.
  */
@@ -72,7 +74,10 @@ export function FileTreePanel(props: FileTreePanelProps) {
               style={indent()}
               aria-current={isActive() ? 'true' : undefined}
               title={nodeProps.node.path}
-              onClick={() => void openDocumentFile(nodeProps.node.path)}
+              onClick={() => {
+                void openDocumentFile(nodeProps.node.path);
+                props.onOpen?.();
+              }}
             >
               <span class="docws-tree-icon">
                 <Show when={DOCUMENT_RE.test(nodeProps.node.name)} fallback={<span>·</span>}>

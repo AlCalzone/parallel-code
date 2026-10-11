@@ -16,6 +16,10 @@ function rule(selector: string): string {
    panel is part of its behaviour: these guard the two rules that make the
    panel reachable with a mouse at all. */
 describe('annotation popover styles', () => {
+  it('contains authored stacking contexts below workspace controls in every viewer', () => {
+    expect(rule('.docws-content')).toMatch(/isolation:\s*isolate/);
+  });
+
   it('floats the popover over the window, placed by the marker with nothing to cross', () => {
     const pop = rule('.docws-marker-pop');
 
@@ -54,6 +58,14 @@ describe('document width', () => {
     expect(rule('.docws-doc')).toMatch(/max-width:\s*800px/);
     expect(rule('.docws-doc.is-full-width')).toMatch(/max-width:\s*none/);
     expect(rule('.docws-doc .docws-content')).toMatch(/max-width:\s*none/);
+  });
+});
+
+describe('header drag region', () => {
+  // The document actions share the draggable header, so a click on the
+  // "N resolved" label must toggle it rather than start a window drag.
+  it('carves labels out of the window drag region along with the controls', () => {
+    expect(css).toMatch(/\.docws-header label,[^{]*\{[^}]*-webkit-app-region:\s*no-drag/);
   });
 });
 

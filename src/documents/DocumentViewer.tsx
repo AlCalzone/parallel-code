@@ -20,6 +20,7 @@ interface DocumentViewerProps {
   blocks: DocumentBlock[];
   /** Renders selection affordances and reports selections. */
   selectable?: boolean;
+  composerOpen?: boolean;
   selection?: BlockRange | null;
   onSelect?: (selection: DocumentSelection | null) => void;
   /** Per-block change marks for the compare view. */
@@ -54,7 +55,7 @@ interface DocumentViewerProps {
   /** A link to another file of the project was clicked. */
   onNavigate?: (path: string, anchor?: string) => void;
   /** A block's hover toolbar was used: pick the block and open the composer on `action`. */
-  onAction?: (action: BlockActionKind, index: number) => void;
+  onAction?: (action: BlockActionKind, index: number, range?: BlockRange) => void;
 }
 
 export function selectionFromRange(
@@ -79,6 +80,17 @@ export function selectionFromRange(
  * An open note is one of them even though it floats over the window: reading
  * or editing it must not let go of the passage being worked on.
  */
+/** Keys that move or extend a text selection, as Shift+arrows do without the mouse. */
+const SELECTION_KEYS = new Set([
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown',
+]);
 const CONTROLS = 'a, button, input, textarea, .docws-marker, .docws-marker-pop, .docws-bubble';
 
 /**
@@ -113,15 +125,14 @@ export function DocumentViewer(props: DocumentViewerProps) {
     return { start: Math.min(s.start, s.end), end: Math.max(s.start, s.end) };
   });
 
-  // The block under the pointer, held for a beat so the pointer can climb
-  // onto the toolbar above it. Picked blocks have the composer up on them;
-  // their toolbar would only repeat what it offers.
+  // Keep actions on a selected passage until explicitly used or dismissed.
   const hovered = createHeldSignal<number>(TOOLBAR_HOLD_MS);
+  const toolbarIndex = () => (props.composerOpen ? null : (selected()?.end ?? hovered.value()));
   const toolbarBlock = (): HTMLElement | null => {
-    const index = hovered.value();
-    const s = selected();
-    if (index === null || (s && index >= s.start && index <= s.end)) return null;
-    return containerRef?.querySelector<HTMLElement>(`[data-block-index="${index}"]`) ?? null;
+    const index = toolbarIndex();
+    return index === null
+      ? null
+      : (containerRef?.querySelector<HTMLElement>(`[data-block-index="${index}"]`) ?? null);
   };
   function trackHover(e: MouseEvent) {
     // Solid delivers delegated events from the portalled toolbar and popover
@@ -168,33 +179,26 @@ export function DocumentViewer(props: DocumentViewerProps) {
     props.onSelect(selectionFromRange(props.blocks, range));
   }
 
-  function handleMouseUp(e: MouseEvent) {
-    if (!props.selectable || !containerRef) return;
-    const target = e.target as HTMLElement | null;
-    if (target?.closest(CONTROLS)) return;
+  // Only a text selection picks a passage (and the § handle, below). A plain
+  // click picks nothing: it would get in the way of reading and of placing a
+  // caret to copy from.
+  function handleSelectionEnd(e: MouseEvent | KeyboardEvent) {
+    if (!props.selectable || (props.composerOpen && props.selection) || !containerRef) return;
+    if ((e.target as HTMLElement | null)?.closest(CONTROLS)) return;
     const native = window.getSelection();
-    if (native && !native.isCollapsed && native.rangeCount > 0) {
-      const range = native.getRangeAt(0);
-      const start = blockIndexOf(range.startContainer, containerRef);
-      const end = blockIndexOf(range.endContainer, containerRef);
-      if (start === null && end === null) return;
-      // A drag across several blocks scopes them; a selection inside one block
-      // stays a plain text selection so copying keeps working. Click the block
-      // to scope it. The native range is left alone for the same reason.
-      const from = start ?? end ?? 0;
-      const to = end ?? start ?? 0;
-      if (from !== to) emitRange({ start: from, end: to });
-      return;
-    }
-    const index = blockIndexOf(target, containerRef);
-    // Clicking the picked block again keeps it: a second click is how one
-    // reaches for the passage already being worked on, not a way to drop it.
-    // The backdrop, Esc and the composer's own × let it go.
-    if (index !== null) emitRange({ start: index, end: index });
+    if (!native || native.isCollapsed || native.rangeCount === 0) return;
+    const range = native.getRangeAt(0);
+    const start = blockIndexOf(range.startContainer, containerRef);
+    const end = blockIndexOf(range.endContainer, containerRef);
+    if (start === null && end === null) return;
+    // Scope whole blocks consistently for both short and multi-block selections.
+    // Leave the native range intact so copying still works.
+    emitRange({ start: start ?? end ?? 0, end: end ?? start ?? 0 });
   }
 
   function selectSection(index: number, e: MouseEvent) {
     e.stopPropagation();
+    if (props.composerOpen && props.selection) return;
     const [start, end] = sectionRange(props.blocks, index);
     emitRange({ start, end });
   }
@@ -229,7 +233,10 @@ export function DocumentViewer(props: DocumentViewerProps) {
         'docws-selectable': props.selectable === true,
         'docws-hunk-gutter': hasHunkToggles(),
       }}
-      onMouseUp={handleMouseUp}
+      onMouseUp={handleSelectionEnd}
+      onKeyUp={(e) => {
+        if (SELECTION_KEYS.has(e.key)) handleSelectionEnd(e);
+      }}
       onClick={handleClick}
       onMouseOver={trackHover}
       onMouseLeave={() => hovered.clear()}
@@ -240,8 +247,8 @@ export function DocumentViewer(props: DocumentViewerProps) {
           anchor={toolbarBlock}
           alignLeft={isPage()}
           onAction={(kind) => {
-            const index = hovered.value();
-            if (index !== null) props.onAction?.(kind, index);
+            const index = toolbarIndex();
+            if (index !== null) props.onAction?.(kind, index, selected() ?? undefined);
           }}
           onPointer={(inside) => (inside ? hovered.hold() : hovered.clear())}
         />

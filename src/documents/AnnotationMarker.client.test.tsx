@@ -3,13 +3,15 @@ import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AnnotationMarker } from './AnnotationMarker';
 import type { DocumentAnnotation, DocumentAnnotationKind } from './types';
-import { dismissPinnedBubbles } from './workspace-ui';
+import { dismissPinnedBubbles, focusAnnotation, resetWorkspaceUi } from './workspace-ui';
 
 const disposers: Array<() => void> = [];
 
 afterEach(() => {
   while (disposers.length > 0) disposers.pop()?.();
   document.body.replaceChildren();
+  resetWorkspaceUi();
+  vi.restoreAllMocks();
 });
 
 function annotation(id: string, text: string, kind: DocumentAnnotationKind): DocumentAnnotation {
@@ -77,7 +79,7 @@ describe('AnnotationMarker', () => {
 
     const button = host.querySelector<HTMLButtonElement>('.docws-marker-btn');
 
-    expect(button?.getAttribute('aria-label')).toBe('1 note and 1 question on this passage');
+    expect(button?.getAttribute('aria-label')).toBe('1 comment and 1 question on this passage');
     expect(button?.textContent).toContain('2');
   });
 
@@ -142,7 +144,7 @@ describe('AnnotationMarker', () => {
     const time = document.querySelector<HTMLElement>('.docws-marker-pop .docws-bubble-time');
     const exact = new Date('2026-01-01T00:00:00.000Z').toLocaleString();
 
-    // The head shares its row with three buttons, so the stamp travels in the
+    // The meta line is cramped, so the stamp travels in the
     // title and the machine-readable value in the attribute, leaving only the
     // short form to take space.
     expect(time?.tagName).toBe('TIME');
@@ -237,4 +239,14 @@ describe('AnnotationMarker', () => {
     expect(pop?.classList.contains('is-open')).toBe(false);
     expect(dismissPinnedBubbles()).toBe(false);
   });
+});
+
+it('reveals and focuses the requested note within a multi-note popup', async () => {
+  const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
+  mount([annotation('first', 'First note', 'note'), annotation('last', 'Later note', 'note')]);
+  const later = document.querySelector<HTMLElement>('[data-annotation-id="last"]');
+  focusAnnotation('last');
+  await vi.waitFor(() => expect(document.activeElement).toBe(later));
+  expect(document.querySelector('.docws-marker-pop')?.classList.contains('is-open')).toBe(true);
+  expect(scroll.mock.instances).toContain(later);
 });

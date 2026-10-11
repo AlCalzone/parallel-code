@@ -2,7 +2,12 @@ import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setStore, store } from '../store/core';
 import { DocumentWorkspacePanel } from './DocumentWorkspacePanel';
-import { documentStore, setDocumentComposerDraft, openDocumentWorkspace } from './store';
+import {
+  documentStore,
+  setDocumentComposerDraft,
+  setDocumentSelection,
+  openDocumentWorkspace,
+} from './store';
 import { IPC } from '../../electron/ipc/channels';
 import * as ipc from '../lib/ipc';
 import { createRenderedBlocks } from './use-blocks';
@@ -79,6 +84,18 @@ function openWorkspace(): HTMLElement {
   return host;
 }
 
+/** Selects the text of one block the way dragging across it would. */
+function selectText(host: HTMLElement, index: number): void {
+  const target = host.querySelector(`[data-block-index="${index}"] > div`);
+  if (!target) throw new Error('No paragraph to select');
+  const range = document.createRange();
+  range.selectNodeContents(target);
+  window.getSelection()?.removeAllRanges();
+  window.getSelection()?.addRange(range);
+  target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  window.getSelection()?.removeAllRanges();
+}
+
 function button(host: HTMLElement, label: string): HTMLButtonElement | null {
   return (
     Array.from(host.querySelectorAll('button')).find((b) => b.textContent?.trim() === label) ?? null
@@ -122,12 +139,12 @@ describe('DocumentWorkspacePanel', () => {
 
   it('opens the file list from the current document path', () => {
     const host = openWorkspace();
-    const path = host.querySelector<HTMLButtonElement>(
-      '[aria-label="Browse project files: notes.md"]',
-    );
+    const path = host.querySelector<HTMLButtonElement>('[aria-label="Switch document: notes.md"]');
     expect(path?.textContent).toContain('notes.md');
     path?.click();
     expect(host.querySelector('[aria-label="Project files"]')).not.toBeNull();
+    path?.click();
+    expect(host.querySelector('[aria-label="Project files"]')).toBeNull();
   });
 
   it('stacks the document above the agent in a narrow panel', () => {
@@ -168,7 +185,7 @@ describe('DocumentWorkspacePanel', () => {
       const host = openWorkspace();
       setStore('documentWorkspacesEnabled', true);
       await openDocumentWorkspace('docs');
-      button(host, 'Revise document')?.click();
+      button(host, 'Rewrite')?.click();
       const main = host.querySelector<HTMLElement>('.docws-doc-main');
       const scroll = host.querySelector<HTMLElement>('.docws-scroll');
       if (!main || !scroll) throw new Error('Document pane did not mount');
@@ -265,7 +282,7 @@ describe('DocumentWorkspacePanel', () => {
     expect(reopened.querySelector('[aria-label="Reset document zoom"]')?.textContent).toBe('100%');
   });
 
-  it('scales HTML page previews while preserving their sandbox', async () => {
+  it('offers Full width for Markdown only, since an HTML page already fills the column', async () => {
     vi.spyOn(ipc, 'invoke').mockImplementation(async (channel) =>
       channel === IPC.ReadDocument
         ? { content: '<!doctype html><html><body><h1>Guide</h1></body></html>', missing: false }
@@ -274,13 +291,8 @@ describe('DocumentWorkspacePanel', () => {
     const host = openWorkspace();
     setStore('documentWorkspacesEnabled', true);
     await openDocumentWorkspace('docs');
-    button(host, 'Page')?.click();
-    host.querySelector<HTMLButtonElement>('[aria-label="Zoom in document"]')?.click();
-    const preview = host.querySelector<HTMLIFrameElement>('iframe');
-    expect(preview).not.toBeNull();
-    expect(preview?.style.transform).toBe('scale(1.1)');
-    expect(preview?.getAttribute('sandbox')).toBe('');
-    expect(preview?.srcdoc).toContain('<h1>Guide</h1>');
+    await vi.waitFor(() => expect(button(host, 'Edit block')).toBeTruthy());
+    expect(button(host, 'Full width')).toBeFalsy();
   });
 
   it('uses the entire title-bar background as the window drag region', () => {
@@ -306,6 +318,95 @@ describe('DocumentWorkspacePanel', () => {
     expect(header?.hasAttribute('data-tauri-drag-region')).toBe(true);
   });
 
+  it('keeps the document actions in the header, one bar with the window controls', () => {
+    const host = openWorkspace();
+    const header = host.querySelector('.docws-header');
+    expect(header?.querySelector('.docws-toolbar')).not.toBeNull();
+    expect(host.querySelectorAll('.docws-toolbar')).toHaveLength(1);
+    expect(button(host, 'Hide panel')).toBeNull();
+    expect(header?.querySelector('[aria-label="Close document workspace"]')).toBeNull();
+    header?.querySelector<HTMLButtonElement>('[aria-label="Minimize document workspace"]')?.click();
+    expect(store.activeDocumentProjectId).toBeNull();
+  });
+
+  it('opens the Ask composer from the toolbar for the selected passage', async () => {
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel) =>
+      channel === IPC.ReadDocument
+        ? { content: 'First paragraph.\n', missing: false, dirty: false }
+        : [],
+    );
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="0"]')).not.toBeNull());
+    const ask = button(host, 'Ask');
+    expect(ask?.disabled).toBe(true);
+    selectText(host, 0);
+    expect(ask?.disabled).toBe(false);
+    ask?.click();
+    expect(documentStore.composerDraft?.mode).toBe('question');
+    expect(host.querySelector('[aria-label="Ask about this passage"]')).not.toBeNull();
+  });
+
+  it('switches a typed comment to Ask without first saving it as a comment', async () => {
+    const saved: string[] = [];
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel, args) => {
+      if (channel === IPC.ReadDocument)
+        return { content: 'First paragraph.\n', missing: false, dirty: false };
+      if (channel === IPC.SaveDocumentAnnotation) {
+        const annotation = (args as { annotation: { kind: string } }).annotation;
+        saved.push(annotation.kind);
+        return annotation;
+      }
+      return [];
+    });
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="0"]')).not.toBeNull());
+    selectText(host, 0);
+    button(host, 'Comment')?.click();
+    const box = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Comment"]');
+    if (!box) throw new Error('No comment field');
+    box.value = 'Is this still true?';
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    // A real press moves focus on mousedown, which would autosave the comment;
+    // the mode buttons keep focus in the field, so the text moves over instead.
+    for (const label of ['Ask', 'Comment', 'Rewrite']) {
+      const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      button(host, label)?.dispatchEvent(press);
+      expect(press.defaultPrevented).toBe(true);
+    }
+    button(host, 'Ask')?.click();
+    expect(documentStore.composerDraft).toMatchObject({
+      mode: 'question',
+      text: 'Is this still true?',
+    });
+    await Promise.resolve();
+    expect(saved).toEqual([]);
+    // Mid-save, switching would post the same text twice: as a comment and again.
+    setDocumentComposerDraft({
+      text: 'Is this still true?',
+      mode: 'note',
+      noteSaveStatus: 'saving',
+    });
+    for (const label of ['Ask', 'Comment', 'Rewrite'])
+      expect(button(host, label)?.disabled).toBe(true);
+    // Emptying the comment drops its backup, so later tests start clean.
+    setDocumentComposerDraft({ text: '', mode: 'note' });
+    setDocumentComposerDraft(null);
+  });
+
+  it('announces loading to screen readers without a chip in the header', async () => {
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    const opening = openDocumentWorkspace('docs');
+    const status = host.querySelector('.docws-header [role="status"]');
+    expect(status?.textContent).toBe('Loading document…');
+    await opening;
+    expect(status?.textContent).toBe('');
+  });
+
   it('renders as a task workspace region, leaving app navigation available', () => {
     const host = openWorkspace();
     const workspace = host.querySelector('[aria-label="Document workspace"]');
@@ -326,10 +427,64 @@ describe('DocumentWorkspacePanel', () => {
     const host = openWorkspace();
     expect(host.querySelector('.docws-composer')).toBeNull();
 
-    button(host, 'Revise document')?.click();
+    button(host, 'Rewrite')?.click();
 
-    expect(documentStore.composerDraft).toEqual({ text: '', mode: 'proposals' });
-    expect(button(host, 'Revise document')).toBeNull();
+    expect(documentStore.composerDraft).toMatchObject({ text: '', mode: 'proposals' });
+    expect(button(host, 'Rewrite')).not.toBeNull();
+  });
+
+  it('selects without opening a composer, then saves a comment on the same passage and lists it', async () => {
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel, args) => {
+      if (channel === IPC.ReadDocument)
+        return { content: 'First paragraph.\n\nSecond paragraph.\n', missing: false, dirty: false };
+      if (channel === IPC.SaveDocumentAnnotation) return args?.annotation;
+      return [];
+    });
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="0"]')).not.toBeNull());
+    // A plain click picks nothing; a text selection does.
+    host
+      .querySelector('[data-block-index="0"]')
+      ?.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    expect(documentStore.selection).toBeNull();
+    selectText(host, 0);
+    expect(documentStore.selection?.startBlock).toBe(0);
+    expect(host.querySelector('.docws-composer')).toBeNull();
+    button(host, 'Comment')?.click();
+    const box = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Comment"]');
+    if (!box) throw new Error('No comment composer');
+    box.value = 'Check this assumption.';
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    host
+      .querySelector('[data-block-index="1"]')
+      ?.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    host
+      .querySelector('.docws-scroll')
+      ?.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    expect(documentStore.selection?.startBlock).toBe(0);
+    // A file update invalidates the old range, but must not strand this draft.
+    setDocumentSelection(null);
+    expect(box.value).toBe('Check this assumption.');
+    expect(host.textContent).toContain('Select a passage in the document to attach this draft.');
+    box.dispatchEvent(new FocusEvent('blur'));
+    expect(documentStore.annotations).toHaveLength(0);
+    selectText(host, 0);
+    expect(documentStore.selection?.startBlock).toBe(0);
+    box.dispatchEvent(new FocusEvent('blur'));
+    await vi.waitFor(() => expect(documentStore.annotations).toHaveLength(1));
+    expect(documentStore.annotations[0].anchor.quote).toContain('First paragraph.');
+    expect(host.querySelector('.docws-composer')).toBeNull();
+    // The comments live on a tab of the panel, which opens when asked for.
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Side panel"][aria-pressed="false"]')
+      ?.click();
+    button(host, 'Comments')?.click();
+    expect(host.querySelector('[aria-label="Document comments"]')?.textContent).toContain(
+      'Check this assumption.',
+    );
+    expect(store.projects[0].documentPanelCollapsed).toBe(false);
   });
 
   it('lets the document take the full width of the pane', () => {
@@ -345,7 +500,7 @@ describe('DocumentWorkspacePanel', () => {
     expect(host.querySelector('.docws-doc')?.classList.contains('is-full-width')).toBe(true);
   });
 
-  it('places the agent, runs and files panel to the right in a wide panel', () => {
+  it('places the agent, runs and comments panel to the right in a wide panel', () => {
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1000);
     setStore({
       projects: [
@@ -367,14 +522,31 @@ describe('DocumentWorkspacePanel', () => {
     expect(host.querySelector('.docws-body .resize-handle-h')).not.toBeNull();
     expect(host.querySelector('.docws-body .resize-handle-v')).toBeNull();
     const rail = host.querySelector<HTMLElement>('.docws-rail');
-    expect(rail?.parentElement?.style.width).toBe('420px');
+    expect(rail?.parentElement?.style.width).toBe('360px');
     const tabs = Array.from(rail?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? []);
-    expect(tabs.map((t) => t.textContent?.trim())).toEqual(['Agent', 'Runs', 'Files']);
+    expect(tabs.map((t) => t.textContent?.trim())).toEqual(['Agent', 'Runs', 'Comments']);
     expect(rail?.querySelector('[aria-label="Project files"]')).toBeNull();
 
     tabs[2]?.click();
 
-    expect(rail?.querySelector('[aria-label="Project files"]')).not.toBeNull();
+    expect(rail?.querySelector('[aria-label="Document comments"]')).not.toBeNull();
+  });
+
+  it('remembers a collapsed rail without remounting the agent or losing its width', () => {
+    const host = openWorkspace();
+    const rail = host.querySelector('.docws-rail');
+    expect(host.querySelector('.docws-split')?.classList.contains('is-rail-collapsed')).toBe(true);
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Side panel"][aria-pressed="false"]')
+      ?.click();
+    expect(store.projects[0].documentPanelCollapsed).toBe(false);
+    expect(host.querySelector('.docws-split')?.classList.contains('is-rail-collapsed')).toBe(false);
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Side panel"][aria-pressed="true"]')
+      ?.click();
+    expect(store.projects[0].documentPanelCollapsed).toBe(true);
+    expect(host.querySelector('.docws-rail')).toBe(rail);
+    expect(host.querySelector('.docws-rail')).toBe(rail);
   });
 
   it('restores the agent column width without treating the former bottom-panel height as a width', () => {
@@ -382,7 +554,7 @@ describe('DocumentWorkspacePanel', () => {
     setStore('panelUserSize', { 'docws-task:rail': 240 });
     const host = openWorkspace();
     const rail = host.querySelector<HTMLElement>('.docws-rail');
-    expect(rail?.parentElement?.style.width).toBe('420px');
+    expect(rail?.parentElement?.style.width).toBe('360px');
     setStore('panelUserSize', 'docws:rail', 500);
     expect(rail?.parentElement?.style.width).toBe('500px');
   });
@@ -466,9 +638,9 @@ describe('DocumentWorkspacePanel', () => {
   });
 
   it.each([
-    ['Commit edits', 'commit_document_edits'],
-    ['Discard edits', 'discard_document_edits'],
-  ])('offers to %s when uncommitted edits are clicked', async (action, channel) => {
+    ['Save version', 'commit_document_edits'],
+    ['Restore last version', 'discard_document_edits'],
+  ])('offers %s in History, separate from disk saving', async (action, channel) => {
     vi.spyOn(ipc, 'invoke').mockImplementation(async (channel) => {
       if (channel === IPC.ReadDocument) {
         return {
@@ -485,15 +657,17 @@ describe('DocumentWorkspacePanel', () => {
     setStore('documentWorkspacesEnabled', true);
     await openDocumentWorkspace('docs');
 
-    button(host, 'uncommitted edits')?.click();
-
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
-      'Commit or discard edits?',
-    );
-    expect(button(document.body, 'Commit edits')).not.toBeNull();
-    expect(button(document.body, 'Discard edits')).not.toBeNull();
+    expect(host.textContent).not.toContain('uncommitted edits');
+    button(host, 'History')?.click();
+    await vi.waitFor(() => expect(button(host, 'Save version')).not.toBeNull());
+    expect(button(host, 'Restore last version…')).not.toBeNull();
     expect(ipc.invoke).not.toHaveBeenCalledWith(channel, expect.anything());
-
+    if (action === 'Restore last version') {
+      button(host, 'Restore last version…')?.click();
+      expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+        'This cannot be undone.',
+      );
+    }
     button(document.body, action)?.click();
 
     await vi.waitFor(() =>

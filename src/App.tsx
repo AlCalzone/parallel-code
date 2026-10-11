@@ -100,13 +100,14 @@ import { redrawAllTerminals } from './lib/terminalFitManager';
 import { isDocumentAgentTaskId } from './documents/agent-task';
 import { isHiddenAgentTaskId } from './documents/task-id';
 import {
+  closeDocumentReview,
   closeDocumentWorkspace,
-  documentStore,
+  inlineReview,
   initDocumentListeners,
   setDocumentComposerDraft,
   setDocumentSelection,
 } from './documents/store';
-import { dismissPinnedBubbles } from './documents/workspace-ui';
+import { closeTopCompareForm, dismissPinnedBubbles, setFilesOpen } from './documents/workspace-ui';
 import { resetForNewMatch } from './arena/store';
 import { startDesktopNotificationWatcher } from './store/desktopNotifications';
 import { startSuperProductivitySync, startSpOpenListener } from './store/store';
@@ -719,6 +720,10 @@ function App() {
       newTask: () => toggleNewTaskPanel(true),
       toggleSidebar: () => toggleSidebar(),
       toggleFocusMode: () => toggleTaskFocusMode(),
+      switchDocument: () => {
+        if (store.activeDocumentProjectId && isDocumentAgentTaskId(store.activeTaskId))
+          setFilesOpen(true);
+      },
       toggleHelp: () => toggleHelpDialog(),
       toggleSettings: () => toggleSettingsDialog(),
       closeDialogs: () => {
@@ -727,16 +732,18 @@ function App() {
           return;
         }
         if (store.activeDocumentProjectId && isDocumentAgentTaskId(store.activeTaskId)) {
-          // A pinned note covers the prose and goes first. Then the composer,
-          // up with a passage or with a draft opened from the toolbar or a
-          // note; either way Escape closes it before the workspace.
+          // A pinned note covers the prose and goes first. Then an inline
+          // proposal review, left undecided (its open refine form first).
+          // Then the composer, up with a passage or with a draft opened from
+          // the toolbar or a note. Escape never closes the workspace itself: it is a full
+          // view, and a stray press would throw away the reading position.
           if (dismissPinnedBubbles()) return;
-          if (documentStore.selection || documentStore.composerDraft) {
-            setDocumentSelection(null);
-            setDocumentComposerDraft(null);
-          } else {
-            closeDocumentWorkspace();
+          if (inlineReview()) {
+            if (!closeTopCompareForm()) closeDocumentReview();
+            return;
           }
+          setDocumentSelection(null);
+          setDocumentComposerDraft(null);
           return;
         }
         if (store.showHelpDialog) {

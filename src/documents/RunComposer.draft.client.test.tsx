@@ -1,9 +1,8 @@
 import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setStore } from '../store/core';
-import { BLOCK_ACTIONS } from './BlockActions';
 import { RunComposer } from './RunComposer';
-import { setDocumentComposerDraft, type DocumentSelection } from './store';
+import { documentStore, setDocumentComposerDraft, type DocumentSelection } from './store';
 import type { DocumentBlock } from './markdown-blocks';
 
 vi.mock('./agent-task', () => ({
@@ -42,20 +41,18 @@ const passage: DocumentSelection = {
 
 describe('RunComposer draft mode', () => {
   it('opens on the mode a hover action asked for', () => {
-    setDocumentComposerDraft({ text: '', mode: 'question' });
+    setDocumentComposerDraft({ text: '', mode: 'note' });
     const host = document.createElement('div');
     document.body.append(host);
     disposers.push(
       render(() => <RunComposer selection={passage} blocks={blocks} onClose={() => {}} />, host),
     );
 
-    const selected = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(
-      (t) => t.getAttribute('aria-selected') === 'true',
-    );
-    expect(selected?.textContent).toBe('Ask');
+    expect(host.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe('Add comment');
+    expect(host.querySelector('[role="tablist"]')).toBeNull();
   });
 
-  it('carries the hover icons on its tabs and lets go of the passage from its corner', () => {
+  it('keeps the chosen action and closes from its corner', () => {
     const onClose = vi.fn();
     const host = document.createElement('div');
     document.body.append(host);
@@ -63,13 +60,9 @@ describe('RunComposer draft mode', () => {
       render(() => <RunComposer selection={passage} blocks={blocks} onClose={onClose} />, host),
     );
 
-    const tabs = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-    // Same glyphs in the same order as the block toolbar, minus its pencil.
-    expect(tabs.map((t) => t.querySelector('path')?.getAttribute('d'))).toEqual(
-      BLOCK_ACTIONS.filter((a) => a.kind !== 'edit').map((a) => a.path),
-    );
-
-    host.querySelector<HTMLButtonElement>('[aria-label="Clear the passage"]')?.click();
+    expect(host.querySelector('.docws-composer-title')?.textContent).toBe('Rewrite');
+    expect(host.querySelector('[role="tablist"]')).toBeNull();
+    host.querySelector<HTMLButtonElement>('[aria-label="Close"]')?.click();
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -81,7 +74,28 @@ describe('RunComposer draft mode', () => {
       render(() => <RunComposer selection={null} blocks={blocks} onClose={() => {}} />, host),
     );
 
-    expect(host.querySelector('[aria-label="Clear the passage"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Close"]')).not.toBeNull();
     expect(host.textContent).toContain('Whole document');
   });
+});
+
+it('preserves note text and mode when the composer is remounted', () => {
+  setDocumentComposerDraft({ text: '', mode: 'note' });
+  const host = document.createElement('div');
+  document.body.append(host);
+  const dispose = render(
+    () => <RunComposer selection={passage} blocks={blocks} onClose={() => {}} />,
+    host,
+  );
+  const box = host.querySelector('textarea');
+  if (!box) throw new Error('No note composer');
+  box.value = 'Remember this.\nAnd this.';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(documentStore.composerDraft).toMatchObject({ text: box.value, mode: 'note' });
+  dispose();
+  disposers.push(
+    render(() => <RunComposer selection={passage} blocks={blocks} onClose={() => {}} />, host),
+  );
+  expect(host.querySelector('textarea')?.value).toBe('Remember this.\nAnd this.');
+  expect(host.querySelector('textarea')?.getAttribute('aria-label')).toBe('Comment');
 });

@@ -8,6 +8,8 @@ import { SparkleIcon } from '../components/icons';
 export function CandidateRefinement(props: {
   run: DocumentRunRecord;
   candidate: DocumentCandidateRecord;
+  /** The toggle's wording; the compare view's default names the candidate. */
+  label?: string;
 }) {
   let toggle: HTMLButtonElement | undefined;
   const [open, setOpen] = createSignal(false);
@@ -64,13 +66,10 @@ export function CandidateRefinement(props: {
         disabled={starting()}
       >
         <SparkleIcon size={12} />
-        Refine this candidate
+        {props.label ?? 'Refine this candidate'}
       </button>
       <Show when={open()}>
         <div class="docws-refinement" on:keydown={onKeyDown}>
-          <p>
-            Revise this whole proposal with the same agent and model. Your document stays unchanged.
-          </p>
           <textarea
             class="docws-note"
             aria-label="Refinement feedback"

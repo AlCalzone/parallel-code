@@ -15,6 +15,8 @@ interface DialogProps {
   overlayStyle?: JSX.CSSProperties;
   /** Element id whose text labels this dialog (sets aria-labelledby). */
   labelledBy?: string;
+  /** Accessible name for dialogs without a visible title. */
+  ariaLabel?: string;
   /** Element id (or space-separated list) describing this dialog (aria-describedby). */
   describedBy?: string;
   children: JSX.Element;
@@ -112,6 +114,7 @@ export function Dialog(props: DialogProps) {
             role="dialog"
             aria-modal={isTopmost(dialogId) ? 'true' : undefined}
             aria-labelledby={props.labelledBy}
+            aria-label={props.labelledBy ? undefined : props.ariaLabel}
             aria-describedby={props.describedBy}
             class="dialog-panel"
             style={{

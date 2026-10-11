@@ -4,11 +4,13 @@
  * because none of it is about the document.
  */
 import { createStore } from 'solid-js/store';
+import { store } from '../store/core';
+import { updateProject } from '../store/projects';
 import { IPC } from '../../electron/ipc/channels';
 import { invoke } from '../lib/ipc';
 import { errMessage } from '../lib/log';
 
-export type RailTab = 'agent' | 'runs' | 'files';
+export type RailTab = 'agent' | 'runs' | 'notes';
 
 /** A one-shot candidate whose output is open for reading. */
 export interface OutputTarget {
@@ -19,15 +21,20 @@ export interface OutputTarget {
 interface WorkspaceUiState {
   files: string[];
   filesError: string | null;
+  /** The header's document switcher is dropped; the shortcut opens it too. */
+  filesOpen: boolean;
   railTab: RailTab;
   output: OutputTarget | null;
+  focusedAnnotationId: string | null;
 }
 
 const [ui, setUi] = createStore<WorkspaceUiState>({
   files: [],
   filesError: null,
+  filesOpen: false,
   railTab: 'agent',
   output: null,
+  focusedAnnotationId: null,
 });
 
 export { ui as workspaceUi };
@@ -41,17 +48,36 @@ export async function loadDocumentFiles(projectRoot: string): Promise<void> {
   }
 }
 
+export function setFilesOpen(open: boolean): void {
+  setUi('filesOpen', open);
+}
+
 export function setRailTab(tab: RailTab): void {
   setUi('railTab', tab);
+  const id = store.activeDocumentProjectId;
+  if (id) updateProject(id, { documentPanelCollapsed: false });
 }
 
 export function openCandidateOutput(target: OutputTarget | null): void {
   setUi('output', target);
 }
 
+export function focusAnnotation(id: string | null): void {
+  // A second click should retry revealing the note after a failed editor save.
+  if (id !== null && ui.focusedAnnotationId === id) setUi('focusedAnnotationId', null);
+  setUi('focusedAnnotationId', id);
+}
+
 /** Back to the defaults when a workspace opens; files are per project. */
 export function resetWorkspaceUi(): void {
-  setUi({ files: [], filesError: null, railTab: 'agent', output: null });
+  setUi({
+    files: [],
+    filesError: null,
+    filesOpen: false,
+    railTab: 'agent',
+    output: null,
+    focusedAnnotationId: null,
+  });
 }
 
 /**

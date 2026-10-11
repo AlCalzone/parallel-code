@@ -18,6 +18,8 @@ export interface CanvasEditorApi {
   save: () => Promise<boolean>;
   /** Replaces the editor state even when it matches an in-flight save. */
   reload: (source: string) => void;
+  /** Cursor to the start of a 1-based line, scrolled into view. */
+  goToLine: (line: number) => void;
 }
 
 export interface CanvasDraft {
@@ -150,7 +152,7 @@ export function TaskCanvasEditor(props: TaskCanvasEditorProps) {
     rebase(initial);
     setDirty(!editor.markSaved(initial));
     if (dirty) scheduleSave();
-    props.ref({ save, reload });
+    props.ref({ save, reload, goToLine: (line) => editor?.goToLine(line) });
     onCleanup(() => {
       clearTimeout(idle);
       editor?.destroy();

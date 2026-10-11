@@ -300,6 +300,19 @@ export const DEFAULT_BINDINGS: KeyBinding[] = [
     global: true,
   },
   {
+    id: 'app.switch-document',
+    layer: 'app',
+    category: 'App',
+    description: 'Switch document (document workspace)',
+    platform: 'both',
+    key: 'P',
+    modifiers: { cmdOrCtrl: true, shift: true },
+    action: 'switchDocument',
+    // Global so it works from the editor and composer. Plain Ctrl+P is not
+    // used: a global binding swallows it, which would break shell history.
+    global: true,
+  },
+  {
     id: 'app.toggle-help',
     layer: 'app',
     category: 'App',

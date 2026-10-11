@@ -32,56 +32,61 @@ the document.
    documents lists them, to open one of those instead. The dialog says what it will do —
    create the folder, `git init`, create the file, make the first commit — and does it on
    confirm.
-3. The workspace opens as a resizable panel alongside coding tasks, defaulting to 960px
-   so the document and agent sit side by side. A manually resized width is remembered.
+3. The workspace opens as a resizable panel alongside coding tasks, defaulting to 960px. The document gets the full panel until you open the side panel.
+   The side-panel icon in the header shows or hides it and remembers your choice per project; hiding keeps the agent session mounted. A manually resized width is remembered.
+   The workspace has one header bar: the project name, the **Document** / **History** tabs and
+   the file path come first, then the document's actions (Rewrite, Comment, Ask, zoom), then
+   the window controls. Below 1100px the project name and the labels beside icons give
+   way; at narrow widths the actions wrap to a second row. The Undo offer after a delete
+   floats below the bar, so it never reflows it.
+   **Minimize** (**−**) leaves the workspace; reopen it from the sidebar. Saved comments and
+   unsaved comment drafts survive; an unsent Rewrite or Ask and the selection do not.
    Selecting another
    task leaves it open; the title-bar switcher and task navigation shortcuts include it.
    One document workspace can be open at a time; selecting another document project
    replaces the project in that panel. The header’s focus button shows the document at
-   full width; click it again to return to tiling. The file path beside the view tabs
-   opens the project’s **Files** list. It has two tabs,
+   full width; click it again to return to tiling. The header has two tabs,
    **Document** and **History**; comparing
    proposals happens in a modal over either.
-   A **Files** tab in the right panel lists every file of the project; click one to open
-   it, and click a relative link inside a document to follow it to the file (and heading)
-   it points at. Web links open in the browser. The history, the composer and the runs
+   The file path beside the view tabs, with a ▾, is the document switcher. It drops a filter
+   field (focused), your most recent files (up to five, remembered per project, the open
+   one left out) and the tree of every file of the project. Type to narrow the list to
+   paths containing the text, use Up/Down and Enter to open one, or click a file. Esc or
+   a click outside closes it without leaving the workspace. Ctrl+Shift+P (Cmd+Shift+P on
+   macOS) opens it while the document agent's task is active. Click a relative link inside a
+   document to follow it to the file (and heading) it points at. Web links open in the browser. The history, the composer and the runs
    follow the open document. Each project remembers its last successfully opened file,
    including across app restarts. **−**, the percentage reset button, and **+** scale
    Markdown, inline HTML and the sandboxed page preview from 50% to 200%. The scale is
    remembered per project and leaves the app controls and terminal unchanged.
-4. The composer is a popover over the prose, never inside it, and stays out of the way
-   until there is something to compose: select text, click a block, or press **§** next
-   to a heading to open it on a passage, or choose **Revise document** in the toolbar to
-   open it on the whole document. On a passage it sits right under it (above it when the
-   foot is close), at full strength and with the cursor in it, and follows the passage as
-   you scroll. In a short document pane the composer scrolls internally, keeping its
-   controls reachable without covering the toolbar or terminal. It steps back once you
-   leave it. Type an instruction and press Enter. Hovering a
-   block shows five icons in the gap just above it, clear of the prose so a click meant
-   for the passage cannot land on one, each named as you point at it: task, proposals,
-   note and ask pick the block and open the composer on that mode (its tabs carry the same
-   icons), and the pencil, set apart, opens the block's source for editing. The picked
-   block's icons step aside while the composer is up on it; the other blocks keep theirs,
-   so one click moves the composer to another block. The **×** in the composer's corner,
-   or Esc, lets go of the passage and closes the composer.
-   The composer's four tabs are the four things one does with a passage; **Edit with agent** and
-   **Proposals** are the same instruction sent two ways:
-   - **Edit with agent** types it into the long-running agent session on the right, which
-     works in the checkout as you watch. Its edits show up in the viewer as they land and
-     are committed as `Manual edits` before the next one-shot run.
-   - **Proposals**, the default for a new composer, runs headless candidates in their own worktrees. The agents sit in
-     plain view: click one to add or drop it, and its count to have it draft more than
-     once; a counter says how many of the allowed candidates are in play. **Models and
-     main session** folds away the tuning: each candidate gets a **Model** field and, where
-     the CLI has one, a **Reasoning** level, so one agent can run its main session on one
-     model and an alternate on another; both are the CLI's defaults until you choose, and
-     the choice is remembered per project, agent and candidate.
-     The toolbar's **Full width** lets the document use the whole pane instead of a reading
-     column; the choice is remembered. Mermaid diagrams, here and in every other Markdown
-     surface of the app, carry an enlarge button that opens them at the size of the window.
-5. The agent section has three tabs and a draggable seam. Below 800px panel width,
+4. Select text, or press **§** beside a heading (a button, so the keyboard reaches it), to
+   pick a passage. A plain click picks nothing, so reading and placing a caret to copy
+   from are left alone. Selection keeps normal copying available, including within one
+   paragraph, and shows labeled **Rewrite**, **Comment** and **Ask** actions. The actions apply to the selected
+   blocks; the composers show the passage as their scope. Selecting alone, with the
+   mouse or Shift+arrows, never opens
+   or focuses the composer. **Rewrite** in the toolbar works on the selected
+   passage, or on the whole document when nothing is selected.
+   The compact composer opens beside the passage only after choosing an action, without
+   repeating the action switcher. A comment shows only the text field, with save feedback
+   only when needed; a question shows the text field and an **Ask** button.
+   There are two verbs: **Edit** (you type, see item 9) and **Rewrite** (the AI does).
+   **Rewrite** is the composer's one primary action. Beside it sit two compact controls:
+   **Review first / Apply directly**, and, when reviewing first, an alternatives count of
+   1, 2 or 3. Review first (the default) drafts proposals; 1 is a single proposal, and 2 or
+   3 start a multi-candidate run spread over the main agent first and then the other
+   installed agents (never more than the per-run candidate limit). Apply directly sends the
+   instruction to the interactive agent and changes the checkout immediately; proposals
+   leave the document unchanged until accepted. **Options** keeps agent selection,
+   fine-tuning of the candidate agents, and model/session settings. Generating proposals opens Runs; sending
+   a direct instruction opens Agent. The **×** or Esc closes the composer. Draft text and
+   mode survive switching to History or temporarily editing the Markdown.
+   For Markdown, the toolbar's **Full width** lets the document use the whole pane instead
+   of a reading column; the choice is remembered. HTML pages always fill the pane. Mermaid diagrams, here and in every other Markdown
+   surface of the app, carry an enlarge button that opens them at the size of the window.
+5. The side panel has Agent, Runs, and Comments tabs and a draggable seam. Below 800px panel width,
    it sits below the document; wider panels place it on the right with a default width
-   of 420px. The stacked layout gives the document 60% of the space by default. Each
+   of 360px. The stacked layout gives the document 60% of the space by default. Each
    layout remembers its own split; double-click the seam to reset it.
    Resizing and switching tasks preserve the agent session. **Agent** is the terminal a task has: the bar above it
    shows the last prompt sent, the chips switch between agents, **+** adds another one
@@ -103,9 +108,16 @@ the document.
    each revision or merge saying which proposals it came from. Click a ready candidate in a
    finished run to review that proposal; **View output** opens its log. Running, failed and
    already-decided candidates still open their output.
-   Runs that wait for a decision also appear as a strip over the agent, so nothing sits
-   unnoticed behind another tab. **Review** (one candidate) or **Compare** (several), or the
-   _n to review_ button in the header, opens the compare view over the whole window: the original
+   What waits for you is also said in the document, as a compact line at the top of the
+   reading column, since the panel starts collapsed: _n proposals ready · **Review**_ and
+   _Agent is asking a question · **Show**_ (which opens the Agent tab). Runs that wait for a
+   decision also appear as a strip over the agent. **Review** of a run with one proposal
+   stays in the document: the page shows tracked changes (removed blocks struck through in
+   place, added and rewritten blocks marked) under a compact bar with the proposal's summary,
+   **Accept**, **Reject**, **Refine…** and **Open side by side**. Accept takes every change; a
+   proposal with several changes says "n changes" and picking among them happens in the
+   compare view. Escape leaves the inline review without deciding. **Review** or **Compare**
+   of a run with several proposals opens the compare view over the whole window: the original
    on the left and one proposal on the right. Proposal tabs support arrow keys, Home and End,
    and preserve notes, selected changes and reading position when switching. **Show all proposals**
    restores the resizable multi-column layout. Each proposal starts with a one-line summary;
@@ -126,31 +138,49 @@ the document.
    verified and is disabled if it cannot be combined cleanly. Refinement uses the same agent and model in a fresh isolated run,
    starts from that candidate's content, and leaves the original proposal available.
    The revision appears in Runs and still needs acceptance.
-6. **History** is `git log` for the document with the `Parallel-*` trailers parsed:
-   what changed, which agent, which instruction, which base. Show the diff or render the
-   older version. Revert any entry.
-7. **Annotations.** The same composer offers **Note** and **Ask** beside **Edit with agent**. A note
-   attaches to the passage as a symbol in its margin; hover it, tab to it, or click it to
-   pin it open, and the bubble opens over the document. A question is a bubble an agent
-   answers into, running read-only in the checkout; question and answer stay visible
-   together. **Ask follow-up** under an answer continues the conversation with the agent
+6. **History** lists document versions and their changes. **Save version** records all
+   tracked file changes in the project; **Restore last version…** confirms before discarding
+   tracked changes since that version. Versions are also recorded automatically: closing
+   the workspace or switching to another document commits any uncommitted tracked edits
+   (after flushing the Markdown editor) without a notification; a failure is reported.
+   The Markdown editor's **Saved** means written to disk. When tracked changes are not yet
+   in a version, the History header says _Changed since last version_. History retains
+   older-version previews, diffs, and commit reverts.
+7. **Comments and questions.** A comment is a note on a passage, kept for you; a question
+   is asked of an agent, which answers it beside the passage. They are separate actions:
+   choose **Comment** or **Ask** beside a selected passage or in the toolbar.
+   Enter inserts a new line. Leaving the field or closing the popover saves it
+   automatically, without an agent; Ctrl/Cmd+Enter saves too, and a failed save keeps the
+   draft with a Retry action. The **Ask** composer is never autosaved: **Ask** or
+   Enter (Shift+Enter for a new line), like Rewrite, saves the question and asks the agent (a picker appears when more than
+   one is installed). The **Comments**
+   tab lists the current document's comments, with passage quotes and a Show resolved
+   filter; clicking an entry returns to its passage. The bubble has no title bar: its icon
+   buttons (Edit, Resolve, **Rewrite from this**,
+   Delete) sit beside the text. Edit opens an explicit editor with Save and Cancel; failed
+   saves retain the text. Comments remain in margin markers, available by hover, keyboard
+   focus, or click.
+   A question is answered by an agent running read-only in the checkout; while it works the
+   bubble says _Waiting for <agent>…_, and question and answer stay visible together.
+   **Ask follow-up** under an answer continues the conversation with the agent
    that answered: the follow-up is a new question on the same passage, and the agent is
    handed the earlier exchange along with it. Resolve (`r`) collapses a bubble to one
    line, Delete removes it with an Undo
-   in the toolbar, and **Make task** reopens the composer on the passage with the bubble's
-   text (and answer) as the instruction; the bubble then collapses as `task`.
+   in the toolbar, and **Rewrite from this** reopens the composer on the passage with the
+   bubble's text (and answer) as the instruction; the bubble then collapses as `task`.
 
-8. **Edit a block.** Hover a block and click its pencil, or click the block and choose
-   **Edit block** in the toolbar. Edit its
-   Markdown or HTML source, then **Save block** to update the document directly. Surrounding
-   content and line endings are preserved. If the file changed meanwhile, saving refuses
-   to overwrite it and keeps your text available to copy. Edits made this way, or in an
-   outside editor, show as an _uncommitted edits_ chip in the header; click it to discard
-   them and return to the committed version. Next to the editor button, a folder button
-   opens the project in the file manager.
+8. **Edit a block (HTML).** In an HTML document, select text inside one block and choose
+   **Edit block** in the toolbar. Edit its source, then **Save block** to update the
+   document directly. Surrounding content and line endings are preserved. If the file
+   changed meanwhile, saving refuses to overwrite it and keeps your text available to copy.
+   Edits made this way, or in an outside editor, are recorded as a version automatically
+   or with **Save version** in History, or discarded with **Restore last version…**. Next
+   to the editor button, a folder button opens the project in the file manager. Markdown
+   documents have no separate block dialog: see the next item.
 
 9. **Edit Markdown directly.** For `.md` and `.markdown` files, choose **Edit** in the
-   document toolbar. The live Markdown editor saves after a 1.5-second pause;
+   document toolbar. With a passage selected, the cursor lands at the start of its first
+   line. The live Markdown editor saves after a 1.5-second pause;
    **Save** or Cmd/Ctrl+S saves immediately. Undo and redo remain available across
    saves and switching between **Edit** and **Preview**. Preview keeps the rendered
    diagrams, annotations and passage actions. Switching to Preview, History or a
@@ -160,8 +190,7 @@ the document.
    waits for an outstanding save so subsequent typing and undo remain recoverable. If an
    agent or external editor changes the file while a draft is unsaved, the draft is
    preserved and saving refuses to overwrite the changed file. Copy the draft before
-   choosing **Reload and discard my draft**. HTML retains its existing block editor
-   and Inline/Page views.
+   choosing **Reload and discard my draft**. HTML retains its existing block editor.
 
 ### How it works
 
@@ -314,9 +343,8 @@ workspace-write` (the sandbox blocks writes outside the worktree),
   the same two overlays. Every block carries its source lines, so selection, the composer,
   annotations, compare marking and history work on the rendered page exactly as on
   Markdown; marks are outlines and markers hang out of the page's flow, so nothing the
-  app adds moves the page's own elements. A **Page** toggle
-  shows the sandboxed iframe render for pages that lean on scripts or external
-  stylesheets, which the inline view does not follow.
+  app adds moves the page's own elements. Scripts and external stylesheets do not run
+  in this view; open the file in a browser to see them.
 - **It lives in two folders.** `electron/documents/` holds the runs, agents, prompts,
   annotations, setup, IPC shapes and the registrar for every channel it owns;
   `src/documents/` holds the UI with its store, types and markdown helpers. The seams are

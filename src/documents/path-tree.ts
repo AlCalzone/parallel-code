@@ -39,3 +39,10 @@ export function buildPathTree(paths: readonly string[]): PathTreeNode[] {
       });
   return convert(root, '');
 }
+
+const MAX_RECENT = 5;
+
+/** The recent-files list with `path` moved to the front, capped at a handful. */
+export function pushRecentPath(recent: readonly string[], path: string): string[] {
+  return [path, ...recent.filter((p) => p !== path)].slice(0, MAX_RECENT);
+}

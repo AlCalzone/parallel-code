@@ -3,7 +3,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setStore } from '../store/core';
 import { RunComposer } from './RunComposer';
 import type { DocumentBlock } from './markdown-blocks';
-import type { DocumentSelection } from './store';
+import { setDocumentComposerDraft, dispatchDocumentRun, type DocumentSelection } from './store';
+import { sendToDocumentAgent } from './agent-task';
+
+// The composer reads the open project from the store; pin it without opening a workspace.
+vi.mock('./store', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./store')>();
+  return {
+    ...actual,
+    dispatchDocumentRun: vi.fn(() => Promise.resolve(null)),
+    documentStore: new Proxy(actual.documentStore, {
+      get: (target, key) => (key === 'projectId' ? 'docs' : Reflect.get(target, key)),
+    }),
+  };
+});
 
 vi.mock('./agent-task', () => ({
   sendToDocumentAgent: vi.fn(() => Promise.resolve()),
@@ -15,6 +28,8 @@ afterEach(() => {
   while (disposers.length > 0) disposers.pop()?.();
   document.body.replaceChildren();
   setStore({ projects: [], availableAgents: [] });
+  setDocumentComposerDraft(null);
+  vi.clearAllMocks();
 });
 
 const blocks: DocumentBlock[] = [
@@ -57,104 +72,136 @@ function mount(selection: DocumentSelection | null) {
   return host;
 }
 
-function tab(host: HTMLElement, label: string): HTMLButtonElement | null {
-  return (
-    Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(
-      (b) => b.textContent?.trim() === label,
-    ) ?? null
+const agentDef = (id: string, name: string) => ({
+  id,
+  name,
+  command: id,
+  args: [],
+  resume_args: [],
+  skip_permissions_args: [],
+  description: '',
+});
+
+function click(host: HTMLElement, label: string, group?: string) {
+  const root = group ? host.querySelector(`[aria-label="${group}"]`) : host;
+  const target = Array.from(root?.querySelectorAll('button') ?? []).find(
+    (b) => b.textContent?.trim() === label,
   );
+  if (!target) throw new Error(`No ${label} button`);
+  target.click();
+  return target;
+}
+
+function directEditing(host: HTMLElement) {
+  click(host, 'Apply directly');
+}
+
+function type(host: HTMLElement, text: string) {
+  const box = host.querySelector('textarea');
+  if (!box) throw new Error('No textarea');
+  box.value = text;
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  return box;
 }
 
 describe('RunComposer', () => {
   it('keeps "Send to agent" off while no agent is installed', () => {
     const host = mount(passage);
-    tab(host, 'Edit with agent')?.click();
+    directEditing(host);
     const box = host.querySelector('textarea');
     if (box) {
       box.value = 'Tighten this.';
       box.dispatchEvent(new Event('input', { bubbles: true }));
     }
     const send = Array.from(host.querySelectorAll('button')).find(
-      (b) => b.textContent?.trim() === 'Send to agent',
+      (b) => b.textContent?.trim() === 'Rewrite',
     );
 
     expect(send?.disabled).toBe(true);
     expect(send?.title).toBe('No agent is installed.');
 
     // No workspace is open here, so the button stays off; the reason goes away.
-    setStore('availableAgents', [
-      {
-        id: 'codex',
-        name: 'Codex',
-        command: 'codex',
-        args: [],
-        resume_args: [],
-        skip_permissions_args: [],
-        description: '',
-      },
-    ]);
+    setStore('availableAgents', [agentDef('codex', 'Codex')]);
     expect(send?.title).toBe('');
   });
 
-  it('defaults to proposals and makes direct editing an explicit choice', () => {
+  it('starts with review and keeps agent configuration in Options', () => {
     const host = mount(passage);
-
-    const task = tab(host, 'Edit with agent');
-    const proposals = tab(host, 'Proposals');
-    expect(proposals?.getAttribute('aria-selected')).toBe('true');
-    expect(task?.getAttribute('aria-selected')).toBe('false');
-    // Who drafts is the decision, so the agents sit in plain view; tuning is folded away.
-    const agents = host.querySelector('[aria-label="Agents"]');
-    expect(agents).not.toBeNull();
+    expect(host.querySelector('.docws-composer-title')?.textContent).toBe('Rewrite');
+    expect(host.querySelector('[role="tablist"]')).toBeNull();
     const options = host.querySelector('details');
-    expect(options).not.toBeNull();
     expect(options?.open).toBe(false);
-    expect(options?.contains(agents)).toBe(false);
-    expect(options?.textContent).toContain('Models and main session');
-    expect(host.querySelector('.docws-proposal-count')?.textContent).toMatch(
-      /^\d+ of \d+ candidates?$/,
-    );
-    expect(host.textContent).toContain('Your document changes only when you accept a proposal.');
-    // No second toggle: the run target is one of the modes now.
-    expect(host.querySelectorAll('[role="radio"]')).toHaveLength(0);
-
-    task?.click();
-    expect(task?.getAttribute('aria-selected')).toBe('true');
-    expect(proposals?.getAttribute('aria-selected')).toBe('false');
-    expect(host.textContent).toContain('The agent edits your document directly.');
     expect(host.querySelector('[aria-label="Agents"]')).toBeNull();
+    const review = click(host, 'Review first', 'After rewriting');
+    expect(review.getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('[aria-label="Alternatives"]')).not.toBeNull();
+    directEditing(host);
+    expect(host.textContent).toContain('Edits the document directly.');
+    expect(host.querySelector('[aria-label="Alternatives"]')).toBeNull();
+    expect(host.querySelector('details')).toBeNull();
   });
 
   it('counts candidates against the maximum in the plural', () => {
-    setStore('availableAgents', [
-      {
-        id: 'claude-code',
-        name: 'Claude Code',
-        command: 'claude',
-        args: [],
-        resume_args: [],
-        skip_permissions_args: [],
-        description: '',
-      },
-    ]);
+    setStore('availableAgents', [agentDef('claude-code', 'Claude Code')]);
     const host = mount(passage);
-    expect(host.querySelector('.docws-proposal-count')?.textContent).toBe('1 of 6 candidates');
+    click(host, '2', 'Alternatives');
+    expect(host.querySelector('.docws-proposal-count')?.textContent).toBe('2 of 6 candidates');
   });
 
-  it('keeps proposals reachable with nothing picked, unlike notes and questions', () => {
-    const host = mount(null);
+  it('sends to the interactive agent when applying directly, on Rewrite and Enter', async () => {
+    setStore('projects', [
+      {
+        id: 'docs',
+        name: 'Docs',
+        path: '/docs',
+        color: '',
+        kind: 'document',
+        documentPath: 'a.md',
+      },
+    ]);
+    setStore('availableAgents', [agentDef('claude-code', 'Claude Code')]);
+    const host = mount(passage);
+    directEditing(host);
+    const box = type(host, 'Tighten this.');
+    click(host, 'Rewrite');
+    await vi.waitFor(() => expect(sendToDocumentAgent).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(sendToDocumentAgent).mock.calls[0][1]).toContain('Tighten this.');
+    expect(dispatchDocumentRun).not.toHaveBeenCalled();
 
-    expect(tab(host, 'Proposals')?.disabled).toBe(false);
-    expect(tab(host, 'Note')?.disabled).toBe(true);
+    type(host, 'Again.');
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await vi.waitFor(() => expect(sendToDocumentAgent).toHaveBeenCalledTimes(2));
+  });
+
+  it('starts a multi-candidate run when reviewing first with two alternatives', async () => {
+    setStore('projects', [
+      {
+        id: 'docs',
+        name: 'Docs',
+        path: '/docs',
+        color: '',
+        kind: 'document',
+        documentPath: 'a.md',
+      },
+    ]);
+    setStore('availableAgents', [
+      agentDef('claude-code', 'Claude Code'),
+      agentDef('codex', 'Codex'),
+    ]);
+    const host = mount(passage);
+    click(host, '2', 'Alternatives');
+    type(host, 'Tighten this.');
+    click(host, 'Rewrite');
+    await vi.waitFor(() => expect(dispatchDocumentRun).toHaveBeenCalledTimes(1));
+    const picks = vi.mocked(dispatchDocumentRun).mock.calls[0][1];
+    expect(picks.reduce((n, p) => n + p.count, 0)).toBe(2);
+    expect(sendToDocumentAgent).not.toHaveBeenCalled();
   });
 
   it('acts on the whole document when nothing is picked and keeps notes to passages', () => {
     const host = mount(null);
 
     expect(host.textContent).toContain('Whole document');
-    const tabs = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-    expect(tabs.find((t) => t.textContent === 'Note')?.disabled).toBe(true);
-    expect(tabs.find((t) => t.textContent === 'Ask')?.disabled).toBe(true);
     expect(host.querySelector('.docws-composer-quote')).toBeNull();
   });
 
@@ -170,11 +217,9 @@ describe('RunComposer', () => {
     expect(composer?.classList.contains('is-fresh')).toBe(false);
   });
 
-  it('quotes the picked passage and lets notes attach to it', () => {
+  it('quotes the picked passage for a rewrite', () => {
     const host = mount(passage);
 
     expect(host.querySelector('.docws-composer-quote')?.textContent).toBe('Body text.');
-    const tabs = Array.from(host.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-    expect(tabs.find((t) => t.textContent === 'Note')?.disabled).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-import { Show, createSignal, createUniqueId, untrack } from 'solid-js';
+import { Show, createSignal, untrack } from 'solid-js';
 import { Dialog } from '../components/Dialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { IPC } from '../../electron/ipc/channels';
@@ -40,7 +40,6 @@ export function BlockEditor(props: {
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal('');
   const [confirmDiscard, setConfirmDiscard] = createSignal(false);
-  const titleId = createUniqueId();
   const dirty = () => text() !== initial;
   // Cancel, Escape and a click beside the dialog all land here; an edit in
   // progress is asked about first rather than lost.
@@ -73,9 +72,8 @@ export function BlockEditor(props: {
   }
 
   return (
-    <Dialog open onClose={close} width="min(760px, 92vw)" labelledBy={titleId}>
+    <Dialog open onClose={close} width="min(640px, 92vw)" ariaLabel="Edit block">
       <div class="docws-block-editor">
-        <h2 id={titleId}>Edit block</h2>
         <Show
           when={!stale}
           fallback={
@@ -84,7 +82,6 @@ export function BlockEditor(props: {
             </p>
           }
         >
-          <p>Edit the source for this block. Saving updates {target.documentPath} directly.</p>
           <textarea
             aria-label="Block source"
             value={text()}

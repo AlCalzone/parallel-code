@@ -115,7 +115,9 @@ export function updateProject(
       | 'documentModels'
       | 'documentTerminalAgentId'
       | 'documentOpenPath'
+      | 'documentRecentPaths'
       | 'documentZoom'
+      | 'documentPanelCollapsed'
     >
   >,
 ): void {
@@ -159,6 +161,10 @@ export function updateProject(
         s.projects[idx].documentTerminalAgentId = updates.documentTerminalAgentId;
       if (updates.documentOpenPath !== undefined)
         s.projects[idx].documentOpenPath = updates.documentOpenPath;
+      if (updates.documentRecentPaths !== undefined)
+        s.projects[idx].documentRecentPaths = updates.documentRecentPaths;
+      if (updates.documentPanelCollapsed !== undefined)
+        s.projects[idx].documentPanelCollapsed = updates.documentPanelCollapsed;
       if (updates.documentZoom !== undefined) s.projects[idx].documentZoom = updates.documentZoom;
     }),
   );

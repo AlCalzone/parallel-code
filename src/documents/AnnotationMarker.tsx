@@ -8,7 +8,7 @@ import {
 } from '../lib/floating';
 import { AnnotationBubble } from './AnnotationBubble';
 import type { DocumentAnnotation } from './types';
-import { registerPinnedBubble } from './workspace-ui';
+import { focusAnnotation, registerPinnedBubble, workspaceUi } from './workspace-ui';
 
 interface AnnotationMarkerProps {
   /** Portalled controls must follow their owning panel’s visibility. */
@@ -36,7 +36,7 @@ function describe(annotations: readonly DocumentAnnotation[]): string {
   const questions = annotations.filter((a) => a.kind === 'question').length;
   const notes = annotations.length - questions;
   const parts: string[] = [];
-  if (notes > 0) parts.push(`${notes} note${notes === 1 ? '' : 's'}`);
+  if (notes > 0) parts.push(`${notes} comment${notes === 1 ? '' : 's'}`);
   if (questions > 0) parts.push(`${questions} question${questions === 1 ? '' : 's'}`);
   return `${parts.join(' and ')} on this passage`;
 }
@@ -58,6 +58,18 @@ export function AnnotationMarker(props: AnnotationMarkerProps) {
   let button: HTMLButtonElement | undefined;
   let pop: HTMLDivElement | undefined;
   const [pinned, setPinned] = createSignal(false);
+  createEffect(() => {
+    const id = workspaceUi.focusedAnnotationId;
+    if (props.floatingUiVisible === false || !id || !props.annotations.some((a) => a.id === id))
+      return;
+    setPinned(true);
+    const frame = requestAnimationFrame(() => {
+      const note = pop?.querySelector<HTMLElement>(`[data-annotation-id="${CSS.escape(id)}"]`);
+      note?.scrollIntoView({ block: 'nearest' });
+      note?.focus({ preventScroll: true });
+    });
+    onCleanup(() => cancelAnimationFrame(frame));
+  });
   const [focused, setFocused] = createSignal(false);
   const hover = createHeldSignal<true>(HOVER_HOLD_MS);
   const open = () =>
@@ -67,10 +79,19 @@ export function AnnotationMarker(props: AnnotationMarkerProps) {
   const label = () =>
     `${describe(props.annotations)}${awaiting() ? ', waiting for an answer' : ''}`;
 
-  createAnchorEffect(open, () => {
+  function place() {
     // The popover is hidden with visibility, not display, so its height is
     // measurable before it opens.
     if (button) setPos(placePopover(button.getBoundingClientRect(), pop?.offsetHeight));
+  }
+  createAnchorEffect(open, place);
+  createEffect(() => {
+    if (!open()) return;
+    const observer = new ResizeObserver(place);
+    const block = root?.closest('.doc-block');
+    if (block) observer.observe(block);
+    if (pop) observer.observe(pop);
+    onCleanup(() => observer.disconnect());
   });
 
   /** The symbol and its popover count as one thing for focus and clicks. */
@@ -80,11 +101,11 @@ export function AnnotationMarker(props: AnnotationMarkerProps) {
   // A pinned bubble covers the prose, so anything else the reader does closes it.
   createEffect(() => {
     if (!pinned()) return;
-    const close = (e: MouseEvent) => {
-      if (!inside(e.target)) setPinned(false);
+    const outside = (e: MouseEvent) => {
+      if (!inside(e.target)) close();
     };
-    document.addEventListener('mousedown', close);
-    onCleanup(() => document.removeEventListener('mousedown', close));
+    document.addEventListener('mousedown', outside);
+    onCleanup(() => document.removeEventListener('mousedown', outside));
   });
 
   /**
@@ -94,6 +115,8 @@ export function AnnotationMarker(props: AnnotationMarkerProps) {
   function close() {
     if (pop?.contains(document.activeElement)) button?.focus();
     setPinned(false);
+    if (props.annotations.some((a) => a.id === workspaceUi.focusedAnnotationId))
+      focusAnnotation(null);
     setFocused(false);
     hover.clear();
   }
@@ -107,7 +130,7 @@ export function AnnotationMarker(props: AnnotationMarkerProps) {
 
   // Bound natively, not delegated: the key has to stop at the bubble, before
   // the window's shortcuts or a dialog under the popover take it for their own
-  // Escape and close the whole workspace along with the note.
+  // Escape and close more than the note.
   function onKeyDown(e: KeyboardEvent) {
     if (e.key !== 'Escape' || !open()) return;
     e.stopPropagation();
@@ -140,7 +163,8 @@ export function AnnotationMarker(props: AnnotationMarkerProps) {
         aria-expanded={pinned()}
         onClick={(e) => {
           const next = !pinned();
-          setPinned(next);
+          if (next) setPinned(true);
+          else close();
           // Focus alone holds the bubble open, so a click that closes it has to
           // give the focus back. A keyboard activation (detail 0) keeps it.
           if (!next && e.detail > 0) e.currentTarget.blur();

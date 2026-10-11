@@ -123,25 +123,66 @@ describe('picking a passage', () => {
     el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   }
 
-  it('keeps the passage picked when the block already picked is clicked again', () => {
-    const onSelect = vi.fn();
-    // The pane owns the selection, so a block already picked comes in as a prop.
-    const host = mountSelectable(onSelect, { start: 1, end: 1 });
-
-    mouseUp(host.querySelector('[data-block-index="1"]') as HTMLElement);
-
-    expect(onSelect).toHaveBeenCalledTimes(1);
-    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ startBlock: 1, endBlock: 1 }));
-  });
-
-  it('moves the passage to another block', () => {
+  it('picks nothing for a plain click, so reading and copying are left alone', () => {
     const onSelect = vi.fn();
     const host = mountSelectable(onSelect);
 
     mouseUp(host.querySelector('[data-block-index="1"]') as HTMLElement);
-    mouseUp(host.querySelector('[data-block-index="0"]') as HTMLElement);
 
-    expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ startBlock: 0 }));
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('keeps a picked passage when it is clicked again', () => {
+    const onSelect = vi.fn();
+    const host = mountSelectable(onSelect, { start: 1, end: 1 });
+
+    mouseUp(host.querySelector('[data-block-index="1"]') as HTMLElement);
+
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('scopes a selection inside one paragraph without clearing text selected for copying', () => {
+    const onSelect = vi.fn();
+    const host = mountSelectable(onSelect);
+    const paragraph = host.querySelector('[data-block-index="0"] p');
+    if (!paragraph) throw new Error('No paragraph');
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+    mouseUp(paragraph);
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ startBlock: 0, endBlock: 0 }));
+    expect(window.getSelection()?.isCollapsed).toBe(false);
+    window.getSelection()?.removeAllRanges();
+  });
+
+  it('picks the passage when the selection is extended from the keyboard', () => {
+    const onSelect = vi.fn();
+    const host = mountSelectable(onSelect);
+    const paragraph = host.querySelector('[data-block-index="0"] p');
+    if (!paragraph) throw new Error('No paragraph');
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+
+    paragraph.dispatchEvent(new KeyboardEvent('keyup', { key: 'a', bubbles: true }));
+    expect(onSelect).not.toHaveBeenCalled();
+    paragraph.dispatchEvent(
+      new KeyboardEvent('keyup', { key: 'ArrowRight', shiftKey: true, bubbles: true }),
+    );
+
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ startBlock: 0, endBlock: 0 }));
+    window.getSelection()?.removeAllRanges();
+  });
+
+  it('still picks the section from the § handle', () => {
+    const onSelect = vi.fn();
+    const host = mountSelectable(onSelect);
+
+    host.querySelector<HTMLButtonElement>('.docws-section-btn')?.click();
+
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ startBlock: 1 }));
   });
 });
 
