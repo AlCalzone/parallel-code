@@ -17,11 +17,12 @@ import { TourCard } from './understanding/TourCard';
 import { TourCopyButton } from './understanding/TourCopyButton';
 import { TourDeeper, questionLabel } from './understanding/TourDeeper';
 import { TourIconButton } from './understanding/TourIconButton';
+import { TourNotes } from './understanding/TourNotes';
 import { TourOutline } from './understanding/TourOutline';
 import { TourProgress } from './understanding/TourProgress';
 import { TourReworkBar } from './understanding/TourReworkBar';
 import { TourSaveState } from './understanding/TourSaveState';
-import { cardReference, serializeTour } from '../lib/tour-file';
+import { cardReference, notesReference, serializeTour } from '../lib/tour-file';
 import { belowNodeId, findNode, questionPoint, rootIndexOf } from '../lib/tour-tree';
 import type { TourNode } from '../lib/tour-tree';
 import type { UnderstandingTourController } from '../lib/create-understanding-tour';
@@ -89,6 +90,12 @@ export function UnderstandingTourDialog(props: {
     new Set(roots().flatMap((root, index) => (root.children.length > 0 ? [index] : [])));
   const [reworking, setReworking] = createSignal(false);
   const [overview, setOverview] = createSignal(false);
+  // Kept outside the dialog's contents, so closing the tour or moving to
+  // another one keeps what the reader wrote until they send it.
+  // shortcut: in memory per task panel — persist with the task if notes must survive a restart
+  const [notes, setNotes] = createSignal('');
+  /** The tour the notes were started on, which the reader may since have left. */
+  let notesSubject = '';
   /** The finished tour on screen, when there is one to copy or rework. */
   const shownTour = () => (props.tour.loading() ? null : tour());
 
@@ -112,6 +119,38 @@ export function UnderstandingTourDialog(props: {
       trail: props.tour.trail(),
     });
     if (text) props.onReference?.(text);
+  }
+
+  function editNotes(value: string): void {
+    if (!notes().trim()) notesSubject = props.tour.subject();
+    setNotes(value);
+  }
+
+  function sendNotes(): void {
+    // The saved file only belongs to the notes while their tour is the one open.
+    const sameTour = notesSubject === props.tour.subject();
+    const text = notesReference({
+      subject: notesSubject,
+      savedPath: (sameTour && props.tour.savedPath()) || undefined,
+      notes: notes(),
+    });
+    if (!text) return;
+    props.onReference?.(text);
+    setNotes('');
+  }
+
+  /** The outline with the reader's notes under it, wherever the outline shows. */
+  function sidePanel() {
+    return (
+      <>
+        <div class="understanding-aside-outline">{outline()}</div>
+        <TourNotes
+          value={notes()}
+          onInput={editNotes}
+          onSend={props.onReference ? sendNotes : undefined}
+        />
+      </>
+    );
   }
 
   /**
@@ -615,7 +654,7 @@ export function UnderstandingTourDialog(props: {
                 {(_head) => <StepView />}
               </Show>
               <Show when={overview()}>
-                <div class="understanding-card understanding-outline-card">{outline()}</div>
+                <div class="understanding-card understanding-outline-card">{sidePanel()}</div>
               </Show>
             </div>
             <div class="understanding-footer">
@@ -656,7 +695,7 @@ export function UnderstandingTourDialog(props: {
         </div>
 
         <Show when={!props.tour.loading() && node()}>
-          <aside class="understanding-aside">{outline()}</aside>
+          <aside class="understanding-aside">{sidePanel()}</aside>
         </Show>
       </div>
     </Dialog>

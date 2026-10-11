@@ -4457,19 +4457,103 @@ html[data-look='islands-light'] .window-title-icon {
    but no border or shadow, so the card stays the one thing to look at. */
 .understanding-aside {
   display: none;
-  width: 232px;
+  width: 246px;
   max-height: 62vh;
   box-sizing: border-box;
   margin-top: calc(var(--tour-top-height) + var(--tour-crumb-height));
   padding: 10px 8px;
-  overflow-y: auto;
+  flex-direction: column;
+  gap: 10px;
   border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--bg-elevated) 55%, transparent);
 }
 
+/* A long outline scrolls on its own, so the notes under it stay in view. */
+.understanding-aside-outline {
+  min-height: 0;
+  /* Mirrors the twisty column on the left, so rows and notes sit centred. */
+  padding-right: 14px;
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+.tour-notes {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  /* Past the outline's twisty column, so the divider and field line up with
+     its rows and the note text with its titles; mirrored on the right to
+     keep them centred. */
+  margin: 0 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.understanding-outline-card .tour-notes {
+  margin-top: 14px;
+}
+
+.tour-notes-field {
+  position: relative;
+}
+
+/* No border at rest: a faint well on the column's surface, sharpened on focus. */
+.tour-notes-input {
+  display: block;
+  width: 100%;
+  min-height: 84px;
+  max-height: 40vh;
+  box-sizing: border-box;
+  /* 6px of text inset, less the border: the text starts where the titles do. */
+  padding: 6px 5px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.5;
+  /* Grows with the notes instead of a resize grip, which would sit under the send button. */
+  field-sizing: content;
+  resize: none;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+}
+
+/* Room in the bottom-right corner, so text never runs under the send button. */
+.tour-notes-input--sendable {
+  padding-bottom: 28px;
+}
+
+.tour-notes-input::placeholder {
+  color: var(--fg-subtle);
+  opacity: 0.7;
+}
+
+.tour-notes-input:focus {
+  border-color: var(--border-focus);
+  background: color-mix(in srgb, var(--fg) 2%, transparent);
+  outline: none;
+}
+
+.tour-icon.tour-notes-send {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 24px;
+  height: 24px;
+}
+
+/* Legible once there is something to send, like the tour's way forward. */
+.tour-icon.tour-notes-send:not(:disabled) {
+  color: var(--fg);
+  opacity: 0.8;
+}
+
 @media (min-width: 960px) {
   .understanding-aside {
-    display: block;
+    display: flex;
   }
 
   /* With the outline beside the card, there is nothing for the toggle to show. */

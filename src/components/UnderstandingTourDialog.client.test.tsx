@@ -1,3 +1,4 @@
+import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC } from '../../electron/ipc/channels';
@@ -862,6 +863,72 @@ describe('UnderstandingTourDialog', () => {
     expect(reference).toContain('tour: output buffering');
     expect(reference).toContain('Position: First card');
     expect(reference).toContain('### First card');
+  });
+
+  it('sends the scratchpad notes to the chat and clears them', async () => {
+    const { onReference } = await mountWithTour();
+    const notes = panel().querySelector<HTMLTextAreaElement>('.understanding-aside textarea');
+    if (!notes) throw new Error('Notes field is missing');
+    expect(iconButton('Send notes to agent').disabled).toBe(true);
+    notes.value = 'Buffers flush on exit.';
+    notes.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    // Arrow keys in the notes move the caret, never the tour.
+    notes.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    expect(currentTitle()).toBe('Gist title');
+    clickIcon('Send notes to agent');
+    expect(onReference).toHaveBeenCalledOnce();
+    const sent = String(onReference.mock.calls[0][0]);
+    expect(sent).toContain('Notes from the tour: output buffering');
+    expect(sent).toContain('Buffers flush on exit.');
+    expect(notes.value).toBe('');
+  });
+
+  it('keeps notes across closing the tour, sends on Ctrl+Enter, and names their tour', async () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const onReference = vi.fn();
+    const [open, setOpen] = createSignal(true);
+    let controller: ReturnType<typeof createUnderstandingTour> | undefined;
+    disposers.push(
+      render(() => {
+        controller = createUnderstandingTour();
+        return (
+          <UnderstandingTourDialog
+            tour={controller}
+            open={open()}
+            onClose={() => setOpen(false)}
+            worktreePath="/repo"
+            onReference={onReference}
+          />
+        );
+      }, host),
+    );
+    if (!controller) throw new Error('Controller was not created');
+    void controller.generate(PLAN_INPUT);
+    await flush();
+    channels[0].onmessage?.({ type: 'chunk', text: TOUR_JSON });
+    channels[0].onmessage?.({ type: 'done', exitCode: 0 });
+    await flush();
+    const notes = () => {
+      const field = document.querySelector<HTMLTextAreaElement>('.understanding-aside textarea');
+      if (!field) throw new Error('Notes field is missing');
+      return field;
+    };
+    notes().value = 'Buffers flush on exit.';
+    notes().dispatchEvent(new InputEvent('input', { bubbles: true }));
+    setOpen(false);
+    setOpen(true);
+    expect(notes().value).toBe('Buffers flush on exit.');
+    void controller.generate({ ...PLAN_INPUT, subject: 'another subject' });
+    await flush();
+    channels[1].onmessage?.({ type: 'chunk', text: TOUR_JSON });
+    channels[1].onmessage?.({ type: 'done', exitCode: 0 });
+    await flush();
+    notes().dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }),
+    );
+    expect(onReference).toHaveBeenCalledOnce();
+    expect(String(onReference.mock.calls[0][0])).toContain('Notes from the tour: output buffering');
   });
 
   it('reworks the tour from the rework bar; Escape closes only the bar', async () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TOUR_FILE_MAX_CHARS } from '../../electron/shared/understanding-limits';
 import {
   cardReference,
+  notesReference,
   isTourFilePath,
   parseTourFile,
   serializeTour,
@@ -192,6 +193,19 @@ describe('tour file', () => {
     expect(reference).not.toContain('tour-card');
     expect(cardReference({ subject: 'x', trail: [roots[1]] })).not.toContain('saved in');
     expect(cardReference({ subject: 'x', trail: [] })).toBe('');
+  });
+
+  it('hands the reader notes to the agent with the tour they came from', () => {
+    const reference = notesReference({
+      subject: 'Worktrees',
+      savedPath: 'worktrees.tour.md',
+      notes: '  Cleanup never follows symlinks.\n',
+    });
+    expect(reference).toBe(
+      'Notes from the tour: Worktrees\nThe whole tour is saved in worktrees.tour.md.\n\nCleanup never follows symlinks.',
+    );
+    expect(notesReference({ subject: 'x', notes: 'n' })).not.toContain('saved in');
+    expect(notesReference({ subject: 'x', notes: ' \n ' })).toBe('');
   });
 
   describe('round trips that must not change a card', () => {

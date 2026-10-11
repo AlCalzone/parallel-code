@@ -335,6 +335,19 @@ export function cardReference(input: {
   return `${lines.join('\n')}\n\n${cardMarkdown(node, 2, false)}`;
 }
 
+/** The reader's notes from a tour, for the task's agent, naming the tour they came from. */
+export function notesReference(input: {
+  subject: string;
+  savedPath?: string;
+  notes: string;
+}): string {
+  const notes = input.notes.trim();
+  if (!notes) return '';
+  const lines = [`Notes from the tour: ${oneLine(input.subject)}`];
+  if (input.savedPath) lines.push(`The whole tour is saved in ${input.savedPath}.`);
+  return `${lines.join('\n')}\n\n${notes}`;
+}
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
