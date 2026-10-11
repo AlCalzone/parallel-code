@@ -541,6 +541,13 @@
   resize: none;
   font: 13px/22px var(--font-ui);
 }
+/* `field-sizing: content` sizes an empty field to its placeholder, so a wrapped
+   hint made the box shrink on the first keystroke. One line keeps it steady. */
+.chat-composer textarea::placeholder {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .chat-composer :is(.chat-send, .chat-stop) {
   display: grid;
   place-items: center;
