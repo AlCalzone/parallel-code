@@ -19,6 +19,13 @@ export function randomPastelColor(): string {
   return `hsl(${hue}, 70%, 75%)`;
 }
 
+const byName = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
+
+/** Projects are listed alphabetically everywhere; the store array is that order. */
+export function sortProjects(projects: Project[]): void {
+  projects.sort((a, b) => byName.compare(a.name, b.name));
+}
+
 export function getProject(projectId: string): Project | undefined {
   return store.projects.find((p) => p.id === projectId);
 }
@@ -30,6 +37,7 @@ export function addProject(name: string, path: string, isGitRepo?: boolean): str
   setStore(
     produce((s) => {
       s.projects.push(project);
+      sortProjects(s.projects);
       s.lastProjectId = id;
     }),
   );
@@ -71,6 +79,7 @@ function pushDocumentProject(
   setStore(
     produce((s) => {
       s.projects.push(project);
+      sortProjects(s.projects);
     }),
   );
   return id;
@@ -191,6 +200,7 @@ export function updateProject(
       if (updates.documentPanelCollapsed !== undefined)
         s.projects[idx].documentPanelCollapsed = updates.documentPanelCollapsed;
       if (updates.documentZoom !== undefined) s.projects[idx].documentZoom = updates.documentZoom;
+      if (updates.name !== undefined) sortProjects(s.projects);
     }),
   );
   if (

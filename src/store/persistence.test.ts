@@ -1373,8 +1373,9 @@ describe('project task group collapsed persistence', () => {
 
     await loadState();
 
-    expect(store.projects[0].tasksCollapsed).toBe(true);
-    expect(store.projects[1].tasksCollapsed).toBeUndefined();
+    const byId = (id: string) => store.projects.find((p) => p.id === id);
+    expect(byId('p1')?.tasksCollapsed).toBe(true);
+    expect(byId('p2')?.tasksCollapsed).toBeUndefined();
   });
 
   it('persists collapsed task groups with their projects', async () => {

@@ -24,7 +24,7 @@ import {
 import { store, setStore } from './core';
 import { startRemoteAccess } from './remote';
 import { effectiveAgentId } from './agent-select';
-import { randomPastelColor } from './projects';
+import { randomPastelColor, sortProjects } from './projects';
 import { markAgentSpawned } from './taskStatus';
 import { clampCoordinatorConcurrentTasks } from '../lib/coordinator-limits';
 import { MAX_PROMPT_HISTORY } from '../lib/prompt-history';
@@ -819,6 +819,7 @@ export async function loadState(): Promise<void> {
   setStore(
     produce((s) => {
       s.projects = projects;
+      sortProjects(s.projects);
       s.lastProjectId = lastProjectId;
       s.lastAgentId = lastAgentId;
       s.taskOrder = raw.taskOrder;

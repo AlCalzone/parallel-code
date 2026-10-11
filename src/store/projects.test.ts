@@ -22,6 +22,7 @@ import { IPC } from '../../electron/ipc/channels';
 import { invoke } from '../lib/ipc';
 import { setStore, store } from './core';
 import {
+  addProject,
   addQuickEditProject,
   relinkProject,
   removeProject,
@@ -376,5 +377,25 @@ describe('quick edit projects', () => {
       projectRoot: '/data/quick-edits/abc',
     });
     expect(store.projects.some((p) => p.id === id)).toBe(false);
+  });
+});
+
+describe('project order', () => {
+  afterEach(() => {
+    setStore({ projects: [] });
+  });
+
+  const names = () => store.projects.map((p) => p.name);
+
+  it('keeps projects sorted by name, ignoring case, when added or renamed', () => {
+    addProject('zeta', '/z');
+    const beta = addProject('Beta', '/b');
+    addProject('alpha', '/a');
+    addProject('project10', '/p10');
+    addProject('project9', '/p9');
+    expect(names()).toEqual(['alpha', 'Beta', 'project9', 'project10', 'zeta']);
+
+    updateProject(beta, { name: 'omega' });
+    expect(names()).toEqual(['alpha', 'omega', 'project9', 'project10', 'zeta']);
   });
 });
