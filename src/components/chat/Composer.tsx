@@ -323,7 +323,7 @@ export function Composer(props: ComposerProps) {
                 // In the tooltip, not a status row: entering shell mode must not move the layout.
                 title={
                   c.shellMode()
-                    ? `${sendLabel()} in this worktree (Enter). ${props.agentName} sees the output with your next message.`
+                    ? `${sendLabel()} in this worktree (Enter). ${props.agentName} answers its output.`
                     : `${sendLabel()} (Enter)`
                 }
                 onClick={() => void c.send()}

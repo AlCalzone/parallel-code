@@ -566,7 +566,7 @@ describe('Claude chat adapter', () => {
     ]);
   });
 
-  it('runs a ! command in the worktree and records it without starting a turn', async () => {
+  it('runs a ! command in the worktree and lets Claude answer its output', async () => {
     const cwd = mkdtempSync(join(settingsDir, 'shell-'));
     const h = harness([], undefined, { cwd });
     await h.chat.start();
@@ -584,14 +584,23 @@ describe('Claude chat adapter', () => {
     expect(item.activity).toMatchObject({ status: 'failed', exitCode: 3 });
     const prompt = h.sdk.query.mock.calls[0][0].prompt as AsyncIterable<SDKUserMessage>;
     const { value } = await prompt[Symbol.asyncIterator]().next();
-    expect(value).toMatchObject({ uuid: item.id, shouldQuery: false });
+    // The terminal's shell mode starts a turn on the output; Chat does the same.
+    expect(value).toMatchObject({ uuid: item.id, shouldQuery: true });
     expect(value?.message.content).toBe(
       `<bash-input>pwd; echo oops >&2; exit 3</bash-input>\n<bash-stdout>${cwd}\n</bash-stdout><bash-stderr>oops\n\nExit code 3</bash-stderr>`,
     );
     // The CLI's replay of the entry must not show the command a second time, and
-    // the chat stays busy until the CLI has the entry, so no prompt can overtake it.
+    // the chat stays busy through Claude's answer, so no prompt can overtake it.
     await h.emit({ ...value, isReplay: true });
     expect(h.chat.state.items).toHaveLength(1);
+    await h.emit({
+      type: 'assistant',
+      message: { id: 'reply', content: [{ type: 'text', text: 'It exited with code 3.' }] },
+    });
+    expect(h.chat.state.items[1]).toMatchObject({
+      kind: 'assistant',
+      text: 'It exited with code 3.',
+    });
     expect(h.chat.state.status).toBe('working');
     await h.emit({ type: 'result', is_error: false });
     expect(h.chat.state.status).toBe('ready');
@@ -610,6 +619,8 @@ describe('Claude chat adapter', () => {
     const prompt = h.sdk.query.mock.calls[0][0].prompt as AsyncIterable<SDKUserMessage>;
     const { value } = await prompt[Symbol.asyncIterator]().next();
     expect(value?.message.content).toContain('Stopped by the user.');
+    // Stopping says the user is done with it; Claude reads it with the next message.
+    expect(value).toMatchObject({ shouldQuery: false });
   });
 
   it('gives the model command output without terminal colours', async () => {

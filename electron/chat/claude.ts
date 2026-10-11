@@ -384,10 +384,10 @@ export class ClaudeChat implements AgentChat {
   }
 
   /**
-   * Run a `!` command and record it the way the terminal's shell mode does: as a
-   * transcript entry that starts no turn, so Claude reads it with the next message.
-   * Returns once the command starts; the chat stays busy until the CLI confirms
-   * the entry, so anything sent meanwhile queues instead of overtaking it.
+   * Run a `!` command and hand it over the way the terminal's shell mode does: as a
+   * transcript entry that starts a turn, so Claude answers its output.
+   * Returns once the command starts; the chat stays busy until that turn ends,
+   * so anything sent meanwhile queues instead of overtaking it.
    */
   async runShell(command: string): Promise<void> {
     if (this.state.status !== 'ready' || !this.query)
@@ -448,7 +448,8 @@ export class ClaudeChat implements AgentChat {
       type: 'user',
       uuid: id,
       session_id: this.state.threadId,
-      shouldQuery: false,
+      // A stopped command is one the user gave up on; it waits for the next message.
+      shouldQuery: !run.killed,
       // Colours mean nothing to the model; FORCE_COLOR and the like can still add them.
       message: { role: 'user', content: stripAnsi(run.transcript(exitCode)) },
       parent_tool_use_id: null,

@@ -16,7 +16,7 @@ export interface AgentChat {
   selectModel(model: string, reasoningEffort?: string): void | Promise<void>;
   /**
    * Run a `!` command in the worktree and add it and its output to the
-   * conversation without starting a turn. Only agents that can record one offer this.
+   * conversation for the agent to answer. Only agents that can record one offer this.
    */
   runShell?(command: string): Promise<void>;
   /** Only agents whose CLI can change mode mid-session offer this. */

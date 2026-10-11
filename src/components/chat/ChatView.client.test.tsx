@@ -1147,7 +1147,7 @@ it('runs a ! draft as a shell command and keeps attachments for the next message
   );
   // Entering shell mode must not add a row: the composer never jumps.
   expect(container.querySelector('.chat-composer-status')).toBeNull();
-  expect(button('Run command').title).toContain('Claude sees the output');
+  expect(button('Run command').title).toContain('Claude answers its output');
   await act(() => button('Run command').click());
   expect(shell).toHaveBeenCalledWith('git status');
   expect(send).not.toHaveBeenCalled();
