@@ -34,6 +34,20 @@ const NEXT_KEYS = new Set(['ArrowDown', 'ArrowRight']);
 const PREVIOUS_KEYS = new Set(['ArrowUp', 'ArrowLeft']);
 
 /**
+ * Gives the keyboard to a request card's default choice so Enter alone answers it.
+ * Questions have nothing safe to preselect, so they start on their first control.
+ * Returns whether the card now holds focus.
+ */
+export function focusRequestCard(card: Element | null | undefined): boolean {
+  if (!card) return false;
+  (
+    card.querySelector<HTMLElement>('.chat-request-default') ??
+    card.querySelector<HTMLElement>('button, input')
+  )?.focus();
+  return card.contains(getDeepActiveElement());
+}
+
+/**
  * One pending approval or question from the agent, answerable from the keyboard:
  * the card opens on its default choice so Enter alone resolves it.
  */
@@ -51,13 +65,11 @@ export function RequestCard(props: {
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal('');
   let card: HTMLElement | undefined;
-  let preselected: HTMLButtonElement | undefined;
   const allowIsDefault = () => props.request.kind === 'approval' && !props.request.defaultToNo;
   // Only an approval can be remembered; an answer to a question is not a permission.
   const canRemember = () =>
     props.request.kind === 'approval' && props.request.canAlwaysAllow === true;
   // Open the card on the choice the user most likely wants so Enter alone answers it.
-  // Questions have nothing safe to preselect, so they start on their first control.
   createEffect(
     on(
       () => props.autoFocus,
@@ -70,7 +82,7 @@ export function RequestCard(props: {
         // Never pull the caret out of a half-written message — Enter there means "send
         // my message" — and never re-grab focus this card already holds.
         if (card?.contains(active) || holdsUnsentText(active)) return;
-        (preselected ?? card?.querySelector<HTMLElement>('button, input'))?.focus();
+        focusRequestCard(card);
       },
     ),
   );
@@ -219,9 +231,6 @@ export function RequestCard(props: {
       </For>
       <div class="chat-options">
         <button
-          ref={(element) => {
-            if (allowIsDefault()) preselected = element;
-          }}
           class={allowIsDefault() ? 'chat-request-default btn-with-icon' : 'btn-with-icon'}
           disabled={pending() || props.request.questions?.some((q) => !answerTo(q))}
           onClick={() => void submit('accept')}
@@ -244,9 +253,6 @@ export function RequestCard(props: {
         </Show>
         <Show when={props.request.kind === 'approval'}>
           <button
-            ref={(element) => {
-              if (props.request.defaultToNo) preselected = element;
-            }}
             class={
               props.request.defaultToNo ? 'chat-request-default btn-with-icon' : 'btn-with-icon'
             }

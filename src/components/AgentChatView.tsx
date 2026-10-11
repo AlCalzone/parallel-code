@@ -243,7 +243,11 @@ export function AgentChatView(props: {
     props.onReady?.(focusUnlessBusy);
     const focusKey = `${props.task.id}:prompt`;
     const actionKey = `${props.task.id}:send-prompt`;
-    const focus = () => actions?.focus();
+    // Chat mode hides the prompt row, so reaching it lands on this pane, where a pending
+    // request answers first unless the composer holds unsent text.
+    const focus = () => {
+      if (!actions?.focusRequest()) actions?.focus();
+    };
     const send = () => actions?.send();
     registerFocusFn(focusKey, focus);
     registerAction(actionKey, send);
@@ -267,13 +271,17 @@ export function AgentChatView(props: {
         title: session.title,
         open: () => void connect(true, session.threadId),
       }));
-  /** Any click in the pane re-focuses it, which lands on the composer. Leave focus
-   *  where the user put it inside the chat (the search, a button) and leave a
-   *  text selection alone, since moving focus would drop it before it is copied. */
+  /** Any click in the pane re-focuses it, which lands on a pending request, the way a
+   *  terminal shows the agent's prompt, or else on the composer, which also wins while it
+   *  holds an unsent draft. Leave focus where the user put it inside the chat (the search,
+   *  a button) and leave a text selection alone, since focusing the composer would drop
+   *  it before it is copied. */
   function focusUnlessBusy() {
     const focused = document.activeElement;
     const selection = window.getSelection();
     if (focused && focused !== document.body && root?.contains(focused)) return;
+    // The agent is blocked on the answer, and copy-on-select copied the selection on mouseup.
+    if (actions?.focusRequest()) return;
     if (selection && !selection.isCollapsed && root?.contains(selection.anchorNode)) return;
     actions?.focus();
   }

@@ -9,7 +9,7 @@ import { Composer, type ChatHistoryEntry } from './Composer';
 import { createComposer, type ComposerMemory } from './composer-state';
 import { enableCopyOnSelect } from './copy-on-select';
 import { FILE_LINK_PREFIX } from './chat-markdown';
-import type { RespondToRequest } from './RequestCard';
+import { focusRequestCard, type RespondToRequest } from './RequestCard';
 import { Transcript } from './Transcript';
 import { TranscriptSearch } from './TranscriptSearch';
 import { DiffIcon } from '../icons';
@@ -17,6 +17,9 @@ import './chat.css';
 
 export interface ChatActions {
   focus: () => void;
+  /** Gives the keyboard to the first pending request; false when there is none, or when
+   *  the composer holds unsent text, since Enter there means "send my message". */
+  focusRequest: () => boolean;
   send: () => Promise<void>;
 }
 
@@ -97,7 +100,14 @@ function Conversation(props: { chat: ChatProps; threadId: string }) {
   const focus = () => textarea?.focus();
   // Whoever sends a message wants to see it land and the answer arrive.
   createEffect(on(composer.pendingMessage, (sent) => sent && toLatest?.()));
-  onMount(() => chat.onActions({ focus, send: () => composer.send() }));
+  onMount(() =>
+    chat.onActions({
+      focus,
+      focusRequest: () =>
+        !textarea?.value.trim() && focusRequestCard(root?.querySelector('.chat-request')),
+      send: () => composer.send(),
+    }),
+  );
   function jump(id: string) {
     const element = Array.from(root?.querySelectorAll<HTMLElement>('[data-chat-id]') ?? []).find(
       (element) => element.dataset.chatId === id,

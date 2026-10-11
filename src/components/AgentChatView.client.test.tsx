@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   revealItemInDir: vi.fn(async () => {}),
   openCanvasDocument: vi.fn(),
   setTaskFocusedPanel: vi.fn(),
+  registerFocusFn: vi.fn<(key: string, fn: () => void) => void>(),
   channel: undefined as
     | { onmessage: ((state: AgentChatState) => void) | null; dispose: () => void }
     | undefined,
@@ -46,7 +47,7 @@ vi.mock('../store/tasks', () => ({
 }));
 vi.mock('../store/focus', () => ({ registerAction: vi.fn(), unregisterAction: vi.fn() }));
 vi.mock('../store/focused-panel', () => ({
-  registerFocusFn: vi.fn(),
+  registerFocusFn: mocks.registerFocusFn,
   unregisterFocusFn: vi.fn(),
   setTaskFocusedPanel: mocks.setTaskFocusedPanel,
 }));
@@ -573,7 +574,7 @@ describe('Codex chat view', () => {
     const chat = await tick();
     expect(chat.hideToolbar).toBe(true);
     const focusComposer = vi.fn();
-    chat.onActions({ focus: focusComposer, send: async () => {} });
+    chat.onActions({ focus: focusComposer, focusRequest: () => false, send: async () => {} });
     mocks.channel?.onmessage?.(state({ items: [{ id: 'a', kind: 'assistant', text: 'Copy me' }] }));
     // A click anywhere in the pane re-focuses it, which must not move a focused control
     container.querySelector<HTMLButtonElement>('.mock-chat button')?.focus();
@@ -588,6 +589,49 @@ describe('Codex chat view', () => {
     expect(focusComposer).not.toHaveBeenCalled();
     window.getSelection()?.removeAllRanges();
     focusPane?.();
+    expect(focusComposer).toHaveBeenCalledTimes(1);
+  });
+
+  it('enters the pane on a pending request, even over a selection', async () => {
+    let focusPane: (() => void) | undefined;
+    dispose = render(
+      () => (
+        <AgentChatView task={task()} agentId="agent-1" active onReady={(fn) => (focusPane = fn)} />
+      ),
+      container,
+    );
+    const chat = await tick();
+    const focusComposer = vi.fn();
+    const focusRequest = vi.fn(() => true);
+    chat.onActions({ focus: focusComposer, focusRequest, send: async () => {} });
+    mocks.channel?.onmessage?.(state({ items: [{ id: 'a', kind: 'assistant', text: 'Copy me' }] }));
+    const text = container.querySelector('.mock-chat p');
+    if (!text) throw new Error('Missing transcript');
+    window.getSelection()?.selectAllChildren(text);
+    try {
+      focusPane?.();
+      expect(focusRequest).toHaveBeenCalledTimes(1);
+      expect(focusComposer).not.toHaveBeenCalled();
+    } finally {
+      window.getSelection()?.removeAllRanges();
+    }
+  });
+
+  it('lets the hidden prompt panel answer a pending request before the composer', async () => {
+    dispose = render(() => <AgentChatView task={task()} agentId="agent-1" active />, container);
+    const chat = await tick();
+    const focusComposer = vi.fn();
+    const focusRequest = vi.fn(() => true);
+    chat.onActions({ focus: focusComposer, focusRequest, send: async () => {} });
+    const focusPrompt = mocks.registerFocusFn.mock.calls.find(
+      ([key]) => key === 'task-1:prompt',
+    )?.[1];
+    // Alt+Down reaches the prompt row, which in chat mode is this pane.
+    focusPrompt?.();
+    expect(focusRequest).toHaveBeenCalledTimes(1);
+    expect(focusComposer).not.toHaveBeenCalled();
+    focusRequest.mockReturnValue(false);
+    focusPrompt?.();
     expect(focusComposer).toHaveBeenCalledTimes(1);
   });
 

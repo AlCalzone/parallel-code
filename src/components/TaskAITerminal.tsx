@@ -913,7 +913,9 @@ function AgentTerminalPane(props: {
                 agentId={props.agentId}
                 active={
                   props.visible &&
-                  isPanelFocusedOrDefault(props.task.id, aiTerminalPanelId(props.agentId))
+                  (isPanelFocusedOrDefault(props.task.id, aiTerminalPanelId(props.agentId)) ||
+                    // Chat mode hides the prompt panel, so its focus key lands in this composer.
+                    isPanelFocused(props.task.id, 'prompt'))
                 }
                 onReady={(focus) => {
                   chatFocus = focus;

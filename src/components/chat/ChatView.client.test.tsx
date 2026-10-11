@@ -208,6 +208,50 @@ it('returns focus to the surviving composer after a streamed request disappears'
   expect(document.activeElement).toBe(composer());
 });
 
+it('lets the app hand the keyboard to a pending question', async () => {
+  const sidebar = document.createElement('button');
+  document.body.append(sidebar);
+  const actions = () => vi.mocked(props.onActions).mock.calls[0]?.[0];
+  try {
+    expect(actions()?.focusRequest()).toBe(false);
+    // The question arrives while the user is elsewhere, so it waits for them.
+    sidebar.focus();
+    await update({
+      state: {
+        ...props.state,
+        status: 'working',
+        requests: [
+          {
+            id: 'question',
+            kind: 'question',
+            text: 'Claude needs your input',
+            since: 1,
+            questions: [
+              {
+                id: 'scope',
+                question: 'Which scope?',
+                isSecret: false,
+                options: [{ label: 'Narrow', description: '' }],
+              },
+            ],
+          },
+        ],
+      },
+    });
+    expect(document.activeElement).toBe(sidebar);
+    // Unsent text keeps the composer: Enter there means "send my message".
+    expect(composer().value).toBe('Keep my draft');
+    expect(actions()?.focusRequest()).toBe(false);
+    expect(document.activeElement).toBe(sidebar);
+    // Coming back to the chat otherwise answers it from the keyboard.
+    await update({ draft: '' });
+    expect(actions()?.focusRequest()).toBe(true);
+    expect(document.activeElement?.firstChild?.textContent).toBe('Narrow');
+  } finally {
+    sidebar.remove();
+  }
+});
+
 it('queues during execution, then sends once after the agent becomes ready', async () => {
   await update({ state: { ...props.state, status: 'working' } });
   await act(() => button('Queue message').click());
