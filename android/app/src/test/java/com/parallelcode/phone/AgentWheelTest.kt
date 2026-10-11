@@ -25,11 +25,23 @@ class AgentWheelTest {
     }
 
     @Test
-    fun leavesFlingsAndOrdinaryTerminalsAlone() {
+    fun continuesFlingMotionThroughTheAgentWheel() {
         val turns = mutableListOf<Int>()
         val wheel = wheel(turns)
-        assertEquals(Offset.Zero, wheel.onPostScroll(Offset.Zero, Offset(0f, 50f), NestedScrollSource.SideEffect))
+        assertEquals(Offset(0f, 25f), wheel.onPostScroll(Offset.Zero, Offset(0f, 25f), NestedScrollSource.SideEffect))
+        assertEquals(Offset(0f, 5f), wheel.onPostScroll(Offset.Zero, Offset(0f, 5f), NestedScrollSource.SideEffect))
+        assertEquals(listOf(-2, -1), turns)
+        // Motion already consumed by the local list must not also move the agent.
+        wheel.onPostScroll(Offset(0f, 40f), Offset.Zero, NestedScrollSource.SideEffect)
+        assertEquals(listOf(-2, -1), turns)
+    }
+
+    @Test
+    fun leavesOrdinaryTerminalsAlone() {
+        val turns = mutableListOf<Int>()
+        val wheel = wheel(turns)
         wheel.onWheel = null
+        assertEquals(Offset.Zero, wheel.onPostScroll(Offset.Zero, Offset(0f, 50f), NestedScrollSource.SideEffect))
         assertEquals(Offset.Zero, wheel.onPostScroll(Offset.Zero, Offset(0f, 50f), NestedScrollSource.UserInput))
         assertEquals(emptyList<Int>(), turns)
     }

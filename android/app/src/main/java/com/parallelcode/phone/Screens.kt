@@ -1580,7 +1580,7 @@ private fun TerminalText(
 }
 
 /**
- * Turns the drag a full-screen agent's terminal cannot follow into mouse-wheel lines for the agent,
+ * Turns the drag or fling a full-screen agent's terminal cannot follow into mouse-wheel lines for the agent,
  * as scrolling over the desktop pane does: the agent keeps its transcript out of the history.
  */
 internal class AgentWheel : NestedScrollConnection {
@@ -1590,7 +1590,9 @@ internal class AgentWheel : NestedScrollConnection {
 
     override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
         val turn = onWheel
-        if (turn == null || source != NestedScrollSource.UserInput || linePx <= 0f) return Offset.Zero
+        if (turn == null || linePx <= 0f) return Offset.Zero
+        // Compose sends fling frames as SideEffect. Consume them too so the list's
+        // existing fling decelerates naturally instead of stopping at the first frame.
         // Dragging down reveals what came before, so the wheel turns up (negative lines).
         pending -= available.y
         val lines = (pending / linePx).toInt()
