@@ -461,12 +461,20 @@
   cursor: pointer;
   font: inherit;
   font-size: 12px;
+  text-align: left;
 }
 .chat-options button:enabled:hover {
   border-color: var(--chat-accent);
 }
+/* A border alone was easy to miss; the chosen answer has to read at a glance. */
 .chat-options button[aria-pressed='true'] {
   border-color: var(--chat-accent);
+  background: color-mix(in srgb, var(--chat-accent) 18%, var(--chat-surface-strong));
+}
+.chat-option-description {
+  display: block;
+  color: var(--fg-muted);
+  font-size: 11px;
 }
 .chat-options button.chat-request-default {
   background: var(--chat-accent);
