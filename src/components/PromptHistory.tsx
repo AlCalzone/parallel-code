@@ -135,9 +135,6 @@ export function PromptHistory(props: { task: Task; emptyLabel: string }) {
                 </For>
               </ol>
             </Show>
-            <p class="prompt-history-note">
-              Sent prompts only. Earlier prompts may not have been saved.
-            </p>
           </div>
         </Portal>
       </Show>

@@ -3081,8 +3081,7 @@ html:is(
   overflow-wrap: anywhere;
 }
 
-.prompt-history-meta,
-.prompt-history-note {
+.prompt-history-meta {
   color: var(--fg-muted);
   font-size: 11px;
 }
