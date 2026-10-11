@@ -2604,12 +2604,19 @@ html:is(
 }
 
 /* Routine actions share a quiet boundary across presets and inline-styled dialogs. */
-.btn-primary,
 .sidebar-create-btn,
 .prompt-send-btn:not(:disabled) {
   background: transparent !important;
   border: 1px solid var(--border-subtle) !important;
   color: var(--fg-muted) !important;
+}
+
+/* Same neutral surface as the secondary buttons beside it; full-strength text
+   is what ranks the primary action above them without an accent fill. */
+.btn-primary {
+  background: var(--bg-input) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--fg) !important;
 }
 
 .btn-primary:hover:not(:disabled),
