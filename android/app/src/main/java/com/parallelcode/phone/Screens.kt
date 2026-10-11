@@ -953,6 +953,8 @@ fun AgentScreen(
     client: RemoteClient,
     alwaysFollowOutput: Boolean,
     fitTerminalToPhone: Boolean,
+    quickReplies: List<String> = emptyList(),
+    sendQuickReplies: Boolean = false,
     promptHistory: PromptHistoryStore? = null,
     pageLabel: String? = null,
     nextNeedingYou: RemoteAgent? = null,
@@ -1222,6 +1224,8 @@ fun AgentScreen(
                 ReplyBox(
                     agentId = agentId,
                     compact = terminalExpanded,
+                    quickReplies = quickReplies,
+                    sendQuickReplies = sendQuickReplies,
                     working = agent?.running == true &&
                         (agent.attention == "active" || agent.attention == "shell_busy"),
                     promptHistory = promptHistory,
@@ -1700,6 +1704,8 @@ private fun arrowKeyFor(label: String): Pair<ImageVector, String>? = when (label
 private fun ReplyBox(
     agentId: String,
     compact: Boolean = false,
+    quickReplies: List<String> = emptyList(),
+    sendQuickReplies: Boolean = false,
     working: Boolean = false,
     promptHistory: PromptHistoryStore? = null,
     needsInput: Boolean = false,
@@ -1821,6 +1827,21 @@ private fun ReplyBox(
                         enabled = !busy,
                         modifier = Modifier.fillMaxHeight(),
                     ) { setDraft(appendToDraft(draft, it)) }
+                    // Behind a button rather than a row of chips, so the terminal keeps its room.
+                    QuickRepliesButton(
+                        quickReplies,
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxHeight(),
+                    ) {
+                        // A quick reply is for the agent, sent straight away or not: one that starts the
+                        // draft leaves shell mode, so Send cannot run it as a shell command.
+                        if (sendQuickReplies) {
+                            run { send(it, false) }
+                        } else {
+                            if (draft.isBlank()) shellMode = false
+                            setDraft(appendToDraft(draft, it))
+                        }
+                    }
                     if (promptHistory != null) {
                         OutlinedButton(
                             onClick = { showHistory = true },
