@@ -755,7 +755,7 @@ export function TaskPanel(props: TaskPanelProps) {
   const notesAndFilesChild: PanelChild = {
     id: 'notes-files',
     minSize: 60,
-    absorberWeight: 0.25,
+    absorberWeight: 0.35,
     content: () => (
       <div style={{ height: '100%', 'min-height': topStripEmpty() ? '64px' : '140px' }}>
         {isGitUnavailable() ? (
