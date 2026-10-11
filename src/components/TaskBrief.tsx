@@ -132,12 +132,14 @@ export function TaskBriefBar(props: TaskBriefBarProps) {
   const onPointerDown = (event: PointerEvent) => {
     const target = event.target as Node | null;
     if (target && (card?.contains(target) || anchor?.contains(target))) return;
-    setOpen(false);
+    // close(), not setOpen(false): a document listener left behind would swallow
+    // Escape everywhere, terminals included, and pull focus back to the bar.
+    close();
   };
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.key !== 'Escape') return;
     event.stopPropagation();
-    setOpen(false);
+    close();
     anchor?.focus();
   };
   const toggle = () => {

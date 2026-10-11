@@ -213,6 +213,23 @@ describe('TaskBriefBar', () => {
     expect(card()).toBeNull();
   });
 
+  it('leaves Escape to the focused element once closed by a click outside', () => {
+    const { bar } = mount(baseTask());
+    const terminal = document.createElement('textarea');
+    document.body.append(terminal);
+    bar.click();
+    terminal.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    expect(card()).toBeNull();
+
+    terminal.focus();
+    const reached = vi.fn();
+    terminal.addEventListener('keydown', reached);
+    terminal.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(reached).toHaveBeenCalled();
+    expect(document.activeElement).toBe(terminal);
+    terminal.remove();
+  });
+
   it('names the agent a rating goes to when the task has several', () => {
     mockTargetName.mockReturnValue('Codex');
     const { bar } = mount(baseTask({ confidence: undefined }));
