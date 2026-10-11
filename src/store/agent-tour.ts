@@ -5,7 +5,7 @@ import { stageCanvasRequest } from './canvas';
 /**
  * Accepts a tour the coding agent published through the `tour_publish` MCP tool.
  * Only shape and size are checked here; the cards are validated in the panel,
- * which then opens the viewer. Runtime state only, never persisted.
+ * which then opens the viewer. The payload persists with the task.
  */
 export function publishAgentTour(taskId: string, input: unknown): void {
   const payload = parseAgentTourPayload(input);

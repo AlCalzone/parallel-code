@@ -532,6 +532,19 @@ it('does not reopen a dismissed agent tour when the panel remounts', () => {
   expect(tourState().open).toBe('true');
 });
 
+it('keeps a tour restored at startup closed until its button is pressed', () => {
+  const card = { label: 'KEY DECISION', title: 'One idea', body: 'Body text.' };
+  const payload = { subject: 'the retry bug', gist: card, cards: [card] };
+  const { setTask, click, tourState } = mountPlanTask();
+
+  setTask('agentTour', { revision: 0, payload });
+  expect(tourState().open).toBe('false');
+
+  click('.test-agent-tour');
+  expect(tourState().open).toBe('true');
+  expect(tourState().subject).toBe('the retry bug');
+});
+
 it('reports a published tour with a card the validator rejects', () => {
   const { setTask, tourState } = mountPlanTask();
   setTask('agentTour', {

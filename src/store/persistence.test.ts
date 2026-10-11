@@ -573,24 +573,48 @@ describe('reasoning profile persistence', () => {
   );
 });
 
-it('never writes a tour the agent published: it is runtime state only', async () => {
-  mockInvoke.mockResolvedValueOnce(
-    JSON.stringify({
-      projects: [{ id: 'project-1', name: 'Repo', path: '/repo', color: 'blue' }],
-      taskOrder: ['task-1'],
-      tasks: { 'task-1': persistedTask(agentDef()) },
-    }),
+describe('agent tour persistence', () => {
+  const payload = {
+    subject: 'the retry bug',
+    gist: { title: 'Retries hide the failure' },
+    cards: [{ title: 'One idea' }],
+    context: 'The agent read the retry loop.',
+  };
+
+  it.each([false, true])(
+    'keeps the published tour across a restart without reopening it (collapsed: %s)',
+    async (collapsed) => {
+      mockInvoke.mockResolvedValueOnce(
+        JSON.stringify({
+          projects: [{ id: 'project-1', name: 'Repo', path: '/repo', color: 'blue' }],
+          taskOrder: collapsed ? [] : ['task-1'],
+          collapsedTaskOrder: collapsed ? ['task-1'] : [],
+          tasks: { 'task-1': { ...persistedTask(agentDef()), collapsed, agentTour: payload } },
+        }),
+      );
+      await loadState();
+      // Revision 0 marks a restored tour, so the panel does not pop it open at startup.
+      expect(store.tasks['task-1'].agentTour).toEqual({ revision: 0, payload });
+      mockInvoke.mockClear();
+      mockInvoke.mockResolvedValueOnce(undefined);
+      await saveState();
+      const call = mockInvoke.mock.calls.find(([channel]) => channel === IPC.SaveAppState);
+      expect(JSON.parse(call?.[1].json).tasks['task-1'].agentTour).toEqual(payload);
+    },
   );
-  await loadState();
-  setStore('tasks', 'task-1', 'agentTour', {
-    revision: 1,
-    payload: { subject: 'the retry bug', gist: {}, cards: [{}] },
+
+  it('drops a saved tour that fails validation', async () => {
+    mockInvoke.mockResolvedValueOnce(
+      JSON.stringify({
+        projects: [{ id: 'project-1', name: 'Repo', path: '/repo', color: 'blue' }],
+        taskOrder: ['task-1'],
+        tasks: { 'task-1': { ...persistedTask(agentDef()), agentTour: { subject: '' } } },
+      }),
+    );
+    await loadState();
+    expect(store.tasks['task-1']).toBeDefined();
+    expect(store.tasks['task-1'].agentTour).toBeUndefined();
   });
-  mockInvoke.mockClear();
-  mockInvoke.mockResolvedValueOnce(undefined);
-  await saveState();
-  const call = mockInvoke.mock.calls.find(([channel]) => channel === IPC.SaveAppState);
-  expect(JSON.parse(call?.[1].json).tasks['task-1']).not.toHaveProperty('agentTour');
 });
 
 describe('mind map persistence', () => {

@@ -74,6 +74,7 @@ function structuralSnapshot(): string {
           {
             browserUrl: t.browserUrl,
             mindMap: t.mindMap,
+            agentTour: t.agentTour?.payload,
             reasoningWorkspaces: t.reasoningWorkspaces,
             lastPrompt: t.lastPrompt,
             promptHistory: t.promptHistory,

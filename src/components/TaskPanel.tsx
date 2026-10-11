@@ -265,11 +265,12 @@ export function TaskPanel(props: TaskPanelProps) {
     else showAgentTour();
   };
   // Every publish opens the viewer, including a second publish of the same subject.
+  // Revision 0 is a tour restored at startup; it opens from its button only.
   createEffect(
     on(
       () => props.task.agentTour?.revision,
       (revision) => {
-        if (revision === undefined) {
+        if (revision === undefined || revision === 0) {
           shownAgentTourRevisions.delete(props.task);
           return;
         }

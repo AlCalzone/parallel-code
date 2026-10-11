@@ -31,6 +31,7 @@ import { MAX_PROMPT_HISTORY } from '../lib/prompt-history';
 import { normalizeReasoningProfile } from '../investigation/profiles';
 import { restoreReasoningWorkspaces } from '../investigation/editing';
 import { isValidSpId } from '../../electron/shared/super-productivity';
+import { parseAgentTourPayload } from '../../electron/shared/agent-tour';
 import { DEFAULT_TASK_NAME_MODEL, isTaskNameModelId } from '../../electron/shared/task-name-model';
 
 /** A map that fails validation is kept aside rather than crashing load or being overwritten
@@ -44,6 +45,17 @@ function restoreTaskMindMap(
   if (document) return { mindMap: document };
   unreadable.push(pt.name || 'a task');
   return { mindMapUnreadable: pt.mindMap };
+}
+
+/** Revision 0 marks a restored tour: its button comes back, but the viewer stays closed. */
+function restoreAgentTour(value: unknown): Task['agentTour'] {
+  if (value === undefined || value === null) return undefined;
+  try {
+    return { revision: 0, payload: parseAgentTourPayload(value) };
+  } catch (error) {
+    logWarn('persistence', 'Dropped an unreadable agent tour', { error: errMessage(error) });
+    return undefined;
+  }
 }
 
 // Hand-edited state files may hold anything; the IPC layer rejects non-integers.
@@ -329,6 +341,7 @@ function toPersistedTask(task: Task, agentDefs: AgentDef[], collapsed?: boolean)
     browserUrl: task.browserUrl,
     canvasTaskLinks: task.canvasTaskLinks,
     mindMap: task.mindMap ?? task.mindMapUnreadable,
+    agentTour: task.agentTour?.payload,
     reasoningProfile: task.reasoningProfile,
     reasoningWorkspaces: task.reasoningWorkspaces,
     branchAdoptedFrom: task.branchAdoptedFrom,
@@ -1079,6 +1092,7 @@ export async function loadState(): Promise<void> {
           planFileName: pt.planFileName,
           ...restoredCanvas(pt),
           ...restoreTaskMindMap(pt, unreadableMindMaps),
+          agentTour: restoreAgentTour(pt.agentTour),
           reasoningProfile: normalizeReasoningProfile(pt.reasoningProfile),
           canvasTaskLinks: restoreCanvasTaskLinks(pt.canvasTaskLinks),
           reasoningWorkspaces: restoreReasoningWorkspaces(pt.reasoningWorkspaces),
@@ -1226,6 +1240,7 @@ export async function loadState(): Promise<void> {
           planFileName: pt.planFileName,
           ...restoredCanvas(pt),
           ...restoreTaskMindMap(pt, unreadableMindMaps),
+          agentTour: restoreAgentTour(pt.agentTour),
           reasoningProfile: normalizeReasoningProfile(pt.reasoningProfile),
           canvasTaskLinks: restoreCanvasTaskLinks(pt.canvasTaskLinks),
           reasoningWorkspaces: restoreReasoningWorkspaces(pt.reasoningWorkspaces),

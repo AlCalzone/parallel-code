@@ -291,9 +291,10 @@ export interface Task {
   /** Runtime-only: bypass setup when this agent session opens the graph from chat. */
   reasoningCanvasRequest?: { agentId: string; generation: number };
   /**
-   * Runtime-only: the tour the agent last published through `tour_publish`. The
-   * revision bumps on every publish so the panel opens the viewer again even
-   * when the payload is unchanged. Not persisted.
+   * The tour the agent last published through `tour_publish`. The revision
+   * bumps on every publish so the panel opens the viewer again even when the
+   * payload is unchanged. Only the payload is persisted; a restored tour has
+   * revision 0, so it waits for its button instead of opening at startup.
    */
   agentTour?: { revision: number; payload: AgentTourPayload };
   reasoningWorkspaces?: Record<string, ReasoningWorkspace>;
@@ -419,6 +420,8 @@ export interface PersistedTask {
   canvasTaskLinks?: CanvasTaskLink[];
   /** Validated on load; an unreadable value is kept and written back unchanged. */
   mindMap?: unknown;
+  /** The published tour's payload; validated on load, dropped if unreadable. */
+  agentTour?: unknown;
   reasoningProfile?: ReasoningProfile;
   reasoningWorkspaces?: Record<string, ReasoningWorkspace>;
   branchAdoptedFrom?: string;
