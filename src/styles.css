@@ -231,6 +231,20 @@ body.font-smoothing {
   display: none;
 }
 
+/* Reads as the status text it extends; the underline on hover shows it opens Finish. */
+.task-check-signal {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  white-space: pre;
+  cursor: pointer;
+}
+
+.task-check-signal:hover {
+  text-decoration: underline;
+}
+
 .task-title-bar .task-title-actions .icon-btn {
   padding: 4px !important;
   border-radius: var(--radius-xs);
