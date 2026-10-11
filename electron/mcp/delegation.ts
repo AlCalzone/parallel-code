@@ -1073,6 +1073,8 @@ export class DelegationService {
       }
       case 'closeParent':
         return this.closeParent(id(request.taskId), request.deleteBranch ?? true);
+      case 'detachChild':
+        return this.detachChild(id(request.taskId));
       default:
         throw new DelegationError('Unknown delegation action');
     }
@@ -1112,15 +1114,7 @@ export class DelegationService {
             .map((child) => child.taskId),
         ]),
       ];
-      for (const childId of detachedChildIds) {
-        this.detached.add(childId);
-        const child = this.tasks.get(childId);
-        if (child) {
-          child.parentTaskId = undefined;
-          child.delegationPaused = true;
-          child.integrationPolicy = undefined;
-        }
-      }
+      for (const childId of detachedChildIds) this.markDetached(childId, true);
       this.options.persist();
       this.expireMessages();
       this.options.changed({ taskId, detachedChildIds });
@@ -1145,6 +1139,31 @@ export class DelegationService {
     } finally {
       task.closing = false;
     }
+  }
+
+  /** Ends one parent/child relationship; both tasks keep running as independent tasks. */
+  async detachChild(childId: string): Promise<DelegationChanged> {
+    const child = this.requireTask(childId);
+    const coordinator = await this.options.coordinator();
+    const parentTaskId = coordinator.detachChild(childId) ?? child.parentTaskId;
+    if (!parentTaskId) throw new DelegationError('Task has no parent');
+    // The user chose to detach, so the now-standalone task may delegate straight away.
+    this.markDetached(childId, false);
+    this.options.persist();
+    this.expireMessages();
+    const change = { taskId: parentTaskId, detachedChildIds: [childId], paused: false };
+    this.options.changed(change);
+    return change;
+  }
+
+  /** Detached children keep their work but lose parent tools and messaging until re-created. */
+  private markDetached(childId: string, paused: boolean): void {
+    this.detached.add(childId);
+    const child = this.tasks.get(childId);
+    if (!child) return;
+    child.parentTaskId = undefined;
+    child.delegationPaused = paused;
+    child.integrationPolicy = undefined;
   }
 
   requiresWideTransport(): boolean {

@@ -106,12 +106,18 @@ export function applyDelegationChange(change: DelegationChanged): void {
         mcpConfigPath: undefined,
         mcpLaunchArgs: undefined,
         integrationPolicy: undefined,
-        delegationPaused: true,
+        delegationPaused: change.paused ?? true,
         mcpStartupStatus: undefined,
         mcpStartupError: undefined,
       });
     }
   }
+}
+
+/** Ends a child's link to its parent; both tasks keep their worktrees and keep running. */
+export async function detachFromParent(taskId: string): Promise<void> {
+  const change = await delegationRequest<DelegationChanged>({ action: 'detachChild', taskId });
+  applyDelegationChange(change);
 }
 
 async function loadDelegationState(taskId: string, isCurrent: () => boolean): Promise<void> {

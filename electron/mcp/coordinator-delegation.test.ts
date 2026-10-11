@@ -269,6 +269,17 @@ describe('ordinary delegation lifecycle', () => {
     await expect(create()).rejects.toThrow('Unknown coordinator');
   });
 
+  it('detaches one child while the parent keeps delegating', async () => {
+    const child = await create();
+    const waiting = coordinator.waitForSignalDone('parent');
+    expect(coordinator.detachChild(child.id)).toBe('parent');
+    expect(coordinator.getTaskStatus(child.id)).toBeNull();
+    expect(mockDeleteBackendTask).not.toHaveBeenCalled();
+    await expect(waiting).resolves.toEqual({ remaining: 0 });
+    expect(coordinator.isRegisteredCoordinator('parent')).toBe(true);
+    expect(coordinator.detachChild(child.id)).toBeUndefined();
+  });
+
   it('preserves visible review notifications while the ordinary agent consumes completion', async () => {
     const child = await create();
     const waiting = coordinator.waitForSignalDone('parent');

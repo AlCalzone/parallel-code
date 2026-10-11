@@ -1,4 +1,5 @@
 import { DelegationPanel } from './DelegationPanel';
+import { DetachFromParentButton } from './DetachFromParentButton';
 import { canUsePeerComposer, usePeerComposer } from '../store/delegation';
 import {
   Show,
@@ -1040,17 +1041,20 @@ export function TaskPanel(props: TaskPanelProps) {
               }
             >
               {(parent) => (
-                <button
-                  class="delegation-button delegation-parent-link"
-                  title={`${parent().collapsed ? 'Resume and open parent' : 'Parent task'}: ${parent().name}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (parent().collapsed) uncollapseTask(parent().id);
-                    activateTaskFromPointer(parent().id);
-                  }}
-                >
-                  {parent().collapsed ? 'Resume and open parent' : 'Parent task'}: {parent().name}
-                </button>
+                <span style={{ display: 'flex', gap: '6px', 'min-width': '0' }}>
+                  <button
+                    class="delegation-button delegation-parent-link"
+                    title={`${parent().collapsed ? 'Resume and open parent' : 'Parent task'}: ${parent().name}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (parent().collapsed) uncollapseTask(parent().id);
+                      activateTaskFromPointer(parent().id);
+                    }}
+                  >
+                    {parent().collapsed ? 'Resume and open parent' : 'Parent task'}: {parent().name}
+                  </button>
+                  <DetachFromParentButton taskId={props.task.id} parentName={parent().name} />
+                </span>
               )}
             </Show>
             <Show

@@ -1245,6 +1245,18 @@ export class Coordinator {
     return children.map((task) => task.id);
   }
 
+  /** Detach one child while its parent keeps running. Returns the former parent's id, if any. */
+  detachChild(childId: string): string | undefined {
+    const task = this.tasks.get(childId);
+    if (!task) return undefined;
+    if (task.status === 'creating')
+      throw new Error('The child is still starting. Retry detaching after it finishes.');
+    if (this.integratingTaskIds.has(childId))
+      throw new Error('The child is being integrated. Wait for integration before detaching.');
+    this.removeCoordinatedTask(childId);
+    return task.coordinatorTaskId;
+  }
+
   private isChildInFlight(task: CoordinatedTask): boolean {
     return (
       (task.status !== 'exited' && task.status !== 'error') ||

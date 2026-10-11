@@ -135,7 +135,8 @@ export type DelegationRequest =
     }
   | { action: 'dismissAttempt'; parentTaskId: string; requestId: string }
   | { action: 'state'; taskId: string }
-  | { action: 'closeParent'; taskId: string; deleteBranch?: boolean };
+  | { action: 'closeParent'; taskId: string; deleteBranch?: boolean }
+  | { action: 'detachChild'; taskId: string };
 
 export interface DelegationState {
   attempts: DelegationAttempt[];
@@ -145,4 +146,9 @@ export interface DelegationState {
 
 export type DelegationChanged =
   | { taskId: string; state: DelegationState }
-  | { taskId: string; detachedChildIds: string[] };
+  | {
+      taskId: string;
+      detachedChildIds: string[];
+      /** Missing means paused: children orphaned by a closed parent need review first. */
+      paused?: boolean;
+    };

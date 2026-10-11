@@ -71,6 +71,7 @@ let core: {
   isRegisteredCoordinator: ReturnType<typeof vi.fn>;
   waitForSignalDone: ReturnType<typeof vi.fn>;
   detachChildren: ReturnType<typeof vi.fn>;
+  detachChild: ReturnType<typeof vi.fn>;
   deregisterCoordinator: ReturnType<typeof vi.fn>;
   stopChildren: ReturnType<typeof vi.fn>;
   resumeChildren: ReturnType<typeof vi.fn>;
@@ -196,6 +197,7 @@ beforeEach(() => {
     isRegisteredCoordinator: vi.fn().mockReturnValue(true),
     waitForSignalDone: vi.fn().mockResolvedValue({ remaining: 0 }),
     detachChildren: vi.fn().mockReturnValue(['child']),
+    detachChild: vi.fn().mockReturnValue('parent'),
     deregisterCoordinator: vi.fn(),
     stopChildren: vi.fn(),
     resumeChildren: vi.fn(),
@@ -1217,6 +1219,55 @@ describe('session completion handoffs', () => {
     ).rejects.toThrow('Session expired');
     expect(core.signalDone).toHaveBeenCalledOnce();
     expect(publish).not.toHaveBeenCalled();
+  });
+});
+
+describe('detaching one child', () => {
+  it('ends the relationship while both tasks stay registered', async () => {
+    await register('parent');
+    await register('child', { parentTaskId: 'parent', integrationPolicy: 'review' });
+    const change = { taskId: 'parent', detachedChildIds: ['child'], paused: false };
+    await expect(service.request({ action: 'detachChild', taskId: 'child' })).resolves.toEqual(
+      change,
+    );
+    expect(core.detachChild).toHaveBeenCalledWith('child');
+    expect(core.detachChildren).not.toHaveBeenCalled();
+    expect(changed).toHaveBeenCalledWith(change);
+    // Unlike closing a parent, an explicit detach leaves the task free to delegate.
+    expect(service.getTask('child')).toMatchObject({
+      parentTaskId: undefined,
+      integrationPolicy: undefined,
+      delegationPaused: false,
+    });
+    // Both tasks stay open; a closed authority would reject state reads.
+    await expect(service.request({ action: 'state', taskId: 'child' })).resolves.toBeDefined();
+    await expect(service.request({ action: 'state', taskId: 'parent' })).resolves.toBeDefined();
+    const saved = JSON.parse(
+      service.normalizeState(
+        JSON.stringify({ tasks: { parent: {}, child: { coordinatedBy: 'parent' } } }),
+      ),
+    );
+    expect(saved.tasks.child).not.toHaveProperty('coordinatedBy');
+    expect(saved.tasks).toHaveProperty('parent');
+  });
+
+  it('keeps the child detached when the renderer re-registers a stale parent', async () => {
+    await register('parent');
+    await register('child', { parentTaskId: 'parent' });
+    await service.request({ action: 'detachChild', taskId: 'child' });
+    await register('child', { parentTaskId: 'parent' });
+    expect(service.getTask('child')?.parentTaskId).toBeUndefined();
+  });
+
+  it('rejects tasks without a parent', async () => {
+    await register('solo');
+    core.detachChild.mockReturnValue(undefined);
+    await expect(service.request({ action: 'detachChild', taskId: 'solo' })).rejects.toThrow(
+      'Task has no parent',
+    );
+    expect(changed).not.toHaveBeenCalledWith(
+      expect.objectContaining({ detachedChildIds: ['solo'] }),
+    );
   });
 });
 
