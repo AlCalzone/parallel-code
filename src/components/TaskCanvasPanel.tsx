@@ -26,6 +26,7 @@ import {
 import { theme } from '../lib/theme';
 import { sf } from '../lib/fontScale';
 import { canvasTabKey, tabFromKey } from '../lib/canvas-tabs';
+import { isTourFilePath } from '../lib/tour-file';
 import { useFocusRegistration } from '../lib/focus-registration';
 import { openFileInEditor } from '../lib/shell';
 import { errMessage } from '../lib/log';
@@ -141,6 +142,9 @@ export function TaskCanvasPanel(props: TaskCanvasPanelProps) {
     const key = active();
     return key !== undefined && (tabChars()[key] ?? 0) >= TOUR_MIN_DOCUMENT_CHARS;
   };
+  /** A saved tour opens as a tour however short it is. */
+  const activeIsSavedTour = () =>
+    markdownTabs().some((tab) => canvasTabKey(tab) === active() && isTourFilePath(tab.path));
 
   function requestCloseTab(key: string): void {
     if (dirtyTabs()[key]) setConfirmClose(key);
@@ -277,7 +281,7 @@ export function TaskCanvasPanel(props: TaskCanvasPanelProps) {
           onExitFullscreen={() => setFullscreen(false)}
           onOpenInDefaultEditor={openDefaultEditor}
           understanding={props.understanding}
-          onTakeTour={activeDocumentIsLong() ? props.onTakeTour : undefined}
+          onTakeTour={activeDocumentIsLong() || activeIsSavedTour() ? props.onTakeTour : undefined}
           tourKind={(path) => documentTourKind(props.task, path)}
         />
         <Show when={pickerOpen()}>

@@ -1,7 +1,14 @@
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC } from '../../electron/ipc/channels';
-import { UNDERSTANDING_TIMEOUT_MS } from '../../electron/shared/understanding-limits';
+import {
+  TOUR_CARD_LIMITS,
+  TOUR_FILE_CHANGED,
+  TOUR_FILE_MAX_CARDS,
+  TOUR_FILE_MAX_CHARS,
+  UNDERSTANDING_MAX_OUTPUT_CHARS,
+  UNDERSTANDING_TIMEOUT_MS,
+} from '../../electron/shared/understanding-limits';
 import {
   createUnderstandingTour,
   documentTourKind,
@@ -136,6 +143,16 @@ const PUBLISHED_TOUR: UnderstandingTour = {
   cards: [publishedCard('Published gist', GIST_LABEL), publishedCard('Published one')],
 };
 
+/** Titles and questions of the answers under one of the tour's own cards. */
+function answersUnder(tour: ReturnType<typeof setup>, index: number) {
+  return (tour.tree()[index]?.children ?? []).map((node) => ({
+    title: node.card.title,
+    question: node.question,
+  }));
+}
+const answerCount = (tour: ReturnType<typeof setup>) =>
+  tour.tree().reduce((count, root) => count + root.children.length, 0);
+
 async function generatedPlanTour() {
   const tour = setup();
   void tour.generate(PLAN_INPUT);
@@ -252,13 +269,14 @@ describe('createUnderstandingTour', () => {
     expect(tour.tour()).toBeNull();
   });
 
-  it('asks a follow-up and keeps the answer under the current card', async () => {
+  it('asks a follow-up, nests the answer under the card and opens it', async () => {
     const tour = await generatedPlanTour();
     tour.navigate(1);
     void tour.ask('Why buffer first?');
     await flush();
     expect(tour.asking()).toBe(true);
     expect(tour.pendingQuestion()).toBe('Why buffer first?');
+    expect(tour.pending()).toEqual({ question: 'Why buffer first?', nodeId: tour.tree()[1].id });
     expect(channels).toHaveLength(2);
     expect(promptOf(1)).toContain('Why buffer first?');
     expect(promptOf(1)).toContain('Buffer before IPC.');
@@ -266,15 +284,72 @@ describe('createUnderstandingTour', () => {
     await flush();
     expect(tour.asking()).toBe(false);
     expect(tour.pendingQuestion()).toBe('');
+    expect(answersUnder(tour, 1)).toEqual([
+      { title: 'Deep one', question: 'Why buffer first?' },
+      { title: 'Deep two', question: 'Why buffer first?' },
+    ]);
+    expect(answersUnder(tour, 0)).toEqual([]);
+    // The reader lands on the first answer, still under the same tour card.
+    expect(tour.currentNode()?.card.title).toBe('Deep one');
     expect(tour.step()).toBe(1);
-    expect(tour.threadsFor(1)).toHaveLength(1);
-    expect(tour.threadsFor(1)[0].question).toBe('Why buffer first?');
-    expect(tour.threadsFor(1)[0].cards).toHaveLength(2);
-    expect(tour.threadsFor(0)).toHaveLength(0);
-    // Moving on and back does not lose the thread.
+    expect(tour.trail().map((node) => node.card.title)).toEqual(['One', 'Deep one']);
+    // Within the answers, then out past the last one to the next tour card.
     tour.next();
+    expect(tour.currentNode()?.card.title).toBe('Deep two');
+    tour.next();
+    expect(tour.currentNode()?.card.title).toBe('Two');
+    // Back from a first answer leads out to the card it answers.
+    tour.navigate(1);
+    tour.select(tour.currentNode()?.children[0]?.id);
+    expect(tour.currentNode()?.card.title).toBe('Deep one');
     tour.previous();
-    expect(tour.threadsFor(1)).toHaveLength(1);
+    expect(tour.currentNode()?.card.title).toBe('One');
+    tour.select(tour.currentNode()?.children[0]?.id);
+    tour.leave();
+    expect(tour.currentNode()?.card.title).toBe('One');
+  });
+
+  it('answers a question asked on an answer under that answer', async () => {
+    const tour = await generatedPlanTour();
+    tour.navigate(1);
+    void tour.ask('Why buffer first?');
+    await flush();
+    stream(1, BRANCH_JSON);
+    await flush();
+    void tour.ask('And the timer?');
+    await flush();
+    expect(promptOf(2)).toContain('went deeper from spine card 2 of 4');
+    expect(promptOf(2)).toContain('"Deep one"');
+    stream(2, JSON.stringify({ cards: [card({ title: 'Deeper still' })] }));
+    await flush();
+    expect(tour.trail().map((node) => node.card.title)).toEqual([
+      'One',
+      'Deep one',
+      'Deeper still',
+    ]);
+  });
+
+  it('digs into one point of a slide with a fixed question', async () => {
+    const tour = await generatedPlanTour();
+    tour.goDeeperOn('Buffers flush on a timer');
+    await flush();
+    expect(promptOf(1)).toContain('Go deeper on this point: Buffers flush on a timer');
+  });
+
+  it('stops nesting answers at the deepest level a saved tour can hold', async () => {
+    const tour = await generatedPlanTour();
+    for (let level = 1; level < 5; level += 1) {
+      expect(tour.canAsk()).toBe(true);
+      void tour.ask(`Level ${level}?`);
+      await flush();
+      stream(level, JSON.stringify({ cards: [card({ title: `Level ${level}` })] }));
+      await flush();
+    }
+    expect(tour.trail()).toHaveLength(5);
+    expect(tour.canAsk()).toBe(false);
+    void tour.ask('Too deep?');
+    await flush();
+    expect(channels).toHaveLength(5);
   });
 
   it('shows the question in flight only under the card it was asked from', async () => {
@@ -292,8 +367,10 @@ describe('createUnderstandingTour', () => {
     stream(1, BRANCH_JSON);
     await flush();
     expect(tour.pendingQuestion()).toBe('');
-    expect(tour.threadsFor(1)).toHaveLength(1);
-    expect(tour.threadsFor(2)).toHaveLength(0);
+    expect(answersUnder(tour, 1)).toHaveLength(2);
+    expect(answersUnder(tour, 2)).toHaveLength(0);
+    // A reader who moved on stays where they are.
+    expect(tour.currentNode()?.card.title).toBe('Two');
   });
 
   it('clears provider stderr once the branch parses', async () => {
@@ -304,7 +381,7 @@ describe('createUnderstandingTour', () => {
     expect(tour.error()).toBe('provider warning on stderr');
     stream(1, BRANCH_JSON);
     await flush();
-    expect(tour.threads()[0]?.cards).toHaveLength(2);
+    expect(answersUnder(tour, 0)).toHaveLength(2);
     expect(tour.error()).toBe('');
   });
 
@@ -339,7 +416,7 @@ describe('createUnderstandingTour', () => {
     expect(tour.error()).toBe('');
     expect(tour.asking()).toBe(false);
     expect(tour.pendingQuestion()).toBe('');
-    expect(tour.threads()).toHaveLength(0);
+    expect(answerCount(tour)).toBe(0);
     // Asking again from the card the reader is on still reports its failure.
     void tour.ask('And here?');
     await flush();
@@ -358,10 +435,10 @@ describe('createUnderstandingTour', () => {
     expect(tour.pendingQuestion()).toBe('');
     stream(1, BRANCH_JSON);
     await flush();
-    expect(tour.threads()).toHaveLength(0);
+    expect(answerCount(tour)).toBe(0);
   });
 
-  it('keeps the threads of a cached tour when it is reopened', async () => {
+  it('keeps the answers of a cached tour when it is reopened', async () => {
     const tour = await generatedPlanTour();
     tour.navigate(2);
     void tour.ask('What breaks?');
@@ -372,11 +449,13 @@ describe('createUnderstandingTour', () => {
     await flush();
     stream(2, TOUR_JSON);
     await flush();
-    expect(tour.threads()).toHaveLength(0);
+    expect(answerCount(tour)).toBe(0);
 
     expect(tour.open(PLAN_INPUT)).toBe(true);
-    expect(tour.threadsFor(2)).toHaveLength(1);
-    expect(tour.threadsFor(2)[0].question).toBe('What breaks?');
+    expect(answersUnder(tour, 2).map((answer) => answer.question)).toEqual([
+      'What breaks?',
+      'What breaks?',
+    ]);
   });
 
   it('adds a second answer under the same card and replays the first', async () => {
@@ -386,15 +465,18 @@ describe('createUnderstandingTour', () => {
     await flush();
     stream(1, BRANCH_JSON);
     await flush();
+    tour.leave();
     void tour.ask('Second?');
     await flush();
     expect(promptOf(2)).toContain('already answered');
     expect(promptOf(2)).toContain('Deep one');
     stream(2, JSON.stringify({ cards: [card({ title: 'Follow-on' })] }));
     await flush();
-    const threads = tour.threadsFor(1);
-    expect(threads.map((thread) => thread.question)).toEqual(['First?', 'Second?']);
-    expect(threads[1].cards).toHaveLength(1);
+    expect(answersUnder(tour, 1).map((answer) => answer.question)).toEqual([
+      'First?',
+      'First?',
+      'Second?',
+    ]);
     // The first question's prompt carried no earlier answers.
     expect(promptOf(1)).not.toContain('already answered');
   });
@@ -429,7 +511,7 @@ describe('createUnderstandingTour', () => {
     expect(tour.tour()).toBeNull();
     expect(tour.kind()).toBeNull();
     expect(tour.subject()).toBe('');
-    expect(tour.threads()).toHaveLength(0);
+    expect(tour.tree()).toHaveLength(0);
     expect(tour.pendingQuestion()).toBe('');
     expect(tour.step()).toBe(0);
     expect(tour.error()).toBe('');
@@ -577,7 +659,7 @@ describe('createUnderstandingTour', () => {
     await flush();
     stream(1, BRANCH_JSON);
     await flush();
-    expect(tour.threads()).toHaveLength(1);
+    expect(answerCount(tour)).toBe(2);
 
     tour.rework('Explain it for a newcomer');
     await flush();
@@ -587,7 +669,7 @@ describe('createUnderstandingTour', () => {
     stream(2, JSON.stringify({ gist: card({ title: 'Simpler gist' }), cards: [card()] }));
     await flush();
     expect(tour.tour()?.cards[0]?.title).toBe('Simpler gist');
-    expect(tour.threads()).toHaveLength(0);
+    expect(answerCount(tour)).toBe(0);
     // The reworked tour replaces the cached one, so the entry button reopens it.
     expect(tour.open(PLAN_INPUT)).toBe(true);
     expect(tour.tour()?.cards[0]?.title).toBe('Simpler gist');
@@ -650,7 +732,7 @@ describe('createUnderstandingTour', () => {
     expect(promptOf(0)).toContain('the topic "the retry bug"');
     stream(0, BRANCH_JSON);
     await flush();
-    expect(tour.threadsFor(0)).toHaveLength(1);
+    expect(answersUnder(tour, 0)).toHaveLength(2);
 
     // Without a context the cards themselves are all a follow-up can reason from.
     tour.publish({
@@ -678,6 +760,695 @@ describe('createUnderstandingTour', () => {
     expect(tour.kind()).toBe('agent');
     expect(tour.tour()?.cards[0]?.title).toBe('Published gist');
     expect(tour.step()).toBe(0);
+  });
+
+  it('saves the tour into the worktree once, then keeps the file up to date', async () => {
+    const tour = await generatedPlanTour();
+    vi.mocked(invoke).mockImplementation(((channel: IPC, args?: { path?: string }) =>
+      channel === IPC.SaveTourFile
+        ? Promise.resolve(
+            args?.path === 'output-buffering.tour.md' ? 'output-buffering-2.tour.md' : args?.path,
+          )
+        : Promise.resolve(undefined)) as typeof invoke);
+    const saves = () =>
+      vi.mocked(invoke).mock.calls.filter(([channel]) => channel === IPC.SaveTourFile);
+    await tour.save();
+    expect(saves()).toHaveLength(1);
+    expect(saves()[0][1]).toMatchObject({
+      worktreePath: '/repo',
+      path: 'output-buffering.tour.md',
+      replace: false,
+    });
+    const first = String(saves()[0][1]?.content);
+    expect(first).toContain('kind: plan');
+    expect(first).toContain('## Gist title');
+    // The backend picked a free name; that is the file from now on.
+    expect(tour.savedPath()).toBe('output-buffering-2.tour.md');
+
+    void tour.ask('Why buffer first?');
+    await flush();
+    stream(1, BRANCH_JSON);
+    await flush();
+    await flush();
+    expect(saves()).toHaveLength(2);
+    expect(saves()[1][1]).toMatchObject({ path: 'output-buffering-2.tour.md', replace: true });
+    expect(String(saves()[1][1]?.content)).toContain('### Deep one');
+
+    // Reopening the cached tour keeps saving to the same file.
+    void tour.generate(FILE_INPUT);
+    await flush();
+    stream(2, TOUR_JSON);
+    await flush();
+    expect(tour.savedPath()).toBe('');
+    expect(tour.open(PLAN_INPUT)).toBe(true);
+    expect(tour.savedPath()).toBe('output-buffering-2.tour.md');
+  });
+
+  it('reports a failed save on the tour instead of losing it silently', async () => {
+    const tour = await generatedPlanTour();
+    vi.mocked(invoke).mockImplementation(((channel: IPC) =>
+      channel === IPC.SaveTourFile
+        ? Promise.reject(new Error('disk full'))
+        : Promise.resolve(undefined)) as typeof invoke);
+    await tour.save();
+    expect(tour.error()).toBe('Could not save the tour: disk full');
+    expect(tour.savedPath()).toBe('');
+    expect(tour.saving()).toBe(false);
+  });
+
+  it('restores a saved tour with its answers and replays the document it explains', async () => {
+    const tour = setup();
+    const { parseTourFile, serializeTour } = await import('./tour-file');
+    const text = serializeTour(
+      {
+        subject: 'docs/cache.md',
+        kind: 'document',
+        source: 'docs/cache.md',
+        roots: [
+          {
+            id: 'x',
+            card: publishedCard('Reads dominate', GIST_LABEL),
+            children: [
+              { id: 'y', card: publishedCard('Measured weekly'), question: 'How?', children: [] },
+            ],
+          },
+          { id: 'z', card: publishedCard('Writes stay simple'), children: [] },
+        ],
+      },
+      { forFile: true },
+    );
+    await tour.restore({
+      file: parseTourFile(text),
+      text,
+      savedPath: 'cache.tour.md',
+      worktreePath: '/repo',
+      taskName: 'Task',
+      sourceText: '# Cache\n\nReads are 90% of traffic.',
+    });
+    expect(asks()).toHaveLength(0);
+    expect(tour.kind()).toBe('document');
+    expect(tour.subject()).toBe('docs/cache.md');
+    expect(tour.savedPath()).toBe('cache.tour.md');
+    expect(tour.currentNode()?.card.title).toBe('Reads dominate');
+    expect(tour.tree()[0].children[0].question).toBe('How?');
+    tour.select(tour.currentNode()?.children[0]?.id);
+    expect(tour.currentNode()?.card.title).toBe('Measured weekly');
+    // Reopening the unchanged file keeps the reader's place.
+    await tour.restore({
+      file: parseTourFile(text),
+      text,
+      savedPath: 'cache.tour.md',
+      worktreePath: '/repo',
+      taskName: 'Task',
+      sourceText: '# Cache\n\nReads are 90% of traffic.',
+    });
+    expect(tour.currentNode()?.card.title).toBe('Measured weekly');
+    void tour.ask('Why weekly?');
+    await flush();
+    expect(promptOf(0)).toContain('Reads are 90% of traffic.');
+    expect(promptOf(0)).toContain('went deeper from spine card 1 of 2');
+    // The file is its own tour; the document's Take Tour still makes or opens its own.
+    expect(tour.isReady('document', 'docs/cache.md')).toBe(false);
+  });
+
+  it('never lets a reopened file replace a generated tour and its unsaved answers', async () => {
+    const tour = await generatedPlanTour();
+    void tour.ask('Why buffer first?');
+    await flush();
+    stream(1, BRANCH_JSON);
+    await flush();
+    const { parseTourFile } = await import('./tour-file');
+    const text = `---\nparallel-code-tour: 1\nkind: plan\nsource: "output buffering"\n---\n## Saved card\n- a point\n`;
+    await tour.restore({
+      file: parseTourFile(text),
+      text,
+      savedPath: 'old.tour.md',
+      worktreePath: '/repo',
+      taskName: 'Task',
+      sourceText: PLAN_INPUT.planContent,
+    });
+    expect(tour.currentNode()?.card.title).toBe('Saved card');
+    expect(tour.open(PLAN_INPUT)).toBe(true);
+    expect(tour.currentNode()?.card.title).toBe('Gist title');
+    expect(answerCount(tour)).toBe(2);
+  });
+
+  it('lets go of a saved file edited outside the tour instead of writing over it', async () => {
+    const tour = await generatedPlanTour();
+    let onDisk = '';
+    vi.mocked(invoke).mockImplementation(((
+      channel: IPC,
+      args?: { path?: string; content?: string; expected?: string },
+    ) => {
+      if (channel !== IPC.SaveTourFile) return Promise.resolve(undefined);
+      if (args?.expected !== undefined && args.expected !== onDisk)
+        return Promise.reject(new Error(`Error invoking remote method: ${TOUR_FILE_CHANGED}`));
+      onDisk = args?.content ?? '';
+      return Promise.resolve(args?.path);
+    }) as typeof invoke);
+    await tour.save();
+    expect(tour.savedPath()).toBe('output-buffering.tour.md');
+    // Someone edits the file; the next answer must not overwrite it.
+    onDisk = 'edited by hand';
+    void tour.ask('Why buffer first?');
+    await flush();
+    stream(1, BRANCH_JSON);
+    await flush();
+    await flush();
+    expect(onDisk).toBe('edited by hand');
+    expect(tour.savedPath()).toBe('');
+    expect(tour.error()).toContain(
+      'output-buffering.tour.md was changed or removed outside the tour',
+    );
+  });
+
+  it('falls back to the cards when what a saved tour explains is gone', async () => {
+    const tour = setup();
+    const { parseTourFile } = await import('./tour-file');
+    vi.mocked(invoke).mockImplementation(((channel: IPC) =>
+      channel === IPC.ReadFileTourContext
+        ? Promise.reject(new Error('missing'))
+        : Promise.resolve(undefined)) as typeof invoke);
+    const text =
+      '---\nparallel-code-tour: 1\nkind: file\nsource: "src/gone.ts"\n---\n## Only card\n- a point\n';
+    await tour.restore({
+      file: parseTourFile(text),
+      text,
+      savedPath: 'gone.tour.md',
+      worktreePath: '/repo',
+      taskName: 'Task',
+    });
+    expect(tour.kind()).toBe('agent');
+    void tour.ask('What did it do?');
+    await flush();
+    expect(promptOf(0)).toContain('Only card');
+  });
+
+  it('runs a reopened tour whose source is gone as a tour of its cards, but saves its kind', async () => {
+    const tour = setup();
+    const { parseTourFile } = await import('./tour-file');
+    vi.mocked(invoke).mockImplementation(((channel: IPC, args?: { path?: string }) =>
+      channel === IPC.SaveTourFile
+        ? Promise.resolve(args?.path)
+        : Promise.resolve(undefined)) as typeof invoke);
+    const text =
+      '---\nparallel-code-tour: 1\nkind: document\nsource: "docs/gone.md"\n---\n## Only card\n- a point\n';
+    await tour.restore({
+      file: parseTourFile(text),
+      text,
+      savedPath: 'gone.tour.md',
+      worktreePath: '/repo',
+      taskName: 'Task',
+    });
+    // No document to quote from, so follow-ups ask for no quotes.
+    expect(tour.tour()?.kind).toBe('agent');
+    void tour.ask('Why?');
+    await flush();
+    expect(promptOf(0)).not.toContain('verbatim excerpt');
+    stream(0, BRANCH_JSON);
+    await flush();
+    await flush();
+    const saved = vi.mocked(invoke).mock.calls.filter(([channel]) => channel === IPC.SaveTourFile);
+    expect(String(saved.at(-1)?.[1]?.content)).toContain('kind: document');
+    expect(String(saved.at(-1)?.[1]?.content)).toContain('source: "docs/gone.md"');
+  });
+
+  it('recovers from a failed update without later claiming the file changed', async () => {
+    const tour = await generatedPlanTour();
+    let onDisk = '';
+    let failNext = false;
+    vi.mocked(invoke).mockImplementation(((
+      channel: IPC,
+      args?: { path?: string; content?: string; expected?: string },
+    ) => {
+      if (channel !== IPC.SaveTourFile) return Promise.resolve(undefined);
+      if (failNext) {
+        failNext = false;
+        return Promise.reject(new Error('disk full'));
+      }
+      if (args?.expected !== undefined && args.expected !== onDisk)
+        return Promise.reject(new Error(TOUR_FILE_CHANGED));
+      onDisk = args?.content ?? '';
+      return Promise.resolve(args?.path);
+    }) as typeof invoke);
+    await tour.save();
+    failNext = true;
+    void tour.ask('First?');
+    await flush();
+    stream(1, BRANCH_JSON);
+    await flush();
+    await flush();
+    expect(tour.error()).toContain('disk full');
+    void tour.ask('Second?');
+    await flush();
+    stream(2, BRANCH_JSON);
+    await flush();
+    await flush();
+    expect(tour.savedPath()).toBe('output-buffering.tour.md');
+    expect(onDisk).toContain('### Deep one');
+    expect(tour.error()).toBe('');
+  });
+
+  it('never regenerates a tour reopened from its file', async () => {
+    const tour = await generatedPlanTour();
+    void tour.ask('Why buffer first?');
+    await flush();
+    stream(1, BRANCH_JSON);
+    await flush();
+    const { parseTourFile } = await import('./tour-file');
+    const text = `---\nparallel-code-tour: 1\nkind: plan\nsource: "output buffering"\n---\n## Saved card\n- a point\n`;
+    await tour.restore({
+      file: parseTourFile(text),
+      text,
+      savedPath: 'old.tour.md',
+      worktreePath: '/repo',
+      taskName: 'Task',
+      sourceText: PLAN_INPUT.planContent,
+    });
+    expect(tour.fromFile()).toBe(true);
+    tour.rework('Shorter');
+    tour.retry();
+    await flush();
+    expect(asks()).toHaveLength(2);
+    expect(tour.currentNode()?.card.title).toBe('Saved card');
+    expect(tour.open(PLAN_INPUT)).toBe(true);
+    expect(tour.fromFile()).toBe(false);
+    expect(answerCount(tour)).toBe(2);
+  });
+
+  it('writes answers that arrive while the first save is still running', async () => {
+    const tour = await generatedPlanTour();
+    let release: (path: string) => void = () => {};
+    const contents: string[] = [];
+    vi.mocked(invoke).mockImplementation(((
+      channel: IPC,
+      args?: { path?: string; content?: string; replace?: boolean },
+    ) => {
+      if (channel !== IPC.SaveTourFile) return Promise.resolve(undefined);
+      contents.push(args?.content ?? '');
+      if (args?.replace) return Promise.resolve(args.path);
+      return new Promise<string>((resolve) => (release = resolve));
+    }) as typeof invoke);
+    const saving = tour.save();
+    await flush();
+    void tour.ask('Why buffer first?');
+    await flush();
+    stream(1, BRANCH_JSON);
+    await flush();
+    release('output-buffering.tour.md');
+    await saving;
+    await flush();
+    expect(contents).toHaveLength(2);
+    expect(contents[0]).not.toContain('Deep one');
+    expect(contents[1]).toContain('### Deep one');
+  });
+
+  it('expects what last landed on disk, even with a write queued behind a failure', async () => {
+    const tour = await generatedPlanTour();
+    let onDisk = '';
+    let holdNext = false;
+    let failHeld: () => void = () => {};
+    vi.mocked(invoke).mockImplementation(((
+      channel: IPC,
+      args?: { path?: string; content?: string; expected?: string },
+    ) => {
+      if (channel !== IPC.SaveTourFile) return Promise.resolve(undefined);
+      if (holdNext) {
+        holdNext = false;
+        // This write fails only after the next one has queued behind it.
+        return new Promise((_resolve, reject) => {
+          failHeld = () => reject(new Error('EACCES'));
+        });
+      }
+      if (args?.expected !== undefined && args.expected !== onDisk)
+        return Promise.reject(new Error(TOUR_FILE_CHANGED));
+      onDisk = args?.content ?? '';
+      return Promise.resolve(args?.path);
+    }) as typeof invoke);
+    await tour.save();
+    holdNext = true;
+    tour.navigate(1);
+    void tour.ask('First?');
+    await flush();
+    stream(1, BRANCH_JSON);
+    await flush();
+    tour.navigate(2);
+    void tour.ask('Second?');
+    await flush();
+    stream(2, BRANCH_JSON);
+    await flush();
+    failHeld();
+    await flush();
+    await flush();
+    expect(tour.savedPath()).toBe('output-buffering.tour.md');
+    expect(onDisk).toContain('Second?');
+  });
+
+  it('drops queued updates once one finds the file edited outside the tour', async () => {
+    const tour = await generatedPlanTour();
+    let onDisk = '';
+    let holdNext = false;
+    let conflictHeld: () => void = () => {};
+    vi.mocked(invoke).mockImplementation(((
+      channel: IPC,
+      args?: { path?: string; content?: string; expected?: string },
+    ) => {
+      if (channel !== IPC.SaveTourFile) return Promise.resolve(undefined);
+      if (holdNext) {
+        holdNext = false;
+        return new Promise((_resolve, reject) => {
+          conflictHeld = () => reject(new Error(TOUR_FILE_CHANGED));
+        });
+      }
+      if (args?.expected !== undefined && args.expected !== onDisk)
+        return Promise.reject(new Error(TOUR_FILE_CHANGED));
+      onDisk = args?.content ?? '';
+      return Promise.resolve(args?.path);
+    }) as typeof invoke);
+    await tour.save();
+    onDisk = 'edited by hand';
+    holdNext = true;
+    void tour.ask('First?');
+    await flush();
+    stream(1, BRANCH_JSON);
+    await flush();
+    tour.navigate(2);
+    void tour.ask('Second?');
+    await flush();
+    stream(2, BRANCH_JSON);
+    await flush();
+    conflictHeld();
+    await flush();
+    await flush();
+    expect(onDisk).toBe('edited by hand');
+    expect(tour.savedPath()).toBe('');
+    expect(tour.error()).toContain('was changed or removed outside the tour');
+  });
+
+  it('keeps unsaved answers retryable after a failed update', async () => {
+    const tour = await generatedPlanTour();
+    let onDisk = '';
+    let failNext = false;
+    vi.mocked(invoke).mockImplementation(((
+      channel: IPC,
+      args?: { path?: string; content?: string; expected?: string },
+    ) => {
+      if (channel !== IPC.SaveTourFile) return Promise.resolve(undefined);
+      if (failNext) {
+        failNext = false;
+        return Promise.reject(new Error('disk full'));
+      }
+      if (args?.expected !== undefined && args.expected !== onDisk)
+        return Promise.reject(new Error(TOUR_FILE_CHANGED));
+      onDisk = args?.content ?? '';
+      return Promise.resolve(args?.path);
+    }) as typeof invoke);
+    await tour.save();
+    expect(tour.unsaved()).toBe(false);
+    failNext = true;
+    void tour.ask('First?');
+    await flush();
+    stream(1, BRANCH_JSON);
+    await flush();
+    await flush();
+    expect(tour.unsaved()).toBe(true);
+    tour.navigate(1);
+    // Moving on clears the message, but the tour still knows it is behind.
+    expect(tour.unsaved()).toBe(true);
+    await tour.save();
+    await flush();
+    expect(onDisk).toContain('### Deep one');
+    expect(tour.unsaved()).toBe(false);
+    expect(tour.savedPath()).toBe('output-buffering.tour.md');
+  });
+
+  it('reopens a just-saved file as its own record, with the source read now', async () => {
+    const tour = await generatedPlanTour();
+    let onDisk = '';
+    vi.mocked(invoke).mockImplementation(((
+      channel: IPC,
+      args?: { path?: string; content?: string },
+    ) => {
+      if (channel !== IPC.SaveTourFile) return Promise.resolve(undefined);
+      onDisk = args?.content ?? '';
+      return Promise.resolve(args?.path);
+    }) as typeof invoke);
+    await tour.save();
+    const { parseTourFile } = await import('./tour-file');
+    const reopen = (sourceText: string) =>
+      tour.restore({
+        file: parseTourFile(onDisk),
+        text: onDisk,
+        savedPath: 'output-buffering.tour.md',
+        worktreePath: '/repo',
+        taskName: 'Task',
+        sourceText,
+      });
+    await reopen(PLAN_INPUT.planContent);
+    expect(tour.fromFile()).toBe(true);
+    await reopen('# Plan\n\nThe plan as it reads now.');
+    void tour.ask('Why?');
+    await flush();
+    // Request 0 generated the tour; 1 is the follow-up on the reopened file.
+    expect(replayedContext(1)).toContain('The plan as it reads now.');
+  });
+
+  it('reopens a hand-formatted file as saved, and keeps unsaved answers across a reopen', async () => {
+    const tour = setup();
+    const { parseTourFile, serializeTour } = await import('./tour-file');
+    const canonical = serializeTour(
+      {
+        subject: 'docs/cache.md',
+        kind: 'document',
+        source: 'docs/cache.md',
+        roots: [{ id: 'x', card: publishedCard('Reads dominate', GIST_LABEL), children: [] }],
+      },
+      { forFile: true },
+    );
+    // An editor saved it with CRLF line endings and extra blank lines.
+    const text = `${canonical.replace(/\n/g, '\r\n')}\r\n\r\n`;
+    let onDisk = text;
+    let failNext = false;
+    vi.mocked(invoke).mockImplementation(((
+      channel: IPC,
+      args?: { path?: string; content?: string; expected?: string },
+    ) => {
+      if (channel !== IPC.SaveTourFile) return Promise.resolve(undefined);
+      if (failNext) {
+        failNext = false;
+        return Promise.reject(new Error('disk full'));
+      }
+      if (args?.expected !== undefined && args.expected !== onDisk)
+        return Promise.reject(new Error(TOUR_FILE_CHANGED));
+      onDisk = args?.content ?? '';
+      return Promise.resolve(args?.path);
+    }) as typeof invoke);
+    const reopen = () =>
+      tour.restore({
+        file: parseTourFile(onDisk),
+        text: onDisk,
+        savedPath: 'cache.tour.md',
+        worktreePath: '/repo',
+        taskName: 'Task',
+        sourceText: '# Cache',
+      });
+    await reopen();
+    expect(tour.unsaved()).toBe(false);
+    failNext = true;
+    void tour.ask('Why?');
+    await flush();
+    stream(0, BRANCH_JSON);
+    await flush();
+    await flush();
+    expect(onDisk).toBe(text);
+    expect(tour.unsaved()).toBe(true);
+    // The file is as the tour last read it, so reopening keeps the answers.
+    await reopen();
+    expect(answerCount(tour)).toBe(2);
+    expect(tour.unsaved()).toBe(true);
+    await tour.save();
+    await flush();
+    expect(onDisk).toContain('### Deep one');
+    expect(tour.unsaved()).toBe(false);
+  });
+
+  it('reports saving only for the tour whose file is being written', async () => {
+    const tour = await generatedPlanTour();
+    let release: () => void = () => {};
+    let hold = false;
+    vi.mocked(invoke).mockImplementation(((channel: IPC, args?: { path?: string }) => {
+      if (channel !== IPC.SaveTourFile) return Promise.resolve(undefined);
+      if (!hold) return Promise.resolve(args?.path);
+      return new Promise<string | undefined>((resolve) => (release = () => resolve(args?.path)));
+    }) as typeof invoke);
+    await tour.save();
+    hold = true;
+    void tour.ask('Why?');
+    await flush();
+    stream(1, BRANCH_JSON);
+    await flush();
+    expect(tour.saving()).toBe(true);
+    void tour.generate(FILE_INPUT);
+    await flush();
+    stream(2, TOUR_JSON);
+    await flush();
+    expect(tour.saving()).toBe(false);
+    release();
+    await flush();
+  });
+
+  it('leaves a reopened file to its own record when an earlier update lands late', async () => {
+    const tour = await generatedPlanTour();
+    let onDisk = '';
+    let release: () => void = () => {};
+    let hold = false;
+    vi.mocked(invoke).mockImplementation(((
+      channel: IPC,
+      args?: { path?: string; content?: string },
+    ) => {
+      if (channel !== IPC.SaveTourFile) return Promise.resolve(undefined);
+      if (!hold) {
+        onDisk = args?.content ?? '';
+        return Promise.resolve(args?.path);
+      }
+      return new Promise<string | undefined>((resolve) => (release = () => resolve(args?.path)));
+    }) as typeof invoke);
+    await tour.save();
+    hold = true;
+    void tour.ask('Why?');
+    await flush();
+    stream(1, BRANCH_JSON);
+    await flush();
+    const { parseTourFile } = await import('./tour-file');
+    await tour.restore({
+      file: parseTourFile(onDisk),
+      text: onDisk,
+      savedPath: 'output-buffering.tour.md',
+      worktreePath: '/repo',
+      taskName: 'Task',
+      sourceText: PLAN_INPUT.planContent,
+    });
+    release();
+    await flush();
+    expect(tour.open(PLAN_INPUT)).toBe(true);
+    expect(tour.savedPath()).toBe('');
+  });
+
+  it('reopens a saved file tour with the file as it reads now, or once it is back', async () => {
+    const tour = setup();
+    const { parseTourFile } = await import('./tour-file');
+    let content: string | undefined;
+    vi.mocked(invoke).mockImplementation(((channel: IPC) => {
+      if (channel !== IPC.ReadFileTourContext) return Promise.resolve(undefined);
+      if (content === undefined) return Promise.reject(new Error('missing'));
+      return Promise.resolve({ ...fileContext, files: [{ ...fileContext.files[0], content }] });
+    }) as typeof invoke);
+    const text =
+      '---\nparallel-code-tour: 1\nkind: file\nsource: "src/pty.ts"\n---\n## Only card\n- a point\n';
+    const reopen = () =>
+      tour.restore({
+        file: parseTourFile(text),
+        text,
+        savedPath: 'pty.tour.md',
+        worktreePath: '/repo',
+        taskName: 'Task',
+      });
+    await reopen();
+    expect(tour.kind()).toBe('agent');
+    content = 'export const marker = "FIRST";';
+    await reopen();
+    expect(tour.kind()).toBe('file');
+    content = 'export const marker = "SECOND";';
+    await reopen();
+    void tour.ask('Why?');
+    await flush();
+    expect(promptOf(0)).toContain('SECOND');
+    expect(promptOf(0)).not.toContain('FIRST');
+  });
+
+  it('shows the file opened last when two saved file tours are read at once', async () => {
+    const tour = setup();
+    const { parseTourFile } = await import('./tour-file');
+    const reads: (() => void)[] = [];
+    vi.mocked(invoke).mockImplementation(((channel: IPC) =>
+      channel === IPC.ReadFileTourContext
+        ? new Promise<FileTourContext>((resolve) => reads.push(() => resolve(fileContext)))
+        : Promise.resolve(undefined)) as typeof invoke);
+    const reopen = (subject: string) => {
+      const text = `---\nparallel-code-tour: 1\nkind: file\nsubject: "${subject}"\nsource: "src/pty.ts"\n---\n## ${subject}\n- a point\n`;
+      return tour.restore({
+        file: parseTourFile(text),
+        text,
+        savedPath: `${subject}.tour.md`,
+        worktreePath: '/repo',
+        taskName: 'Task',
+      });
+    };
+    const first = reopen('first');
+    const second = reopen('second');
+    reads[0]();
+    await first;
+    reads[1]();
+    await second;
+    expect(tour.savedPath()).toBe('second.tour.md');
+  });
+
+  it('stops asking before the tour holds more cards than its file can', async () => {
+    const tour = setup();
+    const { parseTourFile, serializeTour } = await import('./tour-file');
+    const roots = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        id: `n${index}`,
+        card: publishedCard(`Card ${index}`),
+        children: [],
+      }));
+    const reopen = async (count: number) => {
+      const text = serializeTour(
+        { subject: 'big', kind: 'agent', roots: roots(count) },
+        { forFile: true },
+      );
+      await tour.restore({
+        file: parseTourFile(text),
+        text,
+        savedPath: `big-${count}.tour.md`,
+        worktreePath: '/repo',
+        taskName: 'Task',
+      });
+    };
+    await reopen(TOUR_FILE_MAX_CARDS - TOUR_CARD_LIMITS.branchMaxCards);
+    expect(tour.canAsk()).toBe(true);
+    await reopen(TOUR_FILE_MAX_CARDS - TOUR_CARD_LIMITS.branchMaxCards + 1);
+    expect(tour.canAsk()).toBe(false);
+    expect(tour.askLimit()).toBe('cards');
+  });
+
+  it('stops asking before an answer could make the tour too large to save', async () => {
+    const tour = setup();
+    const { parseTourFile, serializeTour } = await import('./tour-file');
+    // Spread over cards of 4000 characters, well inside what a file's card may hold.
+    const reopen = async (bodyChars: number) => {
+      const roots = Array.from({ length: Math.ceil(bodyChars / 4000) }, (_, index) => ({
+        id: `n${index}`,
+        card: {
+          ...publishedCard(`Card ${index}`),
+          body: 'x'.repeat(Math.min(4000, bodyChars - index * 4000)),
+        },
+        children: [],
+      }));
+      const text = serializeTour({ subject: 'long', kind: 'agent', roots }, { forFile: true });
+      await tour.restore({
+        file: parseTourFile(text),
+        text,
+        savedPath: `long-${bodyChars}.tour.md`,
+        worktreePath: '/repo',
+        taskName: 'Task',
+      });
+    };
+    await reopen(TOUR_FILE_MAX_CHARS - UNDERSTANDING_MAX_OUTPUT_CHARS - 30_000);
+    expect(tour.canAsk()).toBe(true);
+    await reopen(TOUR_FILE_MAX_CHARS - UNDERSTANDING_MAX_OUTPUT_CHARS);
+    expect(tour.canAsk()).toBe(false);
+    expect(tour.askLimit()).toBe('size');
   });
 
   it('has nothing to open for an ungenerated subject or after a reset', async () => {

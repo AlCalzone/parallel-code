@@ -237,6 +237,17 @@ export function BookmarkIcon(props: IconProps): JSX.Element {
   );
 }
 
+export function SaveIcon(props: IconProps): JSX.Element {
+  return (
+    <SvgIcon {...props}>
+      <path
+        fill-rule="evenodd"
+        d="M2.75 1h8.69c.464 0 .909.184 1.237.513l1.81 1.81c.329.328.513.773.513 1.237v8.69A1.75 1.75 0 0 1 13.25 15H2.75A1.75 1.75 0 0 1 1 13.25V2.75C1 1.784 1.784 1 2.75 1Zm-.25 1.75v10.5c0 .138.112.25.25.25h.75V9.75C3.5 8.784 4.284 8 5.25 8h5.5c.966 0 1.75.784 1.75 1.75v3.75h.75a.25.25 0 0 0 .25-.25V4.56a.25.25 0 0 0-.073-.177l-1.81-1.81a.25.25 0 0 0-.177-.073H11v2.75A1.75 1.75 0 0 1 9.25 7h-3.5A1.75 1.75 0 0 1 4 5.25V2.5H2.75a.25.25 0 0 0-.25.25ZM5.5 2.5v2.75c0 .138.112.25.25.25h3.5a.25.25 0 0 0 .25-.25V2.5ZM5 13.5h6V9.75a.25.25 0 0 0-.25-.25h-5.5a.25.25 0 0 0-.25.25Z"
+      />
+    </SvgIcon>
+  );
+}
+
 export function InfoIcon(props: IconProps): JSX.Element {
   return (
     <SvgIcon {...props}>

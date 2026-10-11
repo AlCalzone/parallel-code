@@ -11,9 +11,9 @@ import {
 import {
   GIST_LABEL,
   type FileTourContext,
-  type TourBranch,
   type TourCard,
   type UnderstandingTourKind,
+  isSlideTourKind,
   isTextTourKind,
 } from './understanding-tour';
 import { markdownOutline, renderOutline } from './markdown-outline';
@@ -40,21 +40,56 @@ const TEXT_TOUR_OUTPUT = '{"gist":CARD,"cards":[CARD, ...],"omitted":["Heading t
 const BRANCH_OUTPUT = '{"cards":[CARD, ...]}';
 
 /** Card schema and writing rules; question suggestions belong only to the spine. */
-function cardInstructions(outputShape: string, options: { sources?: boolean } = {}): string {
+/** The card fields that carry what a card says: prose for code tours, points for slides. */
+function cardContent(slides: boolean): { schema: string; required: string; optional: string } {
+  return slides
+    ? {
+        schema: '"points":["short point", ...],"notes":"optional speaker notes in markdown"',
+        required: 'label, title, tone, and points unless the card is a comparison or flow',
+        optional: 'body, notes',
+      }
+    : {
+        schema: '"body":"short markdown","whyItMatters":"optional single point"',
+        required: 'label, title, body, tone',
+        optional: 'whyItMatters',
+      };
+}
+
+/**
+ * Doc and concept tours read like a presentation: each card is a slide whose
+ * title is the claim and whose few points back it, with any prose in notes.
+ */
+function slideInstructions(): string {
+  const caps = TOUR_CARD_LIMITS;
+  return `Write every card as a presentation slide, not as a paragraph:
+- points are 2 to ${caps.points} bullet points of at most ${caps.point} characters each: fragments of about twelve words or fewer, never full paragraphs and never nested. Each point is evidence for the title's claim, not a new topic. Write cause and effect as "A -> B" inside a point.
+- A comparison or flow card shows its visual instead of points; its body is a one-sentence caption. Ordinary cards leave body out.
+- notes is optional, at most ${caps.notes} characters of Markdown: the speaker notes a reader opens only when they want the reasoning, nuance or why it matters. Never put the card's point only in notes.`;
+}
+
+function cardInstructions(
+  outputShape: string,
+  options: { sources?: boolean; slides?: boolean } = {},
+): string {
   const caps = TOUR_CARD_LIMITS;
   const suggestQuestions = outputShape !== BRANCH_OUTPUT;
   const sources = options.sources === true;
+  const slides = options.slides === true;
+  const content = cardContent(slides);
+  const capList = slides
+    ? `point ${caps.point}, body ${caps.body}, notes ${caps.notes}`
+    : `body ${caps.body}, whyItMatters ${caps.whyItMatters}`;
   return `Return only one JSON object and nothing else, no prose, no code fences: ${outputShape}
-CARD is {"label":"SHORT UPPERCASE LABEL","title":"one short claim","body":"short markdown","whyItMatters":"optional single point"${suggestQuestions ? ',"questions":["optional contextual question"]' : ''},"tone":"neutral","form":"optional layout","diagram":{"kind":"text","source":"..."},"comparison":[{"label":"Before","text":"..."},{"label":"After","text":"..."}]${sources ? ',"source":"verbatim excerpt"' : ''},"refs":[{"filePath":"path/from/worktree/root","line":1}]}
-Required on every card: label, title, body, tone. Optional: whyItMatters, ${suggestQuestions ? 'questions, ' : ''}form, diagram, comparison, ${sources ? 'source, ' : ''}refs.
-title states the card's takeaway as one short, complete claim of at most about twelve words, not a topic: "Each task gets its own working copy", not "Worktree isolation". Reading only the titles in order must give the whole argument; the body is the evidence for the claim.
-Never exceed these character caps: label ${caps.label}, title ${caps.title}, body ${caps.body}, whyItMatters ${caps.whyItMatters}, text diagram source ${caps.textDiagram}, mermaid diagram source ${caps.mermaidDiagram}, comparison side label ${caps.comparisonLabel}, comparison side text ${caps.comparisonText}. At most ${caps.refs} refs per card. Output that exceeds a cap is rejected outright.
-${suggestQuestions ? `questions is optional: suggest 0-${caps.questions} short, specific questions of at most ${caps.question} characters each that explore a real boundary, trade-off or assumption tied to this card. Do not repeat answered facts or ask generic questions. Omit questions when nothing useful remains to ask.\n` : ''}tone is exactly one of: "neutral" (plain explanation), "important" (the reader must not miss this), "risk" (something can break, cost time or lose data), "uncertainty" (genuinely unknown or merely assumed), "mechanical" (dry plumbing detail, low attention; keep its body to one or two sentences).
+CARD is {"label":"SHORT UPPERCASE LABEL","title":"one short claim",${content.schema}${suggestQuestions ? ',"questions":["optional contextual question"]' : ''},"tone":"neutral","form":"optional layout","diagram":{"kind":"text","source":"..."},"comparison":[{"label":"Before","text":"..."},{"label":"After","text":"..."}]${sources ? ',"source":"verbatim excerpt"' : ''},"refs":[{"filePath":"path/from/worktree/root","line":1}]}
+Required on every card: ${content.required}. Optional: ${content.optional}, ${suggestQuestions ? 'questions, ' : ''}form, diagram, comparison, ${sources ? 'source, ' : ''}refs.
+title states the card's takeaway as one short, complete claim of at most about twelve words, not a topic: "Each task gets its own working copy", not "Worktree isolation". Reading only the titles in order must give the whole argument; the ${slides ? 'points are' : 'body is'} the evidence for the claim.
+Never exceed these character caps: label ${caps.label}, title ${caps.title}, ${capList}, text diagram source ${caps.textDiagram}, mermaid diagram source ${caps.mermaidDiagram}, comparison side label ${caps.comparisonLabel}, comparison side text ${caps.comparisonText}. At most ${caps.refs} refs per card. Output that exceeds a cap is rejected outright.
+${slides ? `${slideInstructions()}\n` : ''}${suggestQuestions ? `questions is optional: suggest 0-${caps.questions} short, specific questions of at most ${caps.question} characters each that explore a real boundary, trade-off or assumption tied to this card. Do not repeat answered facts or ask generic questions. Omit questions when nothing useful remains to ask.\n` : ''}tone is exactly one of: "neutral" (plain explanation), "important" (the reader must not miss this), "risk" (something can break, cost time or lose data), "uncertainty" (genuinely unknown or merely assumed), "mechanical" (dry plumbing detail, low attention; keep its ${slides ? 'points to one or two' : 'body to one or two sentences'}).
 form gives different ideas different shapes. Omit it for an ordinary card; otherwise it is exactly one of:
-- "takeaway": one claim that stands on its own; the body is a single supporting sentence.
+- "takeaway": one claim that stands on its own; ${slides ? 'at most two points support it' : 'the body is a single supporting sentence'}.
 - "comparison": before/after or two choices; requires "comparison" with exactly two sides, each a short label and the consequence of that side. The body is a one- or two-sentence caption.
 - "flow": a mechanism; requires a diagram, which becomes the card's main content. The body is a one- or two-sentence caption.
-Let the evidence carry the card: when a diagram or comparison shows the point, do not repeat it in prose.
+Let the evidence carry the card: when a diagram or comparison shows the point, do not repeat it in ${slides ? 'points' : 'prose'}.
 Write decision-ready understanding, not documentation:
 - Omit anything that would not change a high-level decision. Compression is the point.
 - One idea per card. If a card needs "and", split it or drop the weaker half.
@@ -90,8 +125,7 @@ const CLOSING_CARD: Record<UnderstandingTourKind, string> = {
  * short plain cards, the text's own language, and the sections left out.
  */
 function textTourInstructions(): string {
-  return `The gist has no "form". Its body is one sentence that makes the point, then at most three short bullets.
-Keep each ordinary card's body to about 60 words: two sentences or three bullets. Takeaway, comparison and flow cards keep their caption rules.
+  return `The gist has no "form". Its title makes the whole point; one to three points give the reasons or the parts.
 Write every card in the language the text is written in. Keep the text's own names and terms, and define jargon once, where it first appears.
 "omitted" is optional: up to ${TOUR_CARD_LIMITS.omitted} headings of sections you deliberately left out because they would not change the reader's understanding, copied exactly from the outline. Leave it out when nothing substantial was skipped.`;
 }
@@ -154,7 +188,7 @@ export function buildPlanTourPrompt(input: {
 }): string {
   return withinBudget(`You explain an implementation plan to the person who has to approve it.
 Optimise for one question: is this direction sound?
-${cardInstructions(TEXT_TOUR_OUTPUT, { sources: true })}
+${cardInstructions(TEXT_TOUR_OUTPUT, { sources: true, slides: true })}
 ${tourShapeInstructions('plan')}
 ${textTourInstructions()}
 A suggested, not mandatory, shape: problem, approach, key decision, impact, trade-off, decisions for you, risk or uncertainty, bottom line. Drop any of these that the plan does not support.
@@ -176,7 +210,7 @@ export function buildDocumentTourPrompt(input: {
 }): string {
   return withinBudget(`You explain a Markdown document to a developer who has not read it.
 Optimise for three questions: what is this, what does it claim or decide, and what does it ask of me?
-${cardInstructions(TEXT_TOUR_OUTPUT, { sources: true })}
+${cardInstructions(TEXT_TOUR_OUTPUT, { sources: true, slides: true })}
 ${tourShapeInstructions('document')}
 ${textTourInstructions()}
 First decide what kind of document this is, then follow the matching shape. Each is a suggestion; drop what the document does not support:
@@ -224,7 +258,7 @@ export function buildTopicTourPrompt(input: {
   instructions?: string;
 }): string {
   return withinBudget(`You explain a topic from a coding task to a developer who needs to understand it quickly.
-${cardInstructions(TOUR_OUTPUT)}
+${cardInstructions(TOUR_OUTPUT, { slides: true })}
 ${tourShapeInstructions('agent')}
 The material below is all you know about the topic; you cannot read the repository. Say what is unknown instead of guessing.
 ${readerRequest(input.instructions)}${UNTRUSTED}
@@ -235,8 +269,8 @@ ${JSON.stringify(input.context)}`);
 }
 
 /** Keep the evidence: flow and comparison bodies can be just captions. */
-function compactCard({ label, title, body, diagram, comparison }: TourCard) {
-  return { label, title, body, diagram, comparison };
+function compactCard({ label, title, body, points, notes, diagram, comparison }: TourCard) {
+  return { label, title, body: body || undefined, points, notes, diagram, comparison };
 }
 
 /** The tour's own cards as context: the fallback for a tour published without any. */
@@ -245,7 +279,7 @@ export function compactSpine(tour: { cards: TourCard[] }): string {
 }
 
 /** Earlier answers under the same card, so a new question can build on them. */
-function compactThreads(threads: TourBranch[]): string {
+function compactThreads(threads: { question: string; cards: TourCard[] }[]): string {
   return JSON.stringify(
     threads.map((thread) => ({ question: thread.question, cards: thread.cards.map(compactCard) })),
   );
@@ -254,26 +288,38 @@ function compactThreads(threads: TourBranch[]): string {
 export function buildFollowUpPrompt(input: {
   tour: { subject: string; kind: FollowUpTourKind; cards: TourCard[] };
   currentIndex: number;
+  /**
+   * The follow-up cards between the spine card and the reader's card, the
+   * reader's card last; absent or empty when the reader is on the spine.
+   */
+  path?: TourCard[];
   question: string;
   context: string;
   /** What `context` is, when it is not the whole context the tour was built from. */
   contextNote?: string;
   /** Follow-ups already answered under the current card, oldest first. */
-  earlier?: TourBranch[];
+  earlier?: { question: string; cards: TourCard[] }[];
 }): string {
   const { tour, currentIndex } = input;
   const subject = FOLLOW_UP_SUBJECT[tour.kind];
+  const deeper = input.path?.length ? input.path : undefined;
+  const position = deeper
+    ? `The reader went deeper from spine card ${currentIndex + 1} of ${tour.cards.length} through the follow-up cards listed below; answer from the last of them.`
+    : `The reader is on spine card ${currentIndex + 1} of ${tour.cards.length}; answer from there.`;
+  const path = deeper
+    ? `\nThe follow-up cards from that spine card down to the reader's card, as compact JSON, the reader's card last:\n${JSON.stringify(deeper.map(compactCard))}`
+    : '';
   const earlier = input.earlier?.length
     ? `\nFollow-ups already answered under this card, as compact JSON; do not repeat them:\n${compactThreads(input.earlier)}`
     : '';
   return withinBudget(`You are answering a follow-up question inside an understanding tour of ${subject} ${JSON.stringify(tour.subject)}.
 Answer only the question, in 1 to ${TOUR_CARD_LIMITS.branchMaxCards} cards. Do not restate the tour and do not start a new tour.
-${cardInstructions(BRANCH_OUTPUT, { sources: isTextTourKind(tour.kind) })}
-The reader is on spine card ${currentIndex + 1} of ${tour.cards.length}; answer from there. If the tour follows a concrete example, keep using it.
+${cardInstructions(BRANCH_OUTPUT, { sources: isTextTourKind(tour.kind), slides: isSlideTourKind(tour.kind) })}
+${position} If the tour follows a concrete example, keep using it.
 Write in the language the tour is written in.
 ${UNTRUSTED}
 The tour so far, as compact JSON including diagrams and comparisons:
-${compactSpine(tour)}${earlier}
+${compactSpine(tour)}${path}${earlier}
 The question:
 ${JSON.stringify(input.question)}
 The following JSON string contains ${input.contextNote ?? 'the same context the tour was built from'}:

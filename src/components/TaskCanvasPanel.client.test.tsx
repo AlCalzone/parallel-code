@@ -591,6 +591,18 @@ describe('TaskCanvasPanel', () => {
     expect(hintFor()).toContain('Guided tour of this plan');
   });
 
+  it('opens a saved tour however short it is, without generating one', async () => {
+    mockIpc(SOURCE);
+    const onTakeTour = vi.fn();
+    const { container } = mount('cache.tour.md', { onTakeTour });
+    await editorLine(container, 'Keep state in one store.');
+    const button = container.querySelector<HTMLButtonElement>('.canvas-tour-btn');
+    expect(button?.textContent?.trim()).toBe('Open Tour');
+    expect(button?.title).toBe('Open cache.tour.md as a tour');
+    button?.click();
+    expect(onTakeTour).toHaveBeenCalledWith('cache.tour.md');
+  });
+
   it('shows no tour button without a handler', async () => {
     mockIpc(LONG_SOURCE);
     const { container } = mount('docs/design.md');

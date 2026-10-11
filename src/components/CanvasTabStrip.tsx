@@ -7,6 +7,7 @@ import { IconButton } from './IconButton';
 import { CloseIcon, ExpandIcon, ExternalLinkIcon, PlusIcon, ScreenNormalIcon } from './icons';
 import { UnderstandButton, tourButtonStyle } from './understanding/UnderstandButton';
 import type { UnderstandingTourController } from '../lib/create-understanding-tour';
+import { isTourFilePath } from '../lib/tour-file';
 
 interface CanvasTabStripProps {
   tabs: CanvasTab[];
@@ -174,16 +175,32 @@ export function CanvasTabStrip(props: CanvasTabStripProps) {
         </Show>
         <Show when={tourTarget()}>
           {(target) => (
-            <UnderstandButton
-              label="Take Tour"
-              tour={target().tour}
-              kind={props.tourKind?.(target().path) ?? 'document'}
-              subject={target().path}
-              onClick={() => target().onTakeTour(target().path)}
-              class="btn-secondary review-plan-btn canvas-tour-btn"
-              style={tourButtonStyle}
-              modelMenu
-            />
+            <Show
+              when={!isTourFilePath(target().path)}
+              fallback={
+                // A saved tour is already made: it opens, nothing generates.
+                <button
+                  type="button"
+                  class="btn-secondary review-plan-btn canvas-tour-btn"
+                  style={tourButtonStyle}
+                  title={`Open ${target().path} as a tour`}
+                  onClick={() => target().onTakeTour(target().path)}
+                >
+                  Open Tour
+                </button>
+              }
+            >
+              <UnderstandButton
+                label="Take Tour"
+                tour={target().tour}
+                kind={props.tourKind?.(target().path) ?? 'document'}
+                subject={target().path}
+                onClick={() => target().onTakeTour(target().path)}
+                class="btn-secondary review-plan-btn canvas-tour-btn"
+                style={tourButtonStyle}
+                modelMenu
+              />
+            </Show>
           )}
         </Show>
         <Show when={activePath()}>

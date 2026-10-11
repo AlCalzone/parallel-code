@@ -39,6 +39,23 @@ describe('tourMarkdown', () => {
     expect(markdown.trimEnd().endsWith('_Not covered: Appendix_')).toBe(true);
   });
 
+  it("lists a slide card's points and keeps its notes collapsed", () => {
+    const slide: TourCard = {
+      label: 'KEY DECISION',
+      title: 'Each task gets its own working copy',
+      body: '',
+      points: ['Edits never touch your checkout', 'One branch per task'],
+      notes: 'Worktrees are cheap.',
+      tone: 'neutral',
+      refs: [],
+    };
+    const markdown = tourMarkdown({ title: 'Tour', cards: [slide], threads: [] });
+    expect(markdown).toContain(
+      '**KEY DECISION**\n\n- Edits never touch your checkout\n- One branch per task\n\n<details>',
+    );
+    expect(markdown).toContain('<summary>Notes</summary>\n\nWorktrees are cheap.\n\n</details>');
+  });
+
   it('renders a comparison as two labelled points and a ref range', () => {
     const compared: TourCard = {
       ...gist,

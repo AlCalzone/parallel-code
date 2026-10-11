@@ -42,8 +42,15 @@ export interface TourCard {
   /** Short uppercase label such as "KEY DECISION" or "BOTTOM LINE". */
   label: string;
   title: string;
-  /** Markdown, kept short by TOUR_CARD_LIMITS.body. */
+  /**
+   * Markdown, kept short by TOUR_CARD_LIMITS.body. Empty on a slide card, whose
+   * points carry it, and only a caption under a comparison or flow.
+   */
   body: string;
+  /** Slide cards: short bullet fragments that back the title's claim. */
+  points?: string[];
+  /** Slide cards: the speaker notes, Markdown the reader opens on demand. */
+  notes?: string;
   whyItMatters?: string;
   tone: TourTone;
   /** Layout; parsing drops it when the card lacks the evidence the form needs. */
@@ -66,6 +73,14 @@ export interface TourCard {
  * published through MCP.
  */
 export type UnderstandingTourKind = 'plan' | 'file' | 'document' | 'agent';
+
+/**
+ * Doc and concept tours: their cards are slides, a claim plus a few bullet
+ * points, with the prose moved to notes. Code tours keep prose bodies.
+ */
+export function isSlideTourKind(kind: string): kind is 'plan' | 'document' | 'agent' {
+  return kind === 'plan' || kind === 'document' || kind === 'agent';
+}
 
 /** Tours built from one Markdown text, which their quotes are checked against. */
 export function isTextTourKind(kind: string): kind is 'plan' | 'document' {
@@ -201,14 +216,6 @@ function parseForm(
   return form;
 }
 
-function parseWhyItMatters(value: unknown, where: string): string | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value !== 'string') throw new Error(`${where} why-it-matters is invalid.`);
-  // An empty string is the model omitting the field, not a validation failure.
-  if (!value.trim()) return undefined;
-  return requireText(value, TOUR_CARD_LIMITS.whyItMatters, `${where} why-it-matters`);
-}
-
 /** A quote is evidence, not content: a bad one is dropped, never fatal. */
 function parseSource(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
@@ -229,24 +236,68 @@ function parseOmitted(value: unknown): string[] | undefined {
   return omitted.length ? omitted : undefined;
 }
 
+/**
+ * A slide's bullets. One line each, so a point can never open a block of its
+ * own; empty entries are the model padding the list and are dropped. The prompt
+ * asks for at most TOUR_CARD_LIMITS.points, and one extra is tolerated like an
+ * overlong field (D3).
+ */
+function parsePoints(value: unknown, where: string): string[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value)) throw new Error(`${where} points must be a list.`);
+  const points = value.map((entry, index) => {
+    if (typeof entry !== 'string') throw new Error(`${where} point ${index + 1} is invalid.`);
+    const text = entry.replace(/\s+/g, ' ').trim();
+    if (text.length > toleratedCap(TOUR_CARD_LIMITS.point))
+      throw new Error(`${where} point ${index + 1} is too long.`);
+    return text;
+  });
+  const kept = points.filter(Boolean);
+  if (kept.length > TOUR_CARD_LIMITS.points + 1) throw new Error(`${where} has too many points.`);
+  return kept.length ? kept : undefined;
+}
+
+/** Optional Markdown; an empty string is the model omitting the field. */
+function parseOptionalText(value: unknown, cap: number, what: string): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string') throw new Error(`${what} is invalid.`);
+  if (!value.trim()) return undefined;
+  return requireText(value, cap, what);
+}
+
 function parseCard(value: unknown, where: string): TourCard {
   const record = asRecord(value);
   if (!record) throw new Error(`${where} is not a card.`);
+  const diagram = parseDiagram(record.diagram, where);
+  const comparison = parseComparison(record.comparison, where);
+  const points = parsePoints(record.points, where);
+  const notes = parseOptionalText(record.notes, TOUR_CARD_LIMITS.notes, `${where} notes`);
+  // A slide says it in points, a comparison or flow in its evidence, and a
+  // takeaway in its title alone, with notes for whoever wants more. Only a
+  // card with none of them needs a body to say anything at all.
+  const body =
+    points || diagram || comparison || notes || record.form === 'takeaway'
+      ? (parseOptionalText(record.body, TOUR_CARD_LIMITS.body, `${where} body`) ?? '')
+      : requireText(record.body, TOUR_CARD_LIMITS.body, `${where} body`);
   const base = {
     label: requireText(record.label, TOUR_CARD_LIMITS.label, `${where} label`),
     title: requireText(record.title, TOUR_CARD_LIMITS.title, `${where} title`),
-    body: requireText(record.body, TOUR_CARD_LIMITS.body, `${where} body`),
+    body,
     tone: parseTone(record.tone, where),
     refs: parseRefs(record.refs),
   };
-  const diagram = parseDiagram(record.diagram, where);
-  const comparison = parseComparison(record.comparison, where);
   const form = parseForm(record.form, { diagram, comparison });
-  const whyItMatters = parseWhyItMatters(record.whyItMatters, where);
+  const whyItMatters = parseOptionalText(
+    record.whyItMatters,
+    TOUR_CARD_LIMITS.whyItMatters,
+    `${where} why-it-matters`,
+  );
   const questions = parseTourQuestions(record.questions);
   const source = parseSource(record.source);
   return {
     ...base,
+    ...(points && { points }),
+    ...(notes && { notes }),
     ...(form && { form }),
     ...(diagram && { diagram }),
     ...(comparison && { comparison }),

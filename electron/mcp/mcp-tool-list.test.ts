@@ -204,12 +204,16 @@ it('describes tour_publish with the caps the validator enforces', () => {
   });
   // The numbers come from the constants, so a cap change cannot leave the prompt behind.
   expect(tool?.description).toContain(`at most ${TOUR_CARD_LIMITS.body} characters`);
+  expect(tool?.description).toContain(`2 to ${TOUR_CARD_LIMITS.points} bullet fragments`);
+  expect(tool?.description).toContain(`at most ${TOUR_CARD_LIMITS.point} characters each`);
+  expect(tool?.description).toContain(`at most ${TOUR_CARD_LIMITS.notes} characters`);
+  expect(tool?.description).toContain('presentation slide');
   expect(tool?.description).toContain(
     `${TOUR_CARD_LIMITS.minCards} and ${TOUR_CARD_LIMITS.maxCards}`,
   );
   expect(tool?.description).toContain(`at most ${AGENT_TOUR_LIMITS.context} characters`);
   expect(tool?.description).toContain(TOUR_TONES.join(', '));
-  expect(tool?.description).toContain('keep mechanical cards to one or two sentences');
+  expect(tool?.description).toContain('keep mechanical cards to one or two points');
   expect(tool?.description).toContain('as a tour');
   expect(tool?.description).toContain('follow-up');
   expect(tool?.description).toContain(`0-${TOUR_CARD_LIMITS.questions} short, specific`);

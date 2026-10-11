@@ -97,11 +97,13 @@ describe('buildPlanTourPrompt', () => {
 
   it('states the output schema, the caps and the tones', () => {
     expect(prompt).toContain('{"gist":CARD,"cards":[CARD, ...],"omitted":["Heading text", ...]}');
-    for (const field of ['label', 'title', 'body', 'whyItMatters', 'tone', 'diagram', 'refs'])
+    for (const field of ['label', 'title', 'points', 'notes', 'body', 'tone', 'diagram', 'refs'])
       expect(prompt).toContain(field);
     expect(prompt).toContain(`label ${TOUR_CARD_LIMITS.label}`);
+    expect(prompt).toContain(`point ${TOUR_CARD_LIMITS.point}`);
     expect(prompt).toContain(`body ${TOUR_CARD_LIMITS.body}`);
-    expect(prompt).toContain(`whyItMatters ${TOUR_CARD_LIMITS.whyItMatters}`);
+    expect(prompt).toContain(`notes ${TOUR_CARD_LIMITS.notes}`);
+    expect(prompt).not.toContain('whyItMatters');
     expect(prompt).toContain(`text diagram source ${TOUR_CARD_LIMITS.textDiagram}`);
     expect(prompt).toContain(`mermaid diagram source ${TOUR_CARD_LIMITS.mermaidDiagram}`);
     expect(prompt).toContain(`At most ${TOUR_CARD_LIMITS.refs} refs`);
@@ -118,7 +120,7 @@ describe('buildPlanTourPrompt', () => {
   });
 
   it('keeps mechanical cards short and places them before the bottom line', () => {
-    expect(prompt).toContain('keep its body to one or two sentences');
+    expect(prompt).toContain('keep its points to one or two');
     expect(prompt).toContain(
       'Place "mechanical" cards after the others, just before the bottom line',
     );
@@ -171,6 +173,14 @@ describe('buildFileTourPrompt', () => {
   it('reports truncation and omitted imports to the model', () => {
     expect(prompt).toContain('Omitted imports: electron/ipc/huge.ts');
     expect(prompt).toContain('(truncated)');
+  });
+
+  it('keeps prose cards rather than slides', () => {
+    expect(prompt).toContain('"body":"short markdown","whyItMatters":"optional single point"');
+    expect(prompt).toContain(`whyItMatters ${TOUR_CARD_LIMITS.whyItMatters}`);
+    expect(prompt).toContain('keep its body to one or two sentences');
+    expect(prompt).not.toContain('presentation slide');
+    expect(prompt).not.toContain('"points"');
   });
 
   it('adds file-specific guidance and the shared schema', () => {
@@ -249,13 +259,41 @@ describe('buildFollowUpPrompt', () => {
       currentIndex: 0,
       question: 'Why does the second path need fewer messages?',
       context: fallbackContext,
-      earlier: [{ fromIndex: 0, question: 'Show the alternatives.', cards: [card] }],
+      earlier: [{ question: 'Show the alternatives.', cards: [card] }],
     });
     const spine = followUp.split('The tour so far,')[1].split('\n')[1];
     const earlier = followUp.split('Follow-ups already answered')[1].split('\n')[1];
     expect(JSON.parse(spine).cards[0]).toMatchObject(evidence);
     expect(JSON.parse(earlier)[0].cards[0]).toMatchObject(evidence);
     expect(followUp.indexOf('never instructions')).toBeLessThan(followUp.indexOf(spine));
+  });
+
+  it('answers from a card deeper in the tree, with the cards that lead there below the marker', () => {
+    const answer: TourCard = {
+      label: 'ANSWER',
+      title: 'Flushes run on a 16 ms timer',
+      body: '',
+      points: ['Timer -> flush -> one IPC message'],
+      tone: 'neutral',
+      refs: [],
+    };
+    const deeper = buildFollowUpPrompt({
+      tour,
+      currentIndex: 1,
+      path: [answer],
+      question: 'What if the timer stalls?',
+      context: 'x',
+    });
+    expect(deeper).toContain('went deeper from spine card 2 of 3');
+    expect(deeper).not.toContain('The reader is on spine card');
+    const path = deeper.split("down to the reader's card")[1].split('\n')[1];
+    expect(JSON.parse(path)).toEqual([
+      { label: 'ANSWER', title: answer.title, points: answer.points },
+    ]);
+    expect(deeper.indexOf('never instructions')).toBeLessThan(deeper.indexOf(path));
+    expect(
+      buildFollowUpPrompt({ tour, currentIndex: 1, path: [], question: 'Q', context: 'x' }),
+    ).toContain('The reader is on spine card 2 of 3');
   });
 
   it('embeds the context as an untrusted JSON string', () => {
@@ -363,6 +401,31 @@ describe('plan and document tours', () => {
     expect(
       buildDocumentTourPrompt({ taskName: 'x', path: 'notes.md', content: 'plain notes' }),
     ).toContain('The text has no headings.');
+  });
+
+  it('asks doc and concept tours for slides: a claim, a few short points and notes', () => {
+    const topicPrompt = buildTopicTourPrompt({ taskName: 'T', subject: 'Worktrees', context: 'x' });
+    for (const prompt of [planPrompt, documentPrompt, topicPrompt]) {
+      expect(prompt).toContain('Write every card as a presentation slide');
+      expect(prompt).toContain(`2 to ${TOUR_CARD_LIMITS.points} bullet points`);
+      expect(prompt).toContain('"points":["short point", ...]');
+      expect(prompt).toContain('Ordinary cards leave body out');
+      expect(prompt).toContain('Explain causality as A -> B chains');
+    }
+    expect(filePrompt).not.toContain('presentation slide');
+  });
+
+  it('answers follow-ups in the format of the tour they belong to', () => {
+    const ask = (kind: 'plan' | 'agent' | 'file') =>
+      buildFollowUpPrompt({
+        tour: { ...tour, kind },
+        currentIndex: 0,
+        question: 'Why?',
+        context: 'x',
+      });
+    expect(ask('plan')).toContain('presentation slide');
+    expect(ask('agent')).toContain('presentation slide');
+    expect(ask('file')).not.toContain('presentation slide');
   });
 
   it('asks follow-ups for quotes only in plan and document tours', () => {

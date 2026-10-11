@@ -99,6 +99,14 @@ function iconButton(label: string) {
     );
   return button;
 }
+const stackItems = () => [...panel().querySelectorAll<HTMLElement>('.understanding-stack-item')];
+const stackTitles = () =>
+  stackItems().map((item) => item.querySelector('.understanding-card-title')?.textContent);
+
+/** The title of the card on screen; the cards stacked around it are only context. */
+const currentTitle = () =>
+  panel().querySelector('[aria-current="true"] .understanding-card-title')?.textContent;
+
 function clickIcon(label: string) {
   iconButton(label).click();
 }
@@ -121,6 +129,8 @@ function mount() {
   const host = document.createElement('div');
   document.body.append(host);
   const onClose = vi.fn();
+  const onReference = vi.fn();
+  const onOpenFile = vi.fn();
   let controller: ReturnType<typeof createUnderstandingTour> | undefined;
   disposers.push(
     render(() => {
@@ -131,12 +141,14 @@ function mount() {
           open={true}
           onClose={onClose}
           worktreePath="/repo"
+          onReference={onReference}
+          onOpenFile={onOpenFile}
         />
       );
     }, host),
   );
   if (!controller) throw new Error('Controller was not created');
-  return { tour: controller, onClose };
+  return { tour: controller, onClose, onReference, onOpenFile };
 }
 
 /** Mounts the dialog with a generated tour, on its first card: the gist. */
@@ -255,7 +267,7 @@ describe('UnderstandingTourDialog', () => {
     });
   });
 
-  it('asks a question from the ask bar and keeps the answer under the card', async () => {
+  it('asks a question from the ask bar and opens its answer as a card under the card', async () => {
     await mountWithTour();
     clickIcon('Next card');
     clickIcon('Next card');
@@ -266,8 +278,11 @@ describe('UnderstandingTourDialog', () => {
     await flush();
     expect(input.value).toBe('');
     expect(panel().querySelector('[role="status"]')?.textContent).toContain('Thinking…');
-    const pending = panel().querySelector('.understanding-thread[aria-busy="true"]');
-    expect(pending?.textContent).toContain('↳ Why buffer first?');
+    // Where the answer will land shows at the card's foot and in the outline.
+    expect(panel().querySelector('.tour-deeper-pending')?.textContent).toContain(
+      'Why buffer first?',
+    );
+    expect(panel().querySelector('.tour-outline-pending')).not.toBeNull();
     const asks = vi.mocked(invoke).mock.calls.filter(([channel]) => channel === IPC.AskAboutCode);
     expect(asks).toHaveLength(2);
     expect(asks[1][1]?.purpose).toBe('understand');
@@ -275,31 +290,199 @@ describe('UnderstandingTourDialog', () => {
     channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
     channels[1].onmessage?.({ type: 'done', exitCode: 0 });
     await flush();
-    // The spine stays put: same card, same counter, answer cards below it.
+    // The answer is a card of its own, under the card it was asked on.
     expect(progressText()).toContain('3 / 4');
-    expect(panel().textContent).toContain('Second card');
-    const threads = panel().querySelectorAll('.understanding-thread');
-    expect(threads).toHaveLength(1);
-    expect(threads[0].getAttribute('aria-busy')).toBeNull();
-    expect(threads[0].textContent).toContain('↳ Why buffer first?');
-    expect(threads[0].querySelectorAll('.understanding-card')).toHaveLength(2);
-    expect(threads[0].textContent).toContain('Deep one');
-    // The thread belongs to its card: gone on the next card, back on return.
+    expect(currentTitle()).toBe('Deep one');
+    expect(panel().querySelector('.understanding-crumb button')?.textContent).toBe(
+      '↳ Why buffer first?',
+    );
+    const outline = () =>
+      [...panel().querySelectorAll('.understanding-aside .tour-outline-link')].map(
+        (link) => link.textContent,
+      );
+    expect(outline()).toEqual([
+      'Gist title',
+      'First card',
+      'Second card',
+      'Deep one',
+      'Deep two',
+      'Third card',
+    ]);
+    expect(
+      panel().querySelector('.understanding-aside [aria-current="location"]')?.textContent,
+    ).toBe('Deep one');
     clickIcon('Next card');
-    expect(panel().querySelector('.understanding-thread')).toBeNull();
-    clickIcon('Previous card');
-    expect(panel().querySelectorAll('.understanding-thread')).toHaveLength(1);
+    expect(currentTitle()).toBe('Deep two');
+    // The crumb leads back to the card the answer belongs to, its answers below.
+    panel().querySelector<HTMLButtonElement>('.understanding-crumb button')?.click();
+    expect(currentTitle()).toBe('Second card');
+    expect(panel().querySelector('.understanding-crumb button')).toBeNull();
+    expect(stackTitles()).toEqual(['Second card', 'Deep one', 'Deep two']);
+    expect(panel().querySelector('.tour-deeper-link')).toBeNull();
+    stackItems()[2]?.click();
+    expect(currentTitle()).toBe('Deep two');
+  });
+
+  it('goes into answers with the down arrow and back out with the up arrow', async () => {
+    const { tour } = await mountWithTour();
+    clickIcon('Next card');
+    clickIcon('Go deeper');
+    await flush();
+    channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
+    channels[1].onmessage?.({ type: 'done', exitCode: 0 });
+    await flush();
+    const key = (name: string) =>
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true }));
+    expect(tour.currentNode()?.card.title).toBe('Deep one');
+    expect(panel().querySelector('.understanding-crumb button')?.textContent).toBe(
+      '↳ Deeper: First card',
+    );
+    key('ArrowUp');
+    expect(tour.currentNode()?.card.title).toBe('First card');
+    key('ArrowUp');
+    expect(tour.currentNode()?.card.title).toBe('First card');
+    key('ArrowDown');
+    expect(tour.currentNode()?.card.title).toBe('Deep one');
+    // Left and right go between the tour's own cards, from answers too.
+    key('ArrowRight');
+    expect(tour.currentNode()?.card.title).toBe('Second card');
+    key('ArrowLeft');
+    expect(tour.currentNode()?.card.title).toBe('First card');
+    key('ArrowDown');
+    key('ArrowLeft');
+    expect(tour.currentNode()?.card.title).toBe('Gist title');
+  });
+
+  it('stacks the answers under the card they answer and opens one on click', async () => {
+    await mountWithTour();
+    clickIcon('Next card');
+    clickIcon('Go deeper');
+    await flush();
+    channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
+    channels[1].onmessage?.({ type: 'done', exitCode: 0 });
+    await flush();
+    const items = stackItems;
+    const titles = stackTitles;
+    expect(titles()).toEqual(['First card', 'Deep one', 'Deep two']);
+    expect(currentTitle()).toBe('Deep one');
+    // Only the card on screen takes clicks inside it; the others open on click.
+    expect(items().map((item) => item.querySelector('article')?.inert)).toEqual([
+      true,
+      false,
+      true,
+    ]);
+    items()[2]?.click();
+    expect(currentTitle()).toBe('Deep two');
+    expect(titles()).toEqual(['First card', 'Deep one', 'Deep two']);
+  });
+
+  it('steps down through every answer before the ask field, and back up', async () => {
+    const { tour } = await mountWithTour();
+    clickIcon('Next card');
+    clickIcon('Go deeper');
+    await flush();
+    channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
+    channels[1].onmessage?.({ type: 'done', exitCode: 0 });
+    await flush();
+    const key = (name: string) =>
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true }));
+    expect(tour.currentNode()?.card.title).toBe('Deep one');
+    key('ArrowDown');
+    expect(tour.currentNode()?.card.title).toBe('Deep two');
+    expect(document.activeElement).not.toBe(askInput());
+    key('ArrowDown');
+    expect(document.activeElement).toBe(askInput());
+    askInput().blur();
+    key('ArrowUp');
+    expect(tour.currentNode()?.card.title).toBe('Deep one');
+    key('ArrowUp');
+    expect(tour.currentNode()?.card.title).toBe('First card');
+  });
+
+  it('pages the stack only through a card taller than it, not one still sliding in', async () => {
+    const { tour } = await mountWithTour();
+    clickIcon('Next card');
+    clickIcon('Go deeper');
+    await flush();
+    channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
+    channels[1].onmessage?.({ type: 'done', exitCode: 0 });
+    await flush();
+    const stack = panel().querySelector<HTMLElement>('.understanding-stack');
+    const card = panel().querySelector<HTMLElement>('[aria-current="true"] > article');
+    if (!stack || !card) throw new Error('no stack');
+    const rect = (top: number, height: number) =>
+      ({ top, bottom: top + height, height }) as DOMRect;
+    stack.getBoundingClientRect = () => rect(0, 500);
+    stack.scrollBy = vi.fn();
+    let cardHeight = 800;
+    // Half below the stack: a tall card read from its top, or a short one mid-slide.
+    card.getBoundingClientRect = () => rect(300, cardHeight);
+    const key = (name: string) =>
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true }));
+
+    key('ArrowDown');
+    expect(stack.scrollBy).toHaveBeenCalledTimes(1);
+    expect(tour.currentNode()?.card.title).toBe('Deep one');
+
+    cardHeight = 300;
+    key('ArrowDown');
+    expect(stack.scrollBy).toHaveBeenCalledTimes(1);
+    expect(tour.currentNode()?.card.title).toBe('Deep two');
+  });
+
+  it('digs into one point of a slide and then opens that answer', async () => {
+    const { tour } = await mountWithTour(
+      JSON.stringify({
+        gist: card({ body: '', points: ['Buffers flush on a timer', 'One message per flush'] }),
+        cards: [card({ title: 'Next step' })],
+      }),
+    );
+    const dig = () => [
+      ...panel().querySelectorAll<HTMLButtonElement>('[aria-current] .understanding-point-dig'),
+    ];
+    expect(dig().map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Go deeper on: Buffers flush on a timer',
+      'Go deeper on: One message per flush',
+    ]);
+    dig()[0].click();
+    await flush();
+    const asks = vi.mocked(invoke).mock.calls.filter(([channel]) => channel === IPC.AskAboutCode);
+    expect(String(asks[1][1]?.prompt)).toContain(
+      JSON.stringify('Go deeper on this point: Buffers flush on a timer'),
+    );
+    // One question at a time: the other point waits.
+    expect(dig()[1].disabled).toBe(true);
+    channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
+    channels[1].onmessage?.({ type: 'done', exitCode: 0 });
+    await flush();
+    expect(panel().querySelector('.understanding-crumb button')?.textContent).toBe(
+      '↳ Buffers flush on a timer',
+    );
+    // The card above, dimmed while its answer is read, still shows the point answered.
+    const headPoints = panel().querySelectorAll('.understanding-stack-item:first-child li');
+    expect([...headPoints].map((point) => point.hasAttribute('data-open'))).toEqual([true, false]);
+    tour.leave();
+    expect(dig()[0].getAttribute('aria-label')).toBe(
+      'Open the answer on: Buffers flush on a timer',
+    );
+    expect(dig()[0].closest('li')?.hasAttribute('data-open')).toBe(true);
+    dig()[0].click();
+    await flush();
+    expect(asks).toHaveLength(2);
+    expect(tour.currentNode()?.card.title).toBe('Deep one');
   });
 
   it('explores a suggested question once and keeps its answer on the source card', async () => {
     const question = 'What happens if the buffer fills before the timer fires?';
-    await mountWithTour(
+    const { tour } = await mountWithTour(
       JSON.stringify({
         gist: card({ questions: [question, 'Why flush on a timer?'] }),
         cards: [card({ title: 'Next step', questions: [question] })],
       }),
     );
-    const suggestions = () => [...panel().querySelectorAll<HTMLButtonElement>('.tour-question')];
+    const suggestions = () => [
+      ...panel().querySelectorAll<HTMLButtonElement>('[aria-current] .tour-question'),
+    ];
     expect(suggestions()).toHaveLength(2);
     suggestions()[0].click();
     suggestions()[1].click();
@@ -310,17 +493,17 @@ describe('UnderstandingTourDialog', () => {
     expect(suggestions().every((button) => button.disabled)).toBe(true);
     clickIcon('Next card');
     expect(suggestions()[0].disabled).toBe(true);
-    expect(panel().querySelector('.understanding-thread')).toBeNull();
+    expect(panel().querySelector('.tour-deeper')).toBeNull();
     channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
     channels[1].onmessage?.({ type: 'done', exitCode: 0 });
     await flush();
+    // The reader moved on, so the answer waits under its card instead.
+    expect(currentTitle()).toBe('Next step');
     expect(suggestions()[0].disabled).toBe(false);
     clickIcon('Previous card');
     expect(suggestions().map((button) => button.textContent)).toEqual(['↳Why flush on a timer?']);
-    expect(panel().querySelector('.understanding-thread')?.getAttribute('aria-label')).toBe(
-      question,
-    );
-    expect(panel().querySelector('.understanding-thread')?.textContent).toContain('Deep one');
+    expect(stackTitles()).toEqual(['Title', 'Deep one', 'Deep two']);
+    expect(tour.currentNode()?.children[0]?.question).toBe(question);
   });
 
   it('keeps the waiting question under its own card while the reader moves on', async () => {
@@ -331,36 +514,31 @@ describe('UnderstandingTourDialog', () => {
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     await flush();
-    expect(panel().querySelector('.understanding-thread[aria-busy="true"]')).not.toBeNull();
+    expect(panel().querySelector('.tour-deeper-pending')).not.toBeNull();
     clickIcon('Next card');
-    expect(panel().querySelector('.understanding-thread')).toBeNull();
+    expect(panel().querySelector('.tour-deeper')).toBeNull();
     channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
     channels[1].onmessage?.({ type: 'done', exitCode: 0 });
     await flush();
     // The answer belongs to the card it was asked from, so this card stays bare.
-    expect(panel().querySelector('.understanding-thread')).toBeNull();
+    expect(panel().querySelector('.tour-deeper')).toBeNull();
+    expect(stackItems()).toHaveLength(1);
     clickIcon('Previous card');
-    const threads = panel().querySelectorAll('.understanding-thread');
-    expect(threads).toHaveLength(1);
-    expect(threads[0].textContent).toContain('↳ Why buffer first?');
-    expect(threads[0].textContent).toContain('Deep one');
+    expect(stackTitles()).toEqual(['First card', 'Deep one', 'Deep two']);
   });
 
-  it('offers Cancel only on the card whose question is in flight', async () => {
+  it('keeps a question in flight visible and cancellable from another card', async () => {
     const { tour } = await mountWithTour();
     clickIcon('Next card');
     clickIcon('Go deeper');
     await flush();
     expect(iconButton('Cancel question')).toBeDefined();
     clickIcon('Next card');
-    // A Cancel here would abort the previous card's request, so there is none.
-    expect(
-      buttons().some((button) => button.getAttribute('aria-label') === 'Cancel question'),
-    ).toBe(false);
-    expect(panel().querySelector('.understanding-asking')).toBeNull();
+    // The field names the card being answered, so Cancel here is not mistaken
+    // for cancelling something on this card.
     expect(askInput().disabled).toBe(true);
+    expect(askInput().placeholder).toBe('Answering on “First card”…');
     expect(tour.asking()).toBe(true);
-    clickIcon('Previous card');
     iconButton('Cancel question').click();
     expect(tour.asking()).toBe(false);
   });
@@ -390,6 +568,83 @@ describe('UnderstandingTourDialog', () => {
     expect(panel().textContent).toContain('First card');
   });
 
+  it('moves focus to the ask field on Enter from the resting focus', async () => {
+    await mountWithTour();
+    const next = document.activeElement;
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    next?.dispatchEvent(enter);
+    expect(document.activeElement).toBe(askInput());
+    // The default press of Next is suppressed, so the card stays.
+    expect(enter.defaultPrevented).toBe(true);
+    expect(panel().textContent).toContain('Gist title');
+
+    const dialog = panel();
+    if (!(dialog instanceof HTMLElement)) throw new Error('Dialog panel is not an element');
+    dialog.focus();
+    dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(document.activeElement).toBe(askInput());
+  });
+
+  it('steps down into the ask field below the last card and back up out of it', async () => {
+    const { tour } = await mountWithTour();
+    const next = document.activeElement;
+    const down = new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      bubbles: true,
+      cancelable: true,
+    });
+    next?.dispatchEvent(down);
+    expect(document.activeElement).toBe(askInput());
+    expect(down.defaultPrevented).toBe(true);
+    const up = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true });
+    askInput().dispatchEvent(up);
+    expect(document.activeElement).toBe(next);
+    expect(up.defaultPrevented).toBe(true);
+    expect(tour.currentNode()?.card.title).toBe('Gist title');
+  });
+
+  it('keeps the ask field on up while composing or selecting text', async () => {
+    await mountWithTour();
+    askInput().focus();
+    for (const init of [{ isComposing: true }, { shiftKey: true }]) {
+      const up = new KeyboardEvent('keydown', {
+        key: 'ArrowUp',
+        bubbles: true,
+        cancelable: true,
+        ...init,
+      });
+      askInput().dispatchEvent(up);
+      expect(document.activeElement).toBe(askInput());
+      expect(up.defaultPrevented).toBe(false);
+    }
+  });
+
+  it('leaves the down arrow alone while the ask field is closed', async () => {
+    const { tour } = await mountWithTour();
+    void tour.ask('Why?');
+    await flush();
+    const next = document.activeElement;
+    const down = new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      bubbles: true,
+      cancelable: true,
+    });
+    next?.dispatchEvent(down);
+    expect(askInput().disabled).toBe(true);
+    expect(document.activeElement).toBe(next);
+    expect(down.defaultPrevented).toBe(false);
+  });
+
+  it('leaves Enter to other buttons in the tour', async () => {
+    await mountWithTour();
+    const deeper = iconButton('Go deeper');
+    deeper.focus();
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    deeper.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(deeper);
+  });
+
   it('jumps to a card from its progress segment and with Home and End', async () => {
     await mountWithTour();
     clickIcon('Card 4 of 4: Third card');
@@ -400,15 +655,48 @@ describe('UnderstandingTourDialog', () => {
     expect(panel().textContent).toContain('Third card');
   });
 
-  it('shows every card title in the overview and opens the one picked', async () => {
+  it('shows the outline in place of the card and opens the one picked', async () => {
     await mountWithTour();
-    clickIcon('Show overview');
-    const items = [...panel().querySelectorAll('.understanding-overview li')];
-    expect(items).toHaveLength(4);
-    expect(items[0].textContent).toContain('Gist title');
-    items[3].querySelector('button')?.click();
-    expect(panel().querySelector('.understanding-overview')).toBeNull();
+    clickIcon('Show outline');
+    const links = [
+      ...panel().querySelectorAll<HTMLButtonElement>(
+        '.understanding-outline-card .tour-outline-link',
+      ),
+    ];
+    expect(links.map((link) => link.textContent)).toEqual([
+      'Gist title',
+      'First card',
+      'Second card',
+      'Third card',
+    ]);
+    links[3].click();
+    expect(panel().querySelector('.understanding-outline-card')).toBeNull();
     expect(progressText()).toContain('4 / 4');
+  });
+
+  it('opens a card from the outline beside it and folds branches on request', async () => {
+    const { tour } = await mountWithTour();
+    clickIcon('Next card');
+    clickIcon('Go deeper');
+    await flush();
+    channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
+    channels[1].onmessage?.({ type: 'done', exitCode: 0 });
+    await flush();
+    const aside = () => panel().querySelector('.understanding-aside');
+    const titles = () =>
+      [...(aside()?.querySelectorAll('.tour-outline-link') ?? [])].map((link) => link.textContent);
+    // Away from the branch, it folds; its twisty opens it again.
+    clickIcon('Card 4 of 4: Third card');
+    expect(titles()).toEqual(['Gist title', 'First card', 'Second card', 'Third card']);
+    aside()?.querySelector<HTMLButtonElement>('[aria-label="Expand First card"]')?.click();
+    expect(titles()).toContain('Deep two');
+    [...(aside()?.querySelectorAll<HTMLButtonElement>('.tour-outline-link') ?? [])]
+      .find((link) => link.textContent === 'Deep two')
+      ?.click();
+    expect(tour.currentNode()?.card.title).toBe('Deep two');
+    // The branch holding the card on screen stays open, and cannot be folded.
+    expect(titles()).toContain('Deep two');
+    expect(aside()?.querySelector('[aria-label="Collapse First card"]')).toBeNull();
   });
 
   it('marks the progress segment of a card that has answers', async () => {
@@ -446,8 +734,134 @@ describe('UnderstandingTourDialog', () => {
     await flush();
     const markdown = String(writeText.mock.calls[0]?.[0 as never]);
     expect(markdown).toContain('# Tour: output buffering');
-    expect(markdown).toContain('## 4. Third card');
+    expect(markdown).toContain('\n## Third card\n');
+    expect(markdown).not.toContain('parallel-code-tour');
     expect(iconButton('Tour copied')).toBeDefined();
+  });
+
+  it('saves the tour to the worktree and shows that it is saved', async () => {
+    const { tour, onOpenFile } = await mountWithTour();
+    vi.mocked(invoke).mockImplementation(((channel: IPC) =>
+      channel === IPC.SaveTourFile
+        ? Promise.resolve('output-buffering.tour.md')
+        : Promise.resolve(undefined)) as typeof invoke);
+    clickIcon('Save tour');
+    await flush();
+    expect(tour.savedPath()).toBe('output-buffering.tour.md');
+    // Saved is a state, not something left to press.
+    expect(buttons().some((button) => button.getAttribute('aria-label') === 'Save tour')).toBe(
+      false,
+    );
+    const saved = panel().querySelector<HTMLButtonElement>('.tour-save-state');
+    expect(saved?.textContent).toBe('Saved · output-buffering.tour.md');
+    expect(saved?.title).toContain('new answers update it');
+    saved?.click();
+    expect(onOpenFile).toHaveBeenCalledWith('output-buffering.tour.md');
+  });
+
+  it('says when new answers did not reach the file and saves them on retry', async () => {
+    const { tour } = await mountWithTour();
+    let failNext = false;
+    vi.mocked(invoke).mockImplementation(((channel: IPC, args?: { path?: string }) => {
+      if (channel !== IPC.SaveTourFile) return Promise.resolve(undefined);
+      if (failNext) {
+        failNext = false;
+        return Promise.reject(new Error('disk full'));
+      }
+      return Promise.resolve(args?.path);
+    }) as typeof invoke);
+    clickIcon('Save tour');
+    await flush();
+    failNext = true;
+    clickIcon('Go deeper');
+    await flush();
+    channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
+    channels[1].onmessage?.({ type: 'done', exitCode: 0 });
+    await flush();
+    await flush();
+    const state = () => panel().querySelector<HTMLButtonElement>('.tour-save-state');
+    expect(state()?.textContent).toBe('Not saved · Retry');
+    state()?.click();
+    await flush();
+    await flush();
+    expect(state()?.textContent).toBe('Saved · output-buffering.tour.md');
+    expect(tour.unsaved()).toBe(false);
+  });
+
+  it('places an answer among its siblings and names a question still running elsewhere', async () => {
+    await mountWithTour();
+    clickIcon('Go deeper');
+    await flush();
+    channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
+    channels[1].onmessage?.({ type: 'done', exitCode: 0 });
+    await flush();
+    const count = () => panel().querySelector('.understanding-crumb-count')?.textContent;
+    expect(count()).toMatch(/^Answer 1 of \d+$/);
+    clickIcon('Next card');
+    // Back on a card with no answer above it, the line is empty but kept.
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+    expect(count()).toBe('');
+    clickIcon('Go deeper');
+    await flush();
+    clickIcon('Next card');
+    expect(askInput().placeholder).toBe('Answering on “Gist title”…');
+    expect(iconButton('Cancel question')).toBeDefined();
+  });
+
+  it('counts an answer among the answers to its own question', async () => {
+    const { tour } = await mountWithTour();
+    for (const [index, question] of ['First?', 'Second?'].entries()) {
+      tour.navigate(0);
+      void tour.ask(question);
+      await flush();
+      channels[index + 1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
+      channels[index + 1].onmessage?.({ type: 'done', exitCode: 0 });
+      await flush();
+    }
+    expect(panel().querySelector('.understanding-crumb button')?.textContent).toBe('↳ Second?');
+    expect(panel().querySelector('.understanding-crumb-count')?.textContent).toBe('Answer 1 of 2');
+  });
+
+  it('explains a closed ask field at the deepest level and offers the chat', async () => {
+    const { tour, onReference } = await mountWithTour();
+    for (let level = 1; level < 5; level += 1) {
+      void tour.ask(`Level ${level}?`);
+      await flush();
+      channels[level].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
+      channels[level].onmessage?.({ type: 'done', exitCode: 0 });
+      await flush();
+    }
+    expect(tour.askLimit()).toBe('depth');
+    expect(askInput().placeholder).toBe('Deepest level reached · continue in chat');
+    clickIcon('Continue in chat');
+    expect(onReference).toHaveBeenCalledOnce();
+  });
+
+  it('returns focus to the way forward when a control inside the card moves on', async () => {
+    await mountWithTour();
+    clickIcon('Next card');
+    clickIcon('Go deeper');
+    await flush();
+    channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
+    channels[1].onmessage?.({ type: 'done', exitCode: 0 });
+    await flush();
+    const crumb = panel().querySelector<HTMLButtonElement>('.understanding-crumb button');
+    crumb?.focus();
+    crumb?.click();
+    await flush();
+    expect(currentTitle()).toBe('First card');
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Next card');
+  });
+
+  it('hands the card on screen to the chat with its place in the tour', async () => {
+    const { onReference } = await mountWithTour();
+    clickIcon('Next card');
+    clickIcon('Reference in chat');
+    expect(onReference).toHaveBeenCalledOnce();
+    const reference = String(onReference.mock.calls[0][0]);
+    expect(reference).toContain('tour: output buffering');
+    expect(reference).toContain('Position: First card');
+    expect(reference).toContain('### First card');
   });
 
   it('reworks the tour from the rework bar; Escape closes only the bar', async () => {
@@ -514,7 +928,7 @@ describe('UnderstandingTourDialog', () => {
     channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
     channels[1].onmessage?.({ type: 'done', exitCode: 0 });
     await flush();
-    expect(tour.threads()).toHaveLength(0);
+    expect(tour.tree()[1].children).toHaveLength(0);
     expect(panel().textContent).toContain('First card');
   });
 

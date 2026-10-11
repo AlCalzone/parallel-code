@@ -13,6 +13,8 @@ export function TourIconButton(props: {
   disabled?: boolean;
   /** The way forward, kept a shade brighter than the controls around it. */
   primary?: boolean;
+  /** Extra class, for a control the stylesheet shows only in some layouts. */
+  class?: string;
   ref?: (element: HTMLButtonElement) => void;
   children: JSX.Element;
 }) {
@@ -21,7 +23,7 @@ export function TourIconButton(props: {
       // Wrapped so an absent ref cannot be written back onto the props object.
       ref={(element) => props.ref?.(element)}
       type="button"
-      class={props.primary ? 'tour-icon tour-icon--primary' : 'tour-icon'}
+      class={`${props.primary ? 'tour-icon tour-icon--primary' : 'tour-icon'}${props.class ? ` ${props.class}` : ''}`}
       aria-label={props.label}
       title={props.tooltip ?? props.label}
       disabled={props.disabled}

@@ -136,6 +136,7 @@ const ALLOWED_CHANNELS = new Set([
   'open_path',
   'read_file_text',
   'read_file_tour_context',
+  'save_tour_file',
   'resolve_clipboard_paste',
   'save_dropped_image',
   'show_notification',

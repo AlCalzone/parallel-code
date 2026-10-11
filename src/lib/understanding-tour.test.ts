@@ -248,6 +248,70 @@ describe('parseUnderstandingTour', () => {
   });
 });
 
+describe('slide cards', () => {
+  const slide = {
+    label: 'KEY DECISION',
+    title: 'Each task gets its own working copy',
+    points: ['Agent edits never touch your checkout', 'One branch per task'],
+    notes: 'Worktrees share one object store, so they are cheap.',
+    tone: 'important',
+  };
+
+  it('keeps points and notes and needs no body', () => {
+    const [, parsed] = parse({ cards: [slide] }).cards;
+    expect(parsed).toMatchObject({ body: '', points: slide.points, notes: slide.notes });
+  });
+
+  it('keeps one line per point and drops empty ones', () => {
+    const [, parsed] = parse({ cards: [{ ...slide, points: [' a\n  b ', '', '  '] }] }).cards;
+    expect(parsed.points).toEqual(['a b']);
+  });
+
+  it('needs a body when no points, evidence, notes or takeaway title say anything', () => {
+    expect(() => parse({ cards: [{ ...slide, points: [''], notes: undefined }] })).toThrow(
+      'Card 1 body is missing.',
+    );
+    // A takeaway's title is its point; notes alone still give a reader more.
+    const [, takeaway] = parse({
+      cards: [{ ...slide, points: undefined, notes: undefined, form: 'takeaway' }],
+    }).cards;
+    expect(takeaway).toMatchObject({ body: '', form: 'takeaway' });
+    const [, noted] = parse({ cards: [{ ...slide, points: undefined }] }).cards;
+    expect(noted).toMatchObject({ body: '', notes: slide.notes });
+    const diagram = { kind: 'text', source: 'A -> B' };
+    const [, flow] = parse({ cards: [{ ...slide, points: undefined, diagram }] }).cards;
+    expect(flow.body).toBe('');
+  });
+
+  it('tolerates one point over the cap and rejects more', () => {
+    const points = (count: number) => Array.from({ length: count }, (_, index) => `p${index}`);
+    expect(() =>
+      parse({ cards: [{ ...slide, points: points(TOUR_CARD_LIMITS.points + 1) }] }),
+    ).not.toThrow();
+    expect(() =>
+      parse({ cards: [{ ...slide, points: points(TOUR_CARD_LIMITS.points + 2) }] }),
+    ).toThrow('Card 1 has too many points.');
+  });
+
+  it.each([
+    [{ points: 'one' }, 'Card 1 points must be a list.'],
+    [{ points: ['ok', 7] }, 'Card 1 point 2 is invalid.'],
+    [
+      { points: ['x'.repeat(toleratedCap(TOUR_CARD_LIMITS.point) + 1)] },
+      'Card 1 point 1 is too long.',
+    ],
+    [{ notes: 3 }, 'Card 1 notes is invalid.'],
+    [{ notes: 'x'.repeat(toleratedCap(TOUR_CARD_LIMITS.notes) + 1) }, 'Card 1 notes is too long.'],
+  ])('rejects invalid slide fields (%o)', (patch, message) => {
+    expect(() => parse({ cards: [{ ...slide, ...patch }] })).toThrow(message);
+  });
+
+  it('accepts slide cards from an agent', () => {
+    const tour = parseAgentTour({ subject: 'Worktrees', gist: slide, cards: [slide] });
+    expect(tour.cards[0]).toMatchObject({ label: GIST_LABEL, points: slide.points });
+  });
+});
+
 describe('parseAgentTour', () => {
   const payload = { subject: 'the retry bug', gist, cards: [card] };
 

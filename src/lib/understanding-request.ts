@@ -7,7 +7,10 @@
 
 import { IPC } from '../../electron/ipc/channels';
 import { askCodeEnvFile } from '../../electron/shared/ask-code-models';
-import { UNDERSTANDING_TIMEOUT_MS } from '../../electron/shared/understanding-limits';
+import {
+  UNDERSTANDING_MAX_OUTPUT_CHARS,
+  UNDERSTANDING_TIMEOUT_MS,
+} from '../../electron/shared/understanding-limits';
 import { store } from '../store/store';
 import { Channel, invoke } from './ipc';
 import { errMessage, info as logInfo, warn as logWarn } from './log';
@@ -19,8 +22,12 @@ interface TourMessage {
   exitCode?: number;
 }
 
-/** A tour is a handful of small cards; anything larger is a runaway response. */
-const MAX_RESPONSE_CHARS = 60_000;
+/**
+ * A tour is a handful of small cards; anything larger is a runaway response.
+ * Never below the largest tour the validator accepts, with room for the fences
+ * and commentary the JSON reader strips.
+ */
+const MAX_RESPONSE_CHARS = Math.max(60_000, UNDERSTANDING_MAX_OUTPUT_CHARS + 8_000);
 /** Let the backend's own timeout report first, and cover lost IPC events. */
 const CLIENT_DEADLINE_MS = UNDERSTANDING_TIMEOUT_MS + 5000;
 

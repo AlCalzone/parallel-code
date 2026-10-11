@@ -26,6 +26,8 @@ import {
   showNotification,
   setTaskSplitMode,
   isTaskCanvasVisible,
+  referenceTourCard,
+  openCanvasDocument,
 } from '../store/store';
 import { useFocusRegistration } from '../lib/focus-registration';
 import { isTaskColumnHighlighted, scheduleTaskFocus } from '../store/focused-panel';
@@ -77,6 +79,7 @@ import {
   type UnderstandingTourInput,
 } from '../lib/create-understanding-tour';
 import { parseAgentTour } from '../lib/understanding-tour';
+import { isTourFilePath, parseTourFile } from '../lib/tour-file';
 import { UnderstandingTourDialog } from './UnderstandingTourDialog';
 import { getTaskDiffBaseBranch } from '../lib/load-task-diff';
 
@@ -292,11 +295,44 @@ export function TaskPanel(props: TaskPanelProps) {
       filePath,
     });
   /**
+   * Reopens a tour saved in the worktree, with every answer in it, and reads
+   * the text it explains so follow-ups still have their context.
+   */
+  const openSavedTour = async (path: string) => {
+    const { worktreePath, name: taskName } = props.task;
+    const read = (documentPath: string) =>
+      invoke<DocumentSnapshot>(IPC.ReadDocument, { projectRoot: worktreePath, documentPath });
+    const snapshot = await read(path);
+    if (snapshot.missing) throw new Error('the file is not in the worktree');
+    const file = parseTourFile(snapshot.content);
+    let sourceText: string | undefined;
+    if (file.source && (file.kind === 'plan' || file.kind === 'document')) {
+      const source = await read(file.source).catch(() => undefined);
+      if (source && !source.missing) sourceText = source.content;
+    }
+    await understanding.restore({
+      file,
+      text: snapshot.content,
+      savedPath: path,
+      worktreePath,
+      taskName,
+      sourceText,
+    });
+    setUnderstandingOpen(true);
+  };
+  /**
    * A document open on the canvas is read fresh, so an edited file gets a new
    * tour. The task's own plan takes the plan tour with the same text the notes
-   * button sends, so switching between the two never regenerates it.
+   * button sends, so switching between the two never regenerates it. A saved
+   * tour opens as itself, with no provider call.
    */
   const openDocumentTour = (path: string) => {
+    if (isTourFilePath(path)) {
+      openSavedTour(path).catch((error: unknown) =>
+        showNotification(`Could not open ${path}: ${errMessage(error)}`),
+      );
+      return;
+    }
     const kind = documentTourKind(props.task, path);
     if (kind === 'plan' && props.task.planContent) {
       openPlanTour();
@@ -1210,6 +1246,17 @@ export function TaskPanel(props: TaskPanelProps) {
         open={understandingOpen()}
         onClose={() => setUnderstandingOpen(false)}
         worktreePath={props.task.worktreePath}
+        onReference={(reference) => {
+          // The prompt sits behind the tour, so the tour steps aside for it;
+          // reopening keeps the reader's place.
+          setUnderstandingOpen(false);
+          referenceTourCard(props.task.id, reference);
+        }}
+        onOpenFile={(path) => {
+          // The file opens on the canvas behind the tour, so the tour steps aside.
+          setUnderstandingOpen(false);
+          openCanvasDocument(props.task.id, path);
+        }}
         zIndex={1450}
       />
     </div>

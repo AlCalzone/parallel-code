@@ -14,6 +14,15 @@ export const FILE_TOUR_MAX_FILE_CHARS = 60_000;
 export const FILE_TOUR_MAX_TOTAL_CHARS = 200_000;
 export const FILE_TOUR_MAX_IMPORTS = 12;
 
+/** Saved tours are Markdown files the reader keeps in the worktree. */
+export const TOUR_FILE_SUFFIX = '.tour.md';
+/** A saved tour is a few dozen short cards; anything far larger is not one. */
+export const TOUR_FILE_MAX_CHARS = 512 * 1024;
+/** Cards one saved tour may hold; asking stops before an answer would pass it. */
+export const TOUR_FILE_MAX_CARDS = 200;
+/** The refusal the renderer tells apart: the saved file changed outside the tour. */
+export const TOUR_FILE_CHANGED = 'The saved tour changed on disk.';
+
 /** Card tones, shared so the validator and the MCP tool description cannot drift. */
 export const TOUR_TONES = ['neutral', 'important', 'risk', 'uncertainty', 'mechanical'] as const;
 
@@ -33,6 +42,11 @@ export const TOUR_CARD_LIMITS = {
   label: 40,
   title: 120,
   body: 700,
+  /** Slide cards: bullet points instead of prose, each a short fragment. */
+  points: 5,
+  point: 100,
+  /** Slide cards: the speaker notes, read only on demand. */
+  notes: 1000,
   whyItMatters: 300,
   textDiagram: 1200,
   mermaidDiagram: 1500,
@@ -78,6 +92,8 @@ export const UNDERSTANDING_MAX_OUTPUT_CHARS =
     (toleratedCap(TOUR_CARD_LIMITS.label) +
       toleratedCap(TOUR_CARD_LIMITS.title) +
       toleratedCap(TOUR_CARD_LIMITS.body) +
+      (TOUR_CARD_LIMITS.points + 1) * (toleratedCap(TOUR_CARD_LIMITS.point) + 3) +
+      toleratedCap(TOUR_CARD_LIMITS.notes) +
       toleratedCap(TOUR_CARD_LIMITS.whyItMatters) +
       toleratedCap(TOUR_CARD_LIMITS.mermaidDiagram) +
       2 *

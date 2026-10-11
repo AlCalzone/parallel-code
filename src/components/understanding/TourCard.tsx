@@ -1,4 +1,5 @@
-import { For, Show, createEffect } from 'solid-js';
+import { For, Show, createEffect, type JSX } from 'solid-js';
+import { renderInlineMarkdown } from '../../lib/inline-markdown';
 import { createHighlightedMarkdown } from '../../lib/marked-shiki';
 import { renderMermaidIn } from '../../lib/mermaid';
 import { theme } from '../../lib/theme';
@@ -39,8 +40,9 @@ function FileGlyph() {
 
 /**
  * One tour card: label, title, optional evidence (diagram or comparison),
- * markdown body, source quote, why-it-matters, refs. `data-form` lets the stylesheet give a
- * takeaway, comparison or flow card its own shape.
+ * markdown body, a slide's points and notes, source quote, why-it-matters, refs.
+ * `data-form` lets the stylesheet give a takeaway, comparison or flow card its
+ * own shape.
  */
 export function TourCard(props: {
   card: TourCardData;
@@ -50,8 +52,23 @@ export function TourCard(props: {
   answeredQuestions?: string[];
   /** Sections the tour left out; the dialog passes them to the last card only. */
   omitted?: string[];
+  /**
+   * Digging into one point of a slide. `open` says the point already has an
+   * answer under the card, which `onPoint` then shows instead of asking again.
+   */
+  points?: {
+    open: (point: string) => boolean;
+    /** Asking is impossible right now; points with an answer stay usable. */
+    disabled: boolean;
+    onPoint: (point: string) => void;
+  };
+  /** The answers under this card, listed after its own content. */
+  deeper?: JSX.Element;
+  /** Shown only as context beside the card on screen, so nothing in it acts. */
+  inert?: boolean;
 }) {
   const bodyHtml = createHighlightedMarkdown(() => props.card.body);
+  const notesHtml = createHighlightedMarkdown(() => props.card.notes);
   const tone = () => props.card.tone;
   const warned = () => WARNED.includes(tone());
   const questions = () =>
@@ -73,6 +90,7 @@ export function TourCard(props: {
   return (
     <article
       class="understanding-card"
+      inert={props.inert}
       data-tone={tone()}
       data-form={props.card.form}
       aria-label={props.card.title}
@@ -118,11 +136,61 @@ export function TourCard(props: {
           </div>
         )}
       </Show>
-      <div
-        class="understanding-body plan-markdown"
-        // eslint-disable-next-line solid/no-innerhtml -- createHighlightedMarkdown sanitizes with DOMPurify
-        innerHTML={bodyHtml()}
-      />
+      <Show when={props.card.body}>
+        <div
+          class="understanding-body plan-markdown"
+          // eslint-disable-next-line solid/no-innerhtml -- createHighlightedMarkdown sanitizes with DOMPurify
+          innerHTML={bodyHtml()}
+        />
+      </Show>
+      <Show when={props.card.points}>
+        {(points) => (
+          <ul class="understanding-points">
+            <For each={points()}>
+              {(point) => {
+                const open = () => props.points?.open(point) ?? false;
+                return (
+                  <li data-open={open() ? '' : undefined}>
+                    <span
+                      // eslint-disable-next-line solid/no-innerhtml -- renderInlineMarkdown sanitizes with DOMPurify
+                      innerHTML={renderInlineMarkdown(point)}
+                    />
+                    {/* Always laid out, shown on hover or when an answer exists,
+                        so the text never moves when it appears. */}
+                    <Show when={props.points}>
+                      {(dig) => (
+                        <button
+                          type="button"
+                          class="understanding-point-dig"
+                          aria-label={
+                            open() ? `Open the answer on: ${point}` : `Go deeper on: ${point}`
+                          }
+                          title={open() ? 'Open the answer' : 'Go deeper on this point'}
+                          disabled={!open() && dig().disabled}
+                          onClick={() => dig().onPoint(point)}
+                        >
+                          ›
+                        </button>
+                      )}
+                    </Show>
+                  </li>
+                );
+              }}
+            </For>
+          </ul>
+        )}
+      </Show>
+      {/* Speaker notes: the reasoning behind the slide, one click away. */}
+      <Show when={props.card.notes}>
+        <details class="understanding-source understanding-notes">
+          <summary>Notes</summary>
+          <div
+            class="understanding-notes-body plan-markdown"
+            // eslint-disable-next-line solid/no-innerhtml -- createHighlightedMarkdown sanitizes with DOMPurify
+            innerHTML={notesHtml()}
+          />
+        </details>
+      </Show>
       {/* Collapsed: the quote answers "where does it say that?" without adding
           a second body to read. groundTour() already checked it is verbatim. */}
       <Show when={props.card.source}>
@@ -164,6 +232,7 @@ export function TourCard(props: {
           Not covered: {props.omitted?.join(', ')}
         </p>
       </Show>
+      {props.deeper}
       <Show when={props.onAsk && questions().length > 0}>
         <div class="tour-questions" role="group" aria-label="Explore this card">
           <For each={questions()}>
