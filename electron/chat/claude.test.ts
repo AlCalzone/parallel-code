@@ -483,6 +483,45 @@ describe('Claude chat adapter', () => {
     expect(h.chat.state.status).toBe('ready');
   });
 
+  it('matches streamed text to a reply the CLI splits into one message per block', async () => {
+    const h = harness();
+    await h.chat.start();
+    await h.send();
+    const delta = (index: number, text: string) =>
+      h.emit({
+        type: 'stream_event',
+        event: { type: 'content_block_delta', index, delta: { type: 'text_delta', text } },
+      });
+    const block = (uuid: string, content: unknown) =>
+      h.emit({ type: 'assistant', uuid, message: { id: 'reply', content: [content] } });
+    await h.emit({
+      type: 'stream_event',
+      event: { type: 'message_start', message: { id: 'reply' } },
+    });
+    await block('thinking', { type: 'thinking', thinking: 'Hmm' });
+    await delta(1, 'Al');
+    await block('first', { type: 'text', text: 'All tests pass.' });
+    // The CLI forwards no message for a blank block, so it cannot be counted on.
+    await delta(2, '');
+    await block('tool', { type: 'tool_use', id: 'tool-1', name: 'Read', input: {} });
+    await delta(4, 'All');
+    // A repeat lands where its block did, not on a later block its text happens to extend.
+    await block('first', { type: 'text', text: 'All tests pass.' });
+    await block('last', { type: 'text', text: 'All done.' });
+    // Unstreamed blocks of one reply, as history replays them, must not replace each other.
+    for (const text of ['Earlier.', 'Later.'])
+      await h.emit({
+        type: 'assistant',
+        uuid: text,
+        message: { id: 'history', content: [{ type: 'text', text }] },
+      });
+    expect(
+      h.chat.state.items
+        .filter((item) => item.kind !== 'assistant' || item.text.trim())
+        .map((item) => (item.kind === 'assistant' ? item.text : item.kind)),
+    ).toEqual(['user', 'All tests pass.', 'tool', 'All done.', 'Earlier.', 'Later.']);
+  });
+
   it('keeps the words the user sent and cleans up only the turns it did not send', async () => {
     const h = harness();
     await h.chat.start();

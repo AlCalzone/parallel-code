@@ -97,6 +97,10 @@ export class ClaudeChat implements AgentChat {
   // arrives in the same turn, and replays repeat a message within its own turn.
   private seenToolResults = new Set<string>();
   private toolDecisions = new Map<string, 'declined' | 'interrupted'>();
+  /** Streamed text items that their complete block has not reached yet. */
+  private streamed = new Set<string>();
+  /** The item each complete text block landed on, so a repeat lands there too. */
+  private shownText = new Map<string, string>();
   private publishTimer?: ReturnType<typeof setTimeout>;
   /** Launch output only: before the first prompt it cannot contain tool arguments. */
   private launchDiagnostics: string[] = [];
@@ -721,6 +725,27 @@ export class ClaudeChat implements AgentChat {
     });
   };
 
+  /** A reply's complete text block, on the item streamed for it if there is one. */
+  private showText(reply: string, key: string, text: string): void {
+    let id = this.shownText.get(key);
+    if (!id) {
+      // The CLI sends each block of a reply as its own message, so a block's index in
+      // it is not the index it streamed at, and it sends nothing for a blank block.
+      // The streamed copy is the one whose text this block completes.
+      id =
+        this.state.items.find(
+          (item) =>
+            this.streamed.has(item.id) &&
+            item.id.startsWith(`${reply}:`) &&
+            !!item.text.trim() &&
+            text.startsWith(item.text),
+        )?.id ?? key;
+      this.streamed.delete(id);
+      this.shownText.set(key, id);
+    }
+    this.upsert({ id, kind: 'assistant', text });
+  }
+
   /** `live` is false while replaying history, which the caller publishes once. */
   private receive(value: unknown, live = true): void {
     const message = record(value);
@@ -746,6 +771,7 @@ export class ClaudeChat implements AgentChat {
         record(event.delta).type === 'text_delta'
       ) {
         const id = `${this.streamId}:${event.index}`;
+        this.streamed.add(id);
         const item = this.state.items.find((item) => item.id === id);
         this.upsert({
           id,
@@ -802,7 +828,7 @@ export class ClaudeChat implements AgentChat {
       content.forEach((value, index) => {
         const block = record(value);
         if (message.type === 'assistant' && block.type === 'text')
-          this.upsert({ id: `${id}:${index}`, kind: 'assistant', text: string(block.text) });
+          this.showText(id, `${id}:${string(message.uuid)}:${index}`, string(block.text));
         if (block.type === 'tool_use') {
           const tool = string(block.name),
             input = record(block.input);
@@ -929,6 +955,8 @@ export class ClaudeChat implements AgentChat {
       this.clearPermissions();
       this.settleActivities();
       this.seenToolResults.clear();
+      this.streamed.clear();
+      this.shownText.clear();
       this.toolDecisions.clear();
       void this.refreshContextUsage();
     } else return;
