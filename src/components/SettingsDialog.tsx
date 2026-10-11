@@ -518,7 +518,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
               label="Write task briefs"
               checked={store.taskBriefs}
               onChange={setTaskBriefs}
-              description="After each agent turn, a cheap model summarises what changed, what is open and what the agent decided. Sends the turn's prompts, the agent's last message and the diff to that model's provider"
+              description="After each agent turn, a model summarises what needs you, what is open, what the agent decided and what changed, and flags claims the diff does not show. Uses Claude Sonnet when the model below is Claude. Sends the turn's prompts, the agent's last message and the diff to that model's provider"
             />
             <Show when={store.modelTaskNames || store.taskBriefs}>
               <label
@@ -533,7 +533,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
                 }}
               >
                 <span style={{ 'font-size': '13px', color: theme.fg, 'white-space': 'nowrap' }}>
-                  Naming and brief model
+                  Naming model
                 </span>
                 <select
                   value={store.taskNameModel}

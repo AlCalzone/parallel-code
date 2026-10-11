@@ -7,6 +7,7 @@ import {
   diffFingerprint,
   diffPaths,
   parseTaskBriefResponse,
+  prepareDiffForBrief,
   restoreTaskBriefRecord,
 } from './task-brief';
 
@@ -57,6 +58,9 @@ describe('buildTaskBriefPrompt', () => {
     expect(prompt).toContain('short phrase of at most 12 words');
     // Shortening an old decision would drop the user's keep/sent mark on it.
     expect(prompt).toContain('even when it is longer than the item limit');
+    // Reverts and cut file lists leave no trace in the diff; flagging them would make the warning routine.
+    expect(prompt).toContain("undoing or removing the task's own earlier changes");
+    expect(prompt).toContain('When the file list itself is cut short');
   });
 
   it('keeps the newest prompts and closes every fence when they are too long', () => {
@@ -75,6 +79,14 @@ describe('buildTaskBriefPrompt', () => {
     expect(section).toContain('[… truncated]');
   });
 
+  it('asks for the claim check only where the diff shows all the work', () => {
+    const input = { taskName: 't', prompts: [], agentMessage: '', rawDiff: DIFF };
+    expect(buildTaskBriefPrompt({ ...input, claimCheck: true })).not.toContain(
+      'leave unbacked empty',
+    );
+    expect(buildTaskBriefPrompt({ ...input, claimCheck: false })).toContain('leave unbacked empty');
+  });
+
   it('truncates a large diff', () => {
     const prompt = buildTaskBriefPrompt({
       taskName: 't',
@@ -84,6 +96,51 @@ describe('buildTaskBriefPrompt', () => {
     });
     expect(prompt).toContain('[… truncated]');
     expect(prompt).toContain('(none recorded)');
+  });
+});
+
+describe('prepareDiffForBrief', () => {
+  const file = (path: string, body: string) =>
+    `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1 +1 @@\n${body}`;
+
+  it('lists every file with its line counts and leaves lockfile contents out', () => {
+    const diff = [
+      file('package-lock.json', '+"lodash": "4"\n-"lodash": "3"'),
+      file('src/a.ts', '+one\n+two\n-old'),
+    ].join('\n');
+    const prepared = prepareDiffForBrief(diff);
+    expect(prepared).toContain('package-lock.json +1 -1 (left out)\nsrc/a.ts +2 -1');
+    expect(prepared).not.toContain('lodash');
+    expect(prepared).toContain('+two');
+  });
+
+  it('cuts large files rather than the files after them, within the budget', () => {
+    const big = file('src/big.ts', `+${'x'.repeat(5_000)}`);
+    const diff = [big, file('src/late.ts', '+late change')].join('\n');
+    const prepared = prepareDiffForBrief(diff, 2_000);
+    expect(prepared).toContain('+late change');
+    expect(prepared).toContain('[… truncated]');
+    expect(prepared.length).toBeLessThanOrEqual(2_000);
+  });
+
+  it('lists paths git quotes', () => {
+    const quoted = 'diff --git "a/caf\\303\\251.ts" "b/caf\\303\\251.ts"\n+x';
+    expect(prepareDiffForBrief(quoted)).toContain('Changed files:\ncaf\\303\\251.ts +1 -0');
+  });
+
+  it('caps the file list at its share of the budget', () => {
+    const diff = Array.from({ length: 200 }, (_, i) => file(`src/file-${i}.ts`, '+x'));
+    const list = prepareDiffForBrief(diff.join('\n'), 5_000).split('\n\n')[0];
+    expect(list).toContain('[… truncated]');
+    expect(list.length).toBeLessThanOrEqual(5_000 * 0.2 + 40);
+  });
+
+  it('names files too many to show in the list only', () => {
+    const diff = Array.from({ length: 50 }, (_, i) => file(`f${i}.ts`, `+${'y'.repeat(500)}`));
+    const prepared = prepareDiffForBrief(diff.join('\n'), 5_000);
+    expect(prepared).toContain('f49.ts +1 -0');
+    expect(prepared).not.toContain('yyyy');
+    expect(prepared.length).toBeLessThanOrEqual(5_000);
   });
 });
 
@@ -112,6 +169,14 @@ describe('parseTaskBriefResponse', () => {
     ]);
     expect(brief.open).toEqual([{ text: 'Tests not run.' }]);
     expect(brief.decided).toEqual([{ text: 'Kept ?next= working.' }]);
+    expect(brief.unbacked).toEqual([]);
+  });
+
+  it('reads claims the diff does not back', () => {
+    const { brief } = parseTaskBriefResponse(
+      JSON.stringify({ headline: 'h', unbacked: [{ text: 'Says it added login tests.' }] }),
+    );
+    expect(brief.unbacked).toEqual([{ text: 'Says it added login tests.' }]);
   });
 
   it('caps the number of items per section', () => {
@@ -134,11 +199,13 @@ describe('restoreTaskBriefRecord', () => {
       fingerprint: 'abc',
       turns: [{ prompt: 'p', outcome: 'o', endedAt: 4 }, 'junk'],
       decisions: { 'Kept it': 'kept', other: 'maybe' },
+      unread: 'yes',
     });
     expect(record).toEqual({
       brief: {
         goal: 'g',
         headline: 'h',
+        unbacked: [],
         changed: [{ text: 'c', file: 'a.ts' }],
         extra: [],
         open: [],
@@ -149,6 +216,11 @@ describe('restoreTaskBriefRecord', () => {
       turns: [{ prompt: 'p', outcome: 'o', endedAt: 4 }],
       decisions: { 'Kept it': 'kept' },
     });
+  });
+
+  it('keeps a brief unread across restarts', () => {
+    const record = restoreTaskBriefRecord({ brief: { headline: 'h' }, unread: true });
+    expect(record?.unread).toBe(true);
   });
 
   it('returns undefined for anything that is not a brief', () => {

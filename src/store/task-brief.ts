@@ -27,6 +27,16 @@ const TURN_SETTLE_MS = 4_000;
 /** Terminal heuristics can flicker between busy and idle; never brief more often than this. */
 const MIN_BRIEF_INTERVAL_MS = 45_000;
 
+/**
+ * The naming model, except that Claude briefs run on Sonnet: a brief reads a
+ * whole diff, which Haiku summarises vaguely.
+ * shortcut: fixed on trial — a brief model setting if Sonnet's briefs earn their cost.
+ */
+function briefModelSettings() {
+  const naming = TASK_NAME_MODELS[store.taskNameModel];
+  return naming.provider === 'claude' ? { ...naming, model: 'sonnet' } : naming;
+}
+
 const inFlight = new Map<string, { cancel: () => void }>();
 /** Tasks whose turn ended again while their brief was being written. */
 const rerun = new Set<string>();
@@ -147,6 +157,9 @@ export async function refreshTaskBrief(
       setStore('tasks', taskId, 'briefStatus', undefined);
       return;
     }
+    // Only a worktree's diff shows all of its work: direct tasks on main lose their
+    // commits to the merge base, and tasks without git have no diff at all.
+    const claimCheck = task.gitIsolation === 'worktree';
     const request = startEvidenceModelRequest({
       prompt: buildTaskBriefPrompt({
         taskName: task.name,
@@ -154,9 +167,10 @@ export async function refreshTaskBrief(
         previous: previous?.brief,
         agentMessage: message.text,
         rawDiff,
+        claimCheck,
       }),
       cwd: task.worktreePath,
-      settings: TASK_NAME_MODELS[store.taskNameModel],
+      settings: briefModelSettings(),
       agentEnvFiles: store.agentEnvFiles,
       purpose: 'brief',
     });
@@ -170,6 +184,8 @@ export async function refreshTaskBrief(
       response,
       rawDiff === undefined ? undefined : diffPaths(rawDiff),
     );
+    // Without a readable diff a claim can be neither backed nor flagged.
+    if (!claimCheck || rawDiff === undefined) brief.unbacked = [];
     const current = store.tasks[taskId].brief;
     setStore('tasks', taskId, 'brief', {
       brief,
@@ -184,6 +200,10 @@ export async function refreshTaskBrief(
           })
         : (current?.turns ?? []),
       decisions: carryDecisionStates(current?.decisions, brief.decided),
+      // A rewrite that says the same thing is not news.
+      ...((current?.unread || JSON.stringify(brief) !== JSON.stringify(current?.brief)) && {
+        unread: true,
+      }),
     });
     setStore('tasks', taskId, 'briefStatus', undefined);
     logInfo('taskBrief', 'Brief updated', { taskId, durationMs: Date.now() - capturedAt });
@@ -288,6 +308,11 @@ export function startTaskBriefWatcher(): () => void {
       dispose();
     };
   });
+}
+
+/** The user opened the brief, so a new one is no longer news. */
+export function markBriefRead(taskId: string): void {
+  if (store.tasks[taskId]?.brief?.unread) setStore('tasks', taskId, 'brief', 'unread', undefined);
 }
 
 function setDecisionState(taskId: string, text: string, state: BriefDecisionState | undefined) {

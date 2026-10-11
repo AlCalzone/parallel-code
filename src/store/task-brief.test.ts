@@ -34,6 +34,7 @@ import {
   briefTargetAgentName,
   changeBriefDecision,
   keepBriefDecision,
+  markBriefRead,
   publishTaskConfidence,
   refreshCodeFingerprint,
   refreshTaskBrief,
@@ -101,6 +102,45 @@ describe('refreshTaskBrief', () => {
       expect.objectContaining({ prompt: 'Fix the redirect', outcome: 'Fixed the redirect.' }),
     ]);
     expect(task().brief?.fingerprint).toBeTruthy();
+    expect(task().brief?.unread).toBe(true);
+  });
+
+  it('runs Claude briefs on Sonnet and keeps other providers on the naming model', async () => {
+    reply({ headline: 'h' });
+    await refreshTaskBrief('t1');
+    expect(mockStartRequest.mock.calls[0][0].settings).toMatchObject({
+      provider: 'claude',
+      model: 'sonnet',
+    });
+    setStore('taskNameModel', 'luna');
+    await refreshTaskBrief('t1', { force: true });
+    expect(mockStartRequest.mock.calls[1][0].settings).toMatchObject({
+      provider: 'codex',
+      model: 'gpt-6-luna',
+    });
+  });
+
+  it.each(['none', 'direct'] as const)(
+    'skips the claim check for %s tasks, whose diff can miss their work',
+    async (gitIsolation) => {
+      setStore('tasks', 't1', 'gitIsolation', gitIsolation);
+      reply({ headline: 'h', unbacked: [{ text: 'Says it changed a.ts.' }] });
+      await refreshTaskBrief('t1');
+      expect(mockStartRequest.mock.calls[0][0].prompt).toContain('leave unbacked empty');
+      expect(task().brief?.brief.unbacked).toEqual([]);
+    },
+  );
+
+  it('marks a brief unread only when its content changes', async () => {
+    reply({ headline: 'h' });
+    await refreshTaskBrief('t1');
+    markBriefRead('t1');
+    expect(task().brief?.unread).toBeUndefined();
+    await refreshTaskBrief('t1', { force: true });
+    expect(task().brief?.unread).toBeUndefined();
+    reply({ headline: 'h2' });
+    await refreshTaskBrief('t1', { force: true });
+    expect(task().brief?.unread).toBe(true);
   });
 
   it('keeps decision marks across a rewrite and records failures', async () => {
@@ -153,6 +193,13 @@ describe('refreshTaskBrief', () => {
     await refreshTaskBrief('t1');
     expect(mockStartRequest.mock.calls[0][0].prompt).toContain('the diff could not be read');
     expect(task().brief?.fingerprint).toBe('');
+  });
+
+  it('flags no unbacked claims when the diff could not be read', async () => {
+    mockLoadTaskDiff.mockRejectedValue(new Error('git failed'));
+    reply({ headline: 'h', unbacked: [{ text: 'Says it changed a.ts.' }] });
+    await refreshTaskBrief('t1');
+    expect(task().brief?.brief.unbacked).toEqual([]);
   });
 
   it('leaves a prompt sent while the diff is read for the next brief', async () => {

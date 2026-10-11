@@ -2,18 +2,21 @@ import { render } from 'solid-js/web';
 import { createStore, type SetStoreFunction } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockChange, mockKeep, mockRate, mockRefreshCode, mockTargetName } = vi.hoisted(() => ({
-  mockTargetName: vi.fn<() => string | undefined>(),
-  mockRefreshCode: vi.fn(),
-  mockChange: vi.fn(),
-  mockKeep: vi.fn(),
-  mockRate: vi.fn(),
-}));
+const { mockChange, mockKeep, mockMarkRead, mockRate, mockRefreshCode, mockTargetName } =
+  vi.hoisted(() => ({
+    mockTargetName: vi.fn<() => string | undefined>(),
+    mockMarkRead: vi.fn(),
+    mockRefreshCode: vi.fn(),
+    mockChange: vi.fn(),
+    mockKeep: vi.fn(),
+    mockRate: vi.fn(),
+  }));
 
 vi.mock('../store/task-brief', () => ({
   briefTargetAgentName: mockTargetName,
   changeBriefDecision: mockChange,
   keepBriefDecision: mockKeep,
+  markBriefRead: mockMarkRead,
   reopenBriefDecision: vi.fn(),
   refreshTaskBrief: vi.fn(),
   refreshCodeFingerprint: mockRefreshCode,
@@ -52,6 +55,7 @@ function baseTask(overrides: Partial<Task> = {}): Task {
       brief: {
         goal: 'Stop webhook timeouts.',
         headline: 'Deduplicate by event ID or invoice ID?',
+        unbacked: [],
         changed: [{ text: 'Route queues the event.', file: 'src/webhooks.ts' }],
         extra: [],
         open: [{ text: 'Nine event types still synchronous.' }],
@@ -153,17 +157,66 @@ describe('TaskBriefBar', () => {
     expect(bar.getAttribute('aria-expanded')).toBe('true');
     const text = card()?.textContent ?? '';
     expect(text).toContain('Stop webhook timeouts.');
-    expect(text).toContain('Route queues the event.');
     expect(text).toContain('Added Redis to production compose.');
     expect(card()?.querySelector('title')?.textContent).toBe('From the confidence rating');
     const headings = Array.from(card()?.querySelectorAll('h3') ?? []).map((h) =>
       h.getAttribute('aria-label'),
     );
-    expect(headings).toEqual(['Changed (1)', 'Extra (1)', 'Open (1)', 'Decided (1)']);
+    expect(headings).toEqual(['Open (1)', 'Decided (1)', 'Extra (1)', 'Changed (1)']);
     expect(text).toContain('code changed since');
+    // What changed is collapsed, since the diff and the agent's message say it already.
+    expect(text).not.toContain('Route queues the event.');
+    const toggle = card()?.querySelector<HTMLButtonElement>('h3[aria-label^="Changed"] button');
+    expect(toggle?.getAttribute('aria-expanded')).toBe('false');
+    toggle?.click();
+    expect(card()?.textContent).toContain('Route queues the event.');
     button('src/webhooks.ts')?.click();
     expect(onFileClick).toHaveBeenCalledWith('src/webhooks.ts');
     expect(card()).toBeNull();
+  });
+
+  it('marks a new brief on the bar until the card is opened', () => {
+    const task = baseTask();
+    const brief = task.brief;
+    if (!brief) throw new Error('Missing brief');
+    const { bar } = mount({ ...task, brief: { ...brief, unread: true } });
+    const dot = () => bar.querySelector<HTMLElement>('.task-brief-unread');
+    expect(dot()?.style.visibility).toBe('visible');
+    bar.click();
+    expect(mockMarkRead).toHaveBeenCalledWith('task');
+    lastSetState?.('brief', 'unread', undefined);
+    // Hidden rather than removed, so the headline does not shift.
+    expect(dot()?.style.visibility).toBe('hidden');
+  });
+
+  it('shows no brief signals on the bar while briefs are off', () => {
+    setStore('taskBriefs', false);
+    const task = baseTask();
+    const brief = task.brief;
+    if (!brief) throw new Error('Missing brief');
+    const { bar } = mount({
+      ...task,
+      brief: { ...brief, unread: true, brief: { ...brief.brief, unbacked: [{ text: 'X.' }] } },
+    });
+    expect(bar.getAttribute('style')).not.toContain('var(--warning)');
+    expect(bar.querySelector<HTMLElement>('.task-brief-unread')?.style.visibility).toBe('hidden');
+    expect(bar.textContent).toContain('Confidence rating');
+    expect(bar.innerHTML).not.toContain('font-weight: 600');
+    expect(bar.querySelector('[aria-label*="unbacked"]')).toBeNull();
+  });
+
+  it('flags claims the diff does not back on the bar and leads the card with them', () => {
+    const task = baseTask();
+    const brief = task.brief;
+    if (!brief) throw new Error('Missing brief');
+    const { bar } = mount(task);
+    expect(bar.getAttribute('style')).not.toContain('var(--warning)');
+    lastSetState?.('brief', 'brief', 'unbacked', [{ text: 'Says it added dedupe tests.' }]);
+    expect(bar.getAttribute('style')).toContain('var(--warning)');
+    expect(bar.querySelector('[aria-label^="1 unbacked"]')).not.toBeNull();
+    bar.click();
+    expect(card()?.querySelector('h3')?.getAttribute('aria-label')).toBe('Not in diff (1)');
+    expect(card()?.textContent).toContain('Says it added dedupe tests.');
   });
 
   it('keeps a decision or sends the typed change to the agent', async () => {
