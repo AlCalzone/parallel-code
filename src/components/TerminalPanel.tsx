@@ -17,7 +17,7 @@ import { CloseIcon } from './icons';
 import { theme } from '../lib/theme';
 import { handleDragReorder } from '../lib/dragReorder';
 import type { Terminal } from '../store/types';
-import { scheduleTaskFocus } from '../store/focused-panel';
+import { isTaskColumnHighlighted, scheduleTaskFocus } from '../store/focused-panel';
 
 interface TerminalPanelProps {
   terminal: Terminal;
@@ -58,7 +58,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
   return (
     <div
       ref={panelRef}
-      class={`task-column ${props.isActive ? 'active' : ''}`}
+      class={`task-column ${isTaskColumnHighlighted(props.terminal.id) ? 'active' : ''}`}
       style={{
         display: 'flex',
         'flex-direction': 'column',
@@ -73,7 +73,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
     >
       {/* Title bar */}
       <div
-        class={props.isActive ? 'island-header-active' : ''}
+        class={isTaskColumnHighlighted(props.terminal.id) ? 'island-header-active' : ''}
         style={{
           display: 'flex',
           'align-items': 'center',

@@ -40,7 +40,7 @@ import {
 } from './agent-task';
 import { documentAgentTaskId } from './task-id';
 import { setActiveTask } from '../store/navigation';
-import { getTaskFocusedPanel, triggerFocus } from '../store/focused-panel';
+import { getTaskFocusedPanel, isTaskColumnHighlighted, triggerFocus } from '../store/focused-panel';
 import { findAnchorTarget } from './links';
 import { relocateAnchor } from './annotation-anchor';
 import { isHtmlDocument } from './html-document';
@@ -836,7 +836,7 @@ export function DocumentWorkspacePanel() {
     <div
       ref={panelRef}
       class="docws-workspace task-column"
-      classList={{ active: isActive() }}
+      classList={{ active: isTaskColumnHighlighted(taskId()) }}
       role="region"
       tabIndex={-1}
       aria-label="Document workspace"

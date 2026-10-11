@@ -136,6 +136,15 @@ export function isPanelFocusedOrDefault(taskId: string, panel: string): boolean 
   return taskOwnsFocus(taskId) && getTaskFocusedPanel(taskId) === panel;
 }
 
+/**
+ * Whether a task column renders as the active one (full opacity, accent glow).
+ * The new-task draft is a column of its own, so while it holds focus the still
+ * active task dims like every other column instead of competing with it.
+ */
+export function isTaskColumnHighlighted(taskId: string | null): boolean {
+  return taskId !== null && store.activeTaskId === taskId && !store.newTaskPanelFocused;
+}
+
 export function isPanelFocusedPrefix(taskId: string, prefix: string): boolean {
   if (store.sidebarFocused || store.placeholderFocused || store.newTaskPanelFocused) return false;
   if (store.activeTaskId !== taskId) return false;

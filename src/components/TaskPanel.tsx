@@ -28,7 +28,7 @@ import {
   isTaskCanvasVisible,
 } from '../store/store';
 import { useFocusRegistration } from '../lib/focus-registration';
-import { scheduleTaskFocus } from '../store/focused-panel';
+import { isTaskColumnHighlighted, scheduleTaskFocus } from '../store/focused-panel';
 import { ResizablePanel, type PanelChild } from './ResizablePanel';
 import { CANVAS_DEFAULT_WIDTH, CANVAS_MIN_WIDTH } from '../lib/layout-sizes';
 import type { EditableTextHandle } from './EditableText';
@@ -910,7 +910,7 @@ export function TaskPanel(props: TaskPanelProps) {
   return (
     <div
       ref={panelRef}
-      class={`task-column ${props.isActive ? 'active' : ''}${store.focusMode ? ' focus-mode' : ''}`}
+      class={`task-column ${isTaskColumnHighlighted(props.task.id) ? 'active' : ''}${store.focusMode ? ' focus-mode' : ''}`}
       style={{
         display: 'flex',
         'flex-direction': 'column',
@@ -949,7 +949,7 @@ export function TaskPanel(props: TaskPanelProps) {
         <div style={{ flex: '0 0 68px', overflow: 'hidden' }}>
           <TaskTitleBar
             task={props.task}
-            isActive={props.isActive}
+            isActive={isTaskColumnHighlighted(props.task.id)}
             onClose={() => setShowCloseConfirm(true)}
             onFinish={() => openFinish('merge')}
             pushing={pushing()}
