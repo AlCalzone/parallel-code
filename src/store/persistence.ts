@@ -13,6 +13,7 @@ import { produce } from 'solid-js/store';
 import { invoke } from '../lib/ipc';
 import { IPC } from '../../electron/ipc/channels';
 import { isChatPermissionMode, restoreChatSessions } from '../../electron/shared/agent-chat-types';
+import { reopenClaudeChatInTerminal } from './agent-chat';
 import { isSessionId } from '../../electron/shared/session-record';
 import {
   defaultAskCodeModel,
@@ -431,6 +432,7 @@ export async function saveState(): Promise<void> {
     documentFullWidth: store.documentFullWidth || undefined,
     coordinatorControlHintDismissed: store.coordinatorControlHintDismissed || undefined,
     preferUiMode: store.preferUiMode || undefined,
+    disableClaudeUiMode: store.disableClaudeUiMode || undefined,
     defaultSkipPermissions: store.defaultSkipPermissions || undefined,
     defaultPropagateSkipPermissions: store.defaultPropagateSkipPermissions || undefined,
     // Default on: only an explicit opt-out is stored.
@@ -628,6 +630,7 @@ interface LegacyPersistedState {
   documentFullWidth?: unknown;
   coordinatorControlHintDismissed?: unknown;
   preferUiMode?: unknown;
+  disableClaudeUiMode?: unknown;
   defaultSkipPermissions?: unknown;
   defaultPropagateSkipPermissions?: unknown;
   canvasOwnershipBadges?: unknown;
@@ -933,6 +936,7 @@ export async function loadState(): Promise<void> {
       s.coordinatorControlHintDismissed = raw.coordinatorControlHintDismissed === true;
 
       s.preferUiMode = raw.preferUiMode === true;
+      s.disableClaudeUiMode = raw.disableClaudeUiMode === true;
       s.defaultSkipPermissions = raw.defaultSkipPermissions === true;
       s.defaultPropagateSkipPermissions = raw.defaultPropagateSkipPermissions === true;
       s.canvasOwnershipBadges = raw.canvasOwnershipBadges !== false;
@@ -1103,6 +1107,7 @@ export async function loadState(): Promise<void> {
           landingSummary: pt.landingSummary,
           landedMetadata: pt.landedMetadata,
         };
+        reopenClaudeChatInTerminal(task, agentDefs[0]?.id, s.disableClaudeUiMode);
 
         s.tasks[taskId] = task;
 

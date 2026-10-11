@@ -1,7 +1,7 @@
 import { getLocalDateKey } from '../lib/date';
 import { reconcile } from 'solid-js/store';
 import { createMindMap } from '../graph/model';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentDef } from '../ipc/types';
 import type { PersistedTask } from './types';
 import { emptyWorkspace, updateDraft } from '../investigation/editing';
@@ -1391,6 +1391,59 @@ describe('UI mode preference persistence', () => {
       await loadState();
       expect(store.preferUiMode).toBe(enabled);
       expect(store.tasks['task-1'].mainAgentView).not.toBe('chat');
+    },
+  );
+});
+
+describe('Claude UI mode switch-off persistence', () => {
+  const claude = agentDef({ id: 'claude-code', name: 'Claude Code', command: 'claude' });
+  const sessionId = '11111111-2222-4333-8444-555555555555';
+
+  afterEach(() => setStore('disableClaudeUiMode', false));
+
+  it.each([true, false, undefined, 'true'])('restores only boolean true (%s)', async (value) => {
+    setStore('disableClaudeUiMode', true);
+    mockInvoke.mockResolvedValueOnce(basePayload({ disableClaudeUiMode: value }));
+    await loadState();
+    expect(store.disableClaudeUiMode).toBe(value === true);
+  });
+
+  it('saves the setting only when on', async () => {
+    setStore('disableClaudeUiMode', true);
+    await saveState();
+    expect(JSON.parse(mockInvoke.mock.calls.at(-1)?.[1].json).disableClaudeUiMode).toBe(true);
+    setStore('disableClaudeUiMode', false);
+    await saveState();
+    expect(JSON.parse(mockInvoke.mock.calls.at(-1)?.[1].json).disableClaudeUiMode).toBeUndefined();
+  });
+
+  it.each([
+    [true, claude, undefined],
+    [false, claude, 'chat'],
+    [true, agentDef(), 'chat'],
+  ] as const)(
+    'with chat off: %s, a %s task saved in chat restores to %s',
+    async (disabled, def, expected) => {
+      mockInvoke.mockResolvedValueOnce(
+        basePayload({
+          disableClaudeUiMode: disabled,
+          tasks: {
+            'task-1': {
+              ...persistedTask(def),
+              mainAgentView: 'chat',
+              claudeChatSessionId: sessionId,
+            },
+          },
+          taskOrder: ['task-1'],
+        }),
+      );
+      await loadState();
+      const task = store.tasks['task-1'];
+      expect(task.mainAgentView).toBe(expected);
+      if (expected === undefined) {
+        // The terminal resumes the conversation the chat had.
+        expect(task.agentSessionIds?.[task.agentIds[0]]).toBe(sessionId);
+      }
     },
   );
 });

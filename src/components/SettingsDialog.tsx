@@ -49,6 +49,7 @@ import {
   setDocumentWorkspacesEnabled,
   setCoordinatorNotificationDelayMs,
   setPreferUiMode,
+  setDisableClaudeUiMode,
   setDefaultSkipPermissions,
   setCanvasOwnershipBadges,
   setDefaultPropagateSkipPermissions,
@@ -645,6 +646,12 @@ export function SettingsDialog(props: SettingsDialogProps) {
               checked={store.preferUiMode}
               onChange={setPreferUiMode}
               description="Start new Claude and Codex tasks in Chat when supported. You can still switch each task to Terminal. Existing tasks keep their current view."
+            />
+            <SettingsCheckboxRow
+              label="Turn off UI mode for Claude Code"
+              checked={store.disableClaudeUiMode}
+              onChange={setDisableClaudeUiMode}
+              description="Run Claude Code in the terminal only. Tasks can no longer switch to Chat, and tasks saved in Chat reopen in the terminal on the same conversation. A chat open now keeps running until you switch it to Terminal."
             />
             <SettingsCheckboxRow
               label="Dangerously skip all confirms by default"

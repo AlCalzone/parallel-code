@@ -4,6 +4,7 @@ import { IPC } from '../ipc/channels.js';
 import { getUserDataDir } from '../user-data-dir.js';
 import { setAgentHookRuntime } from '../ipc/pty.js';
 import { error as logError, info as logInfo } from '../log.js';
+import { recordClaudeStatusLine } from '../ipc/claude-usage.js';
 import { emitAgentHookEvent } from './events.js';
 import { startAgentHookServer, type AgentHookServer } from './server.js';
 import { observeAgentHook, onAgentActivityObservation } from './observations.js';
@@ -36,8 +37,14 @@ export async function startAgentHookRuntime(getWindow: () => BrowserWindow | nul
     // window state — a coordinated sub-task keeps running with no window.
     emitAgentHookEvent(event);
   };
+  // The usage store keeps the numbers; the renderer is only told they moved and re-reads them.
+  const onUsage = (payload: unknown): void => {
+    if (!recordClaudeStatusLine(payload)) return;
+    const win = getWindow();
+    if (win && !win.isDestroyed()) win.webContents.send(IPC.ClaudeUsageChanged);
+  };
   try {
-    server = await startAgentHookServer({ dir, onEvent: forward });
+    server = await startAgentHookServer({ dir, onEvent: forward, onUsage });
   } catch (err) {
     logError('agent-hooks', 'failed to start hook server; using PTY heuristics only', err);
     return;

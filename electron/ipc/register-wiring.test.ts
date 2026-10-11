@@ -57,6 +57,7 @@ const NOT_HANDLED_HERE: readonly string[] = [
   IPC.LogFromRenderer,
   // Main → renderer only.
   IPC.AgentHookEvent,
+  IPC.ClaudeUsageChanged,
   IPC.BrowserState,
   IPC.DelegationChanged,
   IPC.DocumentAnnotationEvent,

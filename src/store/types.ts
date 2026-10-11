@@ -525,6 +525,7 @@ export interface PersistedState {
   coordinatorNotificationDelayMs?: number;
   coordinatorControlHintDismissed?: boolean;
   preferUiMode?: boolean;
+  disableClaudeUiMode?: boolean;
   defaultSkipPermissions?: boolean;
   defaultPropagateSkipPermissions?: boolean;
   /** Show which canvas nodes the user owns (agents cannot edit them without override). */
@@ -685,6 +686,8 @@ export interface AppStore {
   coordinatorNotificationDelayMs: number;
   coordinatorControlHintDismissed: boolean;
   preferUiMode: boolean;
+  /** Keep Claude Code out of the chat view; its tasks run in the terminal only. */
+  disableClaudeUiMode: boolean;
   defaultSkipPermissions: boolean;
   defaultPropagateSkipPermissions: boolean;
   canvasOwnershipBadges: boolean;

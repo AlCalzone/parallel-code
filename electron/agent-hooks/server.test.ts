@@ -16,13 +16,20 @@ describe('startAgentHookServer', () => {
   let dir: string;
   let server: AgentHookServer;
   let events: AgentHookEventPayload[];
+  let usage: unknown[];
 
   beforeEach(async () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-hooks-'));
     events = [];
+    usage = [];
     registerAgentLaunch('agent-1', 'task-1', 'launch-1');
     registerAgentLaunch('agent-sh', 'task-sh', 'launch-sh');
-    server = await startAgentHookServer({ dir, onEvent: (e) => events.push(e), now: () => 1234 });
+    server = await startAgentHookServer({
+      dir,
+      onEvent: (e) => events.push(e),
+      onUsage: (p) => usage.push(p),
+      now: () => 1234,
+    });
   });
 
   afterEach(async () => {
@@ -49,8 +56,48 @@ describe('startAgentHookServer', () => {
     const endpoint = fs.readFileSync(path.join(dir, 'endpoint.env'), 'utf8');
     expect(endpoint).toContain(`PARALLEL_CODE_HOOK_PORT=${server.port}\n`);
     expect(fs.statSync(server.hookScriptPath).mode & 0o111).not.toBe(0);
-    const settings = JSON.parse(fs.readFileSync(server.claudeSettingsPath, 'utf8'));
+    const settingsPath = server.claudeSettingsPath(dir, { CLAUDE_CONFIG_DIR: dir });
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
     expect(settings.hooks.Stop[0].hooks[0].command).toContain(server.hookScriptPath);
+    expect(settings.statusLine.command).toBe(`/bin/sh '${server.statusLineScriptPath}'`);
+  });
+
+  it("wraps the user's own status line, and leaves an unreadable one alone", () => {
+    const configDir = path.join(dir, 'config');
+    const cwd = path.join(dir, 'work');
+    fs.mkdirSync(configDir);
+    fs.mkdirSync(path.join(cwd, '.claude'), { recursive: true });
+    const env = { CLAUDE_CONFIG_DIR: configDir };
+    fs.writeFileSync(
+      path.join(configDir, 'settings.json'),
+      JSON.stringify({ statusLine: { type: 'command', command: 'echo user', padding: 2 } }),
+    );
+    const read = (): { statusLine?: { command: string; padding?: number } } =>
+      JSON.parse(fs.readFileSync(server.claudeSettingsPath(cwd, env), 'utf8'));
+    expect(read().statusLine).toEqual({
+      type: 'command',
+      command: `/bin/sh '${server.statusLineScriptPath}' 'echo user'`,
+      padding: 2,
+    });
+    fs.writeFileSync(
+      path.join(cwd, '.claude', 'settings.local.json'),
+      JSON.stringify({ statusLine: { type: 'command', command: 'echo local' } }),
+    );
+    expect(read().statusLine?.command).toContain("'echo local'");
+    fs.writeFileSync(path.join(cwd, '.claude', 'settings.json'), '{ broken');
+    expect(read().statusLine).toBeUndefined();
+    expect(read()).toHaveProperty('hooks.Stop');
+  });
+
+  it('hands authenticated status line payloads to onUsage without an agent identity', async () => {
+    const body = JSON.stringify({ rate_limits: { five_hour: { used_percentage: 5 } } });
+    expect(await post(body, {}, '/usage/claude')).toBe(403);
+    expect(
+      await post(body, { 'x-parallel-code-hook-token': tokenFrom(dir) }, '/usage/claude'),
+    ).toBe(204);
+    await vi.waitFor(() => expect(usage).toHaveLength(1));
+    expect(usage[0]).toEqual(JSON.parse(body));
+    expect(events).toHaveLength(0);
   });
 
   it('forwards an authenticated event stamped with agent, task, and time', async () => {
@@ -179,5 +226,35 @@ describe('startAgentHookServer', () => {
     expect(stdout).toBe('{}\n');
     await vi.waitFor(() => expect(events).toHaveLength(1));
     expect(events[0]).toMatchObject({ state: 'working', agentId: 'agent-sh', taskId: 'task-sh' });
+  });
+
+  async function runStatusLine(input: unknown, userCommand?: string): Promise<string> {
+    const { execFile } = await import('child_process');
+    const env = { ...process.env, ...server.buildPtyEnv('agent-sh', 'task-sh', 'launch-sh') };
+    const args = [server.statusLineScriptPath, ...(userCommand ? [userCommand] : [])];
+    return new Promise<string>((resolve, reject) => {
+      const child = execFile('/bin/sh', args, { env }, (err, out) =>
+        err ? reject(err) : resolve(out),
+      );
+      child.stdin?.end(JSON.stringify(input));
+    });
+  }
+
+  it("reports rate limits through the status line script, then prints the user's line", async () => {
+    const input = { model: { id: 'm' }, rate_limits: { five_hour: { used_percentage: 7 } } };
+    const out = await runStatusLine(
+      input,
+      // The user's command sees the same payload, but not the app's token.
+      `wc -c | tr -d ' '; printf '%s' "\${PARALLEL_CODE_HOOK_TOKEN-none}"`,
+    );
+    expect(out).toBe(`${JSON.stringify(input).length}\nnone`);
+    await vi.waitFor(() => expect(usage).toHaveLength(1));
+    expect(usage[0]).toEqual(input);
+  });
+
+  it('prints nothing and posts nothing without rate limits or a user status line', async () => {
+    expect(await runStatusLine({ model: { id: 'm' } })).toBe('');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(usage).toHaveLength(0);
   });
 });

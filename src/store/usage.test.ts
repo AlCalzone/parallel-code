@@ -3,7 +3,10 @@ import type { MockStoreHarness } from './test-helpers';
 import type { UsageState } from './types';
 import type { UsageProvider, UsageResult } from '../ipc/types';
 
-const { mockInvoke } = vi.hoisted(() => ({ mockInvoke: vi.fn() }));
+const { mockInvoke, listeners } = vi.hoisted(() => ({
+  mockInvoke: vi.fn(),
+  listeners: new Map<string, () => void>(),
+}));
 const core = vi.hoisted(() => ({
   harness: undefined as MockStoreHarness<{ usage: Record<UsageProvider, UsageState> }> | undefined,
 }));
@@ -23,7 +26,11 @@ vi.mock('./core', async () => {
 });
 vi.mock('../lib/ipc', () => ({ invoke: mockInvoke }));
 vi.mock('../../electron/ipc/channels', () => ({
-  IPC: { GetClaudeUsage: 'get_claude_usage', GetCodexUsage: 'get_codex_usage' },
+  IPC: {
+    GetClaudeUsage: 'get_claude_usage',
+    GetCodexUsage: 'get_codex_usage',
+    ClaudeUsageChanged: 'claude_usage_changed',
+  },
 }));
 
 type Slice = typeof import('./usage');
@@ -47,6 +54,17 @@ describe('usage store slice', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-02T12:00:00Z'));
     mockInvoke.mockReset();
+    listeners.clear();
+    vi.stubGlobal('window', {
+      electron: {
+        ipcRenderer: {
+          on: (channel: string, listener: () => void) => {
+            listeners.set(channel, listener);
+            return () => listeners.delete(channel);
+          },
+        },
+      },
+    });
     // The slice keeps its throttles and timer in module scope, so every test gets a fresh copy.
     vi.resetModules();
     slice = await import('./usage');
@@ -54,6 +72,7 @@ describe('usage store slice', () => {
 
   afterEach(() => {
     slice.stopUsagePolling();
+    vi.unstubAllGlobals();
     vi.useRealTimers();
   });
 
@@ -137,6 +156,18 @@ describe('usage store slice', () => {
     slice.stopUsagePolling();
     await vi.advanceTimersByTimeAsync(10 * 60_000);
     expect(mockInvoke).toHaveBeenCalledTimes(4);
+  });
+
+  it('re-reads Claude usage when the main process says it moved, until stopped', async () => {
+    mockInvoke.mockResolvedValue(OK);
+    slice.startUsagePolling();
+    await vi.advanceTimersByTimeAsync(0);
+    mockInvoke.mockClear();
+    listeners.get('claude_usage_changed')?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mockInvoke.mock.calls.map(([channel]) => channel)).toEqual(['get_claude_usage']);
+    slice.stopUsagePolling();
+    expect(listeners.has('claude_usage_changed')).toBe(false);
   });
 
   it('maps the bundled Claude Code and Codex agents to their meters', () => {

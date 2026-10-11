@@ -718,7 +718,9 @@ function attachPtyOutputHandlers(
 
 /** What a Claude launch needs to self-report status; null until the hook server is up. */
 export interface AgentHookRuntime {
-  claudeSettingsPath: string;
+  /** The `--settings` file for a launch in `cwd`: the hooks, plus the usage
+   *  status line wrapped around whatever status line the user runs there. */
+  claudeSettingsPath(cwd: string, env: Record<string, string>): string;
   buildPtyEnv(agentId: string, taskId: string, launchId: string): Record<string, string>;
 }
 
@@ -737,6 +739,7 @@ export function setAgentHookRuntime(runtime: AgentHookRuntime | null): void {
 export function applyAgentHookLaunch(
   args: Pick<SpawnAgentArgs, 'agentId' | 'taskId' | 'args' | 'isShell' | 'dockerMode'>,
   command: string,
+  cwd: string,
   spawnEnv: Record<string, string>,
   launchId: string,
 ): string[] {
@@ -744,7 +747,11 @@ export function applyAgentHookLaunch(
     return args.args;
   }
   Object.assign(spawnEnv, agentHookRuntime.buildPtyEnv(args.agentId, args.taskId, launchId));
-  return withClaudeHookSettings(command, args.args, agentHookRuntime.claudeSettingsPath);
+  return withClaudeHookSettings(
+    command,
+    args.args,
+    agentHookRuntime.claudeSettingsPath(cwd, spawnEnv),
+  );
 }
 
 export async function spawnAgent(
@@ -801,7 +808,6 @@ export async function spawnAgent(
 
   const spawnEnv = buildPtySpawnEnv(args.env, fileEnv);
   const launchId = crypto.randomUUID();
-  const launchArgs = applyAgentHookLaunch(args, command, spawnEnv, launchId);
 
   // Backfill sandbox placeholders for pre-existing worktrees (and anywhere
   // Claude Code may launch). See ensureClaudeSandboxFiles for the why.
@@ -826,6 +832,9 @@ export async function spawnAgent(
     refreshWorktreeNodeModules(cwd, repoRoot);
   }
 
+  // After the seeding above: the user's status line can live in the worktree's
+  // `.claude/` settings, which only exist once they are copied in.
+  const launchArgs = applyAgentHookLaunch(args, command, cwd, spawnEnv, launchId);
   const spawnSpec = buildPtySpawnSpec({ ...args, args: launchArgs }, command, cwd, spawnEnv);
 
   logDebug('pty', `spawn command ${args.agentId}`, {

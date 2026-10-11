@@ -9,7 +9,7 @@ import {
 } from './delegation';
 import type { IntegrationPolicy } from '../../electron/shared/delegation-types';
 import { produce } from 'solid-js/store';
-import { isAgentChat, supportsAgentChat } from './agent-chat';
+import { isAgentChat, reopenClaudeChatInTerminal, supportsAgentChat } from './agent-chat';
 import { invoke, Channel } from '../lib/ipc';
 import { asStoreVerificationRun } from '../lib/verification-run';
 import { IPC } from '../../electron/ipc/channels';
@@ -1117,6 +1117,7 @@ export function uncollapseTask(taskId: string, options: { activate?: boolean } =
         if (sessionId) sessions[agent.id] = sessionId;
       });
       t.agentSessionIds = Object.keys(sessions).length > 0 ? sessions : undefined;
+      reopenClaudeChatInTerminal(t, restoredAgents[0]?.def.id, s.disableClaudeUiMode);
       const promptedAgentIds = promptedAgentIndexes
         .map((index) => t.agentIds[index])
         .filter((id): id is string => Boolean(id));

@@ -239,6 +239,10 @@ export function setPreferUiMode(enabled: boolean): void {
   setStore('preferUiMode', enabled);
 }
 
+export function setDisableClaudeUiMode(disabled: boolean): void {
+  setStore('disableClaudeUiMode', disabled);
+}
+
 export function setDefaultSkipPermissions(enabled: boolean): void {
   setStore('defaultSkipPermissions', enabled);
 }

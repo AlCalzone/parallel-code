@@ -169,6 +169,7 @@
   "GetMCPStatus": "get_mcp_status",
   "GetMCPLogs": "get_mcp_logs",
   "GetClaudeUsage": "get_claude_usage",
+  "ClaudeUsageChanged": "claude_usage_changed",
   "GetCodexUsage": "get_codex_usage",
   "GetResourceUsage": "get_resource_usage",
   "MCP_TaskCreated": "mcp_task_created",

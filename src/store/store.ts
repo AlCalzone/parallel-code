@@ -178,6 +178,7 @@ export {
   setMinimaxApiKey,
   setWindowState,
   setPreferUiMode,
+  setDisableClaudeUiMode,
   setDefaultSkipPermissions,
   setCanvasOwnershipBadges,
   setDefaultPropagateSkipPermissions,

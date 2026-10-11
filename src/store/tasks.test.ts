@@ -19,6 +19,7 @@ const core = vi.hoisted(() => ({
         projects: { id: string; path: string; tasksCollapsed?: boolean }[];
         availableAgents: unknown[];
         preferUiMode: boolean;
+        disableClaudeUiMode: boolean;
       }>
     | undefined,
 }));
@@ -81,6 +82,7 @@ vi.mock('./core', async () => {
     },
     availableAgents: [],
     preferUiMode: false,
+    disableClaudeUiMode: false,
     get agentEnvFiles() {
       return mockAgentEnvFiles;
     },
@@ -635,6 +637,45 @@ describe('terminalInputPendingFromQuestion — real typing survives self-resolvi
   });
 });
 
+describe('uncollapseTask with Claude chat turned off', () => {
+  it.each([
+    [true, undefined],
+    [false, 'chat'],
+  ] as const)('with chat off: %s, a Claude chat reopens in %s', async (disabled, expected) => {
+    const harness = expectDefined(core.harness, 'mock store harness');
+    const sessionId = 'fb4f2bc6-62d9-4b29-a795-240caf2fc459';
+    const def = {
+      id: 'claude-code',
+      name: 'Claude Code',
+      command: 'claude',
+      args: [],
+      resume_args: ['--continue'],
+      skip_permissions_args: [],
+      description: '',
+    };
+    mockTasks.task = {
+      id: 'task',
+      agentIds: ['a'],
+      shellAgentIds: [],
+      mainAgentView: 'chat',
+      claudeChatSessionId: sessionId,
+    };
+    mockAgents.a = createAgentRecord({ id: 'a', taskId: 'task', def });
+    mockTaskOrder.push('task');
+    await collapseTask('task');
+    harness.store.disableClaudeUiMode = disabled;
+    try {
+      uncollapseTask('task');
+      const task = mockTasks.task;
+      expect(task.mainAgentView).toBe(expected);
+      // The terminal resumes the conversation the chat had.
+      if (disabled) expect(task.agentSessionIds?.[task.agentIds[0]]).toBe(sessionId);
+    } finally {
+      harness.store.disableClaudeUiMode = false;
+    }
+  });
+});
+
 describe('collapseTask — coordinated child guard (TODO #23)', () => {
   it('keeps each pane on its own session across repeated collapse and reopen', async () => {
     const def = {
@@ -1176,6 +1217,28 @@ describe('createTask initial agent state', () => {
       harness.store.preferUiMode = false;
     },
   );
+
+  it.each([
+    ['claude-code', undefined],
+    ['codex', 'chat'],
+  ] as const)('with Claude chat turned off, prefer UI starts %s in %s', async (id, expected) => {
+    const harness = expectDefined(core.harness, 'mock store harness');
+    harness.store.preferUiMode = true;
+    harness.store.disableClaudeUiMode = true;
+    try {
+      await createTask({
+        name: 'My Task',
+        agentDef: { ...agentDef(id === 'claude-code' ? 'claude' : id), id },
+        projectId: 'proj-1',
+        gitIsolation: 'worktree',
+        baseBranch: 'main',
+      });
+      expect(mockTasks['task-1'].mainAgentView).toBe(expected);
+    } finally {
+      harness.store.preferUiMode = false;
+      harness.store.disableClaudeUiMode = false;
+    }
+  });
 
   it('gives the first Claude pane an id of its own', async () => {
     const task = await createWith('claude');

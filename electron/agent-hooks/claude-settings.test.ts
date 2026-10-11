@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildClaudeHookSettings } from './claude-settings.js';
+import { buildClaudeHookSettings, buildStatusLineSetting } from './claude-settings.js';
 
 describe('buildClaudeHookSettings', () => {
   const settings = buildClaudeHookSettings('/Users/me/Library/App Support/hook.sh');
@@ -41,5 +41,40 @@ describe('buildClaudeHookSettings', () => {
   it('does not register compaction hooks, which fire mid-turn', () => {
     expect(settings.hooks.PreCompact).toBeUndefined();
     expect(settings.hooks.PostCompact).toBeUndefined();
+  });
+});
+
+describe('buildStatusLineSetting', () => {
+  const script = '/Users/me/App Support/statusline.sh';
+
+  it('runs the script alone when the user has no status line', () => {
+    expect(buildStatusLineSetting(script, null)).toEqual({
+      type: 'command',
+      command: "/bin/sh '/Users/me/App Support/statusline.sh'",
+    });
+  });
+
+  it("passes the user's command as one quoted argument and keeps their display options", () => {
+    expect(
+      buildStatusLineSetting(script, {
+        type: 'command',
+        command: "~/.claude/line.sh 'x'",
+        padding: 1,
+        refreshInterval: 5,
+        hideVimModeIndicator: true,
+      }),
+    ).toEqual({
+      type: 'command',
+      command: `/bin/sh '/Users/me/App Support/statusline.sh' '~/.claude/line.sh '\\''x'\\'''`,
+      padding: 1,
+      refreshInterval: 5,
+      hideVimModeIndicator: true,
+    });
+  });
+
+  it('adds the status line next to the hooks only when given one', () => {
+    expect(buildClaudeHookSettings('/hook.sh').statusLine).toBeUndefined();
+    const statusLine = buildStatusLineSetting(script, null);
+    expect(buildClaudeHookSettings('/hook.sh', statusLine).statusLine).toBe(statusLine);
   });
 });

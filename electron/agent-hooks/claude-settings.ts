@@ -25,8 +25,18 @@ interface HookGroup {
   hooks: CommandHook[];
 }
 
+/** The `statusLine` setting; the keys other than `command` are the user's and pass through. */
+export interface StatusLineSetting {
+  type: 'command';
+  command: string;
+  padding?: number;
+  refreshInterval?: number;
+  hideVimModeIndicator?: boolean;
+}
+
 export interface ClaudeHookSettings {
   hooks: Record<string, HookGroup[]>;
+  statusLine?: StatusLineSetting;
 }
 
 /** Quote for `/bin/sh` so a userData path with spaces survives. */
@@ -34,7 +44,24 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
-export function buildClaudeHookSettings(hookScriptPath: string): ClaudeHookSettings {
+/**
+ * The app's status line, running the user's own one (if any) after it. A
+ * `--settings` file replaces the user's `statusLine` outright, display options
+ * and all, so those are carried over with the command.
+ */
+export function buildStatusLineSetting(
+  scriptPath: string,
+  user: StatusLineSetting | null,
+): StatusLineSetting {
+  const script = `/bin/sh ${shellQuote(scriptPath)}`;
+  if (!user) return { type: 'command', command: script };
+  return { ...user, command: `${script} ${shellQuote(user.command)}` };
+}
+
+export function buildClaudeHookSettings(
+  hookScriptPath: string,
+  statusLine?: StatusLineSetting,
+): ClaudeHookSettings {
   const hook: CommandHook = {
     type: 'command',
     command: `/bin/sh ${shellQuote(hookScriptPath)}`,
@@ -44,5 +71,5 @@ export function buildClaudeHookSettings(hookScriptPath: string): ClaudeHookSetti
   for (const event of TURN_EVENTS) hooks[event] = [{ hooks: [hook] }];
   for (const event of TOOL_EVENTS) hooks[event] = [{ matcher: '*', hooks: [hook] }];
   hooks.Notification = [{ matcher: NOTIFICATION_MATCHER, hooks: [hook] }];
-  return { hooks };
+  return statusLine ? { hooks, statusLine } : { hooks };
 }

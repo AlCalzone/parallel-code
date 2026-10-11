@@ -844,7 +844,7 @@ describe('PTY hook launch ownership', () => {
     const agentId = 'agent-hook-failed-spawn';
     const taskId = 'hook-task';
     setAgentHookRuntime({
-      claudeSettingsPath: '/hook-settings.json',
+      claudeSettingsPath: () => '/hook-settings.json',
       buildPtyEnv: (id, task, launchId) => ({
         PARALLEL_CODE_AGENT_ID: id,
         PARALLEL_CODE_TASK_ID: task,

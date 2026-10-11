@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildEndpointFile, buildHookScript } from './hook-script.js';
+import { buildEndpointFile, buildHookScript, buildStatusLineScript } from './hook-script.js';
 
 describe('buildHookScript', () => {
   const script = buildHookScript();
@@ -40,5 +40,19 @@ describe('buildEndpointFile', () => {
     expect(buildEndpointFile(4321, 'tok')).toBe(
       'PARALLEL_CODE_HOOK_PORT=4321\nPARALLEL_CODE_HOOK_TOKEN=tok\n',
     );
+  });
+});
+
+describe('buildStatusLineScript', () => {
+  const script = buildStatusLineScript();
+
+  it('posts only payloads with rate limits, to the usage route, with the token', () => {
+    expect(script).toContain(`*'"rate_limits"'*)`);
+    expect(script).toContain('http://127.0.0.1:$PARALLEL_CODE_HOOK_PORT/usage/claude');
+    expect(script).toContain('x-parallel-code-hook-token: $PARALLEL_CODE_HOOK_TOKEN');
+  });
+
+  it("runs the user's command last, so its output and exit status are the status line's", () => {
+    expect(script.trimEnd().split('\n').pop()).toBe(`printf '%s' "$payload" | /bin/sh -c "$1"`);
   });
 });

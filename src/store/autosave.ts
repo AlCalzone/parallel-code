@@ -36,6 +36,7 @@ function structuralSnapshot(): string {
     autoTrustFolders: store.autoTrustFolders,
     showPlans: store.showPlans,
     preferUiMode: store.preferUiMode,
+    disableClaudeUiMode: store.disableClaudeUiMode,
     defaultSkipPermissions: store.defaultSkipPermissions,
     defaultPropagateSkipPermissions: store.defaultPropagateSkipPermissions,
     canvasOwnershipBadges: store.canvasOwnershipBadges,

@@ -108,6 +108,7 @@ export const [store, setStore] = createStore<AppStore>({
   coordinatorNotificationDelayMs: 60_000,
   coordinatorControlHintDismissed: false,
   preferUiMode: false,
+  disableClaudeUiMode: false,
   defaultSkipPermissions: false,
   defaultPropagateSkipPermissions: false,
   canvasOwnershipBadges: true,
