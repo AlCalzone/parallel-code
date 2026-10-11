@@ -221,6 +221,12 @@ body.font-smoothing {
   white-space: nowrap;
 }
 
+/* The lane centres glyphs for sidebar columns; here the glyph's left edge has
+   to meet the title's, and the fixed lane width still keeps the label steady. */
+.task-title-status > .status-glyph {
+  justify-content: flex-start;
+}
+
 .task-status-explanation {
   display: none;
 }
