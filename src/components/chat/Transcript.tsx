@@ -1,4 +1,14 @@
-import { For, Match, Show, Switch, createMemo, createSignal, onCleanup } from 'solid-js';
+import {
+  For,
+  Match,
+  Show,
+  Switch,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
+import { insert } from 'solid-js/web';
 import type {
   AgentChatState,
   ChatImage,
@@ -16,15 +26,15 @@ type TranscriptProps = ActivityActions & {
   pending?: { text: string; images: ChatImage[] };
 };
 
-function CopyButton(props: { text: string }) {
+function CopyButton(props: { text: string; label?: string }) {
   const [copied, setCopied] = createSignal(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
   onCleanup(() => clearTimeout(timer));
   return (
     <button
       class="chat-copy"
-      aria-label={copied() ? 'Copied' : 'Copy message'}
-      title={copied() ? 'Copied' : 'Copy message'}
+      aria-label={copied() ? 'Copied' : (props.label ?? 'Copy message')}
+      title={copied() ? 'Copied' : (props.label ?? 'Copy message')}
       data-copied={copied()}
       onClick={() =>
         void navigator.clipboard.writeText(props.text).then(
@@ -76,10 +86,28 @@ function AssistantMessage(props: { item: ChatItem; streaming: boolean }) {
     () => props.streaming,
   );
   const html = createChatMarkdown(text, () => props.streaming);
+  let markdown!: HTMLDivElement;
+  // The sanitizer forbids buttons in agent markup, so code-block copy buttons are
+  // added to the rendered DOM. A block still streaming is incomplete; no button.
+  createEffect(() => {
+    html();
+    if (props.streaming) return;
+    for (const pre of markdown.querySelectorAll('pre')) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'chat-code';
+      // Marked ends unhighlighted code with a newline that the fence did not contain.
+      const code = (pre.textContent ?? '').replace(/\n$/, '');
+      pre.replaceWith(wrapper);
+      wrapper.append(pre);
+      insert(wrapper, () => <CopyButton text={code} label="Copy code" />, null);
+      // The HTML can stay while streaming flips, so unwrap rather than wrap twice.
+      onCleanup(() => wrapper.replaceWith(pre));
+    }
+  });
   return (
     <div data-chat-id={props.item.id} class="chat-answer">
       {/* eslint-disable-next-line solid/no-innerhtml -- sanitized by renderChatMarkdown */}
-      <div class="plan-markdown chat-markdown" innerHTML={html()} />
+      <div ref={markdown} class="plan-markdown chat-markdown" innerHTML={html()} />
       <Show when={!props.streaming}>
         <div class="chat-message-actions">
           <CopyButton text={props.item.text} />

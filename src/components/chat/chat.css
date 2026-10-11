@@ -23,7 +23,7 @@
   line-height: 1.7;
   color: var(--fg);
 }
-.chat-markdown.plan-markdown > :is(p, ul, ol, pre, blockquote, .md-table-scroll) {
+.chat-markdown.plan-markdown > :is(p, ul, ol, pre, .chat-code, blockquote, .md-table-scroll) {
   margin-block: 14px;
 }
 .chat-markdown.plan-markdown :is(h1, h2, h3, h4, h5, h6) {
@@ -158,6 +158,26 @@
 }
 .chat-ui .chat-copy[data-copied='true']:enabled {
   color: var(--success);
+}
+/* The block scrolls sideways, so its copy button sits on a wrapper that does not. */
+.chat-code {
+  position: relative;
+}
+.chat-markdown.plan-markdown .chat-code > pre {
+  margin: 0;
+}
+.chat-ui .chat-code > .chat-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  border: 1px solid var(--chat-border);
+  background: var(--bg-input);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.chat-code:is(:hover, :focus-within) > .chat-copy,
+.chat-ui .chat-code > .chat-copy[data-copied='true'] {
+  opacity: 1;
 }
 
 .chat-ui textarea {

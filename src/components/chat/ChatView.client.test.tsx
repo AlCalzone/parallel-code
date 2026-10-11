@@ -870,6 +870,28 @@ it('copies a message from its icon button and confirms it', async () => {
   expect(container.textContent).not.toContain('Use as new prompt');
 });
 
+it('copies a code block from its own button', async () => {
+  const writeText = vi.fn(async () => undefined);
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  await update({
+    state: {
+      ...props.state,
+      items: [
+        ...props.state.items,
+        { id: 'a', kind: 'assistant', text: 'Run:\n\n```sh\nnpm run lint\nnpm test\n```\n' },
+      ],
+    },
+  });
+  await act(() => button('Copy code').click());
+  expect(writeText).toHaveBeenCalledWith('npm run lint\nnpm test');
+  // The answer counts as streaming again once the agent works on, before new text.
+  await update({ state: { ...props.state, status: 'working' } });
+  expect(container.querySelectorAll('.chat-code')).toHaveLength(0);
+  await update({ state: { ...props.state, status: 'ready' } });
+  expect(container.querySelectorAll('.chat-code')).toHaveLength(1);
+  expect(container.querySelectorAll('.chat-code [aria-label="Copy code"]')).toHaveLength(1);
+});
+
 it('keeps declined and interrupted outcomes visible in a collapsed activity summary', async () => {
   await update({
     state: {

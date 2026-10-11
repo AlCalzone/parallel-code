@@ -864,6 +864,10 @@ textarea.mobile-input {
 .mobile-chat .chat-ui .chat-message-actions {
   opacity: 1;
 }
+/* No hover on touch: a hidden code-block copy button would still take taps. */
+.mobile-chat .chat-ui .chat-code > .chat-copy {
+  opacity: 1;
+}
 .mobile-chat .chat-ui .chat-copy,
 .mobile-chat .chat-ui .chat-more,
 .mobile-chat .chat-ui .chat-composer :is(.chat-send, .chat-stop) {
