@@ -16,7 +16,7 @@ import {
   clearInitialPrompt,
 } from '../store/tasks';
 import { registerAction, unregisterAction } from '../store/focus';
-import { registerFocusFn, unregisterFocusFn } from '../store/focused-panel';
+import { registerFocusFn, unregisterFocusFn, setTaskFocusedPanel } from '../store/focused-panel';
 import type { Task } from '../store/types';
 import { isLandedTaskState } from '../store/landing';
 import { openFileInEditor, revealItemInDir } from '../lib/shell';
@@ -194,8 +194,15 @@ export function AgentChatView(props: {
         isMarkdownPath(relative) &&
         !relative.startsWith('/') &&
         !relative.split('/').includes('..')
-      )
-        openCanvasDocument(props.task.id, relative);
+      ) {
+        const taskId = props.task.id;
+        openCanvasDocument(taskId, relative);
+        // The enclosing agent pane selects itself as this click bubbles. Reveal
+        // the destination afterwards, so a wide task cannot hide it off-screen.
+        queueMicrotask(() => {
+          if (!disposed && store.activeTaskId === taskId) setTaskFocusedPanel(taskId, 'canvas');
+        });
+      }
       // Outside the worktree (a dropped download, say) the editor channel refuses the
       // path, and opening it with its default app would run whatever an agent cites.
       else if (relative.startsWith('/'))

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   openFileInEditor: vi.fn(async () => {}),
   revealItemInDir: vi.fn(async () => {}),
   openCanvasDocument: vi.fn(),
+  setTaskFocusedPanel: vi.fn(),
   channel: undefined as
     | { onmessage: ((state: AgentChatState) => void) | null; dispose: () => void }
     | undefined,
@@ -44,7 +45,11 @@ vi.mock('../store/tasks', () => ({
     setStore('tasks', taskId, 'promptDraft', value),
 }));
 vi.mock('../store/focus', () => ({ registerAction: vi.fn(), unregisterAction: vi.fn() }));
-vi.mock('../store/focused-panel', () => ({ registerFocusFn: vi.fn(), unregisterFocusFn: vi.fn() }));
+vi.mock('../store/focused-panel', () => ({
+  registerFocusFn: vi.fn(),
+  unregisterFocusFn: vi.fn(),
+  setTaskFocusedPanel: mocks.setTaskFocusedPanel,
+}));
 // Stands in for the chat itself: it keeps the live props and shows the transcript
 // and a Decline button, which is all these tests look at.
 vi.mock('./chat/ChatView', async () => {
@@ -221,6 +226,29 @@ describe('Codex chat view', () => {
       ['task-1', 'README.md'],
       ['task-1', 'docs/design.md'],
     ]);
+  });
+
+  it('focuses a linked document after the enclosing pane handles the click', async () => {
+    setStore('activeTaskId', null);
+    dispose = render(() => <AgentChatView task={task()} agentId="agent-1" active />, container);
+    const chat = await tick();
+    chat.onOpenFile?.('/worktree/project-plan.md');
+    expect(mocks.setTaskFocusedPanel).not.toHaveBeenCalled();
+    // The pointer selects this task as the original link click bubbles up.
+    setStore('activeTaskId', 'task-1');
+    await Promise.resolve();
+    expect(mocks.openCanvasDocument).toHaveBeenCalledWith('task-1', 'project-plan.md');
+    expect(mocks.setTaskFocusedPanel).toHaveBeenCalledWith('task-1', 'canvas');
+  });
+
+  it('does not move focus after leaving the linked document task', async () => {
+    setStore('activeTaskId', 'task-1');
+    dispose = render(() => <AgentChatView task={task()} agentId="agent-1" active />, container);
+    const chat = await tick();
+    chat.onOpenFile?.('project-plan.md');
+    setStore('activeTaskId', 'other-task');
+    await Promise.resolve();
+    expect(mocks.setTaskFocusedPanel).not.toHaveBeenCalled();
   });
 
   it('references dropped files inside the worktree relatively and others absolutely', async () => {
