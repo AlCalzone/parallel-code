@@ -1,7 +1,7 @@
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DocumentViewer, releasesSelection } from './DocumentViewer';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CLICK_COMMENT_DELAY_MS, DocumentViewer, releasesSelection } from './DocumentViewer';
 import type { DocumentBlock } from './markdown-blocks';
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn(() => Promise.resolve()) }));
@@ -183,6 +183,110 @@ describe('picking a passage', () => {
     host.querySelector<HTMLButtonElement>('.docws-section-btn')?.click();
 
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ startBlock: 1 }));
+  });
+});
+
+describe('DocumentViewer click to comment', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function mountWithAction(
+    onAction: (kind: string, index: number, range?: unknown) => void,
+    opts: { composerOpen?: boolean; selection?: { start: number; end: number } } = {},
+  ) {
+    const host = document.createElement('div');
+    document.body.append(host);
+    disposers.push(
+      render(
+        () => (
+          <DocumentViewer
+            blocks={blocks}
+            renderKey="t"
+            selectable
+            composerOpen={opts.composerOpen}
+            selection={opts.selection}
+            onSelect={() => {}}
+            onAction={onAction}
+          />
+        ),
+        host,
+      ),
+    );
+    return host;
+  }
+
+  function clickTimes(el: Element | null, detail: number) {
+    el?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail }));
+  }
+
+  it('opens a comment on the clicked block once no second click follows', () => {
+    const onAction = vi.fn();
+    const host = mountWithAction(onAction);
+
+    clickTimes(host.querySelector('[data-block-index="1"] h2'), 1);
+    expect(onAction).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(CLICK_COMMENT_DELAY_MS);
+
+    expect(onAction).toHaveBeenCalledWith('note', 1, undefined);
+  });
+
+  it('lets a double-click select a word instead', () => {
+    const onAction = vi.fn();
+    const host = mountWithAction(onAction);
+    const heading = host.querySelector('[data-block-index="1"] h2');
+
+    clickTimes(heading, 1);
+    clickTimes(heading, 2);
+    vi.advanceTimersByTime(CLICK_COMMENT_DELAY_MS);
+
+    expect(onAction).not.toHaveBeenCalled();
+  });
+
+  it('leaves links and controls alone', () => {
+    const onAction = vi.fn();
+    const host = mountWithAction(onAction);
+
+    clickTimes(host.querySelector('a[href="#end"]'), 1);
+    clickTimes(host.querySelector('.docws-section-btn'), 1);
+    vi.advanceTimersByTime(CLICK_COMMENT_DELAY_MS);
+
+    expect(onAction).not.toHaveBeenCalled();
+  });
+
+  it('does not comment when text is selected', () => {
+    const onAction = vi.fn();
+    const host = mountWithAction(onAction);
+    const paragraph = host.querySelector('[data-block-index="0"] p');
+    if (!paragraph) throw new Error('No paragraph');
+
+    clickTimes(paragraph, 1);
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    window.getSelection()?.addRange(range);
+    vi.advanceTimersByTime(CLICK_COMMENT_DELAY_MS);
+
+    expect(onAction).not.toHaveBeenCalled();
+    window.getSelection()?.removeAllRanges();
+  });
+
+  it('comments on the whole picked passage when clicked inside it', () => {
+    const onAction = vi.fn();
+    const host = mountWithAction(onAction, { selection: { start: 0, end: 1 } });
+
+    clickTimes(host.querySelector('[data-block-index="0"] p'), 1);
+    vi.advanceTimersByTime(CLICK_COMMENT_DELAY_MS);
+
+    expect(onAction).toHaveBeenCalledWith('note', 1, { start: 0, end: 1 });
+  });
+
+  it('does not move an open composer', () => {
+    const onAction = vi.fn();
+    const host = mountWithAction(onAction, { composerOpen: true });
+
+    clickTimes(host.querySelector('[data-block-index="1"] h2'), 1);
+    vi.advanceTimersByTime(CLICK_COMMENT_DELAY_MS);
+
+    expect(onAction).not.toHaveBeenCalled();
   });
 });
 

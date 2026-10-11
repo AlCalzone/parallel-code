@@ -1,4 +1,4 @@
-import { For, Index, Show, createEffect, createMemo, on, type JSX } from 'solid-js';
+import { For, Index, Show, createEffect, createMemo, on, onCleanup, type JSX } from 'solid-js';
 import { scopePageCss } from './html-blocks';
 import type { BlockChange, BlockRange, DocumentBlock } from './markdown-blocks';
 import { blockRangeText, nearestHeading, sectionRange } from './markdown-blocks';
@@ -13,6 +13,8 @@ import { createHeldSignal } from '../lib/floating';
 
 /** How long the hover toolbar waits for the pointer to reach it from the block. */
 const TOOLBAR_HOLD_MS = 100;
+/** How long a click waits to learn it was the first of a double- or triple-click. */
+export const CLICK_COMMENT_DELAY_MS = 300;
 
 interface DocumentViewerProps {
   /** Portalled controls must follow their owning panel’s visibility. */
@@ -92,6 +94,8 @@ const SELECTION_KEYS = new Set([
   'PageDown',
 ]);
 const CONTROLS = 'a, button, input, textarea, .docws-marker, .docws-marker-pop, .docws-bubble';
+/** A click on these does its own thing in a page, so it never opens a comment. */
+const CLICK_SKIP = `${CONTROLS}, select, summary, label, video, audio`;
 
 /**
  * True for a mouse-up on the backdrop: the margins and the space below the
@@ -179,9 +183,8 @@ export function DocumentViewer(props: DocumentViewerProps) {
     props.onSelect(selectionFromRange(props.blocks, range));
   }
 
-  // Only a text selection picks a passage (and the § handle, below). A plain
-  // click picks nothing: it would get in the way of reading and of placing a
-  // caret to copy from.
+  // A text selection picks a passage and offers every action (as does the §
+  // handle, below); a plain click goes straight to commenting, in handleClick.
   function handleSelectionEnd(e: MouseEvent | KeyboardEvent) {
     if (!props.selectable || (props.composerOpen && props.selection) || !containerRef) return;
     if ((e.target as HTMLElement | null)?.closest(CONTROLS)) return;
@@ -203,11 +206,32 @@ export function DocumentViewer(props: DocumentViewerProps) {
     emitRange({ start, end });
   }
 
+  // Commenting is what a click on the prose is most often for. A drag or a
+  // double-click selects text instead, so the comment waits out the
+  // double-click window; links and controls keep their own clicks.
+  let pendingComment: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(pendingComment));
+  function commentOnClick(e: MouseEvent) {
+    clearTimeout(pendingComment);
+    if (!props.selectable || !props.onAction || props.composerOpen || !containerRef) return;
+    if (e.detail > 1 || (e.target as HTMLElement | null)?.closest(CLICK_SKIP)) return;
+    const index = blockIndexOf(e.target as Node, containerRef);
+    if (index === null) return;
+    pendingComment = setTimeout(() => {
+      const native = window.getSelection();
+      if (props.composerOpen || (native && !native.isCollapsed)) return;
+      // A click inside the picked passage comments on all of it.
+      const range = selected();
+      const inRange = range && index >= range.start && index <= range.end;
+      props.onAction?.('note', inRange ? range.end : index, inRange ? range : undefined);
+    }, CLICK_COMMENT_DELAY_MS);
+  }
+
   // Links never navigate the app window: web links go to the browser, anchors
   // scroll, and other files of the project open in the workspace.
   function handleClick(e: MouseEvent) {
     const anchorEl = (e.target as HTMLElement | null)?.closest<HTMLAnchorElement>('a[href]');
-    if (!anchorEl || !containerRef?.contains(anchorEl)) return;
+    if (!anchorEl || !containerRef?.contains(anchorEl)) return commentOnClick(e);
     e.preventDefault();
     const link = resolveDocumentLink(anchorEl.getAttribute('href') ?? '', props.documentPath ?? '');
     if (!link) return;

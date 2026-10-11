@@ -82,8 +82,10 @@ the document.
    Markdown, inline HTML and the sandboxed page preview from 50% to 200%. The scale is
    remembered per project and leaves the app controls and terminal unchanged.
 4. Select text, or press **§** beside a heading (a button, so the keyboard reaches it), to
-   pick a passage. A plain click picks nothing, so reading and placing a caret to copy
-   from are left alone. Selection keeps normal copying available, including within one
+   pick a passage. A plain click on a block opens **Comment** on it, or on the whole
+   passage when the click lands inside the picked one. The comment waits a moment so a
+   double-click can still select a word; links, controls and an open composer keep their
+   own behaviour. Selection keeps normal copying available, including within one
    paragraph, and shows labeled **Rewrite**, **Comment** and **Ask** actions. The actions apply to the selected
    blocks; the composers show the passage as their scope. Selecting alone, with the
    mouse or Shift+arrows, never opens
