@@ -548,8 +548,8 @@ private fun PhoneApp(model: PhoneViewModel) {
                 val quickReplies by model.quickReplies.collectAsState()
                 val sendQuickReplies by model.sendQuickReplies.collectAsState()
                 val fitTerminalToPhone by model.fitTerminalToPhone.collectAsState()
-                // The tasks in the order the list shows them: swipe sideways to move between them.
-                val pages = remember(agents) { taskListOrder(agents) }
+                // The active tasks in the order the list shows them: swipe sideways to move between them.
+                val pages = remember(agents) { swipeOrder(agents) }
                 val openIndex = pages.indexOfFirst { it.agentId == currentScreen.agentId }
                 // The task whose terminal is pinch-zoomed; its sideways pans must not turn the page.
                 var zoomedAgentId by remember { mutableStateOf<String?>(null) }
@@ -593,7 +593,7 @@ private fun PhoneApp(model: PhoneViewModel) {
                 }
 
                 if (openIndex < 0 || pages.size < 2) {
-                    // A task that left the list (or the only one) has nothing to swipe to.
+                    // A minimized task, one that left the list, or the only one has nothing to swipe to.
                     Task(currentScreen.agentId, active = true, pageLabel = null)
                 } else {
                     val pager = rememberPagerState(initialPage = openIndex) { pages.size }

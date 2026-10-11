@@ -65,14 +65,14 @@ class TaskGroupsTest {
     }
 
     @Test
-    fun listOrderPutsMinimizedTasksLast() {
+    fun swipeOrderFollowsTheListAndSkipsMinimizedTasks() {
         val agents = listOf(
             agent("a", "active"),
             agent("b", "error", collapsed = true),
             agent("c", "review"),
             agent("d", "needs_input"),
         )
-        assertEquals(listOf("d", "a", "c", "b"), taskListOrder(agents).map { it.agentId })
+        assertEquals(listOf("d", "a", "c"), swipeOrder(agents).map { it.agentId })
     }
 
     @Test

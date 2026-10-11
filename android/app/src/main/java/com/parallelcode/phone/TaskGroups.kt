@@ -68,18 +68,18 @@ fun groupTasks(agents: List<RemoteAgent>): List<Pair<TaskGroup, List<RemoteAgent
 }
 
 /**
- * The tasks in the order the list shows them, minimized ones last: the order swiping between
- * tasks follows.
+ * The active tasks in the order the list shows them: the order swiping between tasks follows.
+ * Minimized tasks are left out, so a swipe never lands on one.
  */
-fun taskListOrder(agents: List<RemoteAgent>): List<RemoteAgent> =
-    groupTasks(agents.filter { !it.collapsed }).flatMap { it.second } + agents.filter { it.collapsed }
+fun swipeOrder(agents: List<RemoteAgent>): List<RemoteAgent> =
+    groupTasks(agents.filter { !it.collapsed }).flatMap { it.second }
 
 /**
  * The next task, after [currentAgentId] in list order and wrapping around, that needs you;
  * null when no other one does.
  */
 fun nextTaskNeedingYou(agents: List<RemoteAgent>, currentAgentId: String): RemoteAgent? {
-    val order = taskListOrder(agents).filter { !it.collapsed }
+    val order = swipeOrder(agents)
     val start = order.indexOfFirst { it.agentId == currentAgentId }
     return (1..order.size)
         .map { order[(start + it).mod(order.size)] }
