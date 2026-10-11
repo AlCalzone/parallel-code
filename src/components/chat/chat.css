@@ -377,9 +377,9 @@
   margin-left: auto;
 }
 
+/* Never a scroll box: a decision that hides its choices below a fold gets missed.
+   The transcript above gives up the room instead. */
 .chat-requests {
-  max-height: min(240px, 40cqh);
-  overflow: auto;
   background: var(--chat-surface);
   border: 1px solid var(--chat-border);
   border-radius: var(--radius-md);
@@ -421,6 +421,8 @@
   color: var(--fg-muted);
   font-size: 11px;
 }
+/* The one scroll inside a card, kept on purpose: raw arguments can hold a whole file
+   (a Write call), and the user unfolds them only when they want to read them. */
 .chat-request-details pre {
   font-size: 11px;
   max-height: 160px;
@@ -443,20 +445,22 @@
 .chat-request input::placeholder {
   color: var(--fg-muted);
 }
+/* Compact so the card fits without scrolling; the phone UI restores 44px targets. */
 .chat-options {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 12px 0 0;
+  gap: 6px;
+  margin: 8px 0 0;
 }
 .chat-options button {
   background: var(--chat-surface-strong);
   color: var(--fg);
   border: 1px solid var(--chat-border);
   border-radius: var(--radius-sm);
-  padding: 5px 10px;
+  padding: 3px 8px;
   cursor: pointer;
   font: inherit;
+  font-size: 12px;
 }
 .chat-options button:enabled:hover {
   border-color: var(--chat-accent);
@@ -1131,6 +1135,11 @@
 .chat-composer-dock {
   max-height: 65cqh;
   overflow-y: auto;
+}
+/* A pending decision outranks the transcript, so it takes the room it needs; the
+   dock scrolls only when the requests outgrow the whole panel. */
+.chat-composer-dock:has(.chat-requests) {
+  max-height: none;
 }
 @container (max-width: 440px) {
   .chat-transcript {

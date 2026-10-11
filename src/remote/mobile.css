@@ -893,6 +893,14 @@ textarea.mobile-input {
 .mobile-chat .chat-ui .chat-picker select {
   padding-left: 24px;
 }
-.mobile-chat .chat-ui :is(.chat-toolbar button, .chat-interrupt, .chat-review, .chat-queue button) {
+.mobile-chat
+  .chat-ui
+  :is(
+    .chat-toolbar button,
+    .chat-interrupt,
+    .chat-review,
+    .chat-queue button,
+    .chat-options button
+  ) {
   font-size: 13px;
 }

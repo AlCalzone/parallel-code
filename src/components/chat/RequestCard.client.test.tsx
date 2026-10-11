@@ -207,6 +207,104 @@ describe('approval card keyboard handling', () => {
   });
 });
 
+describe('choosing with arrow keys and Enter', () => {
+  const twoQuestions = (): ChatRequest =>
+    approval({
+      kind: 'question',
+      text: 'Claude needs your input',
+      questions: [
+        {
+          id: 'scope',
+          question: 'Which scope?',
+          isSecret: false,
+          options: [
+            { label: 'Narrow', description: '' },
+            { label: 'Wide', description: '' },
+          ],
+        },
+        {
+          id: 'tests',
+          question: 'Add tests?',
+          isSecret: false,
+          options: [
+            { label: 'Yes', description: '' },
+            { label: 'No', description: '' },
+          ],
+        },
+      ],
+    });
+  /** Dispatches like a keyboard does; returns whether the browser default still runs. */
+  const press = async (key: string, init: KeyboardEventInit = {}) => {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
+    document.activeElement?.dispatchEvent(event);
+    await settle();
+    return !event.defaultPrevented;
+  };
+
+  it('walks the approval choices with arrow keys, wrapping at the ends', async () => {
+    await show(approval());
+    await press('ArrowRight');
+    expect(focused()).toBe('Decline');
+    await press('ArrowDown');
+    expect(focused()).toBe('Allow once');
+    await press('ArrowUp');
+    expect(focused()).toBe('Decline');
+  });
+
+  it('answers a single question with arrows and one Enter', async () => {
+    await show(question());
+    expect(await press('Enter')).toBe(false);
+    expect(respond).toHaveBeenCalledWith(question(), 'accept', { scope: 'Narrow' });
+  });
+
+  it('moves to the next open question, then sends once every question is answered', async () => {
+    const request = twoQuestions();
+    await show(request);
+    await press('ArrowDown');
+    expect(focused()).toBe('Wide');
+    await press('Enter');
+    expect(respond).not.toHaveBeenCalled();
+    expect(focused()).toBe('Yes');
+    await press('ArrowRight');
+    await press('Enter');
+    expect(respond).toHaveBeenCalledWith(request, 'accept', { scope: 'Wide', tests: 'No' });
+  });
+
+  it('leaves Enter native on a multi-select so it toggles instead of sending', async () => {
+    const request = twoQuestions();
+    request.questions = request.questions?.map((q) => ({ ...q, multiSelect: true }));
+    await show(request);
+    expect(await press('Enter')).toBe(true);
+    expect(respond).not.toHaveBeenCalled();
+    expect(container.querySelector('.chat-request-hint')?.textContent).toBe(
+      'Arrow keys move, Enter toggles',
+    );
+  });
+
+  it('leaves modified arrows to the app, where Alt+Arrow switches panes', async () => {
+    await show(approval());
+    expect(await press('ArrowRight', { altKey: true })).toBe(true);
+    expect(focused()).toBe('Allow once');
+  });
+
+  it('does not let a held Enter rush through every question', async () => {
+    await show(twoQuestions());
+    await press('Enter');
+    expect(focused()).toBe('Yes');
+    // Auto-repeat must neither pick nor fall through to a native click.
+    expect(await press('Enter', { repeat: true })).toBe(false);
+    expect(respond).not.toHaveBeenCalled();
+    expect(button('Yes')?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('keeps arrow keys for the caret in a typed answer', async () => {
+    await show(question());
+    container.querySelector('input')?.focus();
+    expect(await press('ArrowLeft')).toBe(true);
+    expect(document.activeElement).toBe(container.querySelector('input'));
+  });
+});
+
 describe('approval card contents', () => {
   it('offers Always allow only when the agent said this ask can be remembered', async () => {
     await show(approval());

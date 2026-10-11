@@ -22,6 +22,13 @@ const holdsUnsentText = (node: Element | null): boolean => {
 
 const modalOpen = () => !!document.querySelector('[aria-modal="true"]');
 
+// Modified keys belong to the app, e.g. Alt+Arrow switches panes.
+const modified = (event: KeyboardEvent) =>
+  event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
+
+const NEXT_KEYS = new Set(['ArrowDown', 'ArrowRight']);
+const PREVIOUS_KEYS = new Set(['ArrowUp', 'ArrowLeft']);
+
 /**
  * One pending approval or question from the agent, answerable from the keyboard:
  * the card opens on its default choice so Enter alone resolves it.
@@ -97,12 +104,48 @@ export function RequestCard(props: {
     setSelectedOptions({ ...selectedOptions(), [id]: next });
     setAnswers({ ...answers(), [id]: next.join(', ') });
   };
+  const hint = () => {
+    const choices = props.request.questions?.filter((q) => q.options.length) ?? [];
+    if (choices.some((q) => !q.multiSelect)) return 'Arrow keys move, Enter chooses';
+    if (choices.length) return 'Arrow keys move, Enter toggles';
+    if (props.request.kind === 'question') return '';
+    return allowIsDefault() ? 'Enter allows once' : 'Enter declines';
+  };
+  /** Arrow keys walk the card's choices like a menu; text inputs keep them for the caret. */
+  const moveFocus = (event: KeyboardEvent) => {
+    const step = NEXT_KEYS.has(event.key) ? 1 : PREVIOUS_KEYS.has(event.key) ? -1 : 0;
+    if (!step || modified(event) || !(event.target instanceof HTMLButtonElement) || !card) return;
+    const choices = [
+      ...card.querySelectorAll<HTMLButtonElement>('.chat-options button:not(:disabled)'),
+    ];
+    const at = choices.indexOf(event.target);
+    if (at < 0) return;
+    event.preventDefault();
+    choices[(at + step + choices.length) % choices.length]?.focus();
+  };
+  /** Enter on a single choice answers its question, then moves on to the next open
+   *  question, or sends the answers once none is left — one keystroke per question. */
+  const choose = (event: KeyboardEvent, id: string, label: string) => {
+    if (event.key !== 'Enter' || modified(event)) return;
+    event.preventDefault();
+    // A held Enter would otherwise answer every question with its first option.
+    if (event.repeat) return;
+    pick(id, label);
+    const questions = props.request.questions ?? [];
+    const open = questions.findIndex((q) => !answers()[q.id]?.trim());
+    if (open < 0) return void submit('accept');
+    card
+      ?.querySelectorAll('.chat-request-question')
+      [open]?.querySelector<HTMLElement>('button, input')
+      ?.focus();
+  };
   return (
     <section
       class="chat-request"
       data-default={props.request.defaultToNo ? 'decline' : 'allow'}
       aria-label={`${props.agentName} request`}
       ref={card}
+      onKeyDown={moveFocus}
     >
       <strong>
         {props.request.kind === 'question'
@@ -136,6 +179,10 @@ export function RequestCard(props: {
                         : answers()[q.id] === option.label
                     }
                     onClick={() => pick(q.id, option.label, q.multiSelect)}
+                    // A multi-select keeps native Enter: it toggles and waits for more.
+                    onKeyDown={(event) => {
+                      if (!q.multiSelect) choose(event, q.id, option.label);
+                    }}
                   >
                     {option.label}
                   </button>
@@ -200,8 +247,8 @@ export function RequestCard(props: {
         {/* Said out loud, not hidden in a tooltip: remembering can outlive the session. */}
         <p class="chat-request-note">Always allow will {props.request.alwaysAllowNote}.</p>
       </Show>
-      <Show when={props.request.kind === 'approval'}>
-        <p class="chat-request-hint">{allowIsDefault() ? 'Enter allows once' : 'Enter declines'}</p>
+      <Show when={hint()}>
+        <p class="chat-request-hint">{hint()}</p>
       </Show>
       <Show when={error()}>
         <p role="alert">{error()}</p>
