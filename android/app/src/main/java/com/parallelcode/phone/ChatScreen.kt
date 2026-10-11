@@ -1,5 +1,6 @@
 package com.parallelcode.phone
 
+import android.content.ActivityNotFoundException
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -44,6 +45,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -64,6 +66,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.shape.CircleShape
@@ -77,6 +81,9 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.FastOutSlowInEasing
 import kotlinx.coroutines.launch
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownTypography
+import com.mikepenz.markdown.model.rememberMarkdownState
 import org.json.JSONObject
 
 /** Tool output past this is cut on the phone; the desktop shows all of it. */
@@ -293,9 +300,7 @@ private fun ChatTranscript(
                 when (item.kind) {
                     "user" -> UserMessage(item.text)
                     "tool" -> ToolItem(item)
-                    else -> SelectionContainer {
-                        Text(item.text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-                    }
+                    else -> AssistantMessage(item.text)
                 }
             }
         }
@@ -364,6 +369,51 @@ private fun TypingIndicator(modifier: Modifier) {
                         alpha = 0.4f + 0.6f * lift
                     }
                     .background(AppTheme.extra.textMuted, CircleShape),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AssistantMessage(text: String) {
+    val uriHandler = LocalUriHandler.current
+    val messageLinks = remember(uriHandler) {
+        object : UriHandler {
+            override fun openUri(uri: String) {
+                // Desktop file references and arbitrary app schemes cannot open on the phone.
+                if (!uri.startsWith("https://", ignoreCase = true) &&
+                    !uri.startsWith("http://", ignoreCase = true) &&
+                    !uri.startsWith("mailto:", ignoreCase = true)) return
+                try {
+                    uriHandler.openUri(uri)
+                } catch (_: IllegalArgumentException) {
+                    // Malformed links or a missing URL handler must not close the conversation.
+                } catch (_: ActivityNotFoundException) {
+                    // No installed app can handle this link.
+                }
+            }
+        }
+    }
+    CompositionLocalProvider(LocalUriHandler provides messageLinks) {
+        SelectionContainer {
+            Markdown(
+                // Keep the previous rendering visible while a streamed update parses.
+                markdownState = rememberMarkdownState(text, retainState = true),
+                modifier = Modifier.fillMaxWidth(),
+                typography = markdownTypography(
+                    h1 = MaterialTheme.typography.headlineSmall,
+                    h2 = MaterialTheme.typography.titleLarge,
+                    h3 = MaterialTheme.typography.titleMedium,
+                    h4 = MaterialTheme.typography.titleSmall,
+                    h5 = MaterialTheme.typography.titleSmall,
+                    h6 = MaterialTheme.typography.titleSmall,
+                    text = MaterialTheme.typography.bodyMedium,
+                    paragraph = MaterialTheme.typography.bodyMedium,
+                    ordered = MaterialTheme.typography.bodyMedium,
+                    bullet = MaterialTheme.typography.bodyMedium,
+                    list = MaterialTheme.typography.bodyMedium,
+                ),
+                error = { Text(text, style = MaterialTheme.typography.bodyMedium) },
             )
         }
     }

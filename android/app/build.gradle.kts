@@ -53,6 +53,7 @@ android {
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     implementation("androidx.compose.material3:material3")
+    implementation("com.mikepenz:multiplatform-markdown-renderer-m3:0.43.0")
     // Look preset rows show a check mark on the selected theme.
     implementation("androidx.compose.material:material-icons-core")
     // Stop, history and mic buttons: these icons only ship in the extended set.
