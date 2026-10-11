@@ -317,6 +317,11 @@ export function toggleArena(show?: boolean): void {
   setStore('showArena', show ?? !store.showArena);
 }
 
+/** Opens the thinking space on its list, or on a new blank tour; null closes it. */
+export function openThinkingSpace(mode: 'list' | 'new' | null): void {
+  setStore('thinkingSpace', mode);
+}
+
 export function toggleFocusMode(on?: boolean): void {
   setStore('focusMode', on ?? !store.focusMode);
 }

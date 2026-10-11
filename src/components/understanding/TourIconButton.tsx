@@ -13,6 +13,8 @@ export function TourIconButton(props: {
   disabled?: boolean;
   /** The way forward, kept a shade brighter than the controls around it. */
   primary?: boolean;
+  /** A toggle's state; pressed shows in the accent, as state rather than urgency. */
+  pressed?: boolean;
   /** Extra class, for a control the stylesheet shows only in some layouts. */
   class?: string;
   ref?: (element: HTMLButtonElement) => void;
@@ -27,6 +29,7 @@ export function TourIconButton(props: {
       aria-label={props.label}
       title={props.tooltip ?? props.label}
       disabled={props.disabled}
+      aria-pressed={props.pressed}
       onClick={() => props.onClick()}
     >
       {props.children}

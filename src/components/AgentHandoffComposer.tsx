@@ -23,6 +23,8 @@ import type { Task } from '../store/types';
 import type { AgentDef } from '../ipc/types';
 import { SendIcon } from './icons';
 import { AgentModelMenu, chosenEffort } from './AgentModelMenu';
+import { modelToRun } from '../lib/ask-code-model';
+import { effortInArgs, modelInArgs } from '../lib/agent-args';
 import { loadCodexModels } from '../lib/codex-models';
 import { defaultAskCodeModel, type AskCodeProvider } from '../../electron/shared/ask-code-models';
 import './AgentHandoffComposer.css';
@@ -81,15 +83,24 @@ export function AgentHandoffComposer(props: {
     const name = command.split('/').pop();
     return name === 'claude' || name === 'codex' ? name : undefined;
   };
+  // What the reviewer's own launch args set; shown and kept where the app chose nothing.
+  const configured = (def: AgentDef) => ({
+    model: modelInArgs(def.args),
+    effort: effortInArgs(def.args),
+  });
   // A fresh reviewer runs the model last chosen for this provider in the app.
-  const modelFor = (command: string) => {
-    const provider = providerOf(command);
+  const modelFor = (def: AgentDef) => {
+    const provider = providerOf(def.command);
     if (!provider) return '';
-    return provider === store.askCodeProvider ? store.askCodeModel : defaultAskCodeModel(provider);
+    return modelToRun(
+      provider,
+      (provider === store.askCodeProvider ? store.askCodeModel : defaultAskCodeModel(provider)) ||
+        configured(def).model,
+    );
   };
-  const effortFor = (command: string) => {
-    const provider = providerOf(command);
-    return provider ? chosenEffort(provider, modelFor(command)) : '';
+  const effortFor = (def: AgentDef) => {
+    const provider = providerOf(def.command);
+    return provider ? chosenEffort(provider, modelFor(def), configured(def).effort) : '';
   };
   let textRef: HTMLTextAreaElement | undefined;
   let disposed = false;
@@ -301,7 +312,7 @@ export function AgentHandoffComposer(props: {
     try {
       const agentId = await addAgentToTask(
         props.task.id,
-        reviewerWithModel(def, modelFor(def.command), effortFor(def.command)),
+        reviewerWithModel(def, modelFor(def), effortFor(def)),
       );
       if (disposed) return;
       if (!agentId) throw new Error('Could not start reviewer');
@@ -365,7 +376,7 @@ export function AgentHandoffComposer(props: {
               {(def) => (
                 <Show
                   when={providerOf(def().command)}
-                  fallback={<span class="handoff-hint">Default model</span>}
+                  // Copilot keeps its model to itself; naming none beats a guess.
                 >
                   {(provider) => (
                     <>
@@ -378,6 +389,7 @@ export function AgentHandoffComposer(props: {
                         disabled={sending()}
                         provider={provider()}
                         providers={[provider()]}
+                        configured={configured(def())}
                       />
                     </>
                   )}

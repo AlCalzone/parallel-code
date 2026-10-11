@@ -137,6 +137,7 @@ const ALLOWED_CHANNELS = new Set([
   'read_file_text',
   'read_file_tour_context',
   'save_tour_file',
+  'list_thinking_tours',
   'resolve_clipboard_paste',
   'save_dropped_image',
   'show_notification',

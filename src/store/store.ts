@@ -139,6 +139,7 @@ export {
   setTaskViewportVisibility,
   toggleSidebar,
   toggleArena,
+  openThinkingSpace,
   setDocumentWorkspacesEnabled,
   toggleFocusMode,
   toggleTaskFocusMode,

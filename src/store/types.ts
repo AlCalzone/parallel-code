@@ -675,6 +675,8 @@ export interface AppStore {
   autoStartRemoteAccess: boolean;
   githubIssuesProjectId: string | null;
   showArena: boolean;
+  /** The thinking space: how it opens, or null when closed. */
+  thinkingSpace: 'list' | 'new' | null;
   keybindingPreset: string;
   /** Per-preset user overrides. Outer key = preset ID, inner = binding ID → override. */
   keybindingOverridesByPreset: Record<string, Record<string, KeybindingOverride>>;

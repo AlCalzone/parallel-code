@@ -61,6 +61,7 @@ import { AgentEnvFileEditor } from './AgentEnvFileEditor';
 import { SuperProductivitySettings } from './SuperProductivitySettings';
 import { CopyIcon, PencilIcon, PlusIcon, SyncIcon } from './icons';
 import { mod } from '../lib/platform';
+import { modelToRun } from '../lib/ask-code-model';
 import { DEFAULT_COORDINATOR_CONCURRENT_TASKS } from '../lib/coordinator-limits';
 import { DEFAULT_DOCKER_IMAGE, PROJECT_DOCKERFILE_RELATIVE_PATH } from '../lib/docker';
 import { DEFAULT_CONFIDENCE_PROMPT } from '../lib/task-confidence';
@@ -777,7 +778,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
                     Model
                   </span>
                   <select
-                    value={store.askCodeModel}
+                    value={modelToRun(store.askCodeProvider, store.askCodeModel)}
                     onChange={(e) => setAskCodeModel(e.currentTarget.value)}
                     style={{
                       flex: '1',
@@ -798,8 +799,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
                         </For>
                       }
                     >
-                      {/* Empty keeps whatever model the codex CLI defaults to. */}
-                      <option value="">CLI default</option>
                       <For each={codexModels()}>
                         {(model) => <option value={model.slug}>{model.displayName}</option>}
                       </For>

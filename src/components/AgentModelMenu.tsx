@@ -7,6 +7,7 @@ import {
   type AskCodeProvider,
 } from '../../electron/shared/ask-code-models';
 import { reasoningEffortLabel } from '../../electron/shared/chat-messages';
+import { effortToRun, modelToRun } from '../lib/ask-code-model';
 import { codexModels, loadCodexModels } from '../lib/codex-models';
 import { store } from '../store/core';
 import { setAskCodeEffort, setAskCodeModel, setAskCodeProvider } from '../store/store';
@@ -78,12 +79,14 @@ function effortChoices(provider: AskCodeProvider, model: string): readonly strin
 }
 
 /**
- * The remembered level for a provider, if its model takes it. A level the model
- * does not take stays remembered for the next model that does.
+ * The level a provider's model runs at: the remembered one if the model takes
+ * it, else the one the launch sets itself, else the one requests then name. A
+ * level the model does not take stays remembered for the next model that does.
  */
-export function chosenEffort(provider: AskCodeProvider, model: string): string {
+export function chosenEffort(provider: AskCodeProvider, model: string, configured = ''): string {
   const effort = store.askCodeEffort[provider] ?? '';
-  return effortChoices(provider, model).includes(effort) ? effort : '';
+  const remembered = effortChoices(provider, model).includes(effort) ? effort : '';
+  return effortToRun(provider, model, remembered || configured);
 }
 
 function pick(choice: ModelChoice): void {
@@ -103,6 +106,8 @@ export function AgentModelMenu(props: {
   disabled?: boolean;
   providers?: AskCodeProvider[];
   provider?: AskCodeProvider;
+  /** What the launch's own args set, shown where the app has no choice of its own. */
+  configured?: { model: string; effort: string };
   onSelect?: (provider: AskCodeProvider) => void;
 }) {
   const availableGroups = () =>
@@ -111,14 +116,21 @@ export function AgentModelMenu(props: {
   const choices = () => availableGroups().flatMap((group) => group.choices);
   const provider = () => props.provider ?? store.askCodeProvider;
   const model = () =>
-    provider() === store.askCodeProvider ? store.askCodeModel : defaultAskCodeModel(provider());
+    modelToRun(
+      provider(),
+      (provider() === store.askCodeProvider
+        ? store.askCodeModel
+        : defaultAskCodeModel(provider())) ||
+        (props.configured?.model ?? ''),
+    );
   const key = (choice: ModelChoice) => `${choice.provider}:${choice.model ?? ''}`;
   const modelText = () =>
     choices().find((choice) => choice.provider === provider() && choice.model === model())?.label ||
     model() ||
-    'Default model';
+    askCodeLabel(provider(), '');
   const efforts = () => (props.showEffort ? effortChoices(provider(), model()) : []);
-  const effort = () => (props.showEffort ? chosenEffort(provider(), model()) : '');
+  const effort = () =>
+    props.showEffort ? chosenEffort(provider(), model(), props.configured?.effort) : '';
   const effortText = () => (effort() ? ` · ${reasoningEffortLabel(effort())}` : '');
   return (
     <ModelMenu
@@ -135,10 +147,7 @@ export function AgentModelMenu(props: {
         efforts().length > 0
           ? {
               heading: 'Reasoning',
-              choices: [
-                { value: '', label: 'Default', title: "The agent's own reasoning level" },
-                ...efforts().map((value) => ({ value, label: reasoningEffortLabel(value) })),
-              ],
+              choices: efforts().map((value) => ({ value, label: reasoningEffortLabel(value) })),
               value: effort(),
               onSelect: (value) => setAskCodeEffort(provider(), value),
             }

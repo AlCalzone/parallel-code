@@ -1,3 +1,4 @@
+import { modelToRun } from '../../lib/ask-code-model';
 import { store } from '../../store/core';
 import { ASK_CODE_MODELS, type AskCodeProvider } from '../../../electron/shared/ask-code-models';
 
@@ -11,8 +12,9 @@ const PROVIDER_NAMES: Record<AskCodeProvider, string> = {
 export function askCodeLabel(provider: AskCodeProvider, model: string): string {
   const name = PROVIDER_NAMES[provider];
   if (provider === 'minimax') return `${name} · ${ASK_CODE_MODELS.minimax}`;
-  // Codex may run without a chosen slug, on whatever its own default is.
-  return model ? `${name} · ${model}` : `${name} · default model`;
+  const run = modelToRun(provider, model);
+  // Codex names no model only while it lists none; its name alone is then the truth.
+  return run ? `${name} · ${run}` : name;
 }
 
 /**

@@ -116,7 +116,7 @@ export function MergeWithAgent(props: {
               type="button"
               class="docws-agent-chip"
               aria-pressed={agent()?.id === a.id}
-              title={modelLabel(documentModelChoices(project(), a.id)[0] ?? {}) || 'CLI defaults'}
+              title={modelLabel(documentModelChoices(project(), a.id)[0] ?? {}) || undefined}
               onClick={() => setAgentId(a.id)}
               disabled={starting()}
             >

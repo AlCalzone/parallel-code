@@ -6,7 +6,7 @@
  * See docs/guided-understanding-plan.md.
  */
 
-import { createMemo, createSignal, onCleanup } from 'solid-js';
+import { batch, createMemo, createSignal, onCleanup } from 'solid-js';
 import { IPC } from '../../electron/ipc/channels';
 import { invoke } from './ipc';
 import { errMessage, warn as logWarn } from './log';
@@ -37,7 +37,8 @@ import {
   TOUR_FILE_MAX_CHARS,
   UNDERSTANDING_MAX_OUTPUT_CHARS,
 } from '../../electron/shared/understanding-limits';
-import { serializeTour, tourFileName, type TourFile } from './tour-file';
+import { serializeTour, tourFileName, type TourFile, type TourFileKind } from './tour-file';
+import { blankCard, hasWriting, isBlankCard, removeNode } from './tour-tree-edit';
 import {
   MAX_TOUR_DEPTH,
   appendChildren,
@@ -138,9 +139,10 @@ interface CachedTour {
   cleanText?: string;
   /**
    * The kind a reopened file was saved with, written back to it, when what it
-   * explains is gone and the tour itself runs as a tour of its cards.
+   * explains is gone and the tour itself runs as a tour of its cards, and
+   * 'thinking' on a tour the reader writes themselves.
    */
-  fileKind?: UnderstandingTourKind;
+  fileKind?: TourFileKind;
 }
 
 /** The worktree path a tour explains: what a saved file names as its source. */
@@ -179,6 +181,12 @@ const SAVED_KEY_PREFIX = 'saved:';
 function savedKey(path: string): string {
   return `${SAVED_KEY_PREFIX}${path}`;
 }
+
+/** Every blank tour started is its own entry: none has a subject yet to key it by. */
+const THINKING_KEY_PREFIX = 'thinking:';
+
+/** How long typing pauses before a tour the reader writes is saved. */
+const EDIT_SAVE_DELAY_MS = 600;
 
 /** A cached tour as the text of its saved file. */
 function entryText(entry: CachedTour): string {
@@ -254,7 +262,15 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
   /** The cache entry of the tour on screen. */
   let shownKey = '';
   /** See CachedTour.fileKind. */
-  let fileKind: UnderstandingTourKind | undefined;
+  let fileKind: TourFileKind | undefined;
+  /** The tour on screen is one the reader writes: fileKind 'thinking', as a signal. */
+  const [thinking, setThinking] = createSignal(false);
+  /** Blank tours started, for their cache keys. */
+  let thinkingRuns = 0;
+  /** The save waiting for typing to pause; see edit(). */
+  let editSave: ReturnType<typeof setTimeout> | undefined;
+  /** editSave as a signal, for the save state on screen. */
+  const [editPending, setEditPending] = createSignal(false);
   /** Saves run one after another, so an older tree never lands last. */
   let writes: Promise<void> = Promise.resolve();
   /** Bumped by every cancel and every new run so late results are ignored. */
@@ -274,12 +290,14 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
 
   /** Clears what is on screen; finished tours stay in the cache. */
   function clearView(): void {
+    // The tour going off screen keeps what was typed into it last.
+    flushEdits();
     setTour(null);
     setTree([]);
     setCurrentId('');
     setSavedPath('');
     shownKey = '';
-    fileKind = undefined;
+    setFileKind(undefined);
     setError('');
     setElapsedSeconds(0);
     setReceiving(false);
@@ -298,7 +316,15 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     source = undefined;
   }
 
-  onCleanup(cancel);
+  onCleanup(() => {
+    flushEdits();
+    cancel();
+  });
+
+  function setFileKind(next: TourFileKind | undefined): void {
+    fileKind = next;
+    setThinking(next === 'thinking');
+  }
 
   /**
    * Reports a failure. A follow-up's belongs to the card it was asked on, so
@@ -312,9 +338,12 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
 
   /** Puts a tour and its tree on screen, opening on the gist. */
   function show(shown: UnderstandingTour, shownTree: TourNode[]): void {
-    setTour(shown);
-    setTree(shownTree);
-    setCurrentId(shownTree[0]?.id ?? '');
+    // One update, so nothing reading the tour sees it beside the last one's tree.
+    batch(() => {
+      setTour(shown);
+      setTree(shownTree);
+      setCurrentId(shownTree[0]?.id ?? '');
+    });
   }
 
   /**
@@ -501,6 +530,79 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
   }
 
   /**
+   * Opens a blank tour the reader writes themselves, on its one empty card.
+   * The first card's title names the tour. Nothing is saved until a card has
+   * text, so a tour opened and closed blank leaves no file behind.
+   */
+  function startThinking(input: { worktreePath: string; taskName: string }): void {
+    cancel();
+    clearView();
+    const first: TourNode = { id: createNodeIds()(), card: blankCard(), children: [] };
+    const started: UnderstandingTour = { subject: '', kind: 'agent', cards: [first.card] };
+    context = '';
+    cwd = input.worktreePath;
+    // Nothing to regenerate it from: Retry and Rework stay out of reach.
+    lastInput = undefined;
+    source = undefined;
+    shownKey = `${THINKING_KEY_PREFIX}${++thinkingRuns}`;
+    setFileKind('thinking');
+    setCache((prev) =>
+      new Map(prev).set(shownKey, {
+        tour: started,
+        context: '',
+        cwd: input.worktreePath,
+        input: { kind: 'agent', ...input, subject: '', context: '' },
+        tree: [first],
+        fileKind: 'thinking',
+      }),
+    );
+    setKind('agent');
+    setSubject('');
+    show(started, [first]);
+  }
+
+  /**
+   * Replaces the tree of a tour the reader writes, then shows `focusId` when
+   * given. The first card's title names the tour. Saving waits for typing to
+   * pause, so a burst of keys costs one write.
+   */
+  function edit(nextTree: TourNode[], focusId?: string): void {
+    if (!thinking() || !tour()) return;
+    setTree(nextTree);
+    cacheTree(nextTree);
+    setSubject(nextTree[0]?.card.title.trim() ?? '');
+    if (focusId) select(focusId);
+    if (editSave !== undefined) clearTimeout(editSave);
+    editSave = setTimeout(flushEdits, EDIT_SAVE_DELAY_MS);
+    setEditPending(true);
+  }
+
+  /** Writes edits still waiting for typing to pause; see edit(). */
+  function flushEdits(): void {
+    if (editSave === undefined) return;
+    clearTimeout(editSave);
+    editSave = undefined;
+    setEditPending(false);
+    if (savedPath()) void persist();
+    else if (hasWriting(tree())) void save();
+  }
+
+  /**
+   * Drops a card left blank, showing the card before it, or the one after for
+   * a first card. The tour keeps at least one card to write on.
+   */
+  function dropIfBlank(id: string): void {
+    const blank = findNode(tree(), id);
+    if (!blank || !isBlankCard(blank.card) || countNodes(tree()) < 2) return;
+    // Only a card still on screen needs a neighbour; one already left keeps the reader where they went.
+    const neighbour =
+      id === currentId()
+        ? (previousNodeId(tree(), id) ?? blank.children[0]?.id ?? nextNodeId(tree(), id))
+        : undefined;
+    edit(removeNode(tree(), id), neighbour);
+  }
+
+  /**
    * Shows an already generated tour without regenerating it. Returns false when
    * nothing usable is cached for that subject, so callers fall back to generate().
    */
@@ -533,7 +635,7 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     lastInput = cached.input;
     source = cached.source;
     shownKey = key;
-    fileKind = cached.fileKind;
+    setFileKind(cached.fileKind);
     setKind(cached.input.kind);
     setSubject(tourInputSubject(cached.input));
     show(cached.tour, cached.tree);
@@ -663,7 +765,8 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
    * so a failed update leaves something to retry rather than looking saved.
    */
   const unsaved = createMemo(() => {
-    if (!savedPath()) return false;
+    // Typing not yet paused is written by flushEdits, not something to retry.
+    if (!savedPath() || editPending()) return false;
     const content = fileText();
     return content !== undefined && content !== cache().get(shownKey)?.cleanText;
   });
@@ -685,7 +788,12 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     }
     const key = shownKey;
     const path = await queueWrite(
-      { worktreePath: cwd, path: tourFileName(subject()), content, replace: false },
+      {
+        worktreePath: cwd,
+        path: tourFileName(subject() || (thinking() ? 'thinking' : '')),
+        content,
+        replace: false,
+      },
       key,
       shown,
       'Could not save the tour',
@@ -700,7 +808,8 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
   function persist(): Promise<string | undefined> {
     const path = savedPath();
     const content = fileText();
-    if (!path || content === undefined) return Promise.resolve(undefined);
+    // A tour emptied again keeps its last version: a file with no cards would not open.
+    if (!path || content === undefined || !hasWriting(tree())) return Promise.resolve(undefined);
     return queueWrite(
       { worktreePath: cwd, path, content, replace: true },
       shownKey,
@@ -873,7 +982,7 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     lastInput = restoredInput;
     source = file.source;
     shownKey = savedKey(input.savedPath);
-    fileKind = file.kind === restoredInput.kind ? undefined : file.kind;
+    setFileKind(file.kind === restoredInput.kind ? undefined : file.kind);
     setCache((prev) => {
       const next = new Map(prev);
       // Only one tour writes a file; any other that saved here lets go of it.
@@ -1107,6 +1216,10 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     open,
     restore,
     save,
+    thinking,
+    startThinking,
+    edit,
+    dropIfBlank,
     isReady,
     isLoading,
     errorFor,

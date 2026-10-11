@@ -9,7 +9,7 @@ import { AgentHandoffComposer } from './AgentHandoffComposer';
 
 vi.mock('../store/agents', () => ({ addAgentToTask: vi.fn() }));
 const CODEX_MODELS = [
-  { slug: 'codex-test', displayName: 'Codex test', efforts: ['low', 'high'] },
+  { slug: 'codex-test', displayName: 'Codex test', efforts: ['low', 'high'], isDefault: true },
   { slug: 'codex-other', displayName: 'Codex other', efforts: ['high', 'max'] },
 ];
 const codexList = vi.hoisted(() => ({ models: [] as unknown[] }));
@@ -445,18 +445,18 @@ it('starts a fresh reviewer on the model picked in the dialog without changing a
   };
   freshReviewerOnly([def]);
   await mount();
-  expect(modelButton()?.textContent).toBe('sonnet');
+  expect(modelButton()?.textContent).toBe('sonnet · Medium');
   pickModel('opus');
-  expect(modelButton()?.textContent).toBe('opus');
+  expect(modelButton()?.textContent).toBe('opus · Medium');
   // The accessible name says what the button shows.
-  expect(modelButton()?.getAttribute('aria-label')).toBe('Reviewer model: opus');
+  expect(modelButton()?.getAttribute('aria-label')).toBe('Reviewer model: opus · Medium');
   button('Send').click();
   await vi.waitFor(() =>
     expect(addAgentToTask).toHaveBeenCalledWith(
       'task',
       expect.objectContaining({
-        args: ['--model', 'opus'],
-        resume_args: ['--resume', '--model', 'opus'],
+        args: ['--model', 'opus', '--effort', 'medium'],
+        resume_args: ['--resume', '--model', 'opus', '--effort', 'medium'],
       }),
     ),
   );
@@ -484,7 +484,7 @@ it('starts a fresh reviewer at the reasoning level picked for its provider', asy
   pickModel('Codex test');
   modelButton()?.click();
   // Only the levels the picked model takes are offered.
-  expect(menuItems().slice(-3)).toEqual(['Default', 'Low', 'High']);
+  expect(menuItems().slice(-2)).toEqual(['Low', 'High']);
   modelButton()?.click();
   pickModel('High');
   expect(modelButton()?.textContent).toBe('Codex test · High');
@@ -531,20 +531,21 @@ it('does not pass a remembered level the picked Codex model does not take', asyn
   expect(store.askCodeEffort).toEqual({ codex: 'max' });
 });
 
-it('offers the CLI default Codex model only the levels every Codex model takes', async () => {
+it("names and runs Codex's own default model when none is chosen", async () => {
   setStore('askCodeEffort', { codex: 'high' });
   freshReviewerOnly();
   await mount();
-  expect(modelButton()?.textContent).toBe('Default model · High');
+  expect(modelButton()?.textContent).toBe('Codex test · High');
   modelButton()?.click();
-  expect(menuItems().slice(-2)).toEqual(['Default', 'High']);
-  expect(menuItems()).not.toContain('Low');
+  expect(menuItems().slice(-2)).toEqual(['Low', 'High']);
   modelButton()?.click();
   button('Send').click();
   await vi.waitFor(() =>
     expect(addAgentToTask).toHaveBeenCalledWith(
       'task',
-      expect.objectContaining({ args: ['-c', 'model_reasoning_effort="high"'] }),
+      expect.objectContaining({
+        args: ['--model', 'codex-test', '-c', 'model_reasoning_effort="high"'],
+      }),
     ),
   );
 });
@@ -554,7 +555,7 @@ it('offers no Codex reasoning level without the CLI model list', async () => {
   setStore('askCodeEffort', { codex: 'high' });
   freshReviewerOnly();
   await mount();
-  expect(modelButton()?.textContent).toBe('Default model');
+  expect(modelButton()?.textContent).toBe('Codex');
   modelButton()?.click();
   expect(menuItems()).toEqual([]);
   modelButton()?.click();
@@ -564,21 +565,55 @@ it('offers no Codex reasoning level without the CLI model list', async () => {
   );
 });
 
-it('keeps a reasoning level to its own provider', async () => {
+it("keeps a reasoning level to its own provider and names Claude's level otherwise", async () => {
   setStore('askCodeEffort', { codex: 'high' });
   freshReviewerOnly([agent('claude').def]);
   await mount();
-  expect(modelButton()?.textContent).toBe('sonnet');
-  pickModel('Max');
-  pickModel('Default');
-  // Keys, not toEqual: toEqual would also pass with a `claude: undefined` left behind.
-  expect(Object.keys(store.askCodeEffort)).toEqual(['codex']);
-  expect(store.askCodeEffort.codex).toBe('high');
+  expect(modelButton()?.textContent).toBe('sonnet · Medium');
+  modelButton()?.click();
+  expect(menuItems()).not.toContain('Default');
+  modelButton()?.click();
   button('Send').click();
   await vi.waitFor(() =>
     expect(addAgentToTask).toHaveBeenCalledWith(
       'task',
-      expect.objectContaining({ args: ['--model', 'sonnet'] }),
+      expect.objectContaining({ args: ['--model', 'sonnet', '--effort', 'medium'] }),
+    ),
+  );
+  expect(store.askCodeEffort).toEqual({ codex: 'high' });
+});
+
+it("names and keeps the model and level a reviewer's own args set", async () => {
+  const def = {
+    ...agent('codex').def,
+    args: ['-m', 'gpt-own', '-c', 'model_reasoning_effort="low"'],
+  };
+  freshReviewerOnly([def]);
+  await mount();
+  expect(modelButton()?.textContent).toBe('gpt-own · Low');
+  button('Send').click();
+  await vi.waitFor(() =>
+    expect(addAgentToTask).toHaveBeenCalledWith(
+      'task',
+      expect.objectContaining({
+        args: ['--model', 'gpt-own', '-c', 'model_reasoning_effort="low"'],
+      }),
+    ),
+  );
+});
+
+it("names the level Codex's cache gives the model when none is chosen", async () => {
+  codexList.models = [{ ...CODEX_MODELS[0], defaultEffort: 'high' }];
+  freshReviewerOnly();
+  await mount();
+  expect(modelButton()?.textContent).toBe('Codex test · High');
+  button('Send').click();
+  await vi.waitFor(() =>
+    expect(addAgentToTask).toHaveBeenCalledWith(
+      'task',
+      expect.objectContaining({
+        args: ['--model', 'codex-test', '-c', 'model_reasoning_effort="high"'],
+      }),
     ),
   );
 });
@@ -603,8 +638,15 @@ it('remembers the chosen reviewer provider', async () => {
   expect(checkedReviewer()).toBe('claude · New session');
   choose('codex · New session');
   expect(store.askCodeProvider).toBe('codex');
-  // Without a chosen slug Codex runs on its own configured default.
-  expect(modelButton()?.textContent).toBe('Default model');
+  // Without a chosen slug Codex runs, and names, its own configured default.
+  expect(modelButton()?.textContent).toBe('Codex test');
+});
+
+it('names no model for Copilot, whose model the app cannot know', async () => {
+  freshReviewerOnly([agent('copilot').def]);
+  await mount();
+  expect(modelButton()).toBeNull();
+  expect(document.querySelector('.handoff-model')?.textContent).toBe('');
 });
 
 it('says an open session keeps its model instead of offering a model menu', async () => {

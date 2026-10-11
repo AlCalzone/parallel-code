@@ -71,6 +71,25 @@ describe('EvidenceSettingsFields', () => {
     expect(onAutoBuildChange).toHaveBeenCalledWith(true);
   });
 
+  it('names the reasoning level the review runs at when none is chosen', () => {
+    dispose = render(
+      () => (
+        <EvidenceSettingsFields
+          checks={[]}
+          onChecksChange={() => {}}
+          model={{ when: 'manual', provider: 'claude' }}
+          onModelChange={() => {}}
+          autoBuild={false}
+          onAutoBuildChange={() => {}}
+        />
+      ),
+      document.body,
+    );
+    const select = document.querySelector<HTMLSelectElement>('[aria-label="Reasoning level"]');
+    expect(select?.value).toBe('medium');
+    expect([...(select?.options ?? [])].map((option) => option.value)).not.toContain('');
+  });
+
   it('names checks after their kind', () => {
     mount([{ kind: 'e2e', command: 'npm run e2e', run: 'auto' }]);
     expect(document.querySelector('input[aria-label="Check name"]')).toBeNull();

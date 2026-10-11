@@ -576,6 +576,32 @@ it('opens failed activity and connects file actions to the existing review surfa
   expect(onOpenFile).toHaveBeenCalledWith('src/app.ts');
 });
 
+it('names no placeholder model before the session reports its own', async () => {
+  await update({ state: { ...props.state, model: undefined, models: [] } });
+  const select = container.querySelector<HTMLSelectElement>('[aria-label="Model"]');
+  expect(select?.textContent).toBe('');
+});
+
+it('names no placeholder level before the session reports its own', async () => {
+  await update({
+    state: {
+      ...props.state,
+      model: 'model-a',
+      reasoningEffort: undefined,
+      models: [
+        {
+          model: 'model-a',
+          displayName: 'Model A',
+          supportedReasoningEfforts: [{ reasoningEffort: 'high', description: 'Thorough' }],
+        },
+      ],
+    },
+  });
+  const select = container.querySelector<HTMLSelectElement>('[aria-label="Reasoning effort"]');
+  expect(select?.value).toBe('');
+  expect(select?.textContent).toBe('High');
+});
+
 it('renders separate model, reasoning and permission settings in the composer', async () => {
   const onPermissionMode = vi.fn(async () => {});
   await update({

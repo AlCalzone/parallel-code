@@ -2,7 +2,12 @@ import { spawn, type ChildProcess } from 'child_process';
 import type { BrowserWindow } from 'electron';
 import { validateCommand, ENV_BLOCK_LIST } from './pty.js';
 import { loadEnvFile } from './env-file.js';
-import { ASK_CODE_MODELS, type AskCodeProvider } from '../shared/ask-code-models.js';
+import { defaultCodexEffort, defaultCodexModel, listCodexModels } from './codex-models.js';
+import {
+  ASK_CODE_CLAUDE_EFFORT,
+  ASK_CODE_MODELS,
+  type AskCodeProvider,
+} from '../shared/ask-code-models.js';
 import {
   askCodePromptLimit,
   askCodeSystemPrompt,
@@ -104,7 +109,9 @@ export function askAboutCode(win: BrowserWindow, args: AskCodeRequest): void {
       'text',
       '--model',
       args.model ?? ASK_CODE_MODELS.claude,
-      ...(args.effort ? ['--effort', args.effort] : []),
+      // Named even when none is chosen, so the level shown is the one that runs.
+      '--effort',
+      args.effort || ASK_CODE_CLAUDE_EFFORT,
       // Empty string disables all tool usage for quick Q&A responses
       '--tools',
       '',
@@ -227,6 +234,10 @@ function asText(value: unknown): string {
  */
 function askAboutCodeCodex(args: AskCodeRequest, send: (msg: unknown) => void): void {
   validateCommand('codex');
+  // Named even when the reader picked none, so the model shown is the one that runs.
+  const listed = listCodexModels();
+  const model = args.model || defaultCodexModel(listed);
+  const effort = args.effort || defaultCodexEffort(model, listed);
   const proc = spawn(
     'codex',
     [
@@ -239,9 +250,9 @@ function askAboutCodeCodex(args: AskCodeRequest, send: (msg: unknown) => void): 
       'mcp_servers={}',
       '-c',
       'tools.web_search=false',
-      ...(args.model ? ['-m', args.model] : []),
+      ...(model ? ['-m', model] : []),
       // Codex has no effort flag; the config override takes a TOML value.
-      ...(args.effort ? ['-c', `model_reasoning_effort="${args.effort}"`] : []),
+      ...(effort ? ['-c', `model_reasoning_effort="${effort}"`] : []),
       '-',
     ],
     { cwd: args.cwd, env: askCodeEnv(args.envFile), stdio: ['pipe', 'pipe', 'pipe'] },

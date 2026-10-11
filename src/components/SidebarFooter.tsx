@@ -4,6 +4,7 @@ import {
   getMergedTasksTodayCount,
   toggleHelpDialog,
   toggleArena,
+  openThinkingSpace,
   hasAnyCoordinatorTask,
   startMCPStatusPolling,
   stopMCPStatusPolling,
@@ -109,6 +110,28 @@ export function SidebarFooter(props: { onConnectPhone: () => void }) {
               <path d="M13 3L3 13M4 9L7 12" />
             </svg>
             Arena
+          </button>
+          <button
+            onClick={() => openThinkingSpace('list')}
+            title={`Thinking tours: write an idea out card by card (${mod}+Shift+K for a new one)`}
+            type="button"
+            class="sidebar-footer-action"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M8 1.75a4.25 4.25 0 0 0-2.55 7.65c.5.38.8.95.8 1.58v.27h3.5v-.27c0-.63.3-1.2.8-1.58A4.25 4.25 0 0 0 8 1.75Z" />
+              <path d="M6.5 13.75h3" />
+            </svg>
+            Thinking
           </button>
 
           <Show when={store.showSidebarTips}>

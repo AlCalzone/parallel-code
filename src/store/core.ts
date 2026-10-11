@@ -96,6 +96,7 @@ export const [store, setStore] = createStore<AppStore>({
   autoStartRemoteAccess: false,
   githubIssuesProjectId: null,
   showArena: false,
+  thinkingSpace: null,
   keybindingPreset: 'default',
   keybindingOverridesByPreset: {},
   keybindingMigrationDismissed: false,

@@ -5522,6 +5522,12 @@ span.tour-outline-twisty[data-open] {
   cursor: default;
 }
 
+/* A toggle that is on shows its state, the one place chrome takes the accent. */
+.tour-icon[aria-pressed='true'] {
+  color: var(--accent);
+  opacity: 1;
+}
+
 /* The way forward is the one control legible at rest — still not a button. */
 .tour-icon--primary {
   color: var(--fg);

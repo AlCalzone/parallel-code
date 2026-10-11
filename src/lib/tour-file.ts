@@ -27,7 +27,13 @@ import type {
 
 const TOUR_FILE_VERSION = 1;
 
-const KINDS: readonly UnderstandingTourKind[] = ['plan', 'file', 'document', 'agent'];
+/**
+ * What a saved tour is of: one of the generated kinds, or a tour the reader
+ * wrote themselves, which opens with its cards editable.
+ */
+export type TourFileKind = UnderstandingTourKind | 'thinking';
+
+const KINDS: readonly TourFileKind[] = ['plan', 'file', 'document', 'agent', 'thinking'];
 const WARNED = new Set<TourTone>(['risk', 'uncertainty']);
 const META_PREFIX = '<!-- tour-card ';
 const SOURCE_PREFIX = '> Source: “';
@@ -36,7 +42,7 @@ const REFS_PREFIX = 'Refs: ';
 
 export interface TourFile {
   subject: string;
-  kind: UnderstandingTourKind;
+  kind: TourFileKind;
   /** Worktree-relative path of the text or file the tour explains, when there is one. */
   source?: string;
   /** Headings of the source the tour left out on purpose. */
@@ -698,12 +704,13 @@ export function parseTourFile(text: string): TourFile {
   const kindValue = values.get('kind');
   const kind = KINDS.find((entry) => entry === kindValue) ?? 'agent';
 
-  let title = '';
+  let title: string | undefined;
   const sections: { depth: number; title: string; lines: string[] }[] = [];
   const { fenced } = fenceState(body);
   body.forEach((line, index) => {
     const heading = fenced[index] ? undefined : readHeading(line);
-    if (heading?.level === 1 && !sections.length && !title) {
+    // Once, even when empty: a tour with no subject still writes its title line.
+    if (heading?.level === 1 && !sections.length && title === undefined) {
       title = capped(heading.text, READ_CAPS.title);
       return;
     }
@@ -718,7 +725,8 @@ export function parseTourFile(text: string): TourFile {
   const roots: TourNode[] = [];
   const stack: TourNode[] = [];
   for (const section of sections) {
-    if (!section.title.trim()) continue;
+    // A card may have no title, as the reader can write one; only an empty heading is no card.
+    if (!section.title.trim() && !section.lines.some((line) => line.trim())) continue;
     const { card, question } = readCard(section.title.trim(), section.lines);
     const node: TourNode = {
       id: nextId(),
@@ -742,8 +750,11 @@ export function parseTourFile(text: string): TourFile {
     ? omittedValue.filter((entry): entry is string => typeof entry === 'string')
     : [];
   return {
+    // A thinking tour's subject is its first card's title, which may be empty.
     subject:
-      (typeof subjectValue === 'string' && subjectValue.trim()) || title.trim() || 'Saved tour',
+      (typeof subjectValue === 'string' && subjectValue.trim()) ||
+      title?.trim() ||
+      (kind === 'thinking' ? '' : 'Saved tour'),
     kind,
     ...(typeof sourceValue === 'string' && sourceValue.trim() && { source: sourceValue.trim() }),
     ...(omitted.length && { omitted }),

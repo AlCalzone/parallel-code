@@ -64,7 +64,7 @@ export function reviewerWithModel(def: AgentDef, model: string, effort = ''): Ag
   const command = def.command.split('/').pop();
   const efforts = effort ? effortArgs(command, effort) : [];
   if (!model && efforts.length === 0) return def;
-  // Only flags being replaced go; "Default" keeps a level configured on the agent.
+  // Only flags being replaced go; no level keeps one configured on the agent.
   const replace = (args: string[]) => [
     ...args.filter(
       (_, index) =>

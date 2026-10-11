@@ -51,6 +51,7 @@ import {
 } from './plans.js';
 import { readFileTourContext } from './understanding-context.js';
 import { saveTourFile } from './tour-files.js';
+import { listThinkingTours } from './thinking-tours.js';
 import {
   prepareReasoningFeed,
   readReasoningFeed,
@@ -1488,6 +1489,11 @@ export function registerAllHandlers(win: BrowserWindow): void {
     validatePath(args.worktreePath, 'worktreePath');
     return saveTourFile(args.worktreePath, args);
   });
+
+  // Tours written outside any task; they save through SaveTourFile into this folder.
+  ipcMain.handle(IPC.ListThinkingTours, () =>
+    listThinkingTours(path.join(getUserDataDir(), 'thinking')),
+  );
 
   // --- Clipboard ---
   const clipboardImagePath = path.join(os.tmpdir(), 'parallel-code-clipboard.png');

@@ -337,6 +337,18 @@ export const DEFAULT_BINDINGS: KeyBinding[] = [
     dialogSafe: true,
   },
   {
+    id: 'app.new-thinking-tour',
+    layer: 'app',
+    category: 'App',
+    description: 'New thinking tour',
+    platform: 'both',
+    key: 'K',
+    modifiers: { cmdOrCtrl: true, shift: true },
+    action: 'newThinkingTour',
+    global: true,
+    dialogSafe: true,
+  },
+  {
     id: 'app.toggle-settings',
     layer: 'app',
     category: 'App',

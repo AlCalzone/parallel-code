@@ -49,6 +49,10 @@ export function Dialog(props: DialogProps) {
     const handler = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (!isTopmost(dialogId)) return;
+      // Solid delegates its handlers to document too, where stopPropagation
+      // cannot reach this listener: an Escape a control inside already took
+      // (e.g. cancelling a rename) is marked handled instead.
+      if (e.defaultPrevented) return;
       e.stopPropagation();
       props.onClose();
     };

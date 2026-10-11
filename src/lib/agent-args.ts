@@ -223,6 +223,29 @@ export function isEffortArg(args: readonly string[], index: number): boolean {
   );
 }
 
+/** The model a launch's own args set, if any; the last flag wins, as in the CLIs. */
+export function modelInArgs(args: readonly string[]): string {
+  let model = '';
+  args.forEach((arg, index) => {
+    if (MODEL_FLAGS.includes(args[index - 1] ?? '')) model = arg;
+    else model = /^(?:--model|-m)=(.+)$/.exec(arg)?.[1] ?? model;
+  });
+  return model;
+}
+
+/** The reasoning level a launch's own args set: Claude's flag or Codex's config key. */
+export function effortInArgs(args: readonly string[]): string {
+  let effort = '';
+  args.forEach((arg, index) => {
+    const prev = args[index - 1] ?? '';
+    const key = /^model_reasoning_effort="?([^"]*)"?$/.exec(arg)?.[1];
+    if (prev === '--effort') effort = arg;
+    else if (arg.startsWith('--effort=')) effort = arg.slice('--effort='.length);
+    else if ((prev === '-c' || prev === '--config') && key !== undefined) effort = key;
+  });
+  return effort;
+}
+
 /** Recognize the built-in picker launches without interpreting custom CLI options. */
 export function taskAgentOpensSessionPicker(
   ...launch: Parameters<typeof buildTaskAgentArgs>

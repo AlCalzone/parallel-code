@@ -1,5 +1,10 @@
 import { For, Index, Show } from 'solid-js';
-import { ASK_CODE_CLAUDE_MODELS, askCodeEfforts } from '../../electron/shared/ask-code-models';
+import {
+  ASK_CODE_CLAUDE_MODELS,
+  ASK_CODE_MODELS,
+  askCodeEfforts,
+} from '../../electron/shared/ask-code-models';
+import { effortToRun, modelToRun } from '../lib/ask-code-model';
 import type {
   EvidenceCheckKind,
   EvidenceModelSettings,
@@ -186,7 +191,8 @@ export function EvidenceSettingsFields(props: EvidenceSettingsFieldsProps) {
             fallback={
               <input
                 aria-label="Review model"
-                placeholder="Default model"
+                // An empty field runs this model; the request names it.
+                placeholder={modelToRun('codex', '') || 'Model slug'}
                 value={props.model.model ?? ''}
                 onInput={(e) => setModel({ model: e.currentTarget.value.trim() || undefined })}
                 style={fieldStyle}
@@ -195,21 +201,24 @@ export function EvidenceSettingsFields(props: EvidenceSettingsFieldsProps) {
           >
             <select
               aria-label="Review model"
-              value={props.model.model ?? ''}
+              // Unset runs the same model the request falls back to.
+              value={props.model.model ?? ASK_CODE_MODELS.claude}
               onChange={(e) => setModel({ model: e.currentTarget.value || undefined })}
               style={fieldStyle}
             >
-              <option value="">Default model</option>
               <For each={ASK_CODE_CLAUDE_MODELS}>{(m) => <option value={m}>{m}</option>}</For>
             </select>
           </Show>
           <select
             aria-label="Reasoning level"
-            value={props.model.effort ?? ''}
+            value={effortToRun(
+              props.model.provider,
+              props.model.model || modelToRun(props.model.provider, ''),
+              props.model.effort ?? '',
+            )}
             onChange={(e) => setModel({ effort: e.currentTarget.value || undefined })}
             style={fieldStyle}
           >
-            <option value="">Default reasoning</option>
             <For each={askCodeEfforts(props.model.provider)}>
               {(effort) => <option value={effort}>{effort}</option>}
             </For>

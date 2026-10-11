@@ -84,7 +84,7 @@ export function ModelPicker(props: {
         >
           <Show when={!selected()}>
             <option value={props.state.model ?? ''} disabled>
-              {props.state.model || 'Default model'}
+              {props.state.model}
             </option>
           </Show>
           <For each={models()}>
@@ -113,9 +113,9 @@ export function ModelPicker(props: {
               );
             }}
           >
-            {/* Only when the agent has not said which effort it will use. */}
+            {/* Only when the agent has not said which effort it will use; naming none beats a guess. */}
             <Show when={!effort()}>
-              <option value="">Default</option>
+              <option value="" />
             </Show>
             <Show when={unlistedEffort()}>
               <option value={props.state.reasoningEffort} disabled>

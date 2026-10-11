@@ -167,6 +167,36 @@ describe('tour file', () => {
     expect(() => parseTourFile(text)).toThrow(message);
   });
 
+  it('keeps a card written without a title, and the cards under it', () => {
+    const untitled: TourCard = {
+      label: '',
+      title: '',
+      body: 'Only a body',
+      tone: 'neutral',
+      refs: [],
+    };
+    const child: TourCard = { ...untitled, title: 'C', body: 'cc' };
+    const roots: TourNode[] = [
+      { id: 'a', card: untitled, children: [{ id: 'c', card: child, children: [] }] },
+      { id: 'b', card: { ...child, title: 'B', body: 'bb' }, children: [] },
+    ];
+    const tour: TourFile = { subject: '', kind: 'thinking', roots };
+    expect(withoutIds(parseTourFile(serializeTour(tour, { forFile: true })).roots)).toEqual(
+      withoutIds(roots),
+    );
+    // Its subject is its first card's title, so it stays empty for the list to name.
+    expect(parseTourFile(serializeTour(tour, { forFile: true })).subject).toBe('');
+    const alone: TourFile = { ...tour, roots: [{ id: 'a', card: untitled, children: [] }] };
+    expect(parseTourFile(serializeTour(alone, { forFile: true })).roots[0].card.body).toBe(
+      'Only a body',
+    );
+  });
+
+  it('skips a heading with nothing in it', () => {
+    const text = '---\nparallel-code-tour: 1\n---\n\n# T\n\n##\n\n## Kept\n\nBody\n';
+    expect(parseTourFile(text).roots.map((root) => root.card.title)).toEqual(['Kept']);
+  });
+
   it('keeps unknown or broken metadata from failing the file', () => {
     const parsed = parseTourFile(
       '---\nparallel-code-tour: 1\nkind: sideways\n---\n## Card\n<!-- tour-card {broken -->\nBody\n',

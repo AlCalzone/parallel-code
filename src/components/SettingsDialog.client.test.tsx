@@ -4,6 +4,7 @@ import { IPC } from '../../electron/ipc/channels';
 import { invoke } from '../lib/ipc';
 import { setStore, store } from '../store/core';
 import { SettingsDialog } from './SettingsDialog';
+import * as codexModelsModule from '../lib/codex-models';
 
 vi.mock('../lib/ipc', () => ({ invoke: vi.fn() }));
 vi.mock('../lib/fonts', () => ({
@@ -13,6 +14,12 @@ vi.mock('../lib/fonts', () => ({
   getTerminalFontFamily: () => 'monospace',
   LIGATURE_FONTS: new Set(),
 }));
+
+vi.mock('../lib/codex-models', async () => {
+  const { createSignal } = await import('solid-js');
+  const [models, setModels] = createSignal<unknown[]>([]);
+  return { codexModels: models, loadCodexModels: vi.fn(), setCodexModels: setModels };
+});
 
 let dispose: (() => void) | undefined;
 
@@ -148,4 +155,27 @@ it('leaves native select keyboard handling alone inside the scrolling tab', () =
   select.dispatchEvent(key);
   expect(key.defaultPrevented).toBe(false);
   expect(body.scrollTop).toBe(0);
+});
+
+it("names Codex's own default model once its list loads, with no placeholder before", async () => {
+  const { setCodexModels } = codexModelsModule as unknown as {
+    setCodexModels: (models: unknown[]) => void;
+  };
+  setStore('askCodeProvider', 'codex');
+  setStore('askCodeModel', '');
+  const select = () =>
+    [...document.querySelectorAll<HTMLSelectElement>('select')]
+      .find((element) => [...element.options].some((option) => option.value === 'codex'))
+      ?.parentElement?.parentElement?.querySelectorAll('select')[1];
+  await vi.waitFor(() => expect(select()?.options.length).toBe(0));
+  setCodexModels([
+    { slug: 'gpt-6-astra', displayName: 'GPT-6-Astra' },
+    { slug: 'gpt-6-sol', displayName: 'GPT-6-Sol', isDefault: true },
+  ]);
+  await vi.waitFor(() => expect(select()?.value).toBe('gpt-6-sol'));
+  expect([...(select()?.options ?? [])].map((option) => option.text)).toEqual([
+    'GPT-6-Astra',
+    'GPT-6-Sol',
+  ]);
+  setStore('askCodeProvider', 'claude');
 });

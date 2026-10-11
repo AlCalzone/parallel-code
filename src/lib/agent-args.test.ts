@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { reviewerWithModel } from './agent-handoff';
 
-import { buildTaskAgentArgs, isResumeArgsFailure, taskAgentOpensSessionPicker } from './agent-args';
+import {
+  buildTaskAgentArgs,
+  effortInArgs,
+  isResumeArgsFailure,
+  modelInArgs,
+  taskAgentOpensSessionPicker,
+} from './agent-args';
 
 const codexAgent = {
   id: 'codex',
@@ -585,4 +591,19 @@ it('resumes the handed-off Codex session with its selected model and reasoning',
   ]);
   expect(buildTaskAgentArgs(agent, task, false, 'primary')).toEqual([]);
   expect(buildTaskAgentArgs(agent, task, true, 'secondary')).toEqual(['resume']);
+});
+
+describe('the model and level a launch sets itself', () => {
+  it('reads each spelling of the model flag, the last one winning as in the CLIs', () => {
+    expect(modelInArgs(['--model', 'opus'])).toBe('opus');
+    expect(modelInArgs(['-m', 'gpt-6-sol', '--model=gpt-6-luna'])).toBe('gpt-6-luna');
+    expect(modelInArgs(['--resume'])).toBe('');
+  });
+
+  it("reads Claude's effort flag and Codex's config key", () => {
+    expect(effortInArgs(['--effort', 'high'])).toBe('high');
+    expect(effortInArgs(['--effort=low'])).toBe('low');
+    expect(effortInArgs(['-c', 'model_reasoning_effort="xhigh"'])).toBe('xhigh');
+    expect(effortInArgs(['-c', 'model=gpt-6-sol'])).toBe('');
+  });
 });

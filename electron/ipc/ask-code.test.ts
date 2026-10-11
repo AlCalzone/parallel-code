@@ -13,6 +13,11 @@ import { EVIDENCE_MODEL_PROMPT_LIMIT, EVIDENCE_MODEL_TIMEOUT_MS } from '../share
 vi.mock('child_process', () => ({ spawn: vi.fn() }));
 vi.mock('./pty.js', () => ({ validateCommand: vi.fn(), ENV_BLOCK_LIST: new Set<string>() }));
 vi.mock('./env-file.js', () => ({ loadEnvFile: () => ({}) }));
+vi.mock('./codex-models.js', () => ({
+  listCodexModels: () => [],
+  defaultCodexModel: () => 'gpt-6-astra',
+  defaultCodexEffort: (model: string) => (model === 'gpt-6-astra' ? 'medium' : ''),
+}));
 vi.mock('./ask-code-minimax.js', () => ({
   askAboutCodeMinimax: vi.fn(),
   cancelAskAboutCodeMinimax: vi.fn(),
@@ -176,11 +181,12 @@ describe('Claude code Q&A model', () => {
     return vi.mocked(spawn).mock.calls[0][1] as string[];
   }
 
-  it('passes the chosen reasoning level and omits it when none is chosen', () => {
+  it('passes the chosen reasoning level, else names the one the app shows', () => {
     const args = spawnArgs('opus', 'high');
     expect(args[args.indexOf('--effort') + 1]).toBe('high');
     vi.mocked(spawn).mockClear();
-    expect(spawnArgs('opus')).not.toContain('--effort');
+    const fallback = spawnArgs('opus');
+    expect(fallback[fallback.indexOf('--effort') + 1]).toBe('medium');
   });
 
   it('passes the chosen model to the CLI', () => {
@@ -251,9 +257,10 @@ describe('Codex code Q&A', () => {
     expect(args[args.indexOf('model_reasoning_effort="high"') - 1]).toBe('-c');
   });
 
-  it('leaves the model out when none is chosen', () => {
-    expect(start().args).not.toContain('-m');
-    expect(start('').args).not.toContain('-m');
+  it("names the CLI's own model when none is chosen, so the app can show which runs", () => {
+    const { args } = start();
+    expect(args[args.indexOf('-m') + 1]).toBe('gpt-6-astra');
+    expect(args).toContain('model_reasoning_effort="medium"');
   });
 
   it('turns JSONL agent messages into chunks and reports errors', () => {

@@ -60,6 +60,7 @@ import {
   setPendingAction,
   toggleHelpDialog,
   toggleSettingsDialog,
+  openThinkingSpace,
   sendActivePrompt,
   spawnShellForTask,
   closeShell,
@@ -123,6 +124,9 @@ import { startEvidenceAutoBuild } from './store/evidence-auto';
 import type { PlanContentMessage } from './store/canvas';
 import { SyncIcon } from './components/icons';
 
+const ThinkingSpace = lazy(() =>
+  import('./components/thinking/ThinkingSpace').then((m) => ({ default: m.ThinkingSpace })),
+);
 const ArenaOverlay = lazy(() =>
   import('./arena/ArenaOverlay').then((m) => ({ default: m.ArenaOverlay })),
 );
@@ -726,6 +730,7 @@ function App() {
       },
       toggleHelp: () => toggleHelpDialog(),
       toggleSettings: () => toggleSettingsDialog(),
+      newThinkingTour: () => openThinkingSpace('new'),
       closeDialogs: () => {
         if (store.showArena) {
           closeArena();
@@ -948,6 +953,9 @@ function App() {
           open={store.showSettingsDialog}
           onClose={() => toggleSettingsDialog(false)}
         />
+        <Show when={store.thinkingSpace}>
+          {(mode) => <ThinkingSpace mode={mode()} onClose={() => openThinkingSpace(null)} />}
+        </Show>
         <Show when={store.showArena}>
           <ArenaOverlay onClose={closeArena} />
         </Show>

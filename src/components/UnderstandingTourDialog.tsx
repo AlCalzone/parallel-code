@@ -5,6 +5,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CloseIcon,
+  GitGraphIcon,
   ListIcon,
   MentionIcon,
   PencilIcon,
@@ -22,6 +23,11 @@ import { TourOutline } from './understanding/TourOutline';
 import { TourProgress } from './understanding/TourProgress';
 import { TourReworkBar } from './understanding/TourReworkBar';
 import { TourSaveState } from './understanding/TourSaveState';
+import { createThinkingControls } from './thinking/create-thinking-controls';
+import { ThinkingFooter } from './thinking/ThinkingFooter';
+import { altAction } from './thinking/ThinkingCard';
+import { ThinkingMap } from './thinking/ThinkingMap';
+import { ThinkingStep } from './thinking/ThinkingStep';
 import { cardReference, notesReference, serializeTour } from '../lib/tour-file';
 import { belowNodeId, findNode, questionPoint, rootIndexOf } from '../lib/tour-tree';
 import type { TourNode } from '../lib/tour-tree';
@@ -41,6 +47,13 @@ const PANEL_STYLE = {
   border: 'none',
   'box-shadow': 'none',
   overflow: 'hidden',
+} as const;
+
+/** The mind map shows the whole tree, so it may take the window less a margin. */
+const MAP_PANEL_STYLE = {
+  ...PANEL_STYLE,
+  height: 'calc(100vh - 32px)',
+  'max-height': 'none',
 } as const;
 
 /** Reading one card is the whole task, so the rest of the app goes dark. */
@@ -98,13 +111,20 @@ export function UnderstandingTourDialog(props: {
   let notesSubject = '';
   /** The finished tour on screen, when there is one to copy or rework. */
   const shownTour = () => (props.tour.loading() ? null : tour());
+  let dialogRef: HTMLDivElement | undefined;
+  const thinking = createThinkingControls({
+    tour: () => props.tour,
+    worktreePath: () => props.worktreePath,
+    onDone: () => queueMicrotask(() => primaryRef?.focus()),
+    onClose: () => props.onClose(),
+  });
 
   function markdown(): string {
     const shown = tour();
     return serializeTour(
       {
         subject: props.tour.subject(),
-        kind: shown?.kind ?? 'agent',
+        kind: props.tour.thinking() ? 'thinking' : (shown?.kind ?? 'agent'),
         omitted: shown?.omitted,
         roots: roots(),
       },
@@ -192,7 +212,7 @@ export function UnderstandingTourDialog(props: {
   // Give the primary action focus as soon as a tour is on screen, so the arrow
   // keys move on and Enter opens the ask field without reaching for the pointer.
   createEffect(() => {
-    if (props.open && tour() && !props.tour.loading()) primaryRef?.focus();
+    if (props.open && tour() && !props.tour.loading() && !thinking.editing()) primaryRef?.focus();
   });
 
   // Moving to a card, from the overview or otherwise, shows that card. A
@@ -326,11 +346,54 @@ export function UnderstandingTourDialog(props: {
     return true;
   }
 
-  /** Never while typing: the keys move the caret there. */
+  const inMenu = (target: EventTarget | null) =>
+    target instanceof Element && target.closest('[role="menu"]') !== null;
+
+  /**
+   * Never while typing: the keys move the caret there. Nor under another
+   * dialog, such as a thinking tour opened over a task's tour: only the
+   * topmost panel is marked modal. Nor in a menu opened from the tour, such
+   * as the model menu, which walks its own items with the arrows.
+   */
   function onKeyDown(event: KeyboardEvent): void {
-    if (isTypingTarget(event.target) || !tour()) return;
-    const handled = event.key === 'Enter' ? focusAsk(event.target) : move(event.key);
+    if (isTypingTarget(event.target) || inMenu(event.target) || !tour()) return;
+    if (!dialogRef?.closest('[aria-modal="true"]')) return;
+    const handled = props.tour.thinking()
+      ? thinkingKey(event)
+      : event.key === 'Enter'
+        ? focusAsk(event.target)
+        : move(event.key);
     if (handled) event.preventDefault();
+  }
+
+  /**
+   * Reading a tour the reader writes: the arrows move as in any tour, Enter
+   * starts typing on the card and Ctrl+M switches to the mind map, whose own
+   * keys are left alone while it is open.
+   */
+  function thinkingKey(event: KeyboardEvent): boolean {
+    const mod = event.ctrlKey || event.metaKey;
+    if (mod && !event.shiftKey && event.key.toLowerCase() === 'm') {
+      thinking.toggleMap();
+      return true;
+    }
+    if (thinking.map()) return false;
+    const alt = altAction(event);
+    if (alt) {
+      thinking.act(alt);
+      return true;
+    }
+    if (mod || event.altKey) return false;
+    // Space keeps pressing the control it is on; any other character is writing.
+    if (event.key.length === 1 && event.key !== ' ') {
+      thinking.typeKey(event.key);
+      return true;
+    }
+    if (event.key !== 'Enter') return move(event.key);
+    const onControl = event.target instanceof Element && event.target.closest(CONTROLS) !== null;
+    if (onControl && event.target !== primaryRef) return false;
+    thinking.startEditing();
+    return true;
   }
 
   // Reading means clicking on the card, which hands focus to the dialog panel
@@ -466,6 +529,63 @@ export function UnderstandingTourDialog(props: {
     );
   }
 
+  function askBar() {
+    return (
+      <TourAskBar
+        ref={(element) => (askRef = element)}
+        onLeave={() => primaryRef?.focus()}
+        disabled={props.tour.asking() || !props.tour.canAsk()}
+        asking={props.tour.asking()}
+        placeholder={askPlaceholder()}
+        onContinueInChat={props.tour.askLimit() && props.onReference ? reference : undefined}
+        onAsk={(question) => void controller().ask(question)}
+        onGoDeeper={() => controller().goDeeper()}
+        onCancel={() => controller().cancel()}
+      />
+    );
+  }
+
+  /** The card on screen in a tour the reader writes; see ThinkingStep. */
+  function thinkingStep() {
+    const proposal = () => {
+      const waiting = thinking.writer.proposal();
+      return waiting?.nodeId === props.tour.currentId() ? waiting : undefined;
+    };
+    // Keyed on the id, not the node: each keystroke makes a new node, and
+    // remounting on it would send the caret back to the title.
+    return (
+      <Show when={props.tour.currentId()} keyed>
+        {(id) => (
+          <Show when={node()}>
+            {(current) => (
+              <ThinkingStep
+                node={current()}
+                parent={parent()}
+                editing={thinking.editing()}
+                focus={thinking.focus()}
+                writing={thinking.writer.writingId() === id}
+                proposal={proposal()}
+                error={thinking.writer.error(id)}
+                onChange={thinking.change}
+                onAction={thinking.act}
+                onEdit={thinking.startEditing}
+                onLeave={() => controller().leave()}
+                onAccept={thinking.accept}
+                onReject={thinking.reject}
+              />
+            )}
+          </Show>
+        )}
+      </Show>
+    );
+  }
+
+  function thinkingMap() {
+    return (
+      <ThinkingMap subject={props.tour.subject()} roots={roots()} onChange={thinking.fromMap} />
+    );
+  }
+
   function closeButton() {
     return (
       <TourIconButton label="Close tour" tooltip="Close" onClick={() => props.onClose()}>
@@ -479,11 +599,11 @@ export function UnderstandingTourDialog(props: {
       open={props.open}
       onClose={props.onClose}
       zIndex={props.zIndex}
-      panelStyle={PANEL_STYLE}
+      panelStyle={thinking.map() ? MAP_PANEL_STYLE : PANEL_STYLE}
       overlayStyle={OVERLAY_STYLE}
       labelledBy={headingId}
     >
-      <div class="understanding-dialog">
+      <div ref={dialogRef} class="understanding-dialog" data-map={thinking.map() ? '' : undefined}>
         <div class="understanding-main">
           {/* No visible header: the card carries every word the reader needs. The
               heading exists so the dialog still has an accessible name. */}
@@ -534,7 +654,21 @@ export function UnderstandingTourDialog(props: {
               </Show>
               {/* A tour reopened from its file is that file's record; a new
                   tour of its subject starts from the subject's Take Tour. */}
-              <Show when={!props.tour.fromFile()}>
+              <Show when={props.tour.thinking()}>
+                <TourIconButton
+                  label={thinking.map() ? 'Show cards' : 'Show mind map'}
+                  tooltip={
+                    thinking.map()
+                      ? 'Back to the cards · Ctrl+M'
+                      : 'See the tour as a mind map · Ctrl+M'
+                  }
+                  pressed={thinking.map()}
+                  onClick={() => thinking.toggleMap()}
+                >
+                  <GitGraphIcon size={14} />
+                </TourIconButton>
+              </Show>
+              <Show when={!props.tour.fromFile() && !props.tour.thinking()}>
                 <TourIconButton
                   label="Rework tour"
                   tooltip="Rework tour with your own instructions"
@@ -650,8 +784,17 @@ export function UnderstandingTourDialog(props: {
             >
               {/* A fresh stack per step, so its cards open scrolled to the top
                   with their notes closed; the footer stays and keeps its focus. */}
-              <Show when={step()[0]?.id} keyed>
-                {(_head) => <StepView />}
+              <Show
+                when={props.tour.thinking()}
+                fallback={
+                  <Show when={step()[0]?.id} keyed>
+                    {(_head) => <StepView />}
+                  </Show>
+                }
+              >
+                <Show when={!thinking.map()} fallback={thinkingMap()}>
+                  {thinkingStep()}
+                </Show>
               </Show>
               <Show when={overview()}>
                 <div class="understanding-card understanding-outline-card">{sidePanel()}</div>
@@ -666,19 +809,14 @@ export function UnderstandingTourDialog(props: {
               >
                 <ChevronLeftIcon />
               </TourIconButton>
-              <TourAskBar
-                ref={(element) => (askRef = element)}
-                onLeave={() => primaryRef?.focus()}
-                disabled={props.tour.asking() || !props.tour.canAsk()}
-                asking={props.tour.asking()}
-                placeholder={askPlaceholder()}
-                onContinueInChat={
-                  props.tour.askLimit() && props.onReference ? reference : undefined
-                }
-                onAsk={(question) => void controller().ask(question)}
-                onGoDeeper={() => controller().goDeeper()}
-                onCancel={() => controller().cancel()}
-              />
+              <Show when={props.tour.thinking()} fallback={askBar()}>
+                <ThinkingFooter
+                  editing={thinking.editing()}
+                  map={thinking.map()}
+                  writing={thinking.writer.writingId() !== ''}
+                  onWrite={() => thinking.write()}
+                />
+              </Show>
               <TourIconButton
                 primary
                 ref={(element) => (primaryRef = element)}
