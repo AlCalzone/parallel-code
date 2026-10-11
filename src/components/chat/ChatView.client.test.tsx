@@ -268,6 +268,38 @@ it('queues during execution, then sends once after the agent becomes ready', asy
   expect(container.querySelector('.chat-queue')).toBeNull();
 });
 
+/** A mid-turn reader scrolled 100px into a log where the bottom is 700px down. */
+async function scrolledBackMidTurn() {
+  // happy-dom has no layout: fake a 300px viewport over 1000px of log.
+  const log = container.querySelector<HTMLElement>('.chat-scroll');
+  if (!log) throw new Error('Chat log is missing');
+  let top = 0;
+  Object.defineProperty(log, 'scrollHeight', { get: () => 1000 });
+  Object.defineProperty(log, 'clientHeight', { get: () => 300 });
+  Object.defineProperty(log, 'scrollTop', {
+    get: () => top,
+    set: (value: number) => (top = Math.max(0, Math.min(value, 700))),
+  });
+  await update({ state: { ...props.state, status: 'working' } });
+  top = 100;
+  log.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, bubbles: true }));
+  return () => top;
+}
+
+it('brings a scrolled reader back to the latest message when they queue one', async () => {
+  const top = await scrolledBackMidTurn();
+  await act(() => button('Queue message').click());
+  expect(container.querySelector('.chat-queue')?.textContent).toContain('Keep my draft');
+  expect(top()).toBe(700);
+});
+
+it('brings a scrolled reader back to the latest message when they interrupt and send', async () => {
+  const top = await scrolledBackMidTurn();
+  await act(() => button('Interrupt and send now').click());
+  expect(props.onStop).toHaveBeenCalledTimes(1);
+  expect(top()).toBe(700);
+});
+
 it('retains a failed queued message and only retries on request', async () => {
   await update({ state: { ...props.state, status: 'working' } });
   await act(() => button('Queue message').click());

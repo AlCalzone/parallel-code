@@ -102,6 +102,13 @@ function Conversation(props: { chat: ChatProps; threadId: string }) {
   const focus = () => textarea?.focus();
   // Whoever sends a message wants to see it land and the answer arrive.
   createEffect(on(composer.pendingMessage, (sent) => sent && toLatest?.()));
+  // A message queued mid-turn is a send too; the queue only grows by the user's hand.
+  createEffect(
+    on(
+      () => composer.queue().length,
+      (length, previous) => previous !== undefined && length > previous && toLatest?.(),
+    ),
+  );
   // Reloaded commands are never running, so only one the user starts scrolls the log.
   createEffect(
     on(
