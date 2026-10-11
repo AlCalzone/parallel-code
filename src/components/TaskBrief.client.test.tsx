@@ -109,7 +109,11 @@ describe('TaskBriefBar', () => {
     expect(text).toContain('Stop webhook timeouts.');
     expect(text).toContain('Route queues the event.');
     expect(text).toContain('Added Redis to production compose.');
-    expect(text).toContain('from the rating');
+    expect(card()?.querySelector('title')?.textContent).toBe('From the confidence rating');
+    const headings = Array.from(card()?.querySelectorAll('h3') ?? []).map((h) =>
+      h.getAttribute('aria-label'),
+    );
+    expect(headings).toEqual(['Changed (1)', 'Extra (1)', 'Open (1)', 'Decided (1)']);
     expect(text).toContain('code changed since');
     button('src/webhooks.ts')?.click();
     expect(onFileClick).toHaveBeenCalledWith('src/webhooks.ts');
@@ -132,6 +136,18 @@ describe('TaskBriefBar', () => {
     await vi.waitFor(() =>
       expect(mockChange).toHaveBeenCalledWith('task', 'Used BullMQ.', 'Use pg-boss instead.'),
     );
+  });
+
+  it('quietens the Decided icon once every decision is handled', () => {
+    const { bar } = mount(baseTask());
+    bar.click();
+    const decidedIcon = () =>
+      card()?.querySelector('h3[aria-label^="Decided"] svg')?.getAttribute('style') ?? '';
+    expect(decidedIcon()).toContain('var(--review)');
+    lastSetState?.('brief', 'decisions', { 'Used BullMQ.': 'kept' });
+    expect(decidedIcon()).toContain('var(--fg-muted)');
+    lastSetState?.('brief', 'decisions', { 'Used BullMQ.': 'sent' });
+    expect(decidedIcon()).toContain('var(--fg-muted)');
   });
 
   it('keeps a half-typed correction when the brief is rewritten', () => {
