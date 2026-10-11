@@ -40,6 +40,7 @@ describe('inspectDocumentFolder', () => {
       isRepo: false,
       enclosingRepo: null,
       hasCommits: false,
+      looksLikeCode: false,
       files: [
         { path: 'notes/plan.md', committed: false },
         { path: 'page.html', committed: false },
@@ -60,6 +61,7 @@ describe('inspectDocumentFolder', () => {
       isRepo: true,
       enclosingRepo: null,
       hasCommits: true,
+      looksLikeCode: false,
       files: [
         { path: 'committed.md', committed: true },
         { path: 'loose.md', committed: false },
@@ -75,8 +77,62 @@ describe('inspectDocumentFolder', () => {
       isRepo: false,
       enclosingRepo: null,
       hasCommits: false,
+      looksLikeCode: false,
       files: [],
     });
+  });
+
+  it('tells a code repository from a folder of writing', async () => {
+    const repo = tmpFolder();
+    initRepo(repo);
+    fs.writeFileSync(path.join(repo, 'README.md'), '# Readme\n');
+    fs.mkdirSync(path.join(repo, 'src'));
+    fs.writeFileSync(path.join(repo, 'src', 'main.ts'), 'export {};\n');
+    const plain = tmpFolder();
+    fs.writeFileSync(path.join(plain, 'notes.md'), '# Notes\n');
+    fs.writeFileSync(path.join(plain, 'package.json'), '{}\n');
+
+    expect((await inspectDocumentFolder(repo)).looksLikeCode).toBe(true);
+    expect((await inspectDocumentFolder(plain)).looksLikeCode).toBe(true);
+    fs.rmSync(path.join(plain, 'package.json'));
+    expect((await inspectDocumentFolder(plain)).looksLikeCode).toBe(false);
+  });
+
+  it('finds code deep in a repository but not in what it ignores', async () => {
+    const repo = tmpFolder();
+    initRepo(repo);
+    fs.mkdirSync(path.join(repo, 'tools', 'gen'), { recursive: true });
+    fs.writeFileSync(path.join(repo, '.gitignore'), 'build/\n');
+    fs.mkdirSync(path.join(repo, 'build'));
+    fs.writeFileSync(path.join(repo, 'build', 'out.js'), '\n');
+    expect((await inspectDocumentFolder(repo)).looksLikeCode).toBe(false);
+
+    fs.writeFileSync(path.join(repo, 'tools', 'gen', 'Makefile'), 'all:\n');
+    expect((await inspectDocumentFolder(repo)).looksLikeCode).toBe(true);
+    fs.rmSync(path.join(repo, 'tools', 'gen', 'Makefile'));
+    fs.writeFileSync(path.join(repo, 'tools', 'Main.PY'), '\n');
+    expect((await inspectDocumentFolder(repo)).looksLikeCode).toBe(true);
+  });
+
+  it('still notices code past the first thousand documents', async () => {
+    const plain = tmpFolder();
+    for (let i = 0; i < 1001; i++) fs.writeFileSync(path.join(plain, `${i}.md`), '');
+    fs.mkdirSync(path.join(plain, 'z'));
+    fs.writeFileSync(path.join(plain, 'z', 'main.go'), '\n');
+
+    const info = await inspectDocumentFolder(plain);
+    expect(info.files).toHaveLength(1000);
+    expect(info.looksLikeCode).toBe(true);
+  });
+
+  it('reads a notes vault whose app settings hold scripts as writing', async () => {
+    const vault = tmpFolder();
+    initRepo(vault);
+    fs.writeFileSync(path.join(vault, 'Daily.md'), '# Daily\n');
+    fs.mkdirSync(path.join(vault, '.obsidian', 'plugins', 'git'), { recursive: true });
+    fs.writeFileSync(path.join(vault, '.obsidian', 'plugins', 'git', 'main.js'), '\n');
+    git(vault, 'add', '.');
+    expect((await inspectDocumentFolder(vault)).looksLikeCode).toBe(false);
   });
 
   it('names the enclosing repository instead of claiming a subfolder is one', async () => {

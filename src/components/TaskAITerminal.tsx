@@ -35,6 +35,7 @@ import { AgentChatView } from './AgentChatView';
 import { isAgentChat, agentChatProvider, agentChatUnavailableReason } from '../store/agent-chat';
 import { agentViewHandsOff, agentViewSwitchCost, switchMainAgentView } from '../store/agent-view';
 import { setStore } from '../store/core';
+import { editAsDocument } from '../documents/store';
 import { saveState } from '../store/persistence';
 import { registerAction, unregisterAction } from '../store/focus';
 import { resolvedBindings } from '../store/keybindings';
@@ -591,6 +592,7 @@ export function TaskAITerminal(props: TaskAITerminalProps) {
                 onFileLink={(filePath) => {
                   if (!props.onFileLink?.(filePath)) handleFileLink(filePath);
                 }}
+                onEditAsDocument={store.documentWorkspacesEnabled ? editAsDocument : undefined}
                 onReview={props.onReview}
                 onOpenTour={props.onOpenTour}
                 onSendSelection={
@@ -779,6 +781,7 @@ function AgentTerminalPane(props: {
   visible: boolean;
   onSelect: () => void;
   onFileLink: (filePath: string) => void;
+  onEditAsDocument?: (filePath: string) => void;
   onReady: (agentId: string, focusFn: () => void) => void;
   onUnmount: (agentId: string) => void;
   onTranscriptMarksReady?: (api: TranscriptMarks | undefined) => void;
@@ -1023,6 +1026,7 @@ function AgentTerminalPane(props: {
                     }}
                     onData={(data) => markAgentOutput(a().id, data, props.task.id)}
                     onFileLink={props.onFileLink}
+                    onEditAsDocument={props.onEditAsDocument}
                     onPromptDetected={(text) => setLastPrompt(props.task.id, text, props.agentId)}
                     onReady={(focusFn) => {
                       terminalFocus = focusFn;

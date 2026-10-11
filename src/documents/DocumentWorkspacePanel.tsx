@@ -59,6 +59,7 @@ import { RightPanel } from './RightPanel';
 import { AttentionLine } from './AttentionLine';
 import { InlineReview } from './InlineReview';
 import { FilesPopover } from './FilesPopover';
+import { QuickEditChip } from './QuickEditChip';
 import { CandidateOutputDialog } from './CandidateOutputDialog';
 import { BlockEditor, type BlockEditTarget } from './BlockEditor';
 import { MarkdownEditor } from './MarkdownEditor';
@@ -768,6 +769,10 @@ export function DocumentWorkspacePanel() {
   });
   const [editing, setEditing] = createSignal<Project | null>(null);
   const [showEditActions, setShowEditActions] = createSignal(false);
+  const quickEditProject = () => {
+    const p = project();
+    return p?.quickEditSource ? { ...p, quickEditSource: p.quickEditSource } : undefined;
+  };
   const railCollapsed = () => project()?.documentPanelCollapsed !== false;
   const [toolbarSlot, setToolbarSlot] = createSignal<HTMLElement>();
   const [editAction, setEditAction] = createSignal<'commit' | 'discard' | null>(null);
@@ -821,17 +826,25 @@ export function DocumentWorkspacePanel() {
     const command = editorCommand();
     const path = openPath();
     if (!currentProject || !path || !command) return;
-    const documentPath = `${currentProject.path.replace(/\/$/, '')}/${path}`;
+    // A quick edit's copy is private; the editor gets the file the user knows.
+    const documentPath =
+      currentProject.quickEditSource ?? `${currentProject.path.replace(/\/$/, '')}/${path}`;
     openInEditor(command, documentPath).catch((err) =>
       showNotification(`Editor failed: ${errMessage(err)}`),
     );
   }
 
-  /** The project folder in the system file manager. */
+  /** The project folder, or a quick edit's original file, in the system file manager. */
+  const folderTarget = () => project()?.quickEditSource ?? project()?.path ?? '';
+  const folderLabel = () => {
+    const source = project()?.quickEditSource;
+    return source
+      ? `Show ${source} in the file manager`
+      : `Open the folder ${project()?.path ?? ''} in the file manager`;
+  };
   function openProjectFolder() {
-    const currentProject = project();
-    if (!currentProject) return;
-    revealItemInDir(currentProject.path).catch((err) =>
+    if (!project()) return;
+    revealItemInDir(folderTarget()).catch((err) =>
       showNotification(`Could not open folder: ${errMessage(err)}`),
     );
   }
@@ -951,6 +964,7 @@ export function DocumentWorkspacePanel() {
             <DocumentIcon />
             <span>{project()?.name}</span>
           </span>
+          <Show when={quickEditProject()}>{(quick) => <QuickEditChip project={quick()} />}</Show>
           <div class="docws-tabs" role="tablist" aria-label="Document views">
             {tab('document', 'Document')}
             {tab('history', 'History')}
@@ -1010,8 +1024,8 @@ export function DocumentWorkspacePanel() {
           <button
             type="button"
             class="docws-btn docws-open-editor"
-            aria-label={`Open the folder ${project()?.path ?? ''} in the file manager`}
-            title={`Open the folder ${project()?.path ?? ''} in the file manager`}
+            aria-label={folderLabel()}
+            title={folderLabel()}
             disabled={!project()}
             onClick={() => openProjectFolder()}
           >
@@ -1137,6 +1151,9 @@ export function DocumentWorkspacePanel() {
         <p id="docws-uncommitted-description" class="docws-dialog-message">
           This replaces all tracked file changes in this project with the last saved version.
           Changes since that version will be lost. This cannot be undone.
+          <Show when={project()?.quickEditSource}>
+            {(source) => <> The original at {source()} is restored to that version too.</>}
+          </Show>
         </p>
         <div class="docws-dialog-actions">
           <button

@@ -24,14 +24,36 @@ the document.
 ### Using it
 
 1. Enable _Document workspaces_ under Settings → Experimental.
-2. Click **+** next to Projects and choose **Document project…**. Type or browse to a
-   folder and name the project; a new Markdown document is named after it. Start with a
-   spec, architecture decision, or design note. Existing Markdown and HTML documents can
-   still be opened from the folder list. Neither has to exist: type a new name onto
-   the end of the path and that folder is the project. A folder that already holds
-   documents lists them, to open one of those instead. The dialog says what it will do —
-   create the folder, `git init`, create the file, make the first commit — and does it on
-   confirm.
+2. Click **+** next to Projects. One dialog adds every kind of project: type or browse to a
+   folder, and the dialog suggests **Code** for a code repository (source files or a build
+   manifest) and **Documents** for anything else; **Open as** switches it. For documents, a
+   new Markdown document is named after the project. Start with a spec, architecture
+   decision, or design note. Existing Markdown and HTML documents can still be opened from
+   the folder list. Neither has to exist: type a new name onto the end of the path and that
+   folder is the project. A folder that already holds documents lists them, to open one of
+   those instead. The dialog says what it will do — create the folder, `git init`, create
+   the file, make the first commit — and does it on confirm. With document workspaces off,
+   **+** is the plain folder picker it always was.
+   A document in a code repository, or in a folder inside any repository, opens as a
+   **quick edit** instead, so nothing is committed there: the workspace runs on a private
+   copy in its own repository under the app's data folder (`quick-edits/`), and the copy and
+   the original are kept in step both ways while the app runs (polled every 700 ms), and
+   brought level again on every open, so edits made while the app was closed carry over
+   from either side. When both sides changed since the last sync, the original wins; the
+   copy's version is saved beside the copy's repository as `<id>.conflict-<time>.<ext>`, one file per clash.
+   The app shows a notification naming that file, whether the clash is found at open or while
+   the copy is open, and logs a warning. Those files stay until you delete them. A deleted original is not brought back, and
+   removing the quick edit from the sidebar stops the syncing but keeps the copy, so opening the
+   same file again picks up its history. Quick edits are also reachable from
+   a task's canvas: the document button beside _Open in the default editor_ opens the file
+   as one, and so does **Edit as document** when you right-click a Markdown or HTML path
+   printed in a task's agent or shell terminal. The header marks a quick edit with a neutral **Quick edit** chip; the
+   open-in-editor and file-manager buttons point at the original. Click the chip to **Move
+   to its own project**: the document is copied into a folder you pick (not inside a
+   repository, not a folder of code, and not over an existing file), that folder becomes
+   a document project, and the quick edit is removed. The original stays where it was and
+   no longer receives changes. Agents in a quick edit see only the copied document, not the
+   files around the original.
 3. The workspace opens as a resizable panel alongside coding tasks, defaulting to 960px. The document gets the full panel until you open the side panel.
    The side-panel icon in the header shows or hides it and remembers your choice per project; hiding keeps the agent session mounted. A manually resized width is remembered.
    The workspace has one header bar: the project name, the **Document** / **History** tabs and

@@ -2723,3 +2723,22 @@
   color: var(--fg);
   font-size: 13px;
 }
+
+/* Neutral: a quick edit is routine, and the chip is how it moves to a project of its own. */
+.docws-head-chip.docws-quick-edit {
+  background: transparent;
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
+
+.docws-head-chip.docws-quick-edit:hover {
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+/* Unlike the branch chip, this one carries an action, so it stays at every width. */
+@container docws-header (max-width: 960px) {
+  .docws-navigation .docws-head-chip.docws-quick-edit {
+    display: inline-flex;
+  }
+}

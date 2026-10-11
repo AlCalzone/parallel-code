@@ -51,6 +51,7 @@ import {
 import { dataTransferToShellArgs, escapePath } from '../lib/terminalDrop';
 import { cleanCopiedTerminalText } from '../lib/copy-text';
 import { hasTerminalUserActivity, nextTerminalInputPending } from '../lib/terminalInputPending';
+import { isEditableDocumentPath } from '../lib/document-path';
 import { computeWrappedPathLinks, createTerminalHttpLinkHandler } from '../lib/terminalLinks';
 import { recordSharedWebglContextLoss, WEBGL_REATTACH_DELAY_MS } from '../lib/webglContextLoss';
 import { isTerminalPaneOnScreen, WEBGL_DETACH_DELAY_MS } from '../lib/terminalPaneVisibility';
@@ -165,6 +166,8 @@ interface TerminalViewProps {
   onData?: (data: Uint8Array) => void;
   onPromptDetected?: (text: string) => void;
   onFileLink?: (filePath: string) => void;
+  /** Present: right-clicking a Markdown or HTML path offers to edit it as a document. */
+  onEditAsDocument?: (filePath: string) => void;
   onReady?: (focusFn: () => void) => void;
   onBufferReady?: (getBuffer: () => string) => void;
   /** Exposes the scrollback-marker API: `mark(key)` registers a marker at the current line
@@ -226,16 +229,37 @@ export function TerminalView(props: TerminalViewProps) {
   // Bumped whenever the buffer grows or scrolls, so icon positions (derived from
   // live xterm state, not signals) recompute reactively.
   const [overviewTick, setOverviewTick] = createSignal(0);
-  const [selectionMenu, setSelectionMenu] = createSignal<{ x: number; y: number; text: string }>();
+  const [selectionMenu, setSelectionMenu] = createSignal<{
+    x: number;
+    y: number;
+    text: string;
+    documentPath?: string;
+  }>();
+  /** The path link under the pointer, so a right-click can act on it. */
+  let hoveredPath: string | undefined;
   function openSelectionMenu(event: MouseEvent) {
-    if (!props.onSendSelection && !props.onSecondOpinion) return;
+    const documentPath =
+      props.onEditAsDocument && hoveredPath && isEditableDocumentPath(hoveredPath)
+        ? hoveredPath
+        : undefined;
+    if (!props.onSendSelection && !props.onSecondOpinion && !documentPath) return;
     event.preventDefault();
     event.stopPropagation();
     setSelectionMenu({
       x: event.clientX,
       y: event.clientY,
       text: cleanCopiedTerminalText(term?.getSelection() ?? ''),
+      documentPath,
     });
+  }
+
+  /**
+   * Drops a `:line:col` suffix and resolves the path against the terminal's directory;
+   * the main process expands ~/ because the renderer doesn't know the home directory.
+   */
+  function resolveLinkPath(text: string): string {
+    const filePath = text.replace(/:\d+(:\d+)?$/, '');
+    return /^~?\//.test(filePath) ? filePath : `${props.cwd}/${filePath}`;
   }
   const [hasHandoffSelection, setHasHandoffSelection] = createSignal(false);
   const [selectionActive, setSelectionActive] = createSignal(false);
@@ -526,15 +550,17 @@ export function TerminalView(props: TerminalViewProps) {
           links.map((link) => ({
             range: link.range,
             text: link.text,
+            hover() {
+              hoveredPath = resolveLinkPath(link.text);
+            },
+            leave() {
+              hoveredPath = undefined;
+            },
             activate(event: MouseEvent, _text: string) {
               // Require Cmd+click (Mac) or Ctrl+click (Linux) to open links
               const modifierHeld = isMac ? event.metaKey : event.ctrlKey;
               if (!modifierHeld) return;
-              // Strip line:col suffix for opening
-              const filePath = link.text.replace(/:\d+(:\d+)?$/, '');
-              // Resolve relative paths against the task's working directory; the main
-              // process expands ~/ because the renderer doesn't know the home directory.
-              const resolved = /^~?\//.test(filePath) ? filePath : `${props.cwd}/${filePath}`;
+              const resolved = resolveLinkPath(link.text);
               // .md files open in viewer; Shift held = open externally instead
               if (/\.md$/i.test(resolved) && props.onFileLink && !event.shiftKey) {
                 props.onFileLink(resolved);
@@ -1389,6 +1415,7 @@ export function TerminalView(props: TerminalViewProps) {
             recipients={props.handoffRecipients ?? []}
             onSend={(text, id) => props.onSendSelection?.(text, id)}
             onOpinion={props.onSecondOpinion}
+            onEditAsDocument={props.onEditAsDocument}
             onClose={(restoreFocus = true) => {
               setSelectionMenu(undefined);
               if (restoreFocus) term?.focus();

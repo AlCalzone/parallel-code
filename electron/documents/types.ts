@@ -18,7 +18,19 @@ export interface DocumentFolderInfo {
   /** Set when the folder is inside someone else's repository, which setup refuses to nest in. */
   enclosingRepo: string | null;
   hasCommits: boolean;
+  /** Source files or build manifests sit in the folder: it reads as a code project. */
+  looksLikeCode: boolean;
   files: DocumentFileInfo[];
+}
+
+/** A quick edit's private copy: the workspace runs against `projectRoot`, edits sync to `sourcePath`. */
+export interface QuickEditTarget {
+  projectRoot: string;
+  documentPath: string;
+  /** The original file, resolved through symlinks. */
+  sourcePath: string;
+  /** Set when opening found both sides changed and set the copy's version aside. */
+  warning?: string;
 }
 
 /** What `prepareDocumentProject` did, in order, so the app can say so. */

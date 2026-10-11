@@ -22,6 +22,7 @@ import type {
   DocumentRunRecord,
   DocumentScope,
   DocumentSnapshot,
+  QuickEditTarget,
 } from './types';
 import {
   DEFAULT_DOCUMENT_MAIN_AGENT,
@@ -29,7 +30,7 @@ import {
   documentAgentSupport,
 } from '../../electron/documents/shared';
 import { store, setStore } from '../store/core';
-import { getProject, updateProject } from '../store/projects';
+import { addQuickEditProject, getProject, updateProject } from '../store/projects';
 import { showNotification } from '../store/notification';
 import type { DocumentModelChoice, Project } from '../store/types';
 import { afterSavingMarkdown, flushMarkdownEditor } from './markdown-editing';
@@ -225,9 +226,50 @@ function startWatcher(projectId: string, projectRoot: string, documentPath: stri
   });
 }
 
+/**
+ * Brings a quick edit's copy up to date with its original and keeps them in
+ * step. Asked on every open: the backend may have stopped the sync, and a
+ * running one makes this cheap. A missing original still opens the copy, so
+ * nothing written there is lost.
+ */
+async function syncQuickEdit(project: Project): Promise<void> {
+  const sourcePath = project.quickEditSource;
+  if (!sourcePath) return;
+  try {
+    notifyConflict(await invoke<QuickEditTarget>(IPC.OpenQuickEdit, { sourcePath }));
+  } catch (err) {
+    showNotification(`Showing the last copy of ${sourcePath}: ${errMessage(err)}`);
+  }
+}
+
+/** Both sides changed while nothing synced; the copy's version is in a file the user has to be told about. */
+function notifyConflict(target: QuickEditTarget): void {
+  if (target.warning) showNotification(target.warning);
+}
+
+/** Opens `sourcePath` as a quick edit, reusing the project it already has. */
+export async function openQuickEdit(sourcePath: string, create = false): Promise<void> {
+  const target = await invoke<QuickEditTarget>(IPC.OpenQuickEdit, { sourcePath, create });
+  notifyConflict(target);
+  const existing = store.projects.find(
+    (p) => p.quickEditSource === target.sourcePath && p.path === target.projectRoot,
+  );
+  await openDocumentWorkspace(existing?.id ?? addQuickEditProject(target));
+}
+
+/** Opens a path a task printed or lists as a quick edit, saying so if that fails. */
+export function editAsDocument(filePath: string): void {
+  openQuickEdit(filePath).catch((err: unknown) =>
+    showNotification(`Could not open ${filePath} as a document: ${errMessage(err)}`),
+  );
+}
+
 export async function openDocumentWorkspace(projectId: string): Promise<void> {
   const project = getProject(projectId);
   if (!project?.documentPath || !store.documentWorkspacesEnabled) return;
+  // Only quick edits wait: an await here would hold back the loading state of every open.
+  // An open one is already syncing, so switching back to it does not wait either.
+  if (project.quickEditSource && docStore.projectId !== projectId) await syncQuickEdit(project);
   setStore('githubIssuesProjectId', null);
   if (docStore.projectId === projectId) {
     setActiveTask(documentAgentTaskId(projectId));
@@ -1208,9 +1250,14 @@ export function initDocumentListeners(): () => void {
       if (hadSnapshot && previousHeadSha !== p.snapshot.headSha) void loadDocumentAnnotations();
     });
   });
+  const offWarning = window.electron.ipcRenderer.on(IPC.QuickEditWarning, (payload: unknown) => {
+    const message = (payload as { message?: unknown } | undefined)?.message;
+    if (typeof message === 'string') showNotification(message);
+  });
   return () => {
     offRun();
     offAnnotation();
     offChanged();
+    offWarning();
   };
 }

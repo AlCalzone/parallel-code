@@ -116,6 +116,9 @@ export interface Project {
   kind?: ProjectKind;
   /** Repo-relative path of the document a document project opens. */
   documentPath?: string;
+  /** Quick edit: the original file this document project's private copy syncs
+   *  to. The project path is then the copy's folder under the app's data. */
+  quickEditSource?: string;
   /** Last file read in the document workspace, relative to the project. */
   documentOpenPath?: string;
   /** Files opened most recently in the document workspace, newest first. */

@@ -38,15 +38,34 @@ export function addProject(name: string, path: string, isGitRepo?: boolean): str
 
 /** A document project: a git repo plus one document inside it. */
 export function addDocumentProject(name: string, path: string, documentPath: string): string {
+  return pushDocumentProject({ name, path, documentPath });
+}
+
+/** A quick edit: a document project on the private copy of a file that lives elsewhere. */
+export function addQuickEditProject(target: {
+  projectRoot: string;
+  documentPath: string;
+  sourcePath: string;
+}): string {
+  return pushDocumentProject({
+    // `spec.md · docs`: quick edits of same-named files stay apart in the sidebar.
+    name: `${target.documentPath} · ${target.sourcePath.split('/').slice(-2, -1)[0] || '/'}`,
+    path: target.projectRoot,
+    documentPath: target.documentPath,
+    quickEditSource: target.sourcePath,
+  });
+}
+
+function pushDocumentProject(
+  fields: Pick<Project, 'name' | 'path' | 'documentPath' | 'quickEditSource'>,
+): string {
   const id = crypto.randomUUID();
   const project: Project = {
     id,
-    name,
-    path,
     color: randomPastelColor(),
     isGitRepo: true,
     kind: 'document',
-    documentPath,
+    ...fields,
   };
   // Not the default for new tasks: a document project has no task flow.
   setStore(
@@ -77,6 +96,12 @@ export function removeProject(projectId: string): void {
     return;
   }
 
+  const quickEditRoot = store.projects.find((p) => p.id === projectId && p.quickEditSource)?.path;
+  // A removed quick edit stops writing to its original; its copy stays for a later reopen.
+  if (quickEditRoot)
+    invoke(IPC.StopQuickEdit, { projectRoot: quickEditRoot }).catch((err: unknown) =>
+      console.error('Failed to stop quick edit sync:', err),
+    );
   setStore(
     produce((s) => {
       s.projects = s.projects.filter((p) => p.id !== projectId);

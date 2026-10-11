@@ -63,6 +63,7 @@ const NOT_HANDLED_HERE: readonly string[] = [
   IPC.DocumentAnnotationEvent,
   IPC.DocumentChanged,
   IPC.DocumentRunEvent,
+  IPC.QuickEditWarning,
   IPC.MCP_CoordinatorNotificationCleared,
   IPC.MCP_CoordinatorNotificationStaged,
   IPC.MCP_CoordinatorOrphanedNotification,

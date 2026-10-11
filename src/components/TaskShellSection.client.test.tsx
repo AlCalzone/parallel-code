@@ -2,9 +2,12 @@ import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Task } from '../store/types';
 import { TaskShellSection } from './TaskShellSection';
+import { editAsDocument } from '../documents/store';
+
+const { terminalProps } = vi.hoisted(() => ({ terminalProps: [] as Record<string, unknown>[] }));
 
 vi.mock('../store/store', () => ({
-  store: { focusMode: false, taskSplitMode: {} },
+  store: { focusMode: false, taskSplitMode: {}, documentWorkspacesEnabled: true },
   getProject: () => ({
     terminalBookmarks: [
       { id: 'test', command: 'npm test' },
@@ -27,30 +30,49 @@ vi.mock('../store/store', () => ({
 }));
 
 vi.mock('./TerminalView', () => ({
-  TerminalView: () => null,
+  TerminalView: (props: Record<string, unknown>) => {
+    terminalProps.push(props);
+    return null;
+  },
 }));
+vi.mock('../documents/store', () => ({ editAsDocument: vi.fn() }));
 
 const disposers: Array<() => void> = [];
 
 afterEach(() => {
   while (disposers.length > 0) disposers.pop()?.();
   document.body.replaceChildren();
+  terminalProps.length = 0;
 });
 
+function makeTask(shellAgentIds: string[] = []): Task {
+  return {
+    id: 'task-1',
+    name: 'Task',
+    projectId: 'project-1',
+    branchName: 'task/bookmarks',
+    worktreePath: '/tmp/task',
+    agentIds: [],
+    shellAgentIds,
+    notes: '',
+    lastPrompt: '',
+    gitIsolation: 'worktree',
+  };
+}
+
 describe('TaskShellSection', () => {
+  it('lets a Markdown path printed in a shell be edited as a document', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    disposers.push(
+      render(() => <TaskShellSection task={makeTask(['shell-1'])} isActive />, container),
+    );
+
+    expect(terminalProps[0]?.onEditAsDocument).toBe(editAsDocument);
+  });
+
   it('keeps terminal bookmark buttons at their natural width in a horizontally scrollable toolbar', () => {
-    const task: Task = {
-      id: 'task-1',
-      name: 'Task',
-      projectId: 'project-1',
-      branchName: 'task/bookmarks',
-      worktreePath: '/tmp/task',
-      agentIds: [],
-      shellAgentIds: [],
-      notes: '',
-      lastPrompt: '',
-      gitIsolation: 'worktree',
-    };
+    const task = makeTask();
     const container = document.createElement('div');
     document.body.append(container);
     disposers.push(render(() => <TaskShellSection task={task} isActive />, container));

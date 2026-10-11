@@ -13,11 +13,21 @@ vi.mock('./tasks', () => ({
   closeTask: vi.fn(),
 }));
 
+vi.mock('./github-list-storage', () => ({
+  forgetGitHubLists: vi.fn(),
+}));
+
 import { produce } from 'solid-js/store';
 import { IPC } from '../../electron/ipc/channels';
 import { invoke } from '../lib/ipc';
 import { setStore, store } from './core';
-import { relinkProject, updateProject, updateProjectCoordination } from './projects';
+import {
+  addQuickEditProject,
+  relinkProject,
+  removeProject,
+  updateProject,
+  updateProjectCoordination,
+} from './projects';
 import { openDialog } from '../lib/dialog';
 import type { Task } from './types';
 
@@ -341,4 +351,30 @@ it('changes project peer permission only after backend acknowledgment', async ()
     policy: { projectId: 'consent', allowPeerAccess: true },
   });
   expect(store.projects[0].allowPeerAccess).toBe(true);
+});
+
+describe('quick edit projects', () => {
+  afterEach(() => {
+    setStore({ projects: [], tasks: {}, taskOrder: [], collapsedTaskOrder: [] });
+    vi.clearAllMocks();
+  });
+
+  it('names a quick edit after its file and folder, and stops its sync on removal', () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+    const id = addQuickEditProject({
+      projectRoot: '/data/quick-edits/abc',
+      documentPath: 'spec.md',
+      sourcePath: '/work/app/docs/spec.md',
+    });
+    expect(store.projects.find((p) => p.id === id)).toMatchObject({
+      name: 'spec.md · docs',
+      quickEditSource: '/work/app/docs/spec.md',
+    });
+
+    removeProject(id);
+    expect(invoke).toHaveBeenCalledWith(IPC.StopQuickEdit, {
+      projectRoot: '/data/quick-edits/abc',
+    });
+    expect(store.projects.some((p) => p.id === id)).toBe(false);
+  });
 });

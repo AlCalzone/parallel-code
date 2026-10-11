@@ -18,6 +18,7 @@ import {
   isPanelFocusedPrefix,
 } from '../store/store';
 import { TerminalView } from './TerminalView';
+import { editAsDocument } from '../documents/store';
 import { CloseIcon } from './icons';
 import { theme } from '../lib/theme';
 import { sf } from '../lib/fontScale';
@@ -300,6 +301,7 @@ export function TaskShellSection(props: TaskShellSectionProps) {
                     command={''}
                     args={['-l']}
                     cwd={props.task.worktreePath}
+                    onEditAsDocument={store.documentWorkspacesEnabled ? editAsDocument : undefined}
                     dockerMode={props.task.dockerMode}
                     dockerImage={props.task.dockerImage}
                     initialCommand={initialCommand}

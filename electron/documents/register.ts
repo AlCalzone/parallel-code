@@ -9,6 +9,7 @@ import {
   assertOptionalBoolean,
   assertOptionalString,
   assertString,
+  expandHome,
   validatePath,
 } from '../ipc/validate.js';
 import {
@@ -34,6 +35,14 @@ import {
   writeDocumentBlock,
 } from './runs.js';
 import { inspectDocumentFolder, prepareDocumentProject } from './setup.js';
+import {
+  convertQuickEdit,
+  onQuickEditWarning,
+  openQuickEdit,
+  stopAllQuickEditSyncs,
+  stopQuickEditSync,
+} from './quick-edit.js';
+import { getUserDataDir } from '../user-data-dir.js';
 import { listProjectFiles } from './files.js';
 import { readCandidateLog } from './logs.js';
 import {
@@ -52,6 +61,9 @@ function projectRootArg(args: IpcArgs): string {
 }
 
 export function registerDocumentHandlers(win: BrowserWindow): void {
+  onQuickEditWarning((warning) => {
+    if (!win.isDestroyed()) win.webContents.send(IPC.QuickEditWarning, warning);
+  });
   ipcMain.handle(IPC.ReadDocument, (_e, args) => {
     return readDocumentSnapshot(projectRootArg(args), validateDocumentPath(args.documentPath));
   });
@@ -81,6 +93,27 @@ export function registerDocumentHandlers(win: BrowserWindow): void {
       typeof args.title === 'string' ? args.title : undefined,
     );
   });
+
+  ipcMain.handle(IPC.OpenQuickEdit, (_e, args) => {
+    assertString(args.sourcePath, 'sourcePath');
+    const sourcePath = expandHome(args.sourcePath);
+    validatePath(sourcePath, 'sourcePath');
+    assertOptionalBoolean(args.create, 'create');
+    return openQuickEdit(getUserDataDir(), sourcePath, args.create === true);
+  });
+
+  ipcMain.handle(IPC.ConvertQuickEdit, (_e, args) => {
+    validatePath(args.folder, 'folder');
+    return convertQuickEdit(
+      getUserDataDir(),
+      projectRootArg(args),
+      validateDocumentPath(args.documentPath),
+      args.folder as string,
+    );
+  });
+
+  // Only a lookup among running syncs, so any root the renderer names is harmless.
+  ipcMain.handle(IPC.StopQuickEdit, (_e, args) => stopQuickEditSync(projectRootArg(args)));
 
   ipcMain.handle(IPC.ListDocumentRuns, (_e, args) => {
     return listDocumentRuns(projectRootArg(args));
@@ -199,6 +232,7 @@ export function registerDocumentHandlers(win: BrowserWindow): void {
 /** Everything the feature keeps alive; called on app quit. */
 export function stopAllDocumentWork(): void {
   stopAllDocumentWatchers();
+  stopAllQuickEditSyncs();
   stopAllDocumentRuns();
   stopAllAsks();
 }

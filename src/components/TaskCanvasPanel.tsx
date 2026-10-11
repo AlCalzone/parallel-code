@@ -29,6 +29,9 @@ import { canvasTabKey, tabFromKey } from '../lib/canvas-tabs';
 import { isTourFilePath } from '../lib/tour-file';
 import { useFocusRegistration } from '../lib/focus-registration';
 import { openFileInEditor } from '../lib/shell';
+import { store } from '../store/core';
+import { editAsDocument as openAsDocument } from '../documents/store';
+import { joinFolderPath } from '../documents/add-project-plan';
 import { errMessage } from '../lib/log';
 import type { CanvasTab, Task } from '../store/types';
 import {
@@ -229,6 +232,11 @@ export function TaskCanvasPanel(props: TaskCanvasPanelProps) {
     );
   }
 
+  /** The task's worktree is a code checkout, so the document opens as a quick edit. */
+  function editAsDocument(path: string): void {
+    openAsDocument(joinFolderPath(props.task.worktreePath, path));
+  }
+
   function openFullscreenEditor(path: string): void {
     setContextMenu(null);
     activateCanvasTab(props.task.id, canvasTabKey({ kind: 'markdown', path }));
@@ -280,6 +288,7 @@ export function TaskCanvasPanel(props: TaskCanvasPanelProps) {
           onEnterFullscreen={enterFullscreen}
           onExitFullscreen={() => setFullscreen(false)}
           onOpenInDefaultEditor={openDefaultEditor}
+          onEditAsDocument={store.documentWorkspacesEnabled ? editAsDocument : undefined}
           understanding={props.understanding}
           onTakeTour={activeDocumentIsLong() || activeIsSavedTour() ? props.onTakeTour : undefined}
           tourKind={(path) => documentTourKind(props.task, path)}

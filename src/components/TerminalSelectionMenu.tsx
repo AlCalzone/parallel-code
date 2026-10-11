@@ -1,6 +1,7 @@
 import { createSignal, For, onMount, Show, untrack } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { CopyIcon, EyeIcon, SendIcon } from './icons';
+import { DocumentIcon } from '../documents/DocumentIcon';
 
 /** Selection text is captured before opening, so focus changes cannot alter the handoff. */
 export function TerminalSelectionMenu(props: {
@@ -10,6 +11,9 @@ export function TerminalSelectionMenu(props: {
   recipients: { id: string; label: string }[];
   onSend: (text: string, recipientAgentId?: string) => void;
   onOpinion?: () => void;
+  /** The Markdown or HTML path right-clicked, when there was one. */
+  documentPath?: string;
+  onEditAsDocument?: (filePath: string) => void;
   onClose: (restoreFocus?: boolean) => void;
 }) {
   let menu: HTMLDivElement | undefined;
@@ -72,6 +76,21 @@ export function TerminalSelectionMenu(props: {
           }
         }}
       >
+        <Show when={props.documentPath}>
+          {(path) => (
+            <button
+              role="menuitem"
+              title={`Edit ${path()} as a document (nothing is committed here)`}
+              onClick={() => {
+                props.onEditAsDocument?.(path());
+                props.onClose(false);
+              }}
+            >
+              <DocumentIcon size={14} />
+              Edit as document
+            </button>
+          )}
+        </Show>
         <Show when={props.text}>
           <button role="menuitem" onClick={() => void copy()}>
             <CopyIcon size={14} />

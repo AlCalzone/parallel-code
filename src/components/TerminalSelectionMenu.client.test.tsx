@@ -77,3 +77,27 @@ it('keeps second opinion accessible even when right-click selected a word', () =
   button('Second opinion…').click();
   expect(onOpinion).toHaveBeenCalledOnce();
 });
+
+it('edits a right-clicked document path as a document', () => {
+  const onEditAsDocument = vi.fn();
+  const onClose = vi.fn();
+  dispose = render(
+    () => (
+      <TerminalSelectionMenu
+        x={20}
+        y={30}
+        text=""
+        recipients={[]}
+        onSend={vi.fn()}
+        onClose={onClose}
+        documentPath="/work/app/docs/spec.md"
+        onEditAsDocument={onEditAsDocument}
+      />
+    ),
+    document.body,
+  );
+  expect(document.activeElement).toBe(button('Edit as document'));
+  button('Edit as document').click();
+  expect(onEditAsDocument).toHaveBeenCalledWith('/work/app/docs/spec.md');
+  expect(onClose).toHaveBeenCalledWith(false);
+});

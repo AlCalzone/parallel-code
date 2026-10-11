@@ -8,6 +8,8 @@ import { CloseIcon, ExpandIcon, ExternalLinkIcon, PlusIcon, ScreenNormalIcon } f
 import { UnderstandButton, tourButtonStyle } from './understanding/UnderstandButton';
 import type { UnderstandingTourController } from '../lib/create-understanding-tour';
 import { isTourFilePath } from '../lib/tour-file';
+import { isEditableDocumentPath } from '../lib/document-path';
+import { DocumentIcon } from '../documents/DocumentIcon';
 
 interface CanvasTabStripProps {
   tabs: CanvasTab[];
@@ -24,6 +26,8 @@ interface CanvasTabStripProps {
   onExitFullscreen: () => void;
   /** Hands the open document to whatever the system opens Markdown with. */
   onOpenInDefaultEditor: (path: string) => void;
+  /** Present: the open document gets a button that opens it in the document workspace. */
+  onEditAsDocument?: (path: string) => void;
   /** Both present: the open document gets a Take Tour button. */
   understanding?: UnderstandingTourController;
   onTakeTour?: (path: string) => void;
@@ -58,6 +62,11 @@ export function CanvasTabStrip(props: CanvasTabStripProps) {
   const activePath = (): string | undefined => {
     const tab = props.tabs.find((candidate) => canvasTabKey(candidate) === props.active);
     return tab?.kind === 'markdown' ? tab.path : undefined;
+  };
+  /** Tours render from their file but are not prose to edit; other markdown tabs are. */
+  const editablePath = () => {
+    const path = activePath();
+    return path && isEditableDocumentPath(path) ? path : undefined;
   };
   const tourTarget = () => {
     const path = activePath();
@@ -209,6 +218,15 @@ export function CanvasTabStrip(props: CanvasTabStripProps) {
               icon={<ExternalLinkIcon size={13} />}
               onClick={() => props.onOpenInDefaultEditor(path())}
               title={`Open ${path()} in the default editor`}
+            />
+          )}
+        </Show>
+        <Show when={props.onEditAsDocument && editablePath()}>
+          {(path) => (
+            <IconButton
+              icon={<DocumentIcon size={13} />}
+              onClick={() => props.onEditAsDocument?.(path())}
+              title={`Edit ${path()} as a document (no commits in this task)`}
             />
           )}
         </Show>

@@ -179,6 +179,7 @@ import {
   assertStringArray,
   assertOptionalString,
   assertOptionalBoolean,
+  expandHome,
   validatePath,
 } from './validate.js';
 import { registerDocumentHandlers } from '../documents/register.js';
@@ -1451,10 +1452,6 @@ export function registerAllHandlers(win: BrowserWindow): void {
   registerGitHubHandlers();
 
   // --- File links ---
-  // Terminal links pass ~/ paths through unexpanded; only main knows the home directory.
-  // Concatenate rather than path.join so a "~/../" path still fails validatePath's ".." check.
-  const expandHome = (p: string): string => (p.startsWith('~/') ? os.homedir() + p.slice(1) : p);
-
   ipcMain.handle(IPC.OpenPath, (_e, args) => {
     assertString(args.filePath, 'filePath');
     const filePath = expandHome(args.filePath);

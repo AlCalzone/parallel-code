@@ -7,21 +7,44 @@ import fs from 'fs';
 import path from 'path';
 import { ensureWorktreeContainerExclude } from '../ipc/git.js';
 import { git, gitOk } from './git.js';
+import { errMessage, warn } from '../log.js';
 import { validateDocumentPath } from './runs.js';
 import type { DocumentFileInfo, DocumentFolderInfo, DocumentProjectSetup } from './types.js';
 
 const MAX_FILES = 1000;
+/** Entries the pre-repository scan reads at most, so a picked home folder answers quickly. */
+const MAX_ENTRIES = 20_000;
 /** How far the pre-repository scan walks before it stops looking. */
 const SCAN_DEPTH = 4;
 const DOCUMENT_RE = /\.(md|markdown|html?)$/i;
 const HTML_RE = /\.html?$/i;
 const SKIP_DIRS = new Set(['node_modules', '.git', '.parallel', '.worktrees']);
+/** Source files and build manifests: what makes a folder a code project rather than a writing one. */
+const CODE_EXTENSIONS =
+  'c cc cpp cs go h hpp java js jsx kt mjs php py rb rs svelte swift ts tsx vue'.split(' ');
+const CODE_RE = new RegExp(`\\.(${CODE_EXTENSIONS.join('|')})$`, 'i');
+const CODE_MARKERS = new Set([
+  'package.json',
+  'Cargo.toml',
+  'go.mod',
+  'pyproject.toml',
+  'Makefile',
+  'pom.xml',
+  'build.gradle',
+  'Gemfile',
+  'composer.json',
+]);
 
-function isDocument(file: string): boolean {
+export function isDocument(file: string): boolean {
   return DOCUMENT_RE.test(file);
 }
 
-async function repoToplevel(folder: string): Promise<string | null> {
+function isCodeFile(file: string): boolean {
+  const base = path.basename(file);
+  return CODE_MARKERS.has(base) || CODE_RE.test(base);
+}
+
+export async function repoToplevel(folder: string): Promise<string | null> {
   try {
     const out = await git(folder, ['rev-parse', '--show-toplevel']);
     return fs.realpathSync(out.trim());
@@ -30,11 +53,18 @@ async function repoToplevel(folder: string): Promise<string | null> {
   }
 }
 
-/** Documents in a folder that is not a repository yet, so the picker still has something to show. */
-function scanDocuments(folder: string): string[] {
+/**
+ * Documents in a folder that is not a repository of its own, so the picker
+ * still has something to show, and whether any code sits beside them.
+ */
+function scanFolder(folder: string): { documents: string[]; looksLikeCode: boolean } {
   const found: string[] = [];
+  let looksLikeCode = false;
+  let visited = 0;
+  // Past MAX_FILES documents the walk goes on only to learn whether code sits beside them.
+  const done = () => visited >= MAX_ENTRIES || (found.length >= MAX_FILES && looksLikeCode);
   const walk = (dir: string, rel: string, depth: number): void => {
-    if (depth > SCAN_DEPTH || found.length >= MAX_FILES) return;
+    if (depth > SCAN_DEPTH || done()) return;
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -42,18 +72,52 @@ function scanDocuments(folder: string): string[] {
       return;
     }
     for (const entry of entries) {
-      if (found.length >= MAX_FILES) return;
+      if (done()) return;
+      visited++;
       if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue;
       const child = rel ? `${rel}/${entry.name}` : entry.name;
       if (entry.isDirectory()) walk(path.join(dir, entry.name), child, depth + 1);
-      else if (entry.isFile() && isDocument(entry.name)) found.push(child);
+      else if (!entry.isFile()) continue;
+      else if (isDocument(entry.name)) {
+        if (found.length < MAX_FILES) found.push(child);
+      } else if (isCodeFile(entry.name)) looksLikeCode = true;
     }
   };
   walk(folder, '', 0);
-  return found.sort();
+  return { documents: found.sort(), looksLikeCode };
 }
 
 const DOCUMENT_PATHSPEC = ['--', '*.md', '*.markdown', '*.html', '*.htm'];
+/** Asks git for code files only, rather than listing a whole repository to look for one. */
+const CODE_PATHSPEC = [
+  '--',
+  ...CODE_EXTENSIONS.map((ext) => `:(icase)*.${ext}`),
+  ...[...CODE_MARKERS].map((marker) => `:(glob)**/${marker}`),
+  // Dot-folders hold tool settings (an Obsidian vault's plugins), not the project's code;
+  // the scan of a folder that is not a repository skips them too.
+  ':(exclude,glob)**/.*/**',
+];
+
+/** Whether the repository holds code; unknown (an error) reads as no, so the picker still works. */
+async function repoHasCode(folder: string): Promise<boolean> {
+  try {
+    const out = await git(folder, [
+      'ls-files',
+      '-z',
+      '--cached',
+      '--others',
+      '--exclude-standard',
+      ...CODE_PATHSPEC,
+    ]);
+    return out.length > 0;
+  } catch (err) {
+    warn('documents', 'Could not tell whether the repository holds code', {
+      folder,
+      error: errMessage(err),
+    });
+    return false;
+  }
+}
 
 async function listDocuments(folder: string, lsFilesArgs: string[]): Promise<string[]> {
   const out = await git(folder, ['ls-files', '-z', ...lsFilesArgs, ...DOCUMENT_PATHSPEC]);
@@ -71,14 +135,27 @@ export async function inspectDocumentFolder(folder: string): Promise<DocumentFol
   // The folder is allowed not to exist: the picker inspects what the user is
   // still typing, and setup creates whatever is missing.
   if (!fs.existsSync(folder))
-    return { exists: false, isRepo: false, enclosingRepo: null, hasCommits: false, files: [] };
+    return {
+      exists: false,
+      isRepo: false,
+      enclosingRepo: null,
+      hasCommits: false,
+      looksLikeCode: false,
+      files: [],
+    };
   const toplevel = await repoToplevel(folder);
   const isRepo = toplevel !== null && toplevel === fs.realpathSync(folder);
   if (!isRepo) {
-    const files = scanDocuments(folder).map(
-      (p): DocumentFileInfo => ({ path: p, committed: false }),
-    );
-    return { exists: true, isRepo: false, enclosingRepo: toplevel, hasCommits: false, files };
+    const scan = scanFolder(folder);
+    const files = scan.documents.map((p): DocumentFileInfo => ({ path: p, committed: false }));
+    return {
+      exists: true,
+      isRepo: false,
+      enclosingRepo: toplevel,
+      hasCommits: false,
+      looksLikeCode: scan.looksLikeCode,
+      files,
+    };
   }
   const hasCommits = await gitOk(folder, ['rev-parse', '--verify', 'HEAD']);
   const tracked = new Set(await listDocuments(folder, []));
@@ -87,7 +164,8 @@ export async function inspectDocumentFolder(folder: string): Promise<DocumentFol
     .sort()
     .slice(0, MAX_FILES)
     .map((p): DocumentFileInfo => ({ path: p, committed: hasCommits && tracked.has(p) }));
-  return { exists: true, isRepo: true, enclosingRepo: null, hasCommits, files };
+  const looksLikeCode = await repoHasCode(folder);
+  return { exists: true, isRepo: true, enclosingRepo: null, hasCommits, looksLikeCode, files };
 }
 
 function escapeHtml(value: string): string {
@@ -102,7 +180,7 @@ function starterTitle(documentPath: string, title?: string): string {
   return `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
 }
 
-function starterContent(documentPath: string, title?: string): string {
+export function starterContent(documentPath: string, title?: string): string {
   const heading = starterTitle(documentPath, title);
   if (!HTML_RE.test(documentPath)) return `# ${heading}\n\n`;
   const safe = escapeHtml(heading);

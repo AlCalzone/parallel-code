@@ -711,6 +711,7 @@ export async function loadState(): Promise<void> {
       p.coverageReportPath = undefined;
     }
     p.tasksCollapsed = typeof p.tasksCollapsed === 'boolean' ? p.tasksCollapsed : undefined;
+    p.quickEditSource = typeof p.quickEditSource === 'string' ? p.quickEditSource : undefined;
     p.evidenceChecks = parseProjectChecks(p.evidenceChecks);
     p.evidenceModel = parseEvidenceModelSettings(p.evidenceModel);
     p.evidenceAutoBuild = p.evidenceAutoBuild === true ? true : undefined;

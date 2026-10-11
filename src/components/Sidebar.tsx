@@ -43,11 +43,10 @@ import { AttentionTray } from './AttentionTray';
 import { ConnectPhoneModal } from './ConnectPhoneModal';
 import { RemoveProjectConfirm } from './RemoveProjectConfirm';
 import { EditProjectDialog } from './EditProjectDialog';
-import { NewDocumentProjectDialog } from '../documents/NewDocumentProjectDialog';
+import { AddProjectDialog } from '../documents/AddProjectDialog';
 import { openDocumentWorkspace } from '../documents/store';
 import { codeProjects, isDocumentProject } from '../store/projects';
 import { DocumentIcon } from '../documents/DocumentIcon';
-import { AddProjectMenu } from './AddProjectMenu';
 import { ImportWorktreesDialog } from './ImportWorktreesDialog';
 import { SidebarFooter } from './SidebarFooter';
 import { IconButton } from './IconButton';
@@ -469,17 +468,12 @@ export function Sidebar() {
     });
   });
 
-  const [showNewDocumentProject, setShowNewDocumentProject] = createSignal(false);
-  const [addMenuAt, setAddMenuAt] = createSignal<{ left: number; top: number } | null>(null);
+  const [showAddProject, setShowAddProject] = createSignal(false);
 
-  /** With one project kind there is nothing to choose, so "+" stays direct. */
-  function handleAddProject(anchor: HTMLElement) {
-    if (!store.documentWorkspacesEnabled) {
-      void addCodeProject();
-      return;
-    }
-    const rect = anchor.getBoundingClientRect();
-    setAddMenuAt({ left: rect.left, top: rect.bottom + 4 });
+  /** With one project kind there is nothing to choose, so "+" stays the folder picker. */
+  function handleAddProject() {
+    if (store.documentWorkspacesEnabled) setShowAddProject(true);
+    else void addCodeProject();
   }
 
   /** A document project navigates; a code project opens its settings. */
@@ -491,8 +485,10 @@ export function Sidebar() {
 
   async function addCodeProject() {
     const projectId = await pickAndAddProject();
-    if (!projectId) return;
+    if (projectId) await offerExistingWorktrees(projectId);
+  }
 
+  async function offerExistingWorktrees(projectId: string) {
     const project = store.projects.find((entry) => entry.id === projectId) ?? null;
     if (!project) return;
     if (project.isGitRepo === false) return;
@@ -671,7 +667,7 @@ export function Sidebar() {
                   <path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z" />
                 </svg>
               }
-              onClick={(e) => handleAddProject(e.currentTarget)}
+              onClick={handleAddProject}
               title="Add project"
               size="sm"
             />
@@ -711,9 +707,11 @@ export function Sidebar() {
                       title={
                         isProjectMissing(project.id)
                           ? `Folder not found: ${abbreviateHomePath(project.path)}`
-                          : isDocumentProject(project)
-                            ? `Document workspace: ${project.documentPath} (${abbreviateHomePath(project.path)})`
-                            : abbreviateHomePath(project.path)
+                          : project.quickEditSource
+                            ? `Quick edit: ${abbreviateHomePath(project.quickEditSource)}`
+                            : isDocumentProject(project)
+                              ? `Document workspace: ${project.documentPath} (${abbreviateHomePath(project.path)})`
+                              : abbreviateHomePath(project.path)
                       }
                       style={{
                         display: 'flex',
@@ -831,7 +829,7 @@ export function Sidebar() {
           fallback={
             <button
               class="icon-btn sidebar-create-btn"
-              onClick={(e) => handleAddProject(e.currentTarget)}
+              onClick={handleAddProject}
               style={{
                 background: 'transparent',
                 border: `1px solid ${theme.border}`,
@@ -1020,22 +1018,10 @@ export function Sidebar() {
         <ConnectPhoneModal open={showConnectPhone()} onClose={() => setShowConnectPhone(false)} />
 
         <EditProjectDialog project={editingProject()} onClose={() => setEditingProject(null)} />
-        <Show when={addMenuAt()}>
-          {(at) => (
-            <AddProjectMenu
-              anchor={at()}
-              onClose={() => setAddMenuAt(null)}
-              onPick={(kind) => {
-                setAddMenuAt(null);
-                if (kind === 'document') setShowNewDocumentProject(true);
-                else void addCodeProject();
-              }}
-            />
-          )}
-        </Show>
-        <NewDocumentProjectDialog
-          open={showNewDocumentProject()}
-          onClose={() => setShowNewDocumentProject(false)}
+        <AddProjectDialog
+          open={showAddProject()}
+          onClose={() => setShowAddProject(false)}
+          onCodeProjectAdded={(id) => void offerExistingWorktrees(id)}
         />
         <ImportWorktreesDialog
           open={importProject() !== null}
