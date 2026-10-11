@@ -33,6 +33,7 @@ export function AgentChatView(props: {
   active: boolean;
   onReady?: (focus: () => void) => void;
   onReview?: (path?: string) => void;
+  onOpenTour?: () => void;
 }) {
   const provider = () => agentChatProvider(props.agentId);
   const agentName = () => (provider() === 'claude' ? 'Claude' : 'Codex');
@@ -314,6 +315,8 @@ export function AgentChatView(props: {
               onNewChat={() => void connect(true)}
               history={history()}
               onReview={props.onReview ? reviewFile : undefined}
+              // The published tour is runtime state; after a restart there is none to open.
+              onOpenTour={props.task.agentTour ? props.onOpenTour : undefined}
               permissionMode={current().permissionMode ?? props.task.chatPermissionMode}
               permissionsDisabled={props.task.skipPermissions}
               onPermissionMode={provider() === 'claude' ? selectPermissionMode : undefined}

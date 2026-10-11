@@ -208,6 +208,22 @@ describe('Codex chat view', () => {
     expect(task().initialPrompt).toBeUndefined();
   });
 
+  it('offers the published tour only while one is held', async () => {
+    const onOpenTour = vi.fn();
+    dispose = render(
+      () => <AgentChatView task={task()} agentId="agent-1" active onOpenTour={onOpenTour} />,
+      container,
+    );
+    const props = await tick();
+    expect(props.onOpenTour).toBeUndefined();
+    setStore('tasks', 'task-1', 'agentTour', {
+      revision: 1,
+      payload: { subject: 'Auth', gist: {}, cards: [] },
+    });
+    props.onOpenTour?.();
+    expect(onOpenTour).toHaveBeenCalledOnce();
+  });
+
   it('opens the actual file for links containing line and column suffixes', async () => {
     dispose = render(() => <AgentChatView task={task()} agentId="agent-1" active />, container);
     const chat = await tick();

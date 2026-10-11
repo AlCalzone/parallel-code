@@ -43,6 +43,7 @@ export interface ChatProps {
   onActions: (actions: ChatActions) => void;
   onReview?: (path?: string) => void;
   onOpenFile?: (path: string) => void;
+  onOpenTour?: () => void;
   onListFiles?: () => Promise<string[]>;
   /** Path to reference for a dropped file — worktree-relative when inside it — or
    *  undefined when it has no path on disk, such as an image dragged from a browser. */
@@ -197,6 +198,7 @@ function Conversation(props: { chat: ChatProps; threadId: string }) {
           pending={composer.pendingMessage()}
           onReview={chat.onReview}
           onOpenFile={chat.onOpenFile}
+          onOpenTour={chat.onOpenTour}
         />
       </ChatScroll>
       <Composer

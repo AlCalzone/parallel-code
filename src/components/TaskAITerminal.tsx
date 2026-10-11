@@ -77,6 +77,8 @@ interface TaskAITerminalProps {
    *  took the link. Otherwise the file opens in the Markdown viewer. */
   onFileLink?: (filePath: string) => boolean;
   onReview?: (path?: string) => void;
+  /** Opens the tour the agent published through `tour_publish`. */
+  onOpenTour?: () => void;
   /** Task brief bar, shown between the agent header and its output, where people look first. */
   brief?: JSX.Element;
 }
@@ -590,6 +592,7 @@ export function TaskAITerminal(props: TaskAITerminalProps) {
                   if (!props.onFileLink?.(filePath)) handleFileLink(filePath);
                 }}
                 onReview={props.onReview}
+                onOpenTour={props.onOpenTour}
                 onSendSelection={
                   canHandoff(agentId) && !handoff()
                     ? (selection, recipientAgentId) =>
@@ -768,6 +771,7 @@ function AgentTerminalPane(props: {
   handoffRecipients: { id: string; label: string }[];
   task: Task;
   onReview?: (path?: string) => void;
+  onOpenTour?: () => void;
   agentId: string;
   canClose: boolean;
   /** When true the pane is one of several stacked tabs (only `visible` shown). */
@@ -909,6 +913,7 @@ function AgentTerminalPane(props: {
             <Show when={isAgentChat(props.task, props.agentId)}>
               <AgentChatView
                 onReview={props.onReview}
+                onOpenTour={props.onOpenTour}
                 task={props.task}
                 agentId={props.agentId}
                 active={

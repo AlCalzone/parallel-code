@@ -16,6 +16,8 @@ const typeLabels = { command: 'Command', files: 'Changes', tool: 'Tool' };
 export interface ActivityActions {
   onReview?: (path?: string) => void;
   onOpenFile?: (path: string) => void;
+  /** Opens the tour the agent published; omitted when this run did not publish it. */
+  onOpenTour?: () => void;
 }
 
 /** A command line above its output, as a terminal shows it. */
@@ -218,6 +220,11 @@ export function ActivityGroup(props: ActivityActions & { items: ChatItem[] }) {
         <button class="chat-review btn-with-icon" onClick={() => props.onReview?.()}>
           <DiffIcon size={12} />
           Review changes ↗
+        </button>
+      </Show>
+      <Show when={props.onOpenTour}>
+        <button class="chat-review" onClick={() => props.onOpenTour?.()}>
+          Open tour ↗
         </button>
       </Show>
     </div>

@@ -3,7 +3,7 @@ import { batch } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ChatView, type ChatProps } from './ChatView';
-import type { AgentChatState } from '../../../electron/shared/agent-chat-types';
+import type { AgentChatState, ChatItem } from '../../../electron/shared/agent-chat-types';
 import { mod } from '../../lib/platform';
 
 let container: HTMLDivElement;
@@ -1060,6 +1060,52 @@ it('keeps edits compact with numbered diffs available on demand', async () => {
   );
   await act(() => button('Review diff').click());
   expect(onReview).toHaveBeenCalledWith('src/app.ts');
+});
+
+it('offers a published tour beside the tool run that published it', async () => {
+  const onOpenTour = vi.fn();
+  const publish = (id: string, label: string, status: 'running' | 'completed' | 'failed') => ({
+    id,
+    kind: 'tool' as const,
+    text: '',
+    activity: { type: 'tool' as const, label, status },
+  });
+  const withItems = (items: ChatItem[]) => ({ ...props.state, items });
+  await update({
+    onOpenTour,
+    state: withItems([publish('t', 'mcp__parallel-code__tour_publish', 'running')]),
+  });
+  expect(container.textContent).not.toContain('Open tour');
+  await update({
+    onOpenTour,
+    state: withItems([publish('t', 'mcp__parallel-code__tour_publish', 'failed')]),
+  });
+  expect(container.textContent).not.toContain('Open tour');
+  // Codex labels MCP calls as `server / tool`.
+  await update({
+    onOpenTour,
+    state: withItems([publish('t', 'parallel-code / tour_publish', 'completed')]),
+  });
+  expect(button('Open tour ↗').closest('details')).toBeNull();
+  await act(() => button('Open tour ↗').click());
+  expect(onOpenTour).toHaveBeenCalledOnce();
+  // Only the newest publish is held, so an earlier run must not offer it.
+  await update({
+    onOpenTour,
+    state: withItems([
+      publish('t', 'mcp__parallel-code__tour_publish', 'completed'),
+      { id: 'a', kind: 'assistant', text: 'Published.' },
+      publish('u', 'mcp__parallel-code__tour_publish', 'completed'),
+    ]),
+  });
+  const groups = container.querySelectorAll('.chat-activity-group');
+  expect(groups[0].textContent).not.toContain('Open tour');
+  expect(groups[1].textContent).toContain('Open tour');
+  await update({
+    onOpenTour: undefined,
+    state: withItems([publish('t', 'mcp__parallel-code__tour_publish', 'completed')]),
+  });
+  expect(container.textContent).not.toContain('Open tour');
 });
 
 it('leaves a settled, highlighted answer alone while the agent works on', async () => {

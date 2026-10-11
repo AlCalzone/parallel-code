@@ -572,6 +572,7 @@ export function TaskPanel(props: TaskPanelProps) {
                 });
               }
         }
+        onOpenTour={openAgentTour}
         task={props.task}
         isActive={props.isActive}
         selectedAgentId={selectedAgentId()}

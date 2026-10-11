@@ -152,8 +152,17 @@ function AssistantMessage(props: { item: ChatItem; streaming: boolean }) {
   );
 }
 
+/** Claude labels MCP calls `mcp__server__tool`; Codex labels them `server / tool`. */
+function publishedTour(item: ChatItem) {
+  return (
+    item.activity?.status === 'completed' && /(?:__| \/ )tour_publish$/.test(item.activity.label)
+  );
+}
+
 /** Consecutive tool items render as one group, headed by the first of them. */
-function TranscriptEntry(props: TranscriptProps & { item: ChatItem; index: number }) {
+function TranscriptEntry(
+  props: TranscriptProps & { item: ChatItem; index: number; latestTour?: ChatItem },
+) {
   const items = () => props.state.items;
   // Memos, so that a frame appending one item re-runs only what that item changes:
   // every entry reads the item list, but few of their answers move.
@@ -187,7 +196,15 @@ function TranscriptEntry(props: TranscriptProps & { item: ChatItem; index: numbe
         <AssistantMessage item={props.item} streaming={streaming()} />
       </Match>
       <Match when={props.item.kind === 'tool' && startsRun()}>
-        <ActivityGroup items={run()} onReview={props.onReview} onOpenFile={props.onOpenFile} />
+        <ActivityGroup
+          items={run()}
+          onReview={props.onReview}
+          onOpenFile={props.onOpenFile}
+          // Only the newest tour is held, so only the run that published it opens it.
+          onOpenTour={
+            props.latestTour && run().includes(props.latestTour) ? props.onOpenTour : undefined
+          }
+        />
       </Match>
     </Switch>
   );
@@ -196,6 +213,7 @@ function TranscriptEntry(props: TranscriptProps & { item: ChatItem; index: numbe
 /** The conversation log. Completed turns stay mounted: search, selections and
  *  disclosure state belong to the reader, even while the next turn streams. */
 export function Transcript(props: TranscriptProps) {
+  const latestTour = createMemo(() => props.state.items.findLast(publishedTour));
   return (
     <div class="chat-transcript">
       <Show
@@ -211,7 +229,9 @@ export function Transcript(props: TranscriptProps) {
         }
       >
         <For each={props.state.items}>
-          {(item, index) => <TranscriptEntry {...props} item={item} index={index()} />}
+          {(item, index) => (
+            <TranscriptEntry {...props} item={item} index={index()} latestTour={latestTour()} />
+          )}
         </For>
         <Show when={props.pending}>
           {(pending) => (
