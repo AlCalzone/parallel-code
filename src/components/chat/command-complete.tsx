@@ -72,6 +72,8 @@ export function createCommandComplete(input: {
     active,
     optionId,
     choose,
+    /** Keeps the list closed for this draft, e.g. a recalled message that starts with `/`. */
+    dismiss: (draft: string) => setDismissed(draft),
     activeId: () => (matches().length ? optionId(active()) : undefined),
     onKeyDown,
   };
