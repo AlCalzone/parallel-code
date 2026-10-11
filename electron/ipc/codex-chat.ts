@@ -8,6 +8,7 @@ import type {
   ChatItem,
   ChatImage,
   ChatModel,
+  ChatCommand,
   AgentChatState,
 } from '../shared/agent-chat-types.js';
 
@@ -130,6 +131,8 @@ function chatItem(value: unknown, completed = true): ChatItem | undefined {
 /** One official Codex app-server process per chat. No credentials leave that process. */
 export class CodexChat {
   readonly state: AgentChatState = { status: 'starting', items: [], requests: [] };
+  private cwd?: string;
+  private skills = new Map<string, string>();
   private sequence = 0;
   private turnId?: string;
   private interruptRequested = false;
@@ -188,6 +191,7 @@ export class CodexChat {
   }
 
   async start(cwd: string, threadId?: string, skipPermissions = false): Promise<void> {
+    this.cwd = cwd;
     await this.rpc('initialize', {
       clientInfo: { name: 'parallel_code', title: 'Parallel Code', version: '2.0.0' },
       capabilities: { experimentalApi: true },
@@ -222,6 +226,40 @@ export class CodexChat {
     this.state.status = 'ready';
     this.publish();
     await this.loadModels();
+    await this.loadSkills();
+  }
+
+  private async loadSkills(): Promise<void> {
+    try {
+      const result = record(await this.rpc('skills/list', { cwds: [this.cwd] }));
+      if (!Array.isArray(result.data)) throw new Error('Invalid skill list.');
+      const skills = new Map<string, string>();
+      const commands: ChatCommand[] = [];
+      for (const entry of result.data) {
+        const group = record(entry);
+        if (group.cwd !== this.cwd || !Array.isArray(group.skills)) continue;
+        for (const value of group.skills) {
+          const skill = record(value);
+          const name = string(skill.name);
+          const path = string(skill.path);
+          if (!name || !path || skill.enabled === false || skills.has(name)) continue;
+          skills.set(name, path);
+          commands.push({
+            name,
+            description: string(skill.description),
+            argumentHint: '',
+            prefix: '$',
+          });
+        }
+      }
+      this.skills = skills;
+      this.state.commands = commands;
+    } catch {
+      // Older app-servers may not support discovery; chat remains usable.
+      this.skills.clear();
+      this.state.commands = undefined;
+    }
+    this.publish();
   }
 
   async loadModels(): Promise<void> {
@@ -306,6 +344,7 @@ export class CodexChat {
           ...(this.state.reasoningEffort ? { effort: this.state.reasoningEffort } : {}),
           input: [
             { type: 'text', text },
+            ...this.skillInput(text),
             ...images.map((image) => ({
               type: 'image',
               url: `data:${image.mediaType};base64,${image.data}`,
@@ -327,6 +366,12 @@ export class CodexChat {
       this.publish();
       throw err;
     }
+  }
+
+  private skillInput(text: string): { type: 'skill'; name: string; path: string }[] {
+    const name = /^\$(\S+)(?:\s|$)/.exec(text)?.[1];
+    const path = name ? this.skills.get(name) : undefined;
+    return name && path ? [{ type: 'skill', name, path }] : [];
   }
 
   async interrupt(): Promise<void> {
@@ -604,6 +649,9 @@ export class CodexChat {
       if (error.message) this.state.error = string(error.message);
     } else if (method === 'serverRequest/resolved') {
       this.state.requests = this.state.requests.filter((r) => r.id !== params.requestId);
+    } else if (method === 'skills/changed') {
+      void this.loadSkills();
+      return;
     } else if (method === 'error') {
       this.state.error = string(record(params.error).message) || 'Codex encountered an error.';
     } else return;

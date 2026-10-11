@@ -657,6 +657,32 @@ it('completes slash commands and skills like a terminal', async () => {
   expect(props.draft).toBe('/plugin:docx ');
 });
 
+it('completes Codex skills with dollar syntax from either trigger', async () => {
+  await update({
+    draft: '',
+    state: {
+      ...props.state,
+      commands: [{ name: 'review', description: 'Review code', argumentHint: '', prefix: '$' }],
+    },
+  });
+  expect(composer().placeholder).toContain('$ for skills');
+  await type('$re');
+  expect(suggestions()).toEqual([{ text: '$reviewReview code', selected: true }]);
+  await act(() => press('Tab'));
+  expect(props.draft).toBe('$review ');
+  await update({ draft: '' });
+  await type('/review');
+  await act(() => enter());
+  expect(props.draft).toBe('$review ');
+  expect(send).not.toHaveBeenCalled();
+  await act(() => enter());
+  expect(send).toHaveBeenLastCalledWith('$review', []);
+  await update({ draft: '' });
+  await type('$review');
+  await act(() => enter());
+  expect(send).toHaveBeenCalledTimes(2);
+});
+
 it('sends a fully typed command and leaves a dismissed or unmatched slash alone', async () => {
   await update({ draft: '', state: { ...props.state, commands } });
   await type('/review');

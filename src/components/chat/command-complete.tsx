@@ -2,11 +2,11 @@ import { For, Show, createEffect, createMemo, createSignal, createUniqueId, on }
 import type { ChatCommand } from '../../../electron/shared/agent-chat-types';
 
 /**
- * The command name being typed, while the draft is a lone `/word`. The agent runs
+ * The command name being typed, while the draft is a lone `/word` or `$word`. The agent runs
  * a command only from the start of a message, so completion opens only there.
  */
 function commandQuery(draft: string): string | undefined {
-  return /^\/(\S*)$/.exec(draft)?.[1];
+  return /^[/$](\S*)$/.exec(draft)?.[1];
 }
 
 /** Names, or a plugin skill's own name after its `plugin:`, starting with the query;
@@ -33,14 +33,20 @@ export function createCommandComplete(input: {
   const matches = createMemo(() => {
     const query = commandQuery(input.draft());
     if (query === undefined || input.draft() === dismissed()) return [];
-    return matchCommands(input.commands() ?? [], query);
+    return matchCommands(
+      (input.commands() ?? []).filter(
+        (command) => !input.draft().startsWith('$') || command.prefix === '$',
+      ),
+      query,
+    );
   });
   createEffect(on(matches, () => setActive(0)));
   createEffect(on(input.draft, (draft) => draft !== dismissed() && setDismissed(undefined)));
   const optionId = (index: number) => `${id}-${index}`;
 
   // A new draft value moves the caret to the end, which is where an argument goes.
-  const choose = (command: ChatCommand) => input.onDraft(`/${command.name} `);
+  const choose = (command: ChatCommand) =>
+    input.onDraft(`${command.prefix ?? '/'}${command.name} `);
 
   /** Handles a key while the list is open; true when the key was used. */
   function onKeyDown(event: KeyboardEvent): boolean {
@@ -58,7 +64,11 @@ export function createCommandComplete(input: {
     )
       choose(command);
     // A command typed out in full sends, as it would in a terminal.
-    else if (event.key === 'Enter' && !event.shiftKey && input.draft() !== `/${command.name}`)
+    else if (
+      event.key === 'Enter' &&
+      !event.shiftKey &&
+      input.draft() !== `${command.prefix ?? '/'}${command.name}`
+    )
       choose(command);
     else return false;
     event.preventDefault();
@@ -97,7 +107,8 @@ export function CommandList(props: { complete: CommandComplete }) {
               onClick={() => props.complete.choose(command)}
             >
               <span>
-                /{command.name}
+                {command.prefix ?? '/'}
+                {command.name}
                 <Show when={command.argumentHint}> {command.argumentHint}</Show>
               </span>
               <small title={command.description}>{command.description}</small>

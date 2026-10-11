@@ -116,7 +116,7 @@ export function Composer(props: ComposerProps) {
   const placeholder = () =>
     c.shellMode()
       ? 'Command to run in this worktree… Backspace to leave'
-      : `${working() ? 'Add a follow-up' : `Message ${props.agentName}`}… Shift+Enter for a new line${props.onListFiles ? ', @ for files' : ''}${props.state.commands?.length ? ', / for commands' : ''}${c.canRunShell() ? ', ! for a shell command' : ''}`;
+      : `${working() ? 'Add a follow-up' : `Message ${props.agentName}`}… Shift+Enter for a new line${props.onListFiles ? ', @ for files' : ''}${props.state.commands?.length ? (props.state.commands.some((command) => command.prefix === '$') ? ', $ for skills' : ', / for commands') : ''}${c.canRunShell() ? ', ! for a shell command' : ''}`;
   const sendLabel = () =>
     c.shellMode()
       ? working()

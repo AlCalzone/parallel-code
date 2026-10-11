@@ -79,8 +79,10 @@ export interface ChatModel {
   supportedReasoningEfforts: { reasoningEffort: string; description: string }[];
 }
 
-/** A slash command or skill the agent accepts as a message starting with `/name`. */
+/** A command or skill the agent accepts at the start of a message. */
 export interface ChatCommand {
+  /** Defaults to `/` for Claude commands; Codex skills use `$`. */
+  prefix?: '/' | '$';
   name: string;
   description: string;
   argumentHint: string;
@@ -91,7 +93,7 @@ export interface AgentChatState {
   reasoningEffort?: string;
   models?: ChatModel[];
   modelsError?: string;
-  /** What the composer offers after a leading `/`; absent when the agent lists none. */
+  /** What the composer offers after a leading `/` or `$`; absent when the agent lists none. */
   commands?: ChatCommand[];
   threadId?: string;
   status: 'starting' | 'ready' | 'working' | 'closed';

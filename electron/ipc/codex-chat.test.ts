@@ -42,7 +42,7 @@ function harness() {
   const chat = new CodexChat(proc as unknown as ChildProcessWithoutNullStreams, publish);
   const receive = (message: unknown) => proc.stdout.write(`${JSON.stringify(message)}\n`);
   const reply = (result: unknown) => receive({ id: messages[messages.length - 1]?.id, result });
-  async function start(threadId?: string, turns: unknown[] = []) {
+  async function start(threadId?: string, turns: unknown[] = [], skills: unknown[] = []) {
     const ready = chat.start('/worktree', threadId);
     expect(messages[0]).toMatchObject({
       method: 'initialize',
@@ -71,6 +71,13 @@ function harness() {
       params: { includeHidden: false },
     });
     reply({ data: models, nextCursor: null });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(messages[messages.length - 1]).toMatchObject({
+      method: 'skills/list',
+      params: { cwds: ['/worktree'] },
+    });
+    reply({ data: [{ cwd: '/worktree', skills, errors: [] }] });
     await ready;
   }
   return { proc, chat, messages, receive, reply, start, publish };
@@ -79,6 +86,53 @@ function harness() {
 afterEach(() => vi.useRealTimers());
 
 describe('Codex chat app-server protocol', () => {
+  it('discovers enabled skills, sends explicit skill inputs and refreshes changes', async () => {
+    const h = harness();
+    await h.start(
+      undefined,
+      [],
+      [
+        {
+          name: 'review',
+          path: '/skills/review/SKILL.md',
+          description: 'Review code',
+          enabled: true,
+        },
+        { name: 'disabled', path: '/skills/disabled/SKILL.md', enabled: false },
+        { name: 'broken' },
+      ],
+    );
+    expect(h.chat.state.commands).toEqual([
+      { name: 'review', description: 'Review code', argumentHint: '', prefix: '$' },
+    ]);
+    const sent = h.chat.send('$review this change');
+    expect(h.messages[h.messages.length - 1]).toMatchObject({
+      method: 'turn/start',
+      params: {
+        input: [
+          { type: 'text', text: '$review this change' },
+          { type: 'skill', name: 'review', path: '/skills/review/SKILL.md' },
+        ],
+      },
+    });
+    h.reply({ turn: { id: 'turn-1' } });
+    await sent;
+    h.receive({ method: 'skills/changed' });
+    expect(h.messages[h.messages.length - 1]).toMatchObject({ method: 'skills/list' });
+    h.reply({ data: [{ cwd: '/worktree', skills: [] }] });
+    await Promise.resolve();
+    expect(h.chat.state.commands).toEqual([]);
+    h.receive({ method: 'skills/changed' });
+    h.receive({
+      id: h.messages[h.messages.length - 1]?.id,
+      error: { message: 'Unsupported method' },
+    });
+    await Promise.resolve();
+    expect(h.chat.state.commands).toBeUndefined();
+    expect(h.chat.state.status).toBe('working');
+    h.chat.stop();
+  });
+
   it('tracks the latest context window separately from session totals and clears unknown limits', async () => {
     const h = harness();
     await h.start();
