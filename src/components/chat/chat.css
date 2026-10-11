@@ -1159,15 +1159,9 @@
   .chat-toolbar {
     padding-inline: 8px;
   }
-  /* Keep labels readable when the action buttons need most of the bottom row. */
+  /* Wrap instead of truncating labels, but only when the row really runs out of room. */
   .chat-composer-settings {
     flex-wrap: wrap;
-  }
-  .chat-model-settings {
-    flex-basis: 100%;
-  }
-  .chat-model-selectors select {
-    max-width: none;
   }
 }
 
