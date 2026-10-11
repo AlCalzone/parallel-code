@@ -313,6 +313,7 @@ function ItemList(props: { items: CardItem[]; onFileClick?: (file: string) => vo
       <For each={props.items}>
         {(item) => (
           <li
+            class="brief-item"
             style={{
               display: 'flex',
               'flex-wrap': 'wrap',
@@ -329,6 +330,7 @@ function ItemList(props: { items: CardItem[]; onFileClick?: (file: string) => vo
                   {(file) => (
                     <button
                       type="button"
+                      class="brief-item-file"
                       title="Show in changed files"
                       onClick={() => props.onFileClick?.(file())}
                       style={{
