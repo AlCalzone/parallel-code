@@ -922,6 +922,40 @@ describe('Claude chat adapter', () => {
     await expect(h.chat.selectModel('claude-fixture')).rejects.toThrow('Wait for Claude');
   });
 
+  it('names the model and effort the CLI applies instead of its defaults', async () => {
+    const h = harness();
+    const getSettings = vi.fn(
+      async (): Promise<{ applied: { model: string; effort: string | null } }> => ({
+        applied: { model: 'claude-fixture', effort: 'high' },
+      }),
+    );
+    Object.assign(h.controls, { getSettings });
+    h.controls.supportedModels.mockResolvedValueOnce([
+      {
+        value: 'default',
+        resolvedModel: 'claude-fixture',
+        displayName: 'Default (recommended)',
+        supportedEffortLevels: ['low', 'high'],
+      },
+      {
+        value: 'sonnet',
+        resolvedModel: 'claude-fixture',
+        displayName: 'Claude Fixture',
+        supportedEffortLevels: ['low', 'high'],
+      },
+    ]);
+    await h.chat.start();
+    expect(h.chat.state.models?.map((model) => model.displayName)).toEqual(['Claude Fixture']);
+    expect(h.chat.state).toMatchObject({ model: 'claude-fixture', reasoningEffort: 'high' });
+    // Clearing the effort leaves the model's own default, which the CLI then names.
+    getSettings.mockResolvedValueOnce({ applied: { model: 'claude-fixture', effort: 'low' } });
+    await h.chat.selectModel('claude-fixture');
+    expect(h.chat.state.reasoningEffort).toBe('low');
+    getSettings.mockResolvedValueOnce({ applied: { model: 'claude-fixture', effort: null } });
+    await h.chat.selectModel('claude-fixture');
+    expect(h.chat.state.reasoningEffort).toBeUndefined();
+  });
+
   it('explains a launch failure with the CLI output', async () => {
     const h = harness();
     h.controls.initializationResult.mockImplementationOnce(async () => {

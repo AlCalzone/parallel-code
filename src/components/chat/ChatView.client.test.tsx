@@ -492,6 +492,23 @@ it('hides unsupported reasoning and restores it when a capable model is selected
   expect(container.querySelector('[aria-label="Reasoning effort"]')).toBeNull();
 });
 
+it('names the reported effort instead of offering Default when the catalog has none', async () => {
+  const models = [
+    {
+      model: 'claude',
+      displayName: 'Claude',
+      supportedReasoningEfforts: [
+        { reasoningEffort: 'medium', description: '' },
+        { reasoningEffort: 'high', description: '' },
+      ],
+    },
+  ];
+  await update({ state: { ...props.state, model: 'claude', models, reasoningEffort: 'medium' } });
+  const effort = container.querySelector<HTMLSelectElement>('[aria-label="Reasoning effort"]');
+  expect(effort?.value).toBe('medium');
+  expect([...(effort?.options ?? [])].map((option) => option.text)).toEqual(['Medium', 'High']);
+});
+
 it('retains queued follow-ups across reconnects and requires an explicit retry', async () => {
   await update({ state: { ...props.state, status: 'working' } });
   await act(() => button('Queue message').click());

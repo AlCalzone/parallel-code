@@ -202,6 +202,7 @@ export class ClaudeChat implements AgentChat {
     if (this.isClosed())
       throw new Error(this.state.error ?? 'Claude disconnected while connecting.');
     await this.loadModels();
+    await this.readAppliedModel();
     if (this.isClosed())
       throw new Error(this.state.error ?? 'Claude disconnected while connecting.');
     this.noteUnadoptedSettingsMode(settingsMode);
@@ -250,9 +251,16 @@ export class ClaudeChat implements AgentChat {
     try {
       if (!this.query) throw new Error('Claude is not connected.');
       const models = await this.query.supportedModels();
+      const id = (model: (typeof models)[number]) => model.resolvedModel ?? model.value;
       this.state.models = models
+        // The "default" row aliases a model the catalog also lists by name; show that name.
+        .filter(
+          (model) =>
+            model.value !== 'default' ||
+            !models.some((other) => other !== model && id(other) === id(model)),
+        )
         .map((model) => ({
-          model: model.resolvedModel ?? model.value,
+          model: id(model),
           // A picker on the composer names the model; the CLI's advice would crowd it.
           displayName: model.displayName.replace(/\s*\(recommended\)$/i, ''),
           supportedReasoningEfforts: (model.supportedEffortLevels ?? []).map((reasoningEffort) => ({
@@ -295,6 +303,7 @@ export class ClaudeChat implements AgentChat {
       if (!this.isClosed()) {
         this.state.model = model;
         this.state.reasoningEffort = effort;
+        await this.readAppliedModel();
       }
     } finally {
       if (!this.isClosed()) {
@@ -303,6 +312,25 @@ export class ClaudeChat implements AgentChat {
       }
       this.publish();
     }
+  }
+
+  /**
+   * Adopts the model and effort the CLI will actually send. Without an explicit
+   * choice it applies its own defaults, which the picker names instead of calling
+   * them "Default". `getSettings` is missing from the SDK's types.
+   */
+  private async readAppliedModel(): Promise<void> {
+    const query = this.query as (Query & { getSettings?: () => Promise<unknown> }) | undefined;
+    let applied: Record<string, unknown>;
+    try {
+      applied = record(record(await query?.getSettings?.()).applied);
+    } catch {
+      return; // Older CLIs: the init message still names the model on the first turn.
+    }
+    if (this.isClosed()) return;
+    this.state.model = string(applied.model) || this.state.model;
+    // null means no effort is sent, e.g. for a model without effort levels.
+    if ('effort' in applied) this.state.reasoningEffort = string(applied.effort) || undefined;
   }
 
   async setPermissionMode(mode: ChatPermissionMode): Promise<void> {
