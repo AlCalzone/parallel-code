@@ -9,6 +9,7 @@ import { isConfidenceStale } from '../lib/task-confidence';
 import type { BriefItem } from '../lib/task-brief';
 import type { ConfidenceFinding } from '../../electron/shared/task-confidence';
 import {
+  briefTargetAgentName,
   changeBriefDecision,
   keepBriefDecision,
   refreshTaskBrief,
@@ -91,7 +92,7 @@ interface TaskBriefBarProps {
 }
 
 /**
- * The task brief in the task header: one compact line (headline and any
+ * The task brief above the agent output: a card of up to two lines (headline and any
  * confidence scores) that opens the full brief in a card below it.
  */
 export function TaskBriefBar(props: TaskBriefBarProps) {
@@ -149,7 +150,7 @@ export function TaskBriefBar(props: TaskBriefBarProps) {
 
   const headline = () => {
     const brief = props.task.brief?.brief;
-    if (!store.taskBriefs) return 'Confidence rating';
+    if (!store.taskBriefs) return props.task.confidence ? 'Confidence rating' : 'Rate confidence…';
     if (brief) return brief.headline || brief.goal;
     if (props.task.briefStatus?.state === 'generating') return 'Writing the brief…';
     return 'The brief appears after the agent finishes a turn';
@@ -178,16 +179,18 @@ export function TaskBriefBar(props: TaskBriefBarProps) {
           display: 'flex',
           'align-items': 'center',
           gap: '8px',
-          width: '100%',
-          height: '24px',
+          // A card inset from the panel edges. It stays unfilled, since a brief is
+          // routine; the fill on hover and while open lives in styles.css.
+          width: 'calc(100% - 16px)',
+          'flex-shrink': '0',
           'min-width': '0',
-          padding: '0 12px',
-          margin: '0',
-          border: 'none',
-          'border-bottom': `1px solid ${theme.border}`,
-          background: 'transparent',
+          padding: '7px 12px',
+          margin: '6px 8px',
+          border: `1px solid ${theme.border}`,
+          'border-radius': 'var(--radius-md)',
           color: props.task.brief ? theme.fg : theme.fgMuted,
-          'font-size': sf(11),
+          'font-size': sf(12),
+          'line-height': '1.4',
           'font-family': 'inherit',
           'text-align': 'left',
           cursor: 'pointer',
@@ -195,8 +198,18 @@ export function TaskBriefBar(props: TaskBriefBarProps) {
           'white-space': 'nowrap',
         }}
       >
+        {/* Two lines fit most headlines; the full brief is one click away. */}
         <span
-          style={{ flex: '1', 'min-width': '0', overflow: 'hidden', 'text-overflow': 'ellipsis' }}
+          style={{
+            flex: '1',
+            'min-width': '0',
+            overflow: 'hidden',
+            'white-space': 'normal',
+            'overflow-wrap': 'anywhere',
+            display: '-webkit-box',
+            '-webkit-line-clamp': '2',
+            '-webkit-box-orient': 'vertical',
+          }}
         >
           {headline()}
         </span>
@@ -431,7 +444,7 @@ function DecisionRow(props: {
             disabled={sending() || !draft().trim()}
             onClick={() => void send()}
           >
-            {sending() ? 'Sending…' : 'Send to agent'}
+            {sending() ? 'Sending…' : `Send to ${briefTargetAgentName(props.task) ?? 'agent'}`}
           </button>
           <button type="button" style={quietButton} onClick={() => setEditing(false)}>
             Cancel
@@ -512,7 +525,7 @@ function TaskBriefCard(props: {
                 ? `The brief could not be written: ${props.task.briefStatus.message}`
                 : store.taskBriefs
                   ? 'The brief is written by the naming model after each agent turn.'
-                  : 'Task briefs are off in Settings; ratings still show here.'}
+                  : 'Turn on Write task briefs in Settings for a summary after each turn.'}
             </span>
           }
         >
@@ -719,6 +732,7 @@ function TaskBriefCard(props: {
         </Show>
         <button type="button" style={linkButton} disabled={rating()} onClick={() => void rate()}>
           {props.task.confidence ? 'Re-rate confidence' : 'Rate confidence'}
+          <Show when={briefTargetAgentName(props.task)}>{(name) => ` · ${name()}`}</Show>
         </button>
         <Show when={props.onWalkThrough}>
           <button

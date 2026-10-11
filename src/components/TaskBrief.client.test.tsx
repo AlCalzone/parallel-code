@@ -2,7 +2,8 @@ import { render } from 'solid-js/web';
 import { createStore, type SetStoreFunction } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockChange, mockKeep, mockRate, mockRefreshCode } = vi.hoisted(() => ({
+const { mockChange, mockKeep, mockRate, mockRefreshCode, mockTargetName } = vi.hoisted(() => ({
+  mockTargetName: vi.fn<() => string | undefined>(),
   mockRefreshCode: vi.fn(),
   mockChange: vi.fn(),
   mockKeep: vi.fn(),
@@ -10,6 +11,7 @@ const { mockChange, mockKeep, mockRate, mockRefreshCode } = vi.hoisted(() => ({
 }));
 
 vi.mock('../store/task-brief', () => ({
+  briefTargetAgentName: mockTargetName,
   changeBriefDecision: mockChange,
   keepBriefDecision: mockKeep,
   reopenBriefDecision: vi.fn(),
@@ -24,7 +26,10 @@ import { TaskBriefBar, TaskBriefLine } from './TaskBrief';
 
 let dispose: (() => void) | undefined;
 let lastSetState: SetStoreFunction<Task> | undefined;
-beforeEach(() => setStore('taskBriefs', true));
+beforeEach(() => {
+  setStore('taskBriefs', true);
+  mockTargetName.mockReturnValue(undefined);
+});
 afterEach(() => {
   dispose?.();
   document.body.replaceChildren();
@@ -171,7 +176,7 @@ describe('TaskBriefBar', () => {
     expect(bar.textContent).toContain('Confidence rating');
     bar.click();
     expect(mockRefreshCode).toHaveBeenCalledWith('task');
-    expect(card()?.textContent).toContain('Task briefs are off');
+    expect(card()?.textContent).toContain('Write task briefs');
   });
 
   it('marks a rating out of date from a newer code check', () => {
@@ -190,6 +195,22 @@ describe('TaskBriefBar', () => {
     expect(mockRate).toHaveBeenCalledWith('task');
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(card()).toBeNull();
+  });
+
+  it('names the agent a rating goes to when the task has several', () => {
+    mockTargetName.mockReturnValue('Codex');
+    const { bar } = mount(baseTask({ confidence: undefined }));
+    bar.click();
+    expect(button('Rate confidence · Codex')).toBeDefined();
+  });
+
+  it('offers a rating and points to briefs when briefs are off and nothing is rated', () => {
+    setStore('taskBriefs', false);
+    const { bar } = mount(baseTask({ brief: undefined, confidence: undefined }));
+    expect(bar.textContent).toContain('Rate confidence…');
+    bar.click();
+    expect(card()?.textContent).toContain('Write task briefs');
+    expect(button('Rate confidence')).toBeDefined();
   });
 
   it('explains the empty state before the first brief', () => {
