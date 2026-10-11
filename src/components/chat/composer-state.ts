@@ -164,6 +164,9 @@ export function createComposer(
       return;
     }
     if (props.state.status === 'working') {
+      // A pause holds the messages queued before it; a Stop or failed send from an
+      // earlier turn must not hold back a queue the user starts afresh.
+      if (!queue().length) setQueuePaused(false);
       setQueue((entries) => [
         ...entries,
         { id: crypto.randomUUID(), text: message, images: attached },

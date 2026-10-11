@@ -281,6 +281,26 @@ it('retains a failed queued message and only retries on request', async () => {
   expect(container.querySelector('.chat-queue')).toBeNull();
 });
 
+it.each(['a stopped turn', 'a failed send'] as const)(
+  'sends a message queued after %s once the agent is ready',
+  async (earlier) => {
+    if (earlier === 'a stopped turn') {
+      await update({ draft: '', state: { ...props.state, status: 'working' } });
+      await act(() => button('Stop response').click());
+    } else {
+      send.mockRejectedValueOnce(new Error('Disconnected'));
+      await act(() => button('Send message').click());
+      send.mockClear();
+    }
+    await update({ draft: 'Later follow-up', state: { ...props.state, status: 'working' } });
+    await act(() => button('Queue message').click());
+    expect(container.querySelector('.chat-queue')?.textContent).not.toContain('Queue paused');
+    await update({ state: { ...props.state, status: 'ready' } });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith('Later follow-up', []);
+  },
+);
+
 it('interrupts first and waits for confirmed idle before sending a follow-up', async () => {
   await update({ state: { ...props.state, status: 'working' } });
   await act(() => button('Interrupt and send now').click());
