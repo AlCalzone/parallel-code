@@ -179,6 +179,57 @@ export function startDelegationStateHydration(): () => void {
 
 const peerDeliveriesInFlight = new Set<string>();
 
+/**
+ * Why the renderer holds back a queued peer message, or null when main may try
+ * to deliver it. Shown on the queued message, so every hold needs a reason.
+ */
+export function peerDeliveryBlocker(
+  message: PeerMessage,
+  state: Pick<DelegationState, 'paused'>,
+  now = Date.now(),
+): string | null {
+  const { taskId, agentId, sessionInstanceId } = message.recipient;
+  const task = store.tasks[taskId];
+  const agent = store.agents[agentId];
+  // The task composer targets the first pane. An explicit handoff to a
+  // reviewer in another pane must not wait for that unrelated draft.
+  const checkComposerDraft = message.origin !== 'user' || task?.agentIds[0] === agentId;
+  if (
+    !task ||
+    !agent ||
+    agent.taskId !== taskId ||
+    !task.agentIds.includes(agentId) ||
+    agent.status === 'exited' ||
+    (agent.sessionInstanceId && agent.sessionInstanceId !== sessionInstanceId)
+  )
+    return 'Recipient session ended';
+  if (
+    task.closingStatus === 'closing' ||
+    task.closingStatus === 'removing' ||
+    isLandedTaskState(task.landingState)
+  )
+    return 'Task is closing';
+  if (task.delegationPaused || state.paused) return 'Delivery is paused';
+  if (task.controlledBy === 'human' && message.origin !== 'user')
+    return 'You are controlling this task';
+  if (task.initialPrompt) return 'Waiting for the task prompt to send first';
+  if (task.automationWriteInFlight) return 'Waiting for another automatic message';
+  if (checkComposerDraft && (task.promptDraftActive || task.promptDraft?.trim()))
+    return 'Your draft in the task prompt is unsent';
+  if (task.terminalInputPending) return 'Unsent input in the task terminal';
+  if ((task.userActivityHoldUntil ?? 0) > now) return 'Waiting for you to stop typing';
+  if (checkComposerDraft && task.prefillPrompt) return 'A prefilled prompt is unsent';
+  // Manual completion summaries can remain unread indefinitely. Only
+  // reserve input for an automatic notification or a user-edited one.
+  if (
+    checkComposerDraft &&
+    task.stagedNotification &&
+    ((task.autoSendChildUpdates ?? task.coordinatorMode) || task.stagedNotification.userEdited)
+  )
+    return 'A subtask notification is waiting to send';
+  return null;
+}
+
 /** Delivery runs independently of task panels, including for background children. */
 export function startPeerMessageDelivery(onDelivered: (message: PeerMessage) => void): () => void {
   let disposed = false;
@@ -192,38 +243,8 @@ export function startPeerMessageDelivery(onDelivered: (message: PeerMessage) => 
         const { taskId, agentId, sessionInstanceId } = message.recipient;
         if (recipients.has(agentId)) continue;
         recipients.add(agentId);
-        const task = store.tasks[taskId];
         const agent = store.agents[agentId];
-        // The task composer targets the first pane. An explicit handoff to a
-        // reviewer in another pane must not wait for that unrelated draft.
-        const checkComposerDraft = message.origin !== 'user' || task?.agentIds[0] === agentId;
-        if (
-          peerDeliveriesInFlight.has(agentId) ||
-          !task ||
-          !agent ||
-          agent.taskId !== taskId ||
-          !task.agentIds.includes(agentId) ||
-          agent.status === 'exited' ||
-          (agent.sessionInstanceId && agent.sessionInstanceId !== sessionInstanceId) ||
-          task.closingStatus === 'closing' ||
-          task.closingStatus === 'removing' ||
-          isLandedTaskState(task.landingState) ||
-          task.delegationPaused ||
-          state.paused ||
-          (task.controlledBy === 'human' && message.origin !== 'user') ||
-          task.initialPrompt ||
-          task.automationWriteInFlight ||
-          (checkComposerDraft && (task.promptDraftActive || task.promptDraft?.trim())) ||
-          task.terminalInputPending ||
-          (task.userActivityHoldUntil ?? 0) > Date.now() ||
-          (checkComposerDraft && task.prefillPrompt) ||
-          // Manual completion summaries can remain unread indefinitely. Only
-          // reserve input for an automatic notification or a user-edited one.
-          (checkComposerDraft &&
-            task.stagedNotification &&
-            ((task.autoSendChildUpdates ?? task.coordinatorMode) ||
-              task.stagedNotification.userEdited))
-        )
+        if (peerDeliveriesInFlight.has(agentId) || !agent || peerDeliveryBlocker(message, state))
           continue;
         const generation = agent.generation;
         peerDeliveriesInFlight.add(agentId);

@@ -175,6 +175,7 @@ export {
   setShareDockerAgentAuth,
   setAskCodeProvider,
   setAskCodeModel,
+  setAskCodeEffort,
   setMinimaxApiKey,
   setWindowState,
   setPreferUiMode,

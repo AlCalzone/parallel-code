@@ -34,9 +34,11 @@ function isTerminalReport(data: string, start: number, end: number): boolean {
     seq === '\x1b[O' ||
     seq.startsWith('\x1b]') ||
     seq.startsWith('\x1bP') ||
-    // Device attributes, cursor position, status and keyboard-protocol replies.
+    // Device attributes, cursor position, status, mode and keyboard-protocol
+    // replies, plus SGR mouse reports: Codex tracks every pointer move, and a
+    // move over its pane must not count as a draft that blocks second-opinion delivery.
     // eslint-disable-next-line no-control-regex
-    /^\x1b\[(?:[?>]?[\d;]*c|\??\d+;\d+R|\d+n|\?\d+u)$/.test(seq)
+    /^\x1b\[(?:[?>]?[\d;]*c|\??\d+;\d+R|\d+n|\??\d+;\d+\$y|\?\d+u|<\d+;\d+;\d+[Mm])$/.test(seq)
   );
 }
 
@@ -52,6 +54,34 @@ export function hasTerminalUserActivity(data: string): boolean {
     } else if (ch === '\x7f') {
       return true;
     } else if (ch >= ' ') {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Cursor movement, Alt word movement, editing and function keys (optionally
+// modified): none can put text on an empty line. ↑/↓ are absent because
+// history recall can.
+// eslint-disable-next-line no-control-regex
+const NON_DRAFT_KEY = /^\x1b(?:[bf]|\[(?:1;\d+)?[CDHF]|O[CDHFPQRS]|\[1;\d+[PQRS]|\[\d+(?:;\d+)?~)$/;
+
+/**
+ * Whether input may have left a draft in the agent's prompt. Unknown escape
+ * sequences count, so a key encoding not listed here errs towards holding
+ * back peer prompts rather than pasting into a draft.
+ */
+export function hasTerminalDraftActivity(data: string): boolean {
+  for (let i = 0; i < data.length; i++) {
+    const ch = data[i];
+    if (ch === '\x1b') {
+      // Escape, alone or before another Escape or Backspace, cannot create a draft.
+      if (data[i + 1] === undefined || data[i + 1] === '\x1b' || data[i + 1] === '\x7f') continue;
+      const end = skipEscapeSequence(data, i);
+      const seq = data.slice(i, end + 1);
+      if (!isTerminalReport(data, i, end) && !NON_DRAFT_KEY.test(seq)) return true;
+      i = end;
+    } else if (ch !== '\x7f') {
       return true;
     }
   }

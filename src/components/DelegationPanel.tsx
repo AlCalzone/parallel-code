@@ -1,5 +1,5 @@
 import './Delegation.css';
-import { createEffect, createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import { canResumeSessionId } from '../../electron/shared/session-resume';
 import type { PeerMessage } from '../../electron/shared/delegation-types';
 import { IPC } from '../../electron/ipc/channels';
@@ -17,6 +17,7 @@ import { clearStagedNotification } from '../store/tasks';
 import {
   delegationRequest,
   delegationStates,
+  peerDeliveryBlocker,
   refreshDelegationState,
   hasUserMcpConfiguration,
   isSupportedDelegationAgent,
@@ -42,11 +43,42 @@ export function DelegationPanel(props: {
   };
   const attempts = () => state()?.attempts.filter((a) => a.status !== 'created') ?? [];
   const messages = () => state()?.messages.filter((m) => m.state === 'waiting') ?? [];
+  // A handoff seen leaving the queue is confirmed briefly, then dropped: the
+  // recipient's terminal already shows the prompt, and a lasting line would
+  // keep the task's terminals pushed down.
+  const [recentHandoffs, setRecentHandoffs] = createSignal<readonly string[]>([]);
+  const seenWaiting = new Set<string>();
+  const confirmTimers = new Set<ReturnType<typeof setTimeout>>();
+  onCleanup(() => confirmTimers.forEach(clearTimeout));
+  createEffect(() => {
+    for (const m of state()?.messages ?? []) {
+      if (m.origin !== 'user') continue;
+      if (m.state === 'waiting') seenWaiting.add(m.deliveryId);
+      else if (seenWaiting.delete(m.deliveryId) && !m.deliveryFailed) {
+        const id = m.deliveryId;
+        setRecentHandoffs((ids) => [...ids, id]);
+        const timer = setTimeout(() => {
+          confirmTimers.delete(timer);
+          setRecentHandoffs((ids) => ids.filter((entry) => entry !== id));
+        }, 4_000);
+        confirmTimers.add(timer);
+      }
+    }
+  });
   const handoffs = () =>
-    state()
-      ?.messages.filter((m) => m.origin === 'user' && m.state !== 'waiting' && !m.deliveryFailed)
-      .slice(-5) ?? [];
+    state()?.messages.filter((m) => recentHandoffs().includes(m.deliveryId)) ?? [];
   const agentLabel = (id: string, fallback: string) => store.agents[id]?.def.name ?? fallback;
+  // The typing hold expires without a store change; tick so its reason clears.
+  const [nowMs, setNowMs] = createSignal(Date.now());
+  createEffect(() => {
+    if (messages().length === 0) return;
+    const id = window.setInterval(() => setNowMs(Date.now()), 1_000);
+    onCleanup(() => clearInterval(id));
+  });
+  const waitingReason = (message: PeerMessage) =>
+    peerDeliveryBlocker(message, state() ?? { paused: false }, nowMs()) ??
+    message.reason ??
+    'Waiting for the recipient to be ready';
   const failures = () => state()?.messages.filter((m) => m.deliveryFailed) ?? [];
   const coordinating = () =>
     props.task.delegationParent ||
@@ -306,28 +338,45 @@ export function DelegationPanel(props: {
         </Show>
         <For each={handoffs()}>
           {(message) => (
-            <details>
-              <summary>
-                {message.state === 'delivered'
-                  ? 'Delivered to '
-                  : message.state === 'handled'
-                    ? 'Moved to composer for '
-                    : 'Canceled for '}
-                {agentLabel(message.recipient.agentId, message.recipient.agentLabel)}
-              </summary>
-              <p>
-                {message.state === 'delivered'
-                  ? 'Prompt submitted; this does not mean the review is complete.'
-                  : (message.reason ?? 'The user took responsibility for this message.')}
-              </p>
-              <pre style={{ 'white-space': 'pre-wrap', 'overflow-wrap': 'anywhere' }}>
-                {message.prompt}
-              </pre>
-            </details>
+            <div
+              role="status"
+              style={{
+                display: 'flex',
+                'align-items': 'center',
+                gap: '6px',
+                padding: '4px 0',
+                color: message.state === 'delivered' ? theme.success : undefined,
+              }}
+            >
+              <Show when={message.state === 'delivered'}>
+                <CheckIcon size={12} />
+              </Show>
+              {message.state === 'delivered'
+                ? 'Delivered to '
+                : message.state === 'handled'
+                  ? 'Moved to composer for '
+                  : 'Canceled for '}
+              {agentLabel(message.recipient.agentId, message.recipient.agentLabel)}
+              <Show when={message.state === 'closed' && message.reason}>: {message.reason}</Show>
+            </div>
           )}
         </For>
         <Show when={messages().length > 0}>
-          <details>
+          {/* A queued handoff is something you just sent; keep its status in view.
+              Open once per new handoff, so a section the reader collapsed stays
+              collapsed while reasons and other messages change. */}
+          <details
+            ref={(el) => {
+              const shown = new Set<string>();
+              createEffect(() => {
+                for (const m of messages()) {
+                  if (m.origin !== 'user' || shown.has(m.deliveryId)) continue;
+                  shown.add(m.deliveryId);
+                  el.open = true;
+                }
+              });
+            }}
+          >
             <summary>Queued messages ({messages().length})</summary>
             <p>
               Messages send automatically when the recipient is ready and your drafts and terminal
@@ -353,6 +402,7 @@ export function DelegationPanel(props: {
                     {agentLabel(message.recipient.agentId, message.recipient.agentLabel)} ·{' '}
                     {new Date(message.createdAt).toLocaleTimeString()}
                   </div>
+                  <div class="delegation-message-meta">{waitingReason(message)}</div>
                   <p style={{ 'white-space': 'pre-wrap', 'overflow-wrap': 'anywhere' }}>
                     {preview() === message.deliveryId
                       ? message.prompt

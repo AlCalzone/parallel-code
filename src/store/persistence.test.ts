@@ -1669,6 +1669,20 @@ describe('code Q&A model persistence', () => {
     expect((await lastSaved()).askCodeModel).toBeUndefined();
   });
 
+  it('round-trips a reasoning level per provider and drops one the CLI would reject', async () => {
+    mockInvoke.mockResolvedValueOnce(
+      stateJson({ askCodeEffort: { claude: 'max', codex: 'minimal', minimax: 'high' } }),
+    );
+    await loadState();
+    expect(store.askCodeEffort).toEqual({ claude: 'max', codex: 'minimal' });
+    expect((await lastSaved()).askCodeEffort).toEqual({ claude: 'max', codex: 'minimal' });
+
+    mockInvoke.mockResolvedValueOnce(stateJson({ askCodeEffort: { claude: 'minimal' } }));
+    await loadState();
+    expect(store.askCodeEffort).toEqual({});
+    expect((await lastSaved()).askCodeEffort).toBeUndefined();
+  });
+
   it('replaces a model the newly chosen provider cannot run', async () => {
     mockInvoke.mockResolvedValueOnce(stateJson({ askCodeModel: 'opus' }));
     await loadState();

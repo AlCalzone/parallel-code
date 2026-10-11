@@ -1,7 +1,11 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { CODEX_MODEL_PATTERN, type CodexModelChoice } from '../shared/ask-code-models.js';
+import {
+  CODEX_MODEL_PATTERN,
+  isAskCodeEffort,
+  type CodexModelChoice,
+} from '../shared/ask-code-models.js';
 import { warn as logWarn } from '../log.js';
 
 /** The cache is a few hundred kB of model metadata; more means the path is wrong. */
@@ -24,10 +28,27 @@ function toChoice(entry: unknown): CodexModelChoice[] {
   const slug = model.slug;
   if (typeof slug !== 'string' || !CODEX_MODEL_PATTERN.test(slug)) return [];
   const displayName = model.display_name;
+  const efforts = supportedEfforts(model.supported_reasoning_levels);
   // A missing or malformed name must not lose the model; the slug reads fine.
   return [
-    { slug, displayName: typeof displayName === 'string' && displayName ? displayName : slug },
+    {
+      slug,
+      displayName: typeof displayName === 'string' && displayName ? displayName : slug,
+      ...(efforts.length > 0 ? { efforts } : {}),
+    },
   ];
+}
+
+/**
+ * The levels a model lists that the app knows how to pass. Levels the app does
+ * not know, such as Codex's delegating `ultra`, are left out rather than guessed at.
+ */
+function supportedEfforts(levels: unknown): string[] {
+  if (!Array.isArray(levels)) return [];
+  return levels.flatMap((level: unknown) => {
+    const effort = (level as { effort?: unknown } | null)?.effort;
+    return isAskCodeEffort('codex', effort) ? [effort] : [];
+  });
 }
 
 /**

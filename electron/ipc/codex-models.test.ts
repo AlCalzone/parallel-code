@@ -59,6 +59,31 @@ describe('listCodexModels', () => {
     expect(listCodexModels()).toEqual([{ slug: 'gpt-5.5', displayName: 'gpt-5.5' }]);
   });
 
+  it('keeps the reasoning levels a model lists that the app can pass to the CLI', () => {
+    writeCache({
+      models: [
+        {
+          slug: 'gpt-6-sol',
+          display_name: 'GPT-6-Sol',
+          visibility: 'list',
+          supported_reasoning_levels: [
+            { effort: 'low' },
+            { effort: 'ultra' },
+            { effort: '"; rm' },
+            'max',
+            { effort: 'max' },
+          ],
+        },
+        { slug: 'gpt-5.5', visibility: 'list', supported_reasoning_levels: 'all' },
+      ],
+    });
+
+    expect(listCodexModels()).toEqual([
+      { slug: 'gpt-6-sol', displayName: 'GPT-6-Sol', efforts: ['low', 'max'] },
+      { slug: 'gpt-5.5', displayName: 'gpt-5.5' },
+    ]);
+  });
+
   it('returns nothing when the cache is missing, malformed or not a model list', () => {
     expect(listCodexModels()).toEqual([]);
 

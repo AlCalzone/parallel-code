@@ -716,13 +716,13 @@ it('opens second opinion by action after dismissing the button and preserves an 
   setStore('tasks', 'task', 'secondOpinionDismissed', true);
   mount();
   triggerAction('task:second-opinion');
-  const instructions = document.querySelector<HTMLTextAreaElement>('[aria-label="Instructions"]');
+  const instructions = document.querySelector<HTMLTextAreaElement>('.agent-handoff textarea');
   expect(instructions).not.toBeNull();
-  if (!instructions) throw new Error('Missing instructions');
+  if (!instructions) throw new Error('Missing message');
   instructions.value = 'Keep my draft';
   instructions.dispatchEvent(new Event('input', { bubbles: true }));
   triggerAction('task:second-opinion');
-  expect(document.querySelector('[aria-label="Instructions"]')).toBe(instructions);
+  expect(document.querySelector('.agent-handoff textarea')).toBe(instructions);
   expect(instructions.value).toBe('Keep my draft');
 });
 
@@ -730,7 +730,7 @@ it('does not open a second opinion for an unavailable source', () => {
   setStore('mcpOrchestrationEnabled', false);
   mount();
   triggerAction('task:second-opinion');
-  expect(document.querySelector('[aria-label="Instructions"]')).toBeNull();
+  expect(document.querySelector('.agent-handoff textarea')).toBeNull();
 });
 
 it('hands a pending question the keyboard however focus reaches the chat', async () => {

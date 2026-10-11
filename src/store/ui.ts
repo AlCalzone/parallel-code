@@ -284,6 +284,12 @@ export function setAskCodeModel(model: string): void {
   setStore('askCodeModel', model);
 }
 
+/** Remembers a reasoning level per provider; an empty level returns to the CLI default. */
+export function setAskCodeEffort(provider: AskCodeProvider, effort: string): void {
+  // An undefined value deletes the key, so a cleared level is not saved.
+  setStore('askCodeEffort', provider, effort || undefined);
+}
+
 export function setMinimaxApiKey(key: string): void {
   invoke(IPC.SetMinimaxApiKey, { key: key.trim() }).catch((e) =>
     console.warn('Failed to set MiniMax API key:', e),

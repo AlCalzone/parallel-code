@@ -1,4 +1,5 @@
 import { createSignal, untrack } from 'solid-js';
+import { reconcile } from 'solid-js/store';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { IPC } from '../../electron/ipc/channels';
@@ -453,4 +454,197 @@ it('lists every subtask under a collapsible header', () => {
   expect(list?.hidden).toBe(true);
   toggle?.click();
   expect(list?.hidden).toBe(false);
+});
+
+it('opens a queued handoff and says why it is still waiting', async () => {
+  const session = {
+    agentId: 'agent',
+    sessionInstanceId: 'exact-instance',
+    taskId: 'parent',
+    name: 'Parent',
+    agentLabel: 'Codex',
+    branchName: 'task/parent',
+    status: 'running',
+  };
+  state.messages = [
+    {
+      deliveryId: 'handoff',
+      sender: session,
+      recipient: session,
+      prompt: 'Review the diff',
+      state: 'waiting',
+      origin: 'user',
+      reason: 'Recipient has unsent input in its terminal',
+      createdAt: new Date().toISOString(),
+    },
+  ];
+  setStore('agents', 'agent', 'sessionInstanceId', 'exact-instance');
+  dispose = render(() => <DelegationPanel task={store.tasks.parent} />, host);
+  await vi.waitFor(() => expect(host.querySelector('details')?.open).toBe(true));
+  // Renderer holds come first: main never saw this attempt.
+  expect(host.textContent).toContain('Your draft in the task prompt is unsent');
+  setStore('tasks', 'parent', 'promptDraft', '');
+  expect(host.textContent).toContain('Recipient has unsent input in its terminal');
+  setDelegationStates('parent', 'messages', 0, 'reason', undefined);
+  expect(host.textContent).toContain('Waiting for the recipient to be ready');
+});
+
+it('drops the typing reason once the typing hold ends', async () => {
+  vi.useFakeTimers();
+  const session = {
+    agentId: 'agent',
+    sessionInstanceId: 'exact-instance',
+    taskId: 'parent',
+    name: 'Parent',
+    agentLabel: 'Codex',
+    branchName: 'task/parent',
+    status: 'running',
+  };
+  setStore('tasks', 'parent', 'promptDraft', '');
+  setStore('tasks', 'parent', 'userActivityHoldUntil', Date.now() + 2_000);
+  setStore('agents', 'agent', 'sessionInstanceId', 'exact-instance');
+  state.messages = [
+    {
+      deliveryId: 'handoff',
+      sender: session,
+      recipient: session,
+      prompt: 'Review the diff',
+      state: 'waiting',
+      origin: 'user',
+      reason: 'Recipient is starting or showing a dialog',
+      createdAt: new Date().toISOString(),
+    },
+  ];
+  dispose = render(() => <DelegationPanel task={store.tasks.parent} />, host);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(host.textContent).toContain('Waiting for you to stop typing');
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect(host.textContent).toContain('Recipient is starting or showing a dialog');
+  vi.useRealTimers();
+});
+
+it('keeps the queue open after a handoff leaves it', async () => {
+  const session = {
+    agentId: 'agent',
+    sessionInstanceId: 'exact-instance',
+    taskId: 'parent',
+    name: 'Parent',
+    agentLabel: 'Codex',
+    branchName: 'task/parent',
+    status: 'running',
+  };
+  const waiting = { recipient: session, sender: session, state: 'waiting' as const };
+  const createdAt = new Date().toISOString();
+  state.messages = [
+    { ...waiting, deliveryId: 'handoff', prompt: 'Review', origin: 'user', createdAt },
+    { ...waiting, deliveryId: 'peer', prompt: 'Status', createdAt },
+  ];
+  const queue = () =>
+    [...host.querySelectorAll('details')].find((d) =>
+      d.querySelector('summary')?.textContent?.startsWith('Queued messages'),
+    );
+  dispose = render(() => <DelegationPanel task={store.tasks.parent} />, host);
+  await vi.waitFor(() => expect(queue()?.open).toBe(true));
+  setDelegationStates('parent', 'messages', 0, 'state', 'delivered');
+  expect(queue()?.querySelector('summary')?.textContent).toBe('Queued messages (1)');
+  expect(queue()?.open).toBe(true);
+});
+
+it('leaves a collapsed queue closed while its messages only change state', async () => {
+  const session = {
+    agentId: 'agent',
+    sessionInstanceId: 'exact-instance',
+    taskId: 'parent',
+    name: 'Parent',
+    agentLabel: 'Codex',
+    branchName: 'task/parent',
+    status: 'running',
+  };
+  const waiting = { recipient: session, sender: session, state: 'waiting' as const };
+  const createdAt = new Date().toISOString();
+  const handoff = {
+    ...waiting,
+    deliveryId: 'handoff',
+    prompt: 'Review',
+    origin: 'user' as const,
+    createdAt,
+  };
+  const peer = { ...waiting, deliveryId: 'peer', prompt: 'Status', createdAt };
+  state.messages = [handoff, peer];
+  const queue = () =>
+    [...host.querySelectorAll('details')].find((d) =>
+      d.querySelector('summary')?.textContent?.startsWith('Queued messages'),
+    );
+  dispose = render(() => <DelegationPanel task={store.tasks.parent} />, host);
+  await vi.waitFor(() => expect(queue()?.open).toBe(true));
+  const details = queue();
+  if (!details) throw new Error('Missing queue');
+  details.open = false;
+  // Main reports reasons and deliveries by replacing the whole state.
+  const update = (messages: DelegationState['messages']) =>
+    setDelegationStates('parent', reconcile({ ...state, messages }));
+  update([{ ...handoff, reason: 'Waiting for Codex CLI to show its prompt' }, peer]);
+  update([
+    { ...handoff, reason: 'Codex CLI has unsent input' },
+    { ...peer, state: 'delivered' },
+  ]);
+  expect(details.open).toBe(false);
+  update([
+    { ...handoff, reason: 'Codex CLI has unsent input' },
+    { ...handoff, deliveryId: 'second', prompt: 'Again' },
+  ]);
+  expect(details.open).toBe(true);
+});
+
+it('says why a handoff was not delivered', async () => {
+  const session = {
+    agentId: 'agent',
+    sessionInstanceId: 'exact-instance',
+    taskId: 'parent',
+    name: 'Parent',
+    agentLabel: 'Codex CLI',
+    branchName: 'task/parent',
+    status: 'running',
+  };
+  const createdAt = new Date().toISOString();
+  const handoff = { sender: session, recipient: session, origin: 'user' as const, createdAt };
+  state.messages = [{ ...handoff, deliveryId: 'handoff', prompt: 'Review', state: 'waiting' }];
+  dispose = render(() => <DelegationPanel task={store.tasks.parent} />, host);
+  await vi.waitFor(() => expect(host.textContent).toContain('Queued messages (1)'));
+  setDelegationStates('parent', 'messages', 0, {
+    state: 'closed',
+    reason: 'Recipient session ended or access revoked',
+  });
+  expect(host.querySelector('[role="status"]')?.textContent).toContain(
+    'Recipient session ended or access revoked',
+  );
+});
+
+it('confirms a delivered handoff briefly instead of keeping it', async () => {
+  vi.useFakeTimers();
+  const session = {
+    agentId: 'agent',
+    sessionInstanceId: 'exact-instance',
+    taskId: 'parent',
+    name: 'Parent',
+    agentLabel: 'Codex CLI',
+    branchName: 'task/parent',
+    status: 'running',
+  };
+  const createdAt = new Date().toISOString();
+  const handoff = { sender: session, recipient: session, origin: 'user' as const, createdAt };
+  state.messages = [
+    { ...handoff, deliveryId: 'earlier', prompt: 'Old review', state: 'delivered' },
+    { ...handoff, deliveryId: 'handoff', prompt: 'Review', state: 'waiting' },
+  ];
+  dispose = render(() => <DelegationPanel task={store.tasks.parent} />, host);
+  await vi.advanceTimersByTimeAsync(0);
+  // Handoffs finished before this view existed are history, not news.
+  expect(host.textContent).not.toContain('Delivered to');
+  setDelegationStates('parent', 'messages', 1, 'state', 'delivered');
+  expect(host.querySelector('[role="status"]')?.textContent).toContain('Delivered to Claude');
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(host.textContent).not.toContain('Delivered to');
+  expect(host.querySelector('[aria-label="Task collaboration"]')).toBeNull();
+  vi.useRealTimers();
 });

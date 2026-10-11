@@ -1,10 +1,10 @@
 # Agent handoff implementation plan
 
-Status: Implemented with automated verification. Updated 2026-10-09.
+Status: Implemented with automated verification. Updated 2026-10-13: the composer was reduced to one editable message (see **Composer and context**); presets, context toggles and captured diffs were removed.
 
-A compact toolbar **Second opinion** button opens a chooser that can reuse an existing session or start a fresh reviewer without first adding a terminal manually. Dismissal is saved per task; the action remains available in the terminal's right-click menu and via Ctrl+Shift+O (Cmd+Shift+O on macOS). The shortcut is remappable in keyboard settings and opens the chooser without submitting it. Selecting terminal text exposes a small nearby actions button and a right-click menu with **Copy** and named **Send to** recipients. New Claude and Codex reviewers offer a model dropdown beside Start review, sharing the Generate Tour model choices, component, and selected preference; existing sessions keep their model. Forwarding opens an inline composer; the task-wide second-opinion action uses a dialog.
+A compact toolbar **Second opinion** button opens a chooser that can reuse an existing session or start a fresh reviewer without first adding a terminal manually. Dismissal is saved per task; the action remains available in the terminal's right-click menu and via Ctrl+Shift+O (Cmd+Shift+O on macOS). The shortcut is remappable in keyboard settings and opens the chooser without submitting it. Selecting terminal text exposes a small nearby actions button and a right-click menu with **Copy** and named **Send to** recipients. New Claude and Codex reviewers offer a model menu in the composer, sharing the Generate Tour model choices, component, and selected preference; existing sessions keep their model. The same menu sets a reasoning level, remembered per provider; Codex offers only the levels its model cache lists for the chosen model, and none without that cache. Forwarding opens an inline composer; the task-wide second-opinion action uses a dialog.
 
-Fresh reviews reuse the normal add-agent flow and open a normal terminal behind the chooser. Starting and submitting is explicit, targets the exact launched session, and preserves the draft after startup failure; there is no hidden background-agent runtime. Existing queue safeguards and receipt semantics are unchanged. Original task context uses `savedInitialPrompt`; diff attachments retain the task diff viewer's disclosed omission limits.
+Fresh reviews reuse the normal add-agent flow and open a normal terminal behind the chooser. Starting and submitting is explicit, targets the exact launched session, and preserves the draft after startup failure; there is no hidden background-agent runtime. Existing queue safeguards and receipt semantics are unchanged. The task prompt in the message comes from `savedInitialPrompt`.
 
 Subagent review corrections: project peer-policy updates preserve user-origin handoffs, and session refresh/reselection keeps edited drafts intact.
 
@@ -18,7 +18,7 @@ Make it easy for two agents in the same task to critique and refine each other's
 - Show a small, dismissible **Second opinion** button in the terminal toolbar, outside the output area. Keep the action in the terminal context menu after dismissal; save dismissal per task.
 - Selected text gets **Copy** and **Send to named agent…** actions, with **Ask another agent…** when none exists. Capture selected text when opening the menu so focus changes cannot alter it.
 - The task-wide chooser names existing sessions and fresh reviewer options. Existing sessions are preferred when available; otherwise suggest a different installed supported agent. Launch only after the user submits.
-- The selection flow stays inline; the task-wide flow uses a compact dialog. Both reuse **Review changes**, **Critique plan**, and **Custom** presets, preserve edited instructions, and keep context/preview collapsed.
+- The selection flow stays inline; the task-wide flow uses a compact dialog. Both show one editable message that is sent exactly as shown, with no presets or hidden context.
 - Use one **Send** action. Delivery waits for safe input readiness when necessary. Never offer a force-send action that bypasses draft, typing, or question protection.
 - The user decides when to request review and when to send findings back. Input readiness is not proof that implementation or review has finished.
 
@@ -26,21 +26,12 @@ Example: Claude implements a change. The user asks Codex to review it, reads Cod
 
 ## Composer and context
 
-Show the recipient, editable instructions, explicit context selections, and the final message preview before submission. Keep the draft on preparation or delivery failure. Do not replace an existing recipient draft.
+The composer shows the reviewer choices, a model and reasoning menu for a new Claude or Codex reviewer (an open session keeps its current model and level), and one editable message. What the box shows is what gets pasted into the recipient's prompt; there are no presets, toggles or attachments. Keep the text after preparation or delivery failure. Do not replace an existing recipient draft.
 
-| Preset         | Default context                              | Default instruction                                                                                                                                                            |
-| -------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Review changes | Available task prompt and captured text diff | Inspect the changes against the requirements independently. Report actionable defects with location, impact, and evidence. Separate optional suggestions. Do not modify files. |
-| Critique plan  | Selected text, if present                    | Challenge this proposal. Identify concrete flaws, missing requirements, and a simpler complete approach. Do not modify files.                                                  |
-| Custom         | Selected text, if present                    | User supplies the instruction.                                                                                                                                                 |
+- **Task-wide second opinion:** the message asks the reviewer to review the changes on this branch since it split from the task's base branch, including uncommitted and new files, and names the `git diff`/`git status` commands. It adds the task prompt when one is available. Without Git isolation it says "Review the work in this folder." The reviewer shares the worktree, so the diff is referenced rather than captured; it reads the live files.
+- **Selected output:** the message quotes the selected text and names the agent it came from.
 
-Allow the user to toggle available task prompt, selected text, and diff context. Label missing context rather than inventing it. The stored initial prompt can be cleared after submission (`src/store/tasks.ts`); establish which durable task text is actually available before exposing a task-prompt attachment. Do not claim it represents every subsequent requirement.
-
-Capture a diff only when requested, through existing task-scoped Git APIs. Identify the comparison baseline, capture time, and omitted binary or oversized content. Respect existing payload limits; reject or require an explicit smaller selection instead of silently truncating. Preview and send the same captured content. Refreshing it must be explicit.
-
-A captured text diff does not freeze files the reviewer reads. State that the worktree remains live when including the diff. Do not promise snapshot-consistent review or build a new snapshot system for this feature. A hash alone does not solve this limitation.
-
-Treat forwarded terminal text as quoted context. Attribute it to the source session while making clear that the user initiated the request. A review instruction asking the recipient not to edit is advisory, not enforced read-only access.
+Typing is cleaned as it happens: controls that could end the bracketed paste early and invisible formatting characters are removed, and peer message markers get a visible dot so the queue accepts them. Messages over the queue's 64 KB limit are refused with an explanation instead of being truncated. A review instruction asking the recipient not to edit is advisory, not enforced read-only access.
 
 ## Delivery contract
 

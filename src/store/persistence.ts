@@ -17,6 +17,7 @@ import { reopenClaudeChatInTerminal } from './agent-chat';
 import { isSessionId } from '../../electron/shared/session-record';
 import {
   defaultAskCodeModel,
+  isAskCodeEffort,
   isAskCodeModel,
   type AskCodeProvider,
 } from '../../electron/shared/ask-code-models';
@@ -70,6 +71,18 @@ import { showNotification, NOTIFICATION_ERROR_MS } from './notification';
 import { errMessage, warn as logWarn } from '../lib/log';
 import { canvasTabKey } from '../lib/canvas-tabs';
 import { hiddenAgentTaskIds, isHiddenAgentTaskId } from '../documents/task-id';
+
+/** Reasoning levels per provider, each one the CLI accepts; anything else is dropped. */
+function loadAskCodeEffort(value: unknown): Partial<Record<AskCodeProvider, string>> {
+  if (typeof value !== 'object' || value === null) return {};
+  const raw = value as Record<string, unknown>;
+  const efforts: Partial<Record<AskCodeProvider, string>> = {};
+  for (const provider of ['claude', 'codex'] as const) {
+    const effort = raw[provider];
+    if (isAskCodeEffort(provider, effort)) efforts[provider] = effort;
+  }
+  return efforts;
+}
 
 function restoredCodexHandoff(value: unknown): Task['codexChatHandoff'] {
   if (!value || typeof value !== 'object') return;
@@ -410,6 +423,8 @@ export async function saveState(): Promise<void> {
       store.askCodeModel !== defaultAskCodeModel(store.askCodeProvider)
         ? store.askCodeModel
         : undefined,
+    askCodeEffort:
+      Object.keys(store.askCodeEffort).length > 0 ? { ...store.askCodeEffort } : undefined,
     customAgents: store.customAgents.length > 0 ? [...store.customAgents] : undefined,
     agentEnvFiles:
       Object.keys(store.agentEnvFiles).length > 0 ? { ...store.agentEnvFiles } : undefined,
@@ -609,6 +624,7 @@ interface LegacyPersistedState {
   dockerImage?: unknown;
   askCodeProvider?: unknown;
   askCodeModel?: unknown;
+  askCodeEffort?: unknown;
   minimaxApiKey?: unknown;
   customAgents?: unknown;
   agentEnvFiles?: unknown;
@@ -957,6 +973,7 @@ export async function loadState(): Promise<void> {
       s.askCodeModel = isAskCodeModel(provider, raw.askCodeModel)
         ? raw.askCodeModel
         : defaultAskCodeModel(provider);
+      s.askCodeEffort = loadAskCodeEffort(raw.askCodeEffort);
 
       // Restore custom agents
       if (Array.isArray(raw.customAgents)) {

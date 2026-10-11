@@ -1,6 +1,10 @@
 import * as pty from 'node-pty';
 import { codexResumeId, isCodexUnsavedSessionExit } from '../shared/codex-resume.js';
-import { hasTerminalUserActivity, nextTerminalInputPending } from '../shared/terminal-input.js';
+import {
+  hasTerminalDraftActivity,
+  hasTerminalUserActivity,
+  nextTerminalInputPending,
+} from '../shared/terminal-input.js';
 import { stopAgentChat, stopAllAgentChats, runningAgentChatIds } from '../chat/sessions.js';
 import { execFileSync, execFile, spawn as cpSpawn } from 'child_process';
 import crypto from 'crypto';
@@ -937,9 +941,10 @@ function writeSessionInput(session: PtySession, data: string): void {
     invalidateAgentActivity(session.agentId, session.launchId);
     if (!session.isShell) emitPtyEvent('prompt-submitted', session.agentId);
   }
-  // History recall/navigation can populate a draft without printable input.
-  // Escape/Backspace alone preserve a draft but cannot create one on an empty line.
-  const draftActivity = userActivity && [...data].some((ch) => ch !== '\x1b' && ch !== '\x7f');
+  // History recall can populate a draft without printable input. Cursor,
+  // editing and function keys, Escape and Backspace preserve a draft but
+  // cannot create one on an empty line.
+  const draftActivity = userActivity && hasTerminalDraftActivity(data);
   session.inputPending = nextTerminalInputPending(session.inputPending || draftActivity, data);
   // Claude Code fires no Stop hook for a user interrupt, so consumers that
   // trust hook state (the coordinator) need to hear about the keystroke.
@@ -953,6 +958,17 @@ export function getAgentPromptSnapshot(
   return sessions.get(agentId)?.queries.snapshot() ?? null;
 }
 
+/** Why a peer prompt cannot be pasted into the agent's terminal right now, if anything. */
+export function getAgentInputBlocker(
+  agentId: string,
+): 'busy' | 'unsent-input' | 'recent-input' | null {
+  const session = sessions.get(agentId);
+  if (!session || handingOff.has(agentId) || session.peerInputQueue) return 'busy';
+  if (session.inputPending) return 'unsent-input';
+  if (Date.now() - session.lastInputAt < 5_000) return 'recent-input';
+  return null;
+}
+
 /**
  * Paste and submit one peer prompt without interleaving other terminal input.
  * `onSubmitted` runs immediately after Enter, before queued raw input is replayed.
@@ -964,14 +980,7 @@ export async function writeAgentPrompt(
   onSubmitted?: () => void,
 ): Promise<boolean> {
   const session = sessions.get(agentId);
-  if (
-    !session ||
-    handingOff.has(agentId) ||
-    session.peerInputQueue ||
-    session.inputPending ||
-    Date.now() - session.lastInputAt < 5_000
-  )
-    return false;
+  if (!session || getAgentInputBlocker(agentId)) return false;
   const snapshot = session.queries.snapshot();
   if (!snapshot) return false;
 

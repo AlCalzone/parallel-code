@@ -1,10 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { promisify } from 'node:util';
 import type { Coordinator } from './coordinator.js';
 import type { CoordinatedTask } from './types.js';
 import type { CompletionRecord, CompletionReport } from '../shared/completion-report.js';
 import type {
   DelegateAssignment,
+  DelegationChanged,
+  DelegationState,
   SessionCaller,
   TaskAuthorityInput,
 } from '../shared/delegation-types.js';
@@ -19,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   activeAgents: vi.fn(),
   promptSnapshot: vi.fn(),
   writePrompt: vi.fn(),
+  inputBlocker: vi.fn(),
 }));
 vi.mock('node:child_process', () => ({
   execFile: Object.assign(vi.fn(), { [promisify.custom]: mocks.git }),
@@ -31,6 +34,7 @@ vi.mock('../ipc/pty.js', () => ({
   killAgent: mocks.kill,
   getAgentPromptSnapshot: mocks.promptSnapshot,
   writeAgentPrompt: mocks.writePrompt,
+  getAgentInputBlocker: mocks.inputBlocker,
 }));
 vi.mock('../ipc/tasks.js', () => ({ deleteTask: mocks.remove }));
 vi.mock('./canvas-config.js', () => ({
@@ -75,6 +79,7 @@ let core: {
   recordUserMerge: ReturnType<typeof vi.fn>;
 };
 let persist: () => void;
+let changed: Mock<(event: DelegationChanged) => void>;
 let prepareParent: ReturnType<typeof vi.fn<() => Promise<void>>>;
 
 function task(taskId: string, extra: Partial<TaskAuthorityInput> = {}): TaskAuthorityInput {
@@ -199,13 +204,14 @@ beforeEach(() => {
     recordUserMerge: vi.fn(),
   };
   persist = vi.fn();
+  changed = vi.fn();
   prepareParent = vi.fn(async () => {});
   service = new DelegationService({
     coordinator: async () => core as unknown as Coordinator,
     currentCoordinator: () => core as unknown as Coordinator,
     prepareParent,
     sessions: () => sessions,
-    changed: vi.fn(),
+    changed,
     persist,
   });
 });
@@ -864,6 +870,63 @@ describe('automatic peer delivery', () => {
     await vi.advanceTimersByTimeAsync(1500);
     await deliver();
     expect(mocks.writePrompt).toHaveBeenCalledOnce();
+  });
+
+  it('says why a queued message is still waiting and clears it on delivery', async () => {
+    vi.useFakeTimers();
+    const { deliver } = await queued();
+    mocks.promptSnapshot.mockReturnValueOnce({ text: 'Working (esc to interrupt)' });
+    expect(await deliver()).toMatchObject({ state: 'waiting', reason: 'Recipient is working' });
+    mocks.promptSnapshot.mockReturnValueOnce({ text: '› my draft' });
+    expect(await deliver()).toMatchObject({
+      state: 'waiting',
+      reason: 'Waiting for an empty prompt in the recipient',
+    });
+    expect(await deliver()).toMatchObject({ state: 'waiting', reason: undefined });
+    await vi.advanceTimersByTimeAsync(1500);
+    mocks.writePrompt.mockResolvedValueOnce(false);
+    mocks.inputBlocker.mockReturnValueOnce('unsent-input').mockReturnValueOnce('unsent-input');
+    expect(await deliver()).toMatchObject({
+      state: 'waiting',
+      reason: 'Recipient has unsent input in its terminal',
+    });
+    expect(await deliver()).toMatchObject({ state: 'delivered', reason: undefined });
+  });
+
+  it('emits a waiting reason only when it changes', async () => {
+    const { receipt, deliver } = await queued();
+    mocks.promptSnapshot.mockReturnValue({ text: 'Working (esc to interrupt)' });
+    await deliver();
+    const emitted = () =>
+      changed.mock.calls.filter(([event]) =>
+        (event as { state: DelegationState }).state.messages.some(
+          (m) => m.deliveryId === receipt.deliveryId && m.reason === 'Recipient is working',
+        ),
+      ).length;
+    const count = emitted();
+    await deliver();
+    await deliver();
+    expect(count).toBeGreaterThan(0);
+    expect(emitted()).toBe(count);
+  });
+
+  it('keeps an input reason steady while the recipient keeps refusing', async () => {
+    vi.useFakeTimers();
+    const { deliver } = await queued();
+    mocks.promptSnapshot.mockReturnValue({ text: '› Ask Codex to do anything' });
+    mocks.writePrompt.mockResolvedValue(false);
+    mocks.inputBlocker.mockReturnValue('unsent-input');
+    await deliver();
+    await vi.advanceTimersByTimeAsync(1500);
+    await deliver();
+    expect(mocks.writePrompt).toHaveBeenCalledOnce();
+    changed.mockClear();
+    for (let tick = 0; tick < 3; tick++) {
+      await vi.advanceTimersByTimeAsync(1000);
+      await deliver();
+    }
+    expect(mocks.writePrompt).toHaveBeenCalledTimes(4);
+    expect(changed).not.toHaveBeenCalled();
   });
 
   it('delivers when the prompt stays ready despite changing terminal output', async () => {

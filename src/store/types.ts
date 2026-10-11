@@ -508,6 +508,7 @@ export interface PersistedState {
   shareDockerAgentAuth?: boolean;
   askCodeProvider?: AskCodeProvider;
   askCodeModel?: string;
+  askCodeEffort?: Partial<Record<AskCodeProvider, string>>;
   customAgents?: AgentDef[];
   agentEnvFiles?: Record<string, string>;
   keybindingMigrationDismissed?: boolean;
@@ -643,6 +644,8 @@ export interface AppStore {
   askCodeProvider: AskCodeProvider;
   /** CLI model alias or slug used for code Q&A and tours; empty lets the CLI choose. */
   askCodeModel: string;
+  /** Reasoning level per provider for new reviewers; unset runs the CLI's own default. */
+  askCodeEffort: Partial<Record<AskCodeProvider, string>>;
   newTaskDropUrl: string | null;
   newTaskPrefillPrompt: {
     prompt: string;

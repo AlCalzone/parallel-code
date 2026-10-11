@@ -2792,7 +2792,7 @@ html:is(
   flex-shrink: 0;
 }
 
-.agent-btn:hover {
+.agent-btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 7%, var(--bg-hover)) !important;
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border)) !important;
 }

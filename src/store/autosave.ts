@@ -53,6 +53,7 @@ function structuralSnapshot(): string {
     editorCommand: store.editorCommand,
     customAgents: store.customAgents,
     agentEnvFiles: store.agentEnvFiles,
+    askCodeEffort: store.askCodeEffort,
     focusMode: store.focusMode,
     coordinatorNotificationDelayMs: store.coordinatorNotificationDelayMs,
     mcpOrchestrationEnabled: store.mcpOrchestrationEnabled,

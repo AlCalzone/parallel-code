@@ -128,6 +128,36 @@ describe('buildTaskAgentArgs with a session id', () => {
     expect(taskAgentOpensSessionPicker(claude, chats, true)).toBe(true);
   });
 
+  it('replaces a configured reasoning level for a reviewer and keeps the session picker', () => {
+    const codex = reviewerWithModel(
+      { ...codexAgent, args: ['-c', 'model_reasoning_effort="low"', '-c', 'x=1'] },
+      '',
+      'high',
+    );
+    const claude = reviewerWithModel(
+      { ...claudeAgent, args: ['--effort', 'low', '--effort=low'], resume_args: ['--continue'] },
+      'opus',
+      'max',
+    );
+    expect(codex.args).toEqual(['-c', 'x=1', '-c', 'model_reasoning_effort="high"']);
+    expect(claude.args).toEqual(['--model', 'opus', '--effort', 'max']);
+    const chats = { codexChatThreadId: 'chat-thread', claudeChatSessionId: 'chat' };
+    expect(buildTaskAgentArgs(codex, chats, true)).toEqual([
+      'resume',
+      '-c',
+      'model_reasoning_effort="high"',
+    ]);
+    expect(taskAgentOpensSessionPicker(codex, chats, true)).toBe(true);
+    expect(taskAgentOpensSessionPicker(claude, chats, true)).toBe(true);
+  });
+
+  it('keeps a configured reasoning level when the reviewer uses the default', () => {
+    const claude = reviewerWithModel({ ...claudeAgent, args: ['--effort', 'high'] }, 'opus');
+    expect(claude.args).toEqual(['--effort', 'high', '--model', 'opus']);
+    const gemini = { ...codexAgent, command: 'gemini', args: ['--effort', 'low'] };
+    expect(reviewerWithModel(gemini, '', 'high')).toBe(gemini);
+  });
+
   it('restores the latest Codex session after restart when no session id was saved', () => {
     expect(buildTaskAgentArgs(codexAgent, {}, true, undefined)).toEqual(['resume', '--last']);
     expect(taskAgentOpensSessionPicker(codexAgent, {}, true)).toBe(false);

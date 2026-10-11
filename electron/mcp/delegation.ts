@@ -6,7 +6,11 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Coordinator } from './coordinator.js';
 import type { CoordinatedTask } from './types.js';
 import { parseSignalDoneInput } from '../shared/completion-report.js';
-import { getAgentPromptReadiness, stripAnsi } from './prompt-detect.js';
+import {
+  getAgentPromptReadiness,
+  stripAnsi,
+  type AgentPromptReadinessReason,
+} from './prompt-detect.js';
 import { canConfigureCanvasMcp } from './canvas-config.js';
 import { validateBranchName } from './validation.js';
 import {
@@ -18,6 +22,7 @@ import {
   getAgentMeta,
   getAgentScrollback,
   getAgentPromptSnapshot,
+  getAgentInputBlocker,
   writeAgentPrompt,
   killAgent,
 } from '../ipc/pty.js';
@@ -49,6 +54,18 @@ const MAX_REQUESTS_PER_SENDER = 2000;
 const MAX_TOTAL_MESSAGES = 2000;
 const MAX_TOTAL_REQUESTS = 20000;
 const ID = /^[a-zA-Z0-9_-]{1,128}$/;
+// Shown on a queued message, so a delivery that cannot happen yet says why.
+const WAITING_FOR_PROMPT: Record<AgentPromptReadinessReason, string | undefined> = {
+  ready: undefined,
+  busy: 'Recipient is working',
+  startup_or_dialog: 'Recipient is starting or showing a dialog',
+  no_prompt: 'Waiting for an empty prompt in the recipient',
+};
+const WAITING_FOR_INPUT: Record<NonNullable<ReturnType<typeof getAgentInputBlocker>>, string> = {
+  busy: 'Recipient terminal is busy',
+  'unsent-input': 'Recipient has unsent input in its terminal',
+  'recent-input': 'Waiting for recent input in the recipient to settle',
+};
 // Peer text is untrusted; the envelope keeps it from reading as a user instruction.
 // Markers stay distinct on one line because the non-bracketed paste flattens newlines.
 const PEER_BEGIN = '--- begin peer message ---';
@@ -819,6 +836,12 @@ export class DelegationService {
     const coordinator = this.options.currentCoordinator();
     if (this.requireTask(taskId).delegationPaused || coordinator?.hasPendingPrompt(taskId)) {
       this.readyMessages.delete(message.deliveryId);
+      this.setWaitingReason(
+        message,
+        this.requireTask(taskId).delegationPaused
+          ? 'Delivery is paused'
+          : 'Waiting for the task prompt to send first',
+      );
       return;
     }
     const epoch = this.orchestrationEpoch;
@@ -838,10 +861,15 @@ export class DelegationService {
         throw new DelegationError('Recipient changed or delivery was canceled');
     };
     const snapshot = getAgentPromptSnapshot(agentId);
-    if (!snapshot || !getAgentPromptReadiness(snapshot.text).ready) {
+    const readiness = snapshot ? getAgentPromptReadiness(snapshot.text) : undefined;
+    if (!readiness?.ready) {
       this.readyMessages.delete(message.deliveryId);
+      this.setWaitingReason(message, WAITING_FOR_PROMPT[readiness?.reason ?? 'no_prompt']);
       return;
     }
+    // Name the input blocker now rather than clearing it, so a recipient that
+    // keeps refusing does not flash between two reasons on every attempt.
+    this.setWaitingReason(message, this.inputWaitingReason(agentId));
     const previous = this.readyMessages.get(message.deliveryId);
     // Readiness must persist, but unrelated output and status repainting need
     // not stop. The coordinator uses the same continuous-readiness approach.
@@ -862,8 +890,10 @@ export class DelegationService {
           message.reason = undefined;
           this.messageChanged(message);
         }))
-      )
+      ) {
+        this.setWaitingReason(message, this.inputWaitingReason(agentId));
         return;
+      }
       message.state = 'delivered';
       message.reason = undefined;
     } catch (error) {
@@ -875,8 +905,20 @@ export class DelegationService {
       }
     } finally {
       this.delivering.delete(agentId);
-      this.messageChanged(message);
+      // A still-waiting message already reported any new reason.
+      if (message.state !== 'waiting') this.messageChanged(message);
     }
+  }
+
+  private inputWaitingReason(agentId: string): string | undefined {
+    const blocker = getAgentInputBlocker(agentId);
+    return blocker ? WAITING_FOR_INPUT[blocker] : undefined;
+  }
+
+  private setWaitingReason(message: PeerMessage, reason: string | undefined): void {
+    if (message.state !== 'waiting' || message.reason === reason) return;
+    message.reason = reason;
+    this.emit(message.recipient.taskId);
   }
 
   private canDeliverMessage(message: PeerMessage): boolean {

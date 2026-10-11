@@ -15,6 +15,17 @@ describe('autosave snapshot includes new-task-default fields', () => {
     }
   });
 
+  it('a remembered reasoning level changes the snapshot', () => {
+    setStore('askCodeEffort', {});
+    const before = persistedSnapshot();
+    setStore('askCodeEffort', 'codex', 'high');
+    try {
+      expect(persistedSnapshot()).not.toBe(before);
+    } finally {
+      setStore('askCodeEffort', 'codex', undefined);
+    }
+  });
+
   it('mcpOrchestrationEnabled changes the snapshot', () => {
     setStore('mcpOrchestrationEnabled', true);
     const before = persistedSnapshot();

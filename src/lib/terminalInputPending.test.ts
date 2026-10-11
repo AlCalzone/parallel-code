@@ -52,6 +52,9 @@ describe('nextTerminalInputPending', () => {
     '\x1b[>0;276;0c',
     '\x1b[1;1R',
     '\x1b[?1u',
+    // Mode reports (DECRPM); Claude Code queries modes with DECRQM.
+    '\x1b[?2026;2$y',
+    '\x1b[4;2$y',
   ])('ignores automatic terminal reply %j without changing a draft', (reply) => {
     expect(nextTerminalInputPending(false, reply)).toBe(false);
     expect(nextTerminalInputPending(true, reply)).toBe(true);
@@ -59,6 +62,18 @@ describe('nextTerminalInputPending', () => {
     expect(nextTerminalInputPending(false, `${reply}hello`)).toBe(true);
     expect(hasTerminalUserActivity(`${reply}hello`)).toBe(true);
   });
+
+  // Full-screen TUIs such as Codex enable any-motion SGR mouse tracking; pointer
+  // movement over the pane must not read as a draft that holds back peer prompts.
+  it.each(['\x1b[<35;10;5M', '\x1b[<0;12;3M', '\x1b[<0;12;3m', '\x1b[<64;1;1M'])(
+    'ignores SGR mouse report %j without changing a draft',
+    (report) => {
+      expect(hasTerminalUserActivity(report)).toBe(false);
+      expect(nextTerminalInputPending(false, report)).toBe(false);
+      expect(nextTerminalInputPending(true, report)).toBe(true);
+      expect(hasTerminalUserActivity(`${report}hello`)).toBe(true);
+    },
+  );
 
   it('does not mistake application cursor keys for typed text', () => {
     expect(nextTerminalInputPending(false, '\x1bOA')).toBe(false);
