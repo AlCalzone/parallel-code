@@ -599,6 +599,9 @@ it('sizes the focus support column to content until a shell opens, preserving it
     const column = expectDefined(notesCell.parentElement);
 
     expect(column.style.height).toBe('auto');
+    // Oversized pins must scroll inside the column instead of being clipped.
+    expect(column.style.maxHeight).toBe('100%');
+    expect(column.style.overflow).toBe('auto');
     expect(notesCell.style.minHeight).toBe('100px');
     setTask('shellAgentIds', ['shell']);
     expect(column.style.height).toBe('100%');

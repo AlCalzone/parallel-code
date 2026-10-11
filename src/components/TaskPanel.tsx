@@ -912,7 +912,13 @@ export function TaskPanel(props: TaskPanelProps) {
                     absorberIds={['shell-section']}
                     // An empty shell is just its toolbar. An auto-height column
                     // keeps the absorber from claiming the unused column space.
-                    style={{ height: props.task.shellAgentIds.length > 0 ? '100%' : 'auto' }}
+                    // Vertical pins don't shrink, so pinned or dragged panels can
+                    // outgrow the column; scroll keeps them and their handles reachable.
+                    style={{
+                      height: props.task.shellAgentIds.length > 0 ? '100%' : 'auto',
+                      'max-height': '100%',
+                      overflow: 'auto',
+                    }}
                     children={[
                       ...(isGitUnavailable() ? [] : [changedFilesChild]),
                       notesChild,
