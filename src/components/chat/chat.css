@@ -482,15 +482,17 @@
   color: var(--accent-text);
 }
 /* Only true while the card holds the keyboard — hidden otherwise, because Enter
-   then belongs to whatever does have focus (usually the composer). */
+   then belongs to whatever does have focus (usually the composer). Hidden with
+   visibility, not display, so the line keeps its space and focus never shifts
+   the card. */
 .chat-request-hint {
-  display: none;
+  visibility: hidden;
   margin: 8px 0 0;
   color: var(--fg-muted);
   font-size: 11px;
 }
 .chat-request:focus-within .chat-request-hint {
-  display: block;
+  visibility: visible;
 }
 .chat-ui button:disabled {
   opacity: 0.5;
