@@ -1,7 +1,8 @@
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { store, setStore } from '../store/core';
-import { navigateColumn } from '../store/focus';
+import { navigateColumn, navigateTask } from '../store/focus';
+import { bringTaskToFront, sendTaskToBack } from '../store/background-tasks';
 import { jumpToTask, moveActiveTask, setActiveTask } from '../store/navigation';
 import { registerFocusFn, setTaskFocusedPanel, unregisterFocusFn } from '../store/focused-panel';
 import { TilingLayout } from './TilingLayout';
@@ -208,4 +209,33 @@ it('scrolls the tiled tasks while a draft temporarily opens the focus-mode layou
   frame();
   expect(store.activeTaskId).toBe('b');
   expect(scrolls).toEqual(['b']);
+});
+
+it('keyboard travel skips a snoozed task instead of waking it', async () => {
+  sendTaskToBack('c', 1);
+  try {
+    navigateColumn('right');
+    navigateColumn('right');
+    expect(store.placeholderFocused).toBe(true);
+    navigateColumn('left');
+    expect(store.activeTaskId).toBe('b');
+    navigateTask('right');
+    expect(store.activeTaskId).toBe('b');
+    setStore({ showNewTaskPanel: true, newTaskPanelFocused: true });
+    navigateColumn('left');
+    expect(store.activeTaskId).toBe('b');
+  } finally {
+    bringTaskToFront('c');
+  }
+});
+
+it('entering from the sidebar wakes nothing when every task is snoozed', async () => {
+  ids.forEach((id) => sendTaskToBack(id, 1));
+  try {
+    setStore({ sidebarFocused: true, sidebarFocusedTaskId: null });
+    navigateColumn('right');
+    expect(store.activeTaskId).toBe(null);
+  } finally {
+    ids.forEach((id) => bringTaskToFront(id));
+  }
 });

@@ -47,8 +47,8 @@ export function setActiveTask(id: string): void {
   const isDocument =
     store.activeDocumentProjectId && id === documentAgentTaskId(store.activeDocumentProjectId);
   if (!task && !terminal && !isDocument) return;
-  // Activating a CI-snoozed task returns it; the stack says which path did it.
-  if (task?.snoozedUntilCi && store.activeTaskId !== id) {
+  // Activating a snoozed task returns it; the stack says which path did it.
+  if ((task?.snoozedUntilCi || task?.snoozedUntil !== undefined) && store.activeTaskId !== id) {
     logInfo('background-tasks', 'activating snoozed task', {
       taskId: id,
       stack: new Error().stack,
@@ -114,7 +114,7 @@ export function moveActiveTask(direction: 'left' | 'right'): void {
 
 export function jumpToTask(index: number): void {
   // Index against visible panels so Cmd+N matches the left-to-right tile order
-  // shown in the main area (and the order Cmd+Left/Right cycles through).
+  // shown in the main area. Unlike Cmd+Left/Right, it can pick a snoozed tile.
   const id = openPanelOrder()[index];
   if (!id) return;
   setActiveTask(id);

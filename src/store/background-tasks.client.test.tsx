@@ -705,6 +705,17 @@ it('logs who activates a CI-snoozed task', () => {
   );
 });
 
+it('logs who activates a timed-snoozed task', () => {
+  sendTaskToBack('one', 1);
+  vi.mocked(info).mockClear();
+  setActiveTask('one');
+  expect(info).toHaveBeenCalledWith(
+    'background-tasks',
+    'activating snoozed task',
+    expect.objectContaining({ taskId: 'one', stack: expect.stringContaining('setActiveTask') }),
+  );
+});
+
 it('switches a backgrounded coordinator group to its own PR from a child', () => {
   setStore('tasks', 'three', 'coordinatedBy', 'one');
   setPrChecks('one', { ...prChecks });

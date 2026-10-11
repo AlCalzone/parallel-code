@@ -4,6 +4,7 @@ import { store, setStore } from './core';
 import { openPanelOrder, setActiveTask } from './navigation';
 import { showNotification } from './notification';
 import { computeSidebarTaskOrder } from './sidebar-order';
+import { isTaskBackgrounded } from './background-tasks';
 import { uncollapseTask } from './tasks';
 import { isTaskCanvasVisible } from '../lib/canvas-tabs';
 import {
@@ -209,6 +210,12 @@ export function unfocusPlaceholder(): void {
   setStore('placeholderFocused', false);
 }
 
+/** Arrow-key travel order. It skips snoozed tiles: activating one ends its
+ *  snooze, so passing through would undo the snooze. Clicks and Ctrl+N still reach them. */
+function travelOrder(): string[] {
+  return openPanelOrder().filter((id) => !isTaskBackgrounded(id));
+}
+
 function focusTaskPanel(taskId: string, panel: string): void {
   batch(() => {
     setActiveTask(taskId);
@@ -375,7 +382,7 @@ export function navigateColumn(direction: 'left' | 'right'): void {
     if (direction === 'right') {
       if (openPanelOrder().length > 0) focusPlaceholder('add-task');
     } else {
-      const lastTaskId = openPanelOrder().at(-1);
+      const lastTaskId = travelOrder().at(-1);
       if (lastTaskId) {
         focusTaskPanel(lastTaskId, getTaskFocusedPanel(lastTaskId));
       } else if (store.sidebarVisible) {
@@ -393,7 +400,7 @@ export function navigateColumn(direction: 'left' | 'right'): void {
         return;
       }
       unfocusPlaceholder();
-      const lastTaskId = openPanelOrder().at(-1);
+      const lastTaskId = travelOrder().at(-1);
       if (lastTaskId) {
         setActiveTask(lastTaskId);
         setTaskFocusedPanel(lastTaskId, getTaskFocusedPanel(lastTaskId));
@@ -409,7 +416,7 @@ export function navigateColumn(direction: 'left' | 'right'): void {
   // for crossing into the panel area, not for activating the highlighted item.
   if (store.sidebarFocused) {
     if (direction === 'right') {
-      const targetTaskId = openPanelOrder()[0] ?? store.sidebarFocusedTaskId ?? taskId;
+      const targetTaskId = travelOrder()[0] ?? store.sidebarFocusedTaskId ?? taskId;
       if (targetTaskId) {
         if (store.tasks[targetTaskId]?.collapsed) {
           uncollapseTask(targetTaskId);
@@ -448,7 +455,7 @@ export function navigateColumn(direction: 'left' | 'right'): void {
   }
 
   // Cross task boundary
-  const taskOrder = openPanelOrder();
+  const taskOrder = travelOrder();
   const taskIdx = taskOrder.indexOf(taskId);
   const isCurrentTerminal = !store.tasks[taskId];
 
@@ -500,14 +507,15 @@ export function navigateColumn(direction: 'left' | 'right'): void {
 /**
  * Switch directly to the prev/next task in `taskOrder`, preserving the focused
  * panel name when it exists in the target's grid. Clamps at edges (no sidebar
- * or placeholder fall-through). Collapsed tasks are not in `taskOrder`, so
- * they are skipped — same semantics as `navigateColumn`'s cross-task path.
+ * or placeholder fall-through). Collapsed tasks are not in `taskOrder`, and
+ * snoozed ones are filtered out, so both are skipped — same semantics as
+ * `navigateColumn`'s cross-task path.
  */
 export function navigateTask(direction: 'left' | 'right'): void {
   if (store.showHelpDialog || store.showSettingsDialog) return;
 
   const { activeTaskId } = store;
-  const taskOrder = openPanelOrder();
+  const taskOrder = travelOrder();
 
   if (store.showNewTaskPanel && store.newTaskPanelFocused) {
     if (direction === 'left') {
