@@ -110,6 +110,14 @@ export function AgentDetail(props: AgentDetailProps) {
       const context = canvas.getContext('2d');
       if (context) context.font = `${fontSize}px monospace`;
       const charWidth = context?.measureText('M').width ?? fontSize * 0.61;
+      const screen = term.element?.querySelector<HTMLElement>('.xterm-screen');
+      // Size cells from the grid rendered at the base font size: xterm rows are
+      // taller than fontSize * lineHeight, and fitting to that estimate overflowed
+      // the pane, so vertical swipes scrolled the pane before reaching history.
+      // Measuring at one fixed size keeps repeated fits from drifting.
+      term.options.fontSize = fontSize;
+      const cellWidth = (screen?.offsetWidth ?? 0) / term.cols / fontSize || charWidth / fontSize;
+      const cellHeight = (screen?.offsetHeight ?? 0) / term.rows / fontSize || 1.2;
       const availableWidth = outputArea.clientWidth;
       const availableHeight = outputArea.clientHeight;
       // Fitting a wide agent grid to the phone's width alone shrinks it to a few
@@ -120,19 +128,24 @@ export function AgentDetail(props: AgentDetailProps) {
       // gestures below. Each fit is the largest font size that axis still allows;
       // zero means the axis is unmeasured, not that it is infinitely tight.
       const widthFit =
-        availableWidth > 0
-          ? (fontSize * Math.max(1, availableWidth - 24)) / (term.cols * charWidth)
-          : 0;
+        availableWidth > 0 ? Math.max(1, availableWidth - 24) / (term.cols * cellWidth) : 0;
       const heightFit =
-        availableHeight > 0 ? Math.max(1, availableHeight - 8) / (term.rows * 1.2) : 0;
+        availableHeight > 0 ? Math.max(1, availableHeight - 8) / (term.rows * cellHeight) : 0;
       const fittedFontSize = Math.min(fontSize, Math.max(widthFit, heightFit) || fontSize);
       // Scale through xterm so rendering, link hit testing and selection share cell dimensions.
-      const renderedFontSize = Math.max(1, fittedFontSize * zoom());
-      term.options.fontSize = renderedFontSize;
-      const screen = term.element?.querySelector<HTMLElement>('.xterm-screen');
-      const width =
-        screen?.offsetWidth || Math.ceil((term.cols * charWidth * renderedFontSize) / fontSize);
-      const height = screen?.offsetHeight || Math.ceil(term.rows * renderedFontSize * 1.2);
+      term.options.fontSize = Math.max(1, fittedFontSize * zoom());
+      // Cells snap to device pixels, so the fit can still overshoot its axis by a
+      // row. xterm resizes the grid synchronously, so shrink before the next paint.
+      const fitsHeight = heightFit >= widthFit;
+      const size = () => (fitsHeight ? screen?.offsetHeight : screen?.offsetWidth) ?? 0;
+      const limit = (fitsHeight ? availableHeight - 8 : availableWidth - 24) * zoom();
+      for (let i = 0; limit > 0 && size() > limit && i < 8; i++) {
+        // Step at least 3%: a smaller step may not shrink a snapped row.
+        term.options.fontSize = Math.max(1, term.options.fontSize / Math.max(size() / limit, 1.03));
+      }
+      const renderedFontSize = term.options.fontSize;
+      const width = screen?.offsetWidth || Math.ceil(term.cols * cellWidth * renderedFontSize);
+      const height = screen?.offsetHeight || Math.ceil(term.rows * renderedFontSize * cellHeight);
       termContainer.style.width = `${width + 24}px`;
       termContainer.style.height = `${height + 8}px`;
       terminalLineHeight = height / term.rows;
@@ -209,6 +222,8 @@ export function AgentDetail(props: AgentDetailProps) {
     let touchX = 0;
     let touchY = 0;
     let touchId: number | undefined;
+    // Lock each swipe to its first direction so history scrolling never drifts sideways.
+    let touchAxis: 'x' | 'y' | undefined;
     let historyPixels = 0;
     // A full-screen agent UI keeps its transcript out of the terminal history:
     // turn the wheel over the cell under the finger, as the desktop pane does.
@@ -249,6 +264,7 @@ export function AgentDetail(props: AgentDetailProps) {
       e.stopPropagation();
       historyPixels = 0;
       touchId = undefined;
+      touchAxis = undefined;
       if (e.touches.length === 1) {
         touchId = e.touches[0].identifier;
         touchX = e.touches[0].clientX;
@@ -268,7 +284,13 @@ export function AgentDetail(props: AgentDetailProps) {
         return;
       }
       e.preventDefault();
-      scrollTerminal(touchX - touch.clientX, touchY - touch.clientY, touch.clientX, touch.clientY);
+      const dx = touchX - touch.clientX;
+      const dy = touchY - touch.clientY;
+      // Touch-down jitter is not a direction: keep the start point until the swipe has one.
+      if (!touchAxis && Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
+      touchAxis ??= Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+      if (touchAxis === 'x') scrollTerminal(dx, 0, touch.clientX, touch.clientY);
+      else scrollTerminal(0, dy, touch.clientX, touch.clientY);
       touchX = touch.clientX;
       touchY = touch.clientY;
     };

@@ -438,6 +438,28 @@ describe('phone terminal viewport', () => {
     await vi.waitFor(() => expect(terminalMocks.refresh).toHaveBeenCalledWith(0, 39));
   });
 
+  it('fits a tall grid to the pane height so vertical swipes go straight to history', async () => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(360);
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600);
+    // Real xterm rows are taller than fontSize * lineHeight and snap to whole pixels.
+    const element = document.createElement('div');
+    const screen = document.createElement('div');
+    screen.className = 'xterm-screen';
+    element.append(screen);
+    Object.defineProperties(screen, {
+      offsetWidth: { get: () => Math.ceil(120 * terminalMocks.options.fontSize * 0.6) },
+      offsetHeight: { get: () => 40 * Math.ceil(terminalMocks.options.fontSize * 1.4) },
+    });
+    terminalMocks.element = element;
+    mount();
+    const { content } = viewport();
+    terminalMocks.scrollback?.('', 120, 40);
+    await vi.waitFor(() => expect(terminalMocks.refresh).toHaveBeenCalledWith(0, 39));
+    expect(parseFloat(content.style.height)).toBeLessThanOrEqual(600);
+    // Still fills the pane: within one pixel per row of the limit.
+    expect(parseFloat(content.style.height)).toBeGreaterThan(600 - 40);
+  });
+
   it('keeps a wide grid readable and overflowing so a full-screen agent UI can be panned', async () => {
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(360);
     vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600);
@@ -705,7 +727,7 @@ describe('phone terminal viewport', () => {
     expect(labels).not.toContain('Close');
   });
 
-  it('pans the desktop grid before scrolling history and shields gestures from xterm', () => {
+  it('scrolls the desktop grid before history and shields gestures from xterm', () => {
     localStorage.setItem('parallel-mobile:output-view', 'terminal');
     mount();
     const { scroller, content } = viewport();
@@ -713,19 +735,46 @@ describe('phone terminal viewport', () => {
     document.addEventListener('touchmove', xtermGesture);
     try {
       touch(content, 'touchstart', 100, 100);
-      const move = touch(content, 'touchmove', 50, 50);
-      expect(scroller.scrollLeft).toBe(50);
+      const move = touch(content, 'touchmove', 90, 50);
       expect(scroller.scrollTop).toBe(50);
       expect(terminalMocks.scrollLines).not.toHaveBeenCalled();
       expect(move.defaultPrevented).toBe(true);
       expect(xtermGesture).not.toHaveBeenCalled();
       scroller.scrollTop = 900;
-      touch(content, 'touchmove', 50, 0);
+      touch(content, 'touchmove', 80, 0);
       expect(terminalMocks.scrollLines).toHaveBeenCalledWith(2);
       expect(touch(content, 'touchmove', 50, 0, 2).defaultPrevented).toBe(false);
     } finally {
       document.removeEventListener('touchmove', xtermGesture);
     }
+  });
+
+  it('keeps each swipe on one axis so scrolling history never pans sideways', () => {
+    mount();
+    const { scroller } = viewport(300);
+    touch(scroller, 'touchstart', 100, 100);
+    touch(scroller, 'touchmove', 90, 160);
+    touch(scroller, 'touchmove', 60, 170);
+    expect(scroller.scrollLeft).toBe(0);
+    expect(terminalMocks.scrollLines).toHaveBeenCalled();
+    terminalMocks.scrollLines.mockClear();
+    touch(scroller, 'touchend', 0, 0, 0);
+    touch(scroller, 'touchstart', 100, 100);
+    touch(scroller, 'touchmove', 40, 90);
+    touch(scroller, 'touchmove', 20, 140);
+    expect(scroller.scrollLeft).toBe(80);
+    expect(terminalMocks.scrollLines).not.toHaveBeenCalled();
+  });
+
+  it('waits for a clear direction before locking a swipe to an axis', () => {
+    mount();
+    const { scroller } = viewport(300);
+    touch(scroller, 'touchstart', 100, 100);
+    // Touch-down jitter leans sideways; the swipe itself is vertical.
+    touch(scroller, 'touchmove', 97, 101);
+    touch(scroller, 'touchmove', 95, 160);
+    expect(scroller.scrollLeft).toBe(0);
+    expect(terminalMocks.scrollLines).toHaveBeenCalled();
   });
 
   it('scrolls history from the empty pane below a fitted terminal without typing into the agent', () => {
