@@ -111,10 +111,7 @@ export function SettingsCheckboxRow(props: {
         'align-items': props.align ?? 'center',
         gap: '10px',
         cursor: 'pointer',
-        padding: '8px 12px',
-        'border-radius': 'var(--radius-md)',
-        background: theme.bgInput,
-        border: `1px solid ${theme.border}`,
+        padding: '8px 0',
       }}
     >
       <input
@@ -366,10 +363,16 @@ export function SettingsDialog(props: SettingsDialogProps) {
       width="640px"
       zIndex={1100}
       labelledBy={titleId}
-      panelStyle={{ 'max-width': 'calc(100vw - 32px)', padding: '24px', gap: '18px' }}
+      panelStyle={{
+        'max-width': 'calc(100vw - 32px)',
+        padding: '24px',
+        gap: '18px',
+        overflow: 'hidden',
+      }}
     >
       <div
         style={{
+          'flex-shrink': '0',
           display: 'flex',
           'align-items': 'center',
           'justify-content': 'space-between',
@@ -424,6 +427,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
         role="tablist"
         aria-label="Settings tabs"
         style={{
+          'flex-shrink': '0',
           display: 'flex',
           gap: '2px',
           'border-bottom': `1px solid ${theme.border}`,
@@ -479,7 +483,15 @@ export function SettingsDialog(props: SettingsDialogProps) {
           id="settings-tab-general"
           role="tabpanel"
           aria-labelledby="settings-tabbutton-general"
-          style={{ display: 'flex', 'flex-direction': 'column', gap: '18px' }}
+          data-dialog-scroll
+          style={{
+            'min-height': '0',
+            'overflow-y': 'auto',
+            padding: '4px',
+            display: 'flex',
+            'flex-direction': 'column',
+            gap: '18px',
+          }}
         >
           <SettingsSection title="Behavior">
             <SettingsCheckboxRow
@@ -532,7 +544,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
                     padding: '6px 10px',
                     color: theme.fg,
                     'font-size': '13px',
-                    outline: 'none',
                     cursor: 'pointer',
                   }}
                 >
@@ -573,7 +584,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
                   color: theme.fg,
                   'font-size': '12px',
                   'font-family': 'inherit',
-                  outline: 'none',
                 }}
               />
             </label>
@@ -696,7 +706,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
                     color: theme.fg,
                     'font-size': '14px',
                     'font-family': "'JetBrains Mono', monospace",
-                    outline: 'none',
                   }}
                 />
               </label>
@@ -747,7 +756,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
                     padding: '6px 10px',
                     color: theme.fg,
                     'font-size': '13px',
-                    outline: 'none',
                     cursor: 'pointer',
                   }}
                 >
@@ -772,7 +780,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
                       padding: '6px 10px',
                       color: theme.fg,
                       'font-size': '13px',
-                      outline: 'none',
                       cursor: 'pointer',
                     }}
                   >
@@ -818,7 +825,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
                       color: theme.fg,
                       'font-size': '13px',
                       'font-family': "'JetBrains Mono', monospace",
-                      outline: 'none',
                     }}
                   />
                 </label>
@@ -877,7 +883,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
                       color: theme.fg,
                       'font-size': '14px',
                       'font-family': "'JetBrains Mono', monospace",
-                      outline: 'none',
                     }}
                   />
                 </label>
@@ -1141,7 +1146,15 @@ export function SettingsDialog(props: SettingsDialogProps) {
           id="settings-tab-themes"
           role="tabpanel"
           aria-labelledby="settings-tabbutton-themes"
-          style={{ display: 'flex', 'flex-direction': 'column', gap: '18px' }}
+          data-dialog-scroll
+          style={{
+            'min-height': '0',
+            'overflow-y': 'auto',
+            padding: '4px',
+            display: 'flex',
+            'flex-direction': 'column',
+            gap: '18px',
+          }}
         >
           {/* Appearance mode selector */}
           <div style={{ display: 'flex', 'flex-direction': 'column', gap: '10px' }}>
@@ -1263,7 +1276,15 @@ export function SettingsDialog(props: SettingsDialogProps) {
           id="settings-tab-mcp"
           role="tabpanel"
           aria-labelledby="settings-tabbutton-mcp"
-          style={{ display: 'flex', 'flex-direction': 'column', gap: '18px' }}
+          data-dialog-scroll
+          style={{
+            'min-height': '0',
+            'overflow-y': 'auto',
+            padding: '4px',
+            display: 'flex',
+            'flex-direction': 'column',
+            gap: '18px',
+          }}
         >
           <SettingsSection title="Agent orchestration">
             <SettingsCheckboxRow
@@ -1333,7 +1354,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
                     color: theme.fg,
                     'font-size': '14px',
                     'font-family': "'JetBrains Mono', monospace",
-                    outline: 'none',
                     'text-align': 'right',
                   }}
                 />
@@ -1352,7 +1372,15 @@ export function SettingsDialog(props: SettingsDialogProps) {
           id="settings-tab-experimental"
           role="tabpanel"
           aria-labelledby="settings-tabbutton-experimental"
-          style={{ display: 'flex', 'flex-direction': 'column', gap: '18px' }}
+          data-dialog-scroll
+          style={{
+            'min-height': '0',
+            'overflow-y': 'auto',
+            padding: '4px',
+            display: 'flex',
+            'flex-direction': 'column',
+            gap: '18px',
+          }}
         >
           <SettingsSection title="Document workspaces">
             <SettingsCheckboxRow

@@ -863,6 +863,9 @@ export function TaskPanel(props: TaskPanelProps) {
                     direction="vertical"
                     persistKey={`task:${props.task.id}:split-right`}
                     absorberIds={['shell-section']}
+                    // An empty shell is just its toolbar. An auto-height column
+                    // keeps the absorber from claiming the unused column space.
+                    style={{ height: props.task.shellAgentIds.length > 0 ? '100%' : 'auto' }}
                     children={[
                       ...(isGitUnavailable() ? [] : [changedFilesChild]),
                       notesChild,

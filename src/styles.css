@@ -743,17 +743,6 @@ html[data-look='parallel-code'] .icon-btn:not(.sidebar-create-btn):not(:hover):n
   border-color: transparent !important;
 }
 
-html[data-look='parallel-code'] .sidebar-create-btn {
-  background: var(--bg-selected-subtle) !important;
-  color: var(--accent) !important;
-  border-color: color-mix(in srgb, var(--accent) 24%, var(--border)) !important;
-}
-
-html[data-look='parallel-code'] .sidebar-create-btn:hover {
-  background: var(--bg-selected) !important;
-  border-color: var(--accent) !important;
-}
-
 html[data-look='parallel-code'] .task-title-actions {
   background: transparent;
 }
@@ -845,31 +834,12 @@ html[data-look='noir'] .sidebar-panel {
   gap: 20px !important;
 }
 
-html[data-look='noir'] .icon-btn:not(:hover):not(:focus-visible) {
+html[data-look='noir'] .icon-btn:not(.sidebar-create-btn):not(:hover):not(:focus-visible) {
   border-color: transparent !important;
 }
 
 html[data-look='noir'] .sidebar-create-btn {
   padding: 9px 12px !important;
-  background: var(--accent) !important;
-  color: var(--accent-text) !important;
-  border-color: transparent !important;
-  font-weight: 600 !important;
-}
-
-html[data-look='noir'] .sidebar-create-btn:hover {
-  background: var(--accent-hover) !important;
-}
-
-html[data-look='noir'] .app-shell:has(.task-column.active) .sidebar-create-btn {
-  background: var(--bg-input) !important;
-  color: var(--fg) !important;
-  border-color: var(--border) !important;
-  font-weight: 500 !important;
-}
-
-html[data-look='noir'] .app-shell:has(.task-column.active) .sidebar-create-btn:hover {
-  background: var(--bg-hover) !important;
 }
 
 html[data-look='noir'] .task-item {
@@ -953,8 +923,6 @@ html[data-look='noir'] .task-notes-body textarea::placeholder {
 }
 
 html[data-look='noir'] .prompt-send-btn:not(:disabled) {
-  background: var(--accent) !important;
-  color: var(--accent-text) !important;
   border-radius: var(--radius-sm) !important;
 }
 
@@ -1071,21 +1039,13 @@ html[data-look^='obsidian'] .sidebar-panel {
 }
 
 /* Quiet utility controls let the primary action and task names lead. */
-html[data-look^='obsidian'] .icon-btn:not(:hover) {
+html[data-look^='obsidian'] .icon-btn:not(.sidebar-create-btn):not(:hover) {
   border-color: transparent !important;
 }
 
 html[data-look^='obsidian'] .sidebar-create-btn {
   padding: 9px 12px !important;
-  background: var(--accent) !important;
-  color: var(--accent-text) !important;
-  border-color: transparent !important;
-  font-weight: 600 !important;
   box-shadow: none;
-}
-
-html[data-look^='obsidian'] .sidebar-create-btn:hover {
-  background: var(--accent-hover) !important;
 }
 
 html[data-look^='obsidian'] .task-item[aria-current='true'] {
@@ -1632,14 +1592,6 @@ html[data-look^='islands-'] .prompt-input-panel[data-panel-focused='true']::afte
   z-index: 10;
 }
 
-/* Soften the send button so it doesn't punch through the muted theme —
-   matches the notes panel's send-notes button (soft accent tint). */
-html[data-look^='islands-'] .prompt-send-btn:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 14%, var(--bg-input)) !important;
-  color: var(--fg) !important;
-  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border)) !important;
-}
-
 html[data-look^='islands-'] .prompt-send-btn:disabled {
   background: transparent !important;
   color: var(--fg-subtle) !important;
@@ -1900,12 +1852,7 @@ html[data-look='workbench'] .prompt-input-panel[data-panel-focused='true']::afte
   z-index: 10;
 }
 
-/* Soft-tinted send button so the cobalt accent doesn't punch through the
-   muted palette (same logic as islands-dark). */
 html[data-look='workbench'] .prompt-send-btn:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 14%, var(--bg-input)) !important;
-  color: var(--fg) !important;
-  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border)) !important;
   border-radius: 0 !important;
 }
 
@@ -2393,13 +2340,13 @@ textarea::placeholder {
   backdrop-filter: blur(6px);
 }
 
-.icon-btn:hover {
-  background: color-mix(in srgb, var(--accent) 9%, var(--bg-hover)) !important;
+.icon-btn:hover:not(:disabled) {
+  background: var(--bg-hover) !important;
   color: var(--fg) !important;
-  border-color: color-mix(in srgb, var(--accent) 52%, var(--border)) !important;
+  border-color: var(--border) !important;
 }
 
-.icon-btn:active {
+.icon-btn:active:not(:disabled) {
   transform: translateY(1px);
 }
 
@@ -2633,32 +2580,40 @@ html:is(
   overflow: hidden;
 }
 
-.btn-primary:hover:not(:disabled) {
-  background: var(--accent-hover-bg, var(--accent-hover)) !important;
-  box-shadow: var(--shadow-pop);
+/* Routine actions share a quiet boundary across presets and inline-styled dialogs. */
+.btn-primary,
+.sidebar-create-btn,
+.prompt-send-btn:not(:disabled) {
+  background: transparent !important;
+  border: 1px solid var(--border-subtle) !important;
+  color: var(--fg-muted) !important;
+}
+
+.btn-primary:hover:not(:disabled),
+.btn-secondary:hover:not(:disabled),
+.sidebar-create-btn:hover:not(:disabled),
+.prompt-send-btn:hover:not(:disabled) {
+  background: var(--bg-hover) !important;
+  border-color: var(--border) !important;
+  color: var(--fg) !important;
 }
 
 .btn-primary:active:not(:disabled) {
   transform: scale(0.98);
 }
 
-.btn-danger:hover {
+.btn-danger:hover:not(:disabled) {
   filter: brightness(1.12);
   box-shadow: 0 0 18px color-mix(in srgb, var(--error) 35%, transparent);
 }
 
-.btn-danger:active {
+.btn-danger:active:not(:disabled) {
   transform: scale(0.98);
 }
 
 .github-item-option:hover,
 .github-item-option:focus-visible {
   background: var(--bg-hover) !important;
-}
-
-.btn-secondary:hover {
-  background: color-mix(in srgb, var(--accent) 8%, var(--bg-hover)) !important;
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border)) !important;
 }
 
 .review-plan-btn:hover {

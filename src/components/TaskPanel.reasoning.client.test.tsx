@@ -587,6 +587,30 @@ function mountEmptyTask() {
   return { container, setTask };
 }
 
+it('sizes the focus support column to content until a shell opens, preserving its panels', () => {
+  const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1200);
+  try {
+    toggleFocusMode(true);
+    const { container, setTask } = mountEmptyTask();
+    fileInventory.report(1);
+    const notes = expectDefined(container.querySelector('.test-notes'));
+    const terminal = container.querySelector('.test-terminal');
+    const notesCell = expectDefined(notes.closest<HTMLElement>('.rp-cell'));
+    const column = expectDefined(notesCell.parentElement);
+
+    expect(column.style.height).toBe('auto');
+    expect(notesCell.style.minHeight).toBe('100px');
+    setTask('shellAgentIds', ['shell']);
+    expect(column.style.height).toBe('100%');
+    expect(container.querySelector('.test-notes')).toBe(notes);
+    expect(container.querySelector('.test-terminal')).toBe(terminal);
+    setTask('shellAgentIds', []);
+    expect(column.style.height).toBe('auto');
+  } finally {
+    width.mockRestore();
+  }
+});
+
 it('preserves commit rows on unchanged polls and updates changed messages, order and length', async () => {
   vi.useFakeTimers();
   let commits: CommitInfo[] = [

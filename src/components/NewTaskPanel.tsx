@@ -1359,7 +1359,6 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
             agents={store.availableAgents}
             selectedAgent={selectedAgent()}
             onSelect={setSelectedAgent}
-            wrap={false}
           />
 
           <Show when={gitIsolation() === 'direct' && !isNonGitProject()}>
@@ -1699,10 +1698,7 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
             disabled={!canSubmit()}
             style={{
               padding: '9px 20px',
-              background: theme.accent,
-              border: 'none',
               'border-radius': 'var(--radius-md)',
-              color: theme.accentText,
               cursor: 'pointer',
               'font-size': '14px',
               'font-weight': '500',
