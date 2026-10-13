@@ -271,10 +271,12 @@ function parseCard(value: unknown, where: string): TourCard {
   const diagram = parseDiagram(record.diagram, where);
   const comparison = parseComparison(record.comparison, where);
   const points = parsePoints(record.points, where);
-  // A slide says it in points, a comparison or flow in its evidence; only a
+  const notes = parseOptionalText(record.notes, TOUR_CARD_LIMITS.notes, `${where} notes`);
+  // A slide says it in points, a comparison or flow in its evidence, and a
+  // takeaway in its title alone, with notes for whoever wants more. Only a
   // card with none of them needs a body to say anything at all.
   const body =
-    points || diagram || comparison
+    points || diagram || comparison || notes || record.form === 'takeaway'
       ? (parseOptionalText(record.body, TOUR_CARD_LIMITS.body, `${where} body`) ?? '')
       : requireText(record.body, TOUR_CARD_LIMITS.body, `${where} body`);
   const base = {
@@ -285,7 +287,6 @@ function parseCard(value: unknown, where: string): TourCard {
     refs: parseRefs(record.refs),
   };
   const form = parseForm(record.form, { diagram, comparison });
-  const notes = parseOptionalText(record.notes, TOUR_CARD_LIMITS.notes, `${where} notes`);
   const whyItMatters = parseOptionalText(
     record.whyItMatters,
     TOUR_CARD_LIMITS.whyItMatters,

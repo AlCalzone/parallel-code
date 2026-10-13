@@ -67,6 +67,8 @@ export function UnderstandingTourDialog(props: {
   const headingId = createUniqueId();
   /** The action the reader is most likely to press next; see the focus effect. */
   let primaryRef: HTMLButtonElement | undefined;
+  /** Holds the card on screen, which the arrow keys scroll. */
+  let stageRef: HTMLDivElement | undefined;
   const controller = () => props.tour;
   const tour = () => props.tour.tour();
   const roots = () => props.tour.tree();
@@ -141,10 +143,21 @@ export function UnderstandingTourDialog(props: {
     return node()?.children.some((child) => questionPoint(child.question) === point) ?? false;
   }
 
+  /** Scrolls a long card by one step; false when it is already at that end. */
+  function scrollCard(direction: 1 | -1): boolean {
+    const card = stageRef?.querySelector<HTMLElement>('article.understanding-card');
+    if (!card) return false;
+    const room =
+      direction > 0 ? card.scrollHeight - card.clientHeight - card.scrollTop : card.scrollTop;
+    if (room <= 1) return false;
+    card.scrollBy({ top: direction * Math.min(room, 64) });
+    return true;
+  }
+
   /**
    * Left and right step through the cards at one level; down enters the
-   * answers under a card and up leaves them. Down and up keep scrolling a
-   * long card where there is nowhere to go. Returns whether the key moved.
+   * answers under a card and up leaves them, once a long card has scrolled to
+   * that end. Returns whether the key did anything.
    */
   function move(key: string): boolean {
     switch (key) {
@@ -155,10 +168,12 @@ export function UnderstandingTourDialog(props: {
         controller().next();
         return true;
       case 'ArrowDown':
+        if (scrollCard(1)) return true;
         if (!node()?.children.length) return false;
         controller().enter();
         return true;
       case 'ArrowUp':
+        if (scrollCard(-1)) return true;
         if (!parent()) return false;
         controller().leave();
         return true;
@@ -422,7 +437,11 @@ export function UnderstandingTourDialog(props: {
           <Show when={!props.tour.loading() && node()}>
             {/* The outline replaces the card only where it has no room beside it,
                 so widening the window with it open brings the card back. */}
-            <div class="understanding-stage" data-overview={overview() ? '' : undefined}>
+            <div
+              class="understanding-stage"
+              data-overview={overview() ? '' : undefined}
+              ref={stageRef}
+            >
               {/* A fresh card per card, so it opens scrolled to the top with its
                   notes closed; the footer stays and keeps its focus. */}
               <Show when={props.tour.currentId()} keyed>

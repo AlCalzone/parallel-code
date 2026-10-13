@@ -35,6 +35,28 @@ describe('saveTourFile', () => {
     expect(fs.readFileSync(path.join(worktree, 'cache.tour.md'), 'utf8')).toBe('updated');
   });
 
+  it('refuses to replace a file that changed since it was last written', () => {
+    save('cache.tour.md', 'one');
+    fs.writeFileSync(path.join(worktree, 'cache.tour.md'), 'edited by hand');
+    expect(() =>
+      saveTourFile(worktree, {
+        path: 'cache.tour.md',
+        content: 'two',
+        replace: true,
+        expected: 'one',
+      }),
+    ).toThrow('changed on disk');
+    expect(fs.readFileSync(path.join(worktree, 'cache.tour.md'), 'utf8')).toBe('edited by hand');
+    expect(
+      saveTourFile(worktree, {
+        path: 'cache.tour.md',
+        content: 'three',
+        replace: true,
+        expected: 'edited by hand',
+      }),
+    ).toBe('cache.tour.md');
+  });
+
   it('saves into an existing folder of the worktree', () => {
     fs.mkdirSync(path.join(worktree, 'docs'));
     expect(save('./docs//plan.tour.md')).toBe('docs/plan.tour.md');
@@ -46,6 +68,8 @@ describe('saveTourFile', () => {
     ['/tmp/abs.tour.md', 'relative'],
     ['notes.md', 'Only .tour.md'],
     ['.git/x.tour.md', '.git'],
+    ['.GIT/x.tour.md', '.git'],
+    ['sub/.git/x.tour.md', '.git'],
     ['', 'relative'],
     [42, 'must be a string'],
   ])('rejects the path %s', (relative, message) => {

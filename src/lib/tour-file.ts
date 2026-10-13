@@ -3,8 +3,8 @@
  * `.tour.md` file a reader saves into the worktree to revisit later. Each card
  * is a heading one level below its parent's, so the file reads as an outline
  * on GitHub and stays editable by hand or by the agent. What Markdown cannot
- * show (tone, form, the question a card answers) rides in one HTML comment per
- * card. See docs/tour-outline.md.
+ * show (tone, form, the question a card answers, which blocks the card has)
+ * rides in one HTML comment per card. See docs/tour-outline.md.
  */
 
 import {
@@ -62,8 +62,26 @@ export function tourFileName(subject: string): string {
   return `${slug || 'tour'}${TOUR_FILE_SUFFIX}`;
 }
 
+/** One line, without a regular expression a long run of spaces could stall. */
 function oneLine(text: string): string {
-  return text.replace(/\s*\n+\s*/g, ' ').trim();
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+/** Hand-edited files are not bound by the model's caps, but stay readable. */
+const READ_CAPS = {
+  title: 300,
+  label: 80,
+  point: 300,
+  text: 8000,
+  line: 1000,
+} as const;
+
+function capped(text: string, cap: number): string {
+  return text.length > cap ? `${text.slice(0, cap - 1)}…` : text;
 }
 
 /** Longer than any backtick run in the source, so a diagram cannot close its own fence. */
@@ -72,42 +90,85 @@ function fence(source: string): string {
   return '`'.repeat(longest + 1);
 }
 
-const FENCE = /^(`{3,}|~{3,})(.*)$/;
+/**
+ * The marker of a line that opens a fenced code block. As in CommonMark, a
+ * backtick fence's info string has no backticks, so a line of inline code
+ * such as "```npm i``` installs" opens nothing.
+ */
+function fenceOpen(line: string): { marker: string; info: string } | undefined {
+  const match = /^(`{3,})([^`]*)$|^(~{3,})(.*)$/.exec(line);
+  if (!match) return undefined;
+  return { marker: match[1] ?? match[3], info: (match[2] ?? match[4]).trim() };
+}
+
+function closesFence(line: string, marker: string): boolean {
+  const trimmed = line.trim();
+  let length = 0;
+  while (trimmed[length] === marker[0]) length += 1;
+  return length >= marker.length && length === trimmed.length;
+}
 
 /**
- * Calls `visit` with each line and whether it sits inside a fenced code block,
- * the fence lines themselves included.
+ * Whether each line sits inside a fenced code block, the fence lines included,
+ * and the marker of a fence still open after the last line.
  */
-function eachLine(lines: string[], visit: (line: string, fenced: boolean) => void): void {
+function fenceState(lines: readonly string[]): { fenced: boolean[]; open?: string } {
+  const fenced: boolean[] = [];
   let open: string | undefined;
   for (const line of lines) {
-    const match = FENCE.exec(line);
     if (open) {
-      visit(line, true);
-      if (match && match[1][0] === open[0] && match[1].length >= open.length && !match[2].trim())
-        open = undefined;
-    } else if (match) {
-      open = match[1];
-      visit(line, true);
-    } else visit(line, false);
+      fenced.push(true);
+      if (closesFence(line, open)) open = undefined;
+      continue;
+    }
+    open = fenceOpen(line)?.marker;
+    fenced.push(open !== undefined);
   }
+  return { fenced, open };
 }
 
-/** Card text never starts a heading of its own: it would split the card in two. */
-function escapeHeadings(markdown: string): string {
-  const out: string[] = [];
-  eachLine(markdown.split('\n'), (line, fenced) =>
-    out.push(!fenced && /^#/.test(line) ? `\\${line}` : line),
+/**
+ * Card text as it goes into the file: never a heading of its own, which would
+ * split the card in two, and never an unclosed fence, which would swallow the
+ * cards after it.
+ */
+function blockText(markdown: string): string {
+  const lines = markdown.split('\n');
+  const { fenced, open } = fenceState(lines);
+  const out = lines.map((line, index) =>
+    !fenced[index] && line.startsWith('#') ? `\\${line}` : line,
   );
+  if (open) out.push(open);
   return out.join('\n');
 }
 
-function unescapeHeadings(markdown: string): string {
-  const out: string[] = [];
-  eachLine(markdown.split('\n'), (line, fenced) =>
-    out.push(!fenced && /^\\#/.test(line) ? line.slice(1) : line),
-  );
-  return out.join('\n');
+function unescapeHeadings(lines: readonly string[]): string {
+  const { fenced } = fenceState(lines);
+  return lines
+    .map((line, index) => (!fenced[index] && line.startsWith('\\#') ? line.slice(1) : line))
+    .join('\n');
+}
+
+/** A trailing "#" would read as a heading's closing sequence, so it is escaped. */
+function headingText(title: string): string {
+  const text = oneLine(title);
+  return text.endsWith('#') ? `${text.slice(0, -1)}\\#` : text;
+}
+
+/** A heading line's level and text, or undefined; linear in the line's length. */
+function readHeading(line: string): { level: number; text: string } | undefined {
+  let level = 0;
+  while (line[level] === '#' && level < 7) level += 1;
+  if (level === 0 || level > 6) return undefined;
+  if (line.length > level && line[level] !== ' ' && line[level] !== '\t') return undefined;
+  let text = line.slice(level).trim();
+  // An optional closing sequence: spaces, then only "#" to the end.
+  let end = text.length;
+  while (end > 0 && text[end - 1] === '#') end -= 1;
+  if (end === 0) text = '';
+  else if (end < text.length && /\s/.test(text[end - 1])) text = text.slice(0, end).trim();
+  if (text.endsWith('\\#')) text = `${text.slice(0, -2)}#`;
+  return { level, text };
 }
 
 function refText(ref: TourRef): string {
@@ -124,6 +185,38 @@ function tableCell(text: string): string {
   return oneLine(text).replace(/\|/g, '\\|');
 }
 
+/** The blocks a written card has, in the order the writer puts them. */
+type CardField =
+  | 'label'
+  | 'diagram'
+  | 'comparison'
+  | 'body'
+  | 'points'
+  | 'notes'
+  | 'source'
+  | 'why'
+  | 'refs';
+
+function cardFields(card: TourCard): CardField[] {
+  const present: [CardField, unknown][] = [
+    ['label', card.label.trim()],
+    ['diagram', card.diagram],
+    ['comparison', card.comparison],
+    ['body', card.body],
+    ['points', card.points?.length],
+    ['notes', card.notes],
+    ['source', card.source],
+    ['why', card.whyItMatters],
+    ['refs', card.refs.length],
+  ];
+  return present.filter(([, value]) => value).map(([field]) => field);
+}
+
+/**
+ * What Markdown cannot show, plus the blocks the card has: with them the
+ * reader knows a table, fence or list in the body is body, not a comparison,
+ * a diagram or the points.
+ */
 function cardMeta(node: TourNode): Record<string, unknown> {
   const { card } = node;
   return {
@@ -131,20 +224,21 @@ function cardMeta(node: TourNode): Record<string, unknown> {
     ...(card.form && { form: card.form }),
     ...(node.question !== undefined && { question: node.question }),
     ...(card.questions && { questions: card.questions }),
-    // Without points every list belongs to the body; see readCard().
-    ...(!card.points && { prose: true }),
+    fields: cardFields(card),
   };
 }
 
-function cardMarkdown(node: TourNode, depth: number, withMeta = true): string {
+/** Separates a card's points from a body that may end in a list of its own. */
+const POINTS_MARK = '<!-- points -->';
+
+function cardMarkdown(node: TourNode, depth: number, withMeta: boolean): string {
   const { card } = node;
-  const parts = [`${'#'.repeat(depth + 1)} ${oneLine(card.title)}`];
+  const parts = [`${'#'.repeat(depth + 1)} ${headingText(card.title)}`];
   const label = `${WARNED.has(card.tone) ? '⚠ ' : ''}${oneLine(card.label).replace(/\*/g, '\\*')}`;
-  const meta = withMeta ? cardMeta(node) : {};
   parts.push(
     [
-      ...(Object.keys(meta).length ? [`${META_PREFIX}${commentJson(meta)} -->`] : []),
-      ...(label ? [`**${label}**`] : []),
+      ...(withMeta ? [`${META_PREFIX}${commentJson(cardMeta(node))} -->`] : []),
+      ...(card.label.trim() ? [`**${label}**`] : []),
     ].join('\n'),
   );
   if (card.diagram) {
@@ -158,26 +252,29 @@ function cardMarkdown(node: TourNode, depth: number, withMeta = true): string {
       `| ${tableCell(left.label)} | ${tableCell(right.label)} |\n| --- | --- |\n| ${tableCell(left.text)} | ${tableCell(right.text)} |`,
     );
   }
-  if (card.body) parts.push(escapeHeadings(card.body));
-  if (card.points) parts.push(card.points.map((point) => `- ${oneLine(point)}`).join('\n'));
-  if (card.notes) parts.push(`${NOTES_OPEN}\n\n${escapeHeadings(card.notes)}\n\n${NOTES_CLOSE}`);
+  if (card.body) parts.push(blockText(card.body));
+  if (card.points?.length) {
+    const list = card.points.map((point) => `- ${oneLine(point)}`).join('\n');
+    parts.push(withMeta && card.body ? `${POINTS_MARK}\n${list}` : list);
+  }
+  if (card.notes) parts.push(`${NOTES_OPEN}\n\n${blockText(card.notes)}\n\n${NOTES_CLOSE}`);
   if (card.source) parts.push(`${SOURCE_PREFIX}${oneLine(card.source)}”`);
   if (card.whyItMatters) parts.push(`${WHY_PREFIX}${oneLine(card.whyItMatters)}`);
   if (card.refs.length) parts.push(`${REFS_PREFIX}${card.refs.map(refText).join(', ')}`);
   return parts.filter(Boolean).join('\n\n');
 }
 
-function treeMarkdown(nodes: readonly TourNode[], depth: number): string[] {
+function treeMarkdown(nodes: readonly TourNode[], depth: number, withMeta: boolean): string[] {
   return nodes.flatMap((node) => [
-    cardMarkdown(node, depth),
-    ...treeMarkdown(node.children, depth + 1),
+    cardMarkdown(node, depth, withMeta),
+    ...treeMarkdown(node.children, depth + 1, withMeta),
   ]);
 }
 
 /**
- * The tour as Markdown. A saved file carries front matter so the app can open
- * it as a tour again; copied text leaves it out and lists the omitted sections
- * in prose instead.
+ * The tour as Markdown. A saved file carries front matter and the metadata
+ * comments so the app can open it as a tour again; copied text leaves both out
+ * and lists the omitted sections in prose instead.
  */
 export function serializeTour(tour: TourFile, options: { forFile: boolean }): string {
   const header = options.forFile
@@ -190,12 +287,12 @@ export function serializeTour(tour: TourFile, options: { forFile: boolean }): st
         ...(tour.omitted?.length ? [`omitted: ${JSON.stringify(tour.omitted)}`] : []),
         '---',
         '',
-        `# ${oneLine(tour.subject)}`,
+        `# ${headingText(tour.subject)}`,
       ]
-    : [`# Tour: ${oneLine(tour.subject)}`];
+    : [`# Tour: ${headingText(tour.subject)}`];
   const omitted =
     !options.forFile && tour.omitted?.length ? [`_Not covered: ${tour.omitted.join(', ')}_`] : [];
-  return `${[header.join('\n'), ...treeMarkdown(tour.roots, 1), ...omitted].join('\n\n')}\n`;
+  return `${[header.join('\n'), ...treeMarkdown(tour.roots, 1, options.forFile), ...omitted].join('\n\n')}\n`;
 }
 
 /**
@@ -229,22 +326,23 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-/** A front matter value: JSON when it parses, the bare text otherwise. */
+/** A front matter value: JSON when it parses, a single-quoted or bare YAML scalar otherwise. */
 function frontMatterValue(raw: string): unknown {
   try {
     return JSON.parse(raw);
   } catch {
-    return raw;
+    const quoted = /^'(.*)'$/.exec(raw);
+    return quoted ? quoted[1].replace(/''/g, "'") : raw;
   }
 }
 
 function readFrontMatter(lines: string[]): { values: Map<string, unknown>; body: string[] } {
   const values = new Map<string, unknown>();
   if (lines[0]?.trim() !== '---') return { values, body: lines };
-  const end = lines.indexOf('---', 1);
+  const end = lines.findIndex((line, index) => index > 0 && line.trim() === '---');
   if (end < 0) return { values, body: lines };
   for (const line of lines.slice(1, end)) {
-    const match = /^([\w-]+):\s*(.*)$/.exec(line);
+    const match = /^([\w-]+):[ \t]*(.*)$/.exec(line);
     if (match) values.set(match[1], frontMatterValue(match[2].trim()));
   }
   return { values, body: lines.slice(end + 1) };
@@ -278,7 +376,7 @@ function splitCells(row: string): string[] {
     .trim()
     .replace(/^\||\|$/g, '')
     .split(/(?<!\\)\|/)
-    .map((cell) => cell.trim().replace(/\\\|/g, '|'));
+    .map((cell) => capped(cell.trim().replace(/\\\|/g, '|'), READ_CAPS.line));
 }
 
 function readComparison(rows: string[]): [TourSide, TourSide] | undefined {
@@ -308,123 +406,244 @@ function readForm(
 
 function readQuestions(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const questions = value.filter((entry): entry is string => typeof entry === 'string');
+  const questions = value
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => capped(entry, READ_CAPS.line));
   return questions.length ? questions : undefined;
 }
 
-/**
- * One card from the lines under its heading. The blocks the writer emits are
- * recognised by their shape; anything else is body text, so a card edited by
- * hand keeps whatever was written into it.
- */
-function readCard(title: string, lines: string[]): { card: TourCard; question?: string } {
-  let index = 0;
-  const skipBlank = () => {
-    while (index < lines.length && !lines[index].trim()) index += 1;
-  };
-  skipBlank();
-  const meta = readMeta(lines[index]?.trim() ?? '') ?? {};
-  if (Object.keys(meta).length) index += 1;
-  const prose = meta.prose === true;
-  let label = '';
-  let diagram: TourDiagram | undefined;
-  let comparison: [TourSide, TourSide] | undefined;
-  let notes: string | undefined;
-  let source: string | undefined;
-  let whyItMatters: string | undefined;
-  let refs: TourRef[] = [];
-  const points: string[] = [];
-  const body: string[] = [];
-  let labelAllowed = true;
+/** The parts of a card the readers below fill in. */
+interface CardParts {
+  label: string;
+  diagram?: TourDiagram;
+  comparison?: [TourSide, TourSide];
+  body: string[];
+  points: string[];
+  notes?: string;
+  source?: string;
+  whyItMatters?: string;
+  refs: TourRef[];
+}
 
+const LIST_ITEM = /^[-*+][ \t]+/;
+
+/** List items, with an indented line continuing the item above it. */
+function readPoints(lines: readonly string[]): string[] {
+  const points: string[] = [];
+  for (const line of lines) {
+    if (LIST_ITEM.test(line)) points.push(line.trim().replace(LIST_ITEM, ''));
+    else if (points.length && /^\s+\S/.test(line)) points[points.length - 1] += ` ${line.trim()}`;
+  }
+  return points;
+}
+
+/** The lines of a fenced block opening at `start`, through its closing fence. */
+function fencedBlock(lines: readonly string[], start: number): string[] {
+  const opened = fenceOpen(lines[start]);
+  if (!opened) return [];
+  let end = start + 1;
+  while (end < lines.length && !closesFence(lines[end], opened.marker)) end += 1;
+  return lines.slice(start, Math.min(end + 1, lines.length));
+}
+
+/**
+ * A card the app wrote: its comment lists the blocks it has, and each is read
+ * only from the place the writer puts it. Everything else is body, so a body
+ * with a table, a text fence or a list survives the round trip unchanged.
+ */
+function readDeclaredCard(lines: string[], fields: ReadonlySet<string>): CardParts {
+  const parts: CardParts = { label: '', body: [], points: [], refs: [] };
+  const { fenced } = fenceState(lines);
+  let start = 0;
+  let end = lines.length;
+  const lastLine = () => {
+    while (end > start && !lines[end - 1].trim()) end -= 1;
+    return end > start && !fenced[end - 1] ? lines[end - 1].trim() : '';
+  };
+  const firstLine = () => {
+    while (start < end && !lines[start].trim()) start += 1;
+    return start < end ? lines[start].trim() : '';
+  };
+
+  if (fields.has('refs') && lastLine().startsWith(REFS_PREFIX)) {
+    parts.refs = readRefs(lastLine());
+    end -= 1;
+  }
+  if (fields.has('why') && lastLine().startsWith(WHY_PREFIX)) {
+    parts.whyItMatters = capped(lastLine().slice(WHY_PREFIX.length), READ_CAPS.line);
+    end -= 1;
+  }
+  const source = lastLine();
+  if (fields.has('source') && source.startsWith(SOURCE_PREFIX) && source.endsWith('”')) {
+    parts.source = capped(source.slice(SOURCE_PREFIX.length, -1), READ_CAPS.line);
+    end -= 1;
+  }
+  if (fields.has('notes') && lastLine() === NOTES_CLOSE) {
+    let open = end - 2;
+    while (open >= start && (fenced[open] || lines[open].trim() !== NOTES_OPEN)) open -= 1;
+    if (open >= start) {
+      const notes = unescapeHeadings(lines.slice(open + 1, end - 1)).trim();
+      if (notes) parts.notes = capped(notes, READ_CAPS.text);
+      end = open;
+    }
+  }
+
+  const bold = /^\*\*(.+)\*\*$/.exec(firstLine());
+  if (fields.has('label') && bold) {
+    parts.label = bold[1].replace(/^⚠\s*/, '').replace(/\\\*/g, '*');
+    start += 1;
+  }
+  if (fields.has('diagram')) {
+    firstLine();
+    const opened = start < end ? fenceOpen(lines[start]) : undefined;
+    if (opened && (opened.info === 'text' || opened.info === 'mermaid')) {
+      const block = fencedBlock(lines, start);
+      parts.diagram = { kind: opened.info, source: block.slice(1, -1).join('\n') };
+      start += block.length;
+    }
+  }
+  if (fields.has('comparison') && firstLine().startsWith('|')) {
+    const rows: string[] = [];
+    while (start < end && lines[start].trim().startsWith('|')) rows.push(lines[start++].trim());
+    parts.comparison = readComparison(rows);
+    if (!parts.comparison) parts.body.push(...rows);
+  }
+
+  const middle = lines.slice(start, end);
+  if (!fields.has('points')) {
+    parts.body.push(...middle);
+    return parts;
+  }
+  const middleFenced = fenced.slice(start, end);
+  const mark = middle.findIndex(
+    (line, index) => !middleFenced[index] && line.trim() === POINTS_MARK,
+  );
+  if (mark >= 0) {
+    parts.body.push(...middle.slice(0, mark));
+    parts.points = readPoints(middle.slice(mark + 1));
+  } else if (fields.has('body')) {
+    // Marker removed by hand: the list at the end is taken as the points.
+    let split = middle.length;
+    while (
+      split > 0 &&
+      (!middle[split - 1].trim() ||
+        LIST_ITEM.test(middle[split - 1]) ||
+        /^\s+\S/.test(middle[split - 1]))
+    )
+      split -= 1;
+    parts.body.push(...middle.slice(0, split));
+    parts.points = readPoints(middle.slice(split));
+  } else parts.points = readPoints(middle);
+  return parts;
+}
+
+/**
+ * A card written by hand, with no comment to say what it has: the blocks the
+ * writer emits are recognised by their shape wherever they are, a list is the
+ * points and anything else is body.
+ */
+function readLooseCard(lines: string[]): CardParts {
+  const parts: CardParts = { label: '', body: [], points: [], refs: [] };
+  const { fenced } = fenceState(lines);
+  let labelAllowed = true;
+  let index = 0;
   while (index < lines.length) {
     const line = lines[index];
     const trimmed = line.trim();
     if (!trimmed) {
-      if (body.length && body.at(-1) !== '') body.push('');
+      if (parts.body.length && parts.body.at(-1) !== '') parts.body.push('');
       index += 1;
       continue;
     }
-    const fenceMatch = FENCE.exec(line);
-    if (fenceMatch) {
-      const open = fenceMatch[1];
-      const block = [line];
-      index += 1;
-      while (index < lines.length) {
-        const close = FENCE.exec(lines[index]);
-        block.push(lines[index]);
-        index += 1;
-        if (close && close[1][0] === open[0] && close[1].length >= open.length && !close[2].trim())
-          break;
-      }
-      const lang = fenceMatch[2].trim();
-      if (!diagram && (lang === 'text' || lang === 'mermaid') && block.length >= 2) {
-        diagram = { kind: lang, source: block.slice(1, -1).join('\n') };
-      } else body.push(...block);
+    const opened = fenceOpen(line);
+    if (opened) {
+      const block = fencedBlock(lines, index);
+      index += block.length;
       labelAllowed = false;
+      if (
+        !parts.diagram &&
+        (opened.info === 'text' || opened.info === 'mermaid') &&
+        block.length >= 2
+      )
+        parts.diagram = { kind: opened.info, source: block.slice(1, -1).join('\n') };
+      else parts.body.push(...block);
       continue;
     }
     if (trimmed === NOTES_OPEN) {
-      const end = lines.findIndex((entry, at) => at > index && entry.trim() === NOTES_CLOSE);
-      const stop = end < 0 ? lines.length : end;
-      notes = unescapeHeadings(lines.slice(index + 1, stop).join('\n')).trim() || undefined;
-      index = stop + 1;
+      let close = index + 1;
+      while (close < lines.length && (fenced[close] || lines[close].trim() !== NOTES_CLOSE))
+        close += 1;
+      const notes = unescapeHeadings(lines.slice(index + 1, close)).trim();
+      if (notes) parts.notes = capped(notes, READ_CAPS.text);
+      index = close + 1;
       labelAllowed = false;
       continue;
     }
     const bold = /^\*\*(.+)\*\*$/.exec(trimmed);
     if (labelAllowed && bold) {
-      label = bold[1].replace(/^⚠\s*/, '').replace(/\\\*/g, '*');
+      parts.label = bold[1].replace(/^⚠\s*/, '').replace(/\\\*/g, '*');
       labelAllowed = false;
       index += 1;
       continue;
     }
     labelAllowed = false;
     if (trimmed.startsWith(SOURCE_PREFIX) && trimmed.endsWith('”')) {
-      source = trimmed.slice(SOURCE_PREFIX.length, -1);
+      parts.source = capped(trimmed.slice(SOURCE_PREFIX.length, -1), READ_CAPS.line);
     } else if (trimmed.startsWith(WHY_PREFIX)) {
-      whyItMatters = trimmed.slice(WHY_PREFIX.length);
+      parts.whyItMatters = capped(trimmed.slice(WHY_PREFIX.length), READ_CAPS.line);
     } else if (trimmed.startsWith(REFS_PREFIX) && trimmed.includes('`')) {
-      refs = readRefs(trimmed);
-    } else if (trimmed.startsWith('|') && !comparison) {
+      parts.refs = readRefs(trimmed);
+    } else if (trimmed.startsWith('|') && !parts.comparison) {
       const rows: string[] = [];
-      while (index < lines.length && lines[index].trim().startsWith('|')) {
-        rows.push(lines[index].trim());
-        index += 1;
-      }
-      comparison = readComparison(rows);
-      if (!comparison) body.push(...rows);
+      while (index < lines.length && lines[index].trim().startsWith('|'))
+        rows.push(lines[index++].trim());
+      parts.comparison = readComparison(rows);
+      if (!parts.comparison) parts.body.push(...rows);
       continue;
-    } else if (!prose && /^[-*+]\s+/.test(line)) {
-      points.push(trimmed.replace(/^[-*+]\s+/, ''));
-    } else if (!prose && points.length && /^\s+\S/.test(line) && body.at(-1) !== '') {
+    } else if (LIST_ITEM.test(line)) {
+      parts.points.push(trimmed.replace(LIST_ITEM, ''));
+    } else if (parts.points.length && /^\s+\S/.test(line) && parts.body.at(-1) !== '') {
       // A hand-wrapped point continues on an indented line.
-      points[points.length - 1] += ` ${trimmed}`;
+      parts.points[parts.points.length - 1] += ` ${trimmed}`;
     } else {
-      body.push(line);
+      parts.body.push(line);
     }
     index += 1;
   }
+  return parts;
+}
 
-  const text = unescapeHeadings(body.join('\n')).trim();
+/** One card from the lines under its heading. */
+function readCard(title: string, lines: string[]): { card: TourCard; question?: string } {
+  let index = 0;
+  while (index < lines.length && !lines[index].trim()) index += 1;
+  const meta = readMeta(lines[index]?.trim() ?? '');
+  const rest = meta ? lines.slice(index + 1) : lines;
+  const fields = Array.isArray(meta?.fields)
+    ? new Set(meta.fields.filter((field): field is string => typeof field === 'string'))
+    : undefined;
+  const parts = fields ? readDeclaredCard(rest, fields) : readLooseCard(rest);
+  const points = parts.points.map((point) => capped(point, READ_CAPS.point)).filter(Boolean);
   const card: TourCard = {
-    label,
-    title,
-    body: text,
-    tone: readTone(meta.tone),
-    refs,
+    label: capped(parts.label, READ_CAPS.label),
+    title: capped(title, READ_CAPS.title),
+    body: capped(unescapeHeadings(parts.body).trim(), READ_CAPS.text),
+    tone: readTone(meta?.tone),
+    refs: parts.refs,
     ...(points.length && { points }),
-    ...(notes && { notes }),
-    ...(diagram && { diagram }),
-    ...(comparison && { comparison }),
-    ...(whyItMatters && { whyItMatters }),
-    ...(source && { source }),
+    ...(parts.notes && { notes: parts.notes }),
+    ...(parts.diagram && { diagram: parts.diagram }),
+    ...(parts.comparison && { comparison: parts.comparison }),
+    ...(parts.whyItMatters && { whyItMatters: parts.whyItMatters }),
+    ...(parts.source && { source: parts.source }),
   };
-  const form = readForm(meta.form, card);
-  const questions = readQuestions(meta.questions);
+  const form = readForm(meta?.form, card);
+  const questions = readQuestions(meta?.questions);
   return {
     card: { ...card, ...(form && { form }), ...(questions && { questions }) },
-    ...(typeof meta.question === 'string' && { question: meta.question }),
+    ...(typeof meta?.question === 'string' && {
+      question: capped(meta.question, READ_CAPS.line),
+    }),
   };
 }
 
@@ -441,14 +660,15 @@ export function parseTourFile(text: string): TourFile {
 
   let title = '';
   const sections: { depth: number; title: string; lines: string[] }[] = [];
-  eachLine(body, (line, fenced) => {
-    const heading = fenced ? null : /^(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/.exec(line);
-    if (heading && heading[1].length === 1 && !sections.length && !title) {
-      title = heading[2];
+  const { fenced } = fenceState(body);
+  body.forEach((line, index) => {
+    const heading = fenced[index] ? undefined : readHeading(line);
+    if (heading?.level === 1 && !sections.length && !title) {
+      title = capped(heading.text, READ_CAPS.title);
       return;
     }
-    if (heading && heading[1].length > 1) {
-      sections.push({ depth: heading[1].length - 1, title: heading[2], lines: [] });
+    if (heading && heading.level > 1) {
+      sections.push({ depth: heading.level - 1, title: heading.text, lines: [] });
       return;
     }
     sections.at(-1)?.lines.push(line);

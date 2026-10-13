@@ -267,8 +267,17 @@ describe('slide cards', () => {
     expect(parsed.points).toEqual(['a b']);
   });
 
-  it('needs a body when no points or evidence say anything', () => {
-    expect(() => parse({ cards: [{ ...slide, points: [''] }] })).toThrow('Card 1 body is missing.');
+  it('needs a body when no points, evidence, notes or takeaway title say anything', () => {
+    expect(() => parse({ cards: [{ ...slide, points: [''], notes: undefined }] })).toThrow(
+      'Card 1 body is missing.',
+    );
+    // A takeaway's title is its point; notes alone still give a reader more.
+    const [, takeaway] = parse({
+      cards: [{ ...slide, points: undefined, notes: undefined, form: 'takeaway' }],
+    }).cards;
+    expect(takeaway).toMatchObject({ body: '', form: 'takeaway' });
+    const [, noted] = parse({ cards: [{ ...slide, points: undefined }] }).cards;
+    expect(noted).toMatchObject({ body: '', notes: slide.notes });
     const diagram = { kind: 'text', source: 'A -> B' };
     const [, flow] = parse({ cards: [{ ...slide, points: undefined, diagram }] }).cards;
     expect(flow.body).toBe('');

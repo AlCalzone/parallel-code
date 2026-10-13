@@ -18,6 +18,8 @@ export const FILE_TOUR_MAX_IMPORTS = 12;
 export const TOUR_FILE_SUFFIX = '.tour.md';
 /** A saved tour is a few dozen short cards; anything far larger is not one. */
 export const TOUR_FILE_MAX_CHARS = 512 * 1024;
+/** The refusal the renderer tells apart: the saved file changed outside the tour. */
+export const TOUR_FILE_CHANGED = 'The saved tour changed on disk.';
 
 /** Card tones, shared so the validator and the MCP tool description cannot drift. */
 export const TOUR_TONES = ['neutral', 'important', 'risk', 'uncertainty', 'mechanical'] as const;

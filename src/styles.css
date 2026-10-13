@@ -4861,9 +4861,9 @@ button.tour-outline-twisty:hover {
 }
 
 /* Laid out on every point and shown on hover, focus or once the point has an
-   answer, so the text never moves when it appears. */
+   answer, so the text never moves when it appears. Transparent rather than
+   hidden, so the keyboard can still reach it. */
 .understanding-point-dig {
-  visibility: hidden;
   margin-left: 4px;
   padding: 0 6px;
   border: none;
@@ -4872,13 +4872,19 @@ button.tour-outline-twisty:hover {
   color: var(--fg-muted);
   font: inherit;
   line-height: 1.2;
+  opacity: 0;
   cursor: pointer;
 }
 
 .understanding-points > li:hover > .understanding-point-dig,
 .understanding-point-dig:focus-visible,
 .understanding-points > li[data-open] > .understanding-point-dig {
-  visibility: visible;
+  opacity: 1;
+}
+
+.understanding-point-dig:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 1px;
 }
 
 .understanding-point-dig:hover:not(:disabled) {
@@ -4886,7 +4892,7 @@ button.tour-outline-twisty:hover {
   color: var(--fg);
 }
 
-.understanding-point-dig:disabled {
+.understanding-points > li:hover > .understanding-point-dig:disabled {
   opacity: 0.4;
   cursor: default;
 }

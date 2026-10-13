@@ -2,7 +2,11 @@ import fs from 'fs';
 import path from 'path';
 
 import { atomicWriteFileSync } from '../mcp/atomic.js';
-import { TOUR_FILE_MAX_CHARS, TOUR_FILE_SUFFIX } from '../shared/understanding-limits.js';
+import {
+  TOUR_FILE_CHANGED,
+  TOUR_FILE_MAX_CHARS,
+  TOUR_FILE_SUFFIX,
+} from '../shared/understanding-limits.js';
 
 /** Enough numbered names for any one subject; past that the reader should tidy up. */
 const MAX_NAME_ATTEMPTS = 50;
@@ -21,7 +25,7 @@ function tourFilePath(value: unknown): string {
   if (!segments.length || path.isAbsolute(value.trim()))
     throw new Error('path must be relative to the worktree');
   if (segments.includes('..')) throw new Error('path must not contain ".."');
-  if (/^\.(git|parallel|parallel-code|worktrees)$/.test(segments[0]))
+  if (segments.some((segment) => /^\.(git|parallel|parallel-code|worktrees)$/i.test(segment)))
     throw new Error('path must not point into .git or the app folders');
   const relative = segments.join('/');
   if (!relative.toLowerCase().endsWith(TOUR_FILE_SUFFIX))
@@ -50,13 +54,14 @@ function entryAt(target: string): 'missing' | 'file' | 'other' {
  * Writes a saved understanding tour into the worktree and returns the path it
  * landed at. A first save never overwrites: an existing file of that name
  * moves the tour to the next free numbered name. Later saves of the same tour
- * pass `replace` and update their own file. Either way the target must be a
- * regular file in a folder that really is inside the worktree, so a symlink
- * can never carry the write out of it.
+ * pass `replace` and update their own file, and `expected`, the text they last
+ * wrote or read: a file someone edited since is refused, not overwritten.
+ * Either way the target must be a regular file in a folder that really is
+ * inside the worktree, so a symlink can never carry the write out of it.
  */
 export function saveTourFile(
   worktreePath: string,
-  args: { path: unknown; content: unknown; replace: unknown },
+  args: { path: unknown; content: unknown; replace: unknown; expected?: unknown },
 ): string {
   const relative = tourFilePath(args.path);
   if (typeof args.content !== 'string') throw new Error('content must be a string');
@@ -82,6 +87,12 @@ export function saveTourFile(
       continue;
     }
     if (entry === 'file' && args.replace !== true) continue;
+    if (
+      entry === 'file' &&
+      typeof args.expected === 'string' &&
+      fs.readFileSync(target, 'utf8') !== args.expected
+    )
+      throw new Error(TOUR_FILE_CHANGED);
     atomicWriteFileSync(target, args.content);
     return candidate;
   }

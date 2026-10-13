@@ -35,25 +35,25 @@ worktree is removed.
 
 Open a `.tour.md` file on the canvas and press **Open Tour**: it opens as a tour
 straight away, with no provider call, and follow-ups replay the plan, document or
-file it names as its source (or the cards themselves when that is gone). The
-document's own **Take Tour** then reopens the saved version.
+file it names as its source (or the cards themselves when that is gone). A
+reopened file is a tour of its own: it never replaces a tour generated from the
+same document, so answers not yet saved there are kept.
 
 ### File format
 
-```markdown
+```text
 ---
 parallel-code-tour: 1
 kind: document
-subject: 'docs/cache.md'
-source: 'docs/cache.md'
+subject: "docs/cache.md"
+source: "docs/cache.md"
 ---
 
 # docs/cache.md
 
 ## Reads dominate
 
-<!-- tour-card {"tone":"important"} -->
-
+<!-- tour-card {"tone":"important","fields":["label","points","notes"]} -->
 **KEY DECISION**
 
 - 90% of calls are reads
@@ -67,17 +67,24 @@ Measured over the last week.
 
 ### Hits are measured weekly
 
-<!-- tour-card {"question":"How do we know?"} -->
-
+<!-- tour-card {"question":"How do we know?","fields":["label","points"]} -->
 ...
 ```
 
 Each card is a heading one level below its parent's, so the file reads as an
 outline on GitHub and can be edited by hand or by the agent. The HTML comment
 carries what Markdown cannot show: tone, form, the question a card answers,
-suggested questions, and `prose` for cards whose lists belong to the body. Without
-it a card is a neutral slide; a heading alone is a valid card. Card text never
-starts a heading of its own: such lines are written as `\#`.
+suggested questions, and `fields`, the blocks the card has. With `fields` each
+block is read only from where the writer puts it, so a table, a text fence or a
+list in a prose body stays body. A card without the comment is read loosely: a
+list is its points, a two-column table its comparison, a text fence its
+diagram, and a heading alone is a valid card. Card text never starts a heading
+of its own (such lines are written as `\#`) and never leaves a fence open.
+
+Edits made to the file outside the tour are never overwritten. When the next
+answer would replace a file that changed since the tour last wrote or read it,
+the tour lets go of the file and says so; open the file again, or save the tour
+as a new file.
 
 ## Referencing a card in the chat
 

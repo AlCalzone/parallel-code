@@ -125,7 +125,7 @@ const CLOSING_CARD: Record<UnderstandingTourKind, string> = {
  * short plain cards, the text's own language, and the sections left out.
  */
 function textTourInstructions(): string {
-  return `The gist has no "form". Its title makes the whole point; at most three points give the reasons or the parts.
+  return `The gist has no "form". Its title makes the whole point; one to three points give the reasons or the parts.
 Write every card in the language the text is written in. Keep the text's own names and terms, and define jargon once, where it first appears.
 "omitted" is optional: up to ${TOUR_CARD_LIMITS.omitted} headings of sections you deliberately left out because they would not change the reader's understanding, copied exactly from the outline. Leave it out when nothing substantial was skipped.`;
 }

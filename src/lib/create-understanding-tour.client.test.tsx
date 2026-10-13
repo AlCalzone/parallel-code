@@ -1,7 +1,10 @@
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC } from '../../electron/ipc/channels';
-import { UNDERSTANDING_TIMEOUT_MS } from '../../electron/shared/understanding-limits';
+import {
+  TOUR_FILE_CHANGED,
+  UNDERSTANDING_TIMEOUT_MS,
+} from '../../electron/shared/understanding-limits';
 import {
   createUnderstandingTour,
   documentTourKind,
@@ -859,8 +862,57 @@ describe('createUnderstandingTour', () => {
     await flush();
     expect(promptOf(0)).toContain('Reads are 90% of traffic.');
     expect(promptOf(0)).toContain('went deeper from spine card 1 of 2');
-    // The document's own Take Tour now opens the saved tour.
-    expect(tour.isReady('document', 'docs/cache.md')).toBe(true);
+    // The file is its own tour; the document's Take Tour still makes or opens its own.
+    expect(tour.isReady('document', 'docs/cache.md')).toBe(false);
+  });
+
+  it('never lets a reopened file replace a generated tour and its unsaved answers', async () => {
+    const tour = await generatedPlanTour();
+    void tour.ask('Why buffer first?');
+    await flush();
+    stream(1, BRANCH_JSON);
+    await flush();
+    const { parseTourFile } = await import('./tour-file');
+    const text = `---\nparallel-code-tour: 1\nkind: plan\nsource: "output buffering"\n---\n## Saved card\n- a point\n`;
+    await tour.restore({
+      file: parseTourFile(text),
+      text,
+      savedPath: 'old.tour.md',
+      worktreePath: '/repo',
+      taskName: 'Task',
+      sourceText: PLAN_INPUT.planContent,
+    });
+    expect(tour.currentNode()?.card.title).toBe('Saved card');
+    expect(tour.open(PLAN_INPUT)).toBe(true);
+    expect(tour.currentNode()?.card.title).toBe('Gist title');
+    expect(answerCount(tour)).toBe(2);
+  });
+
+  it('lets go of a saved file edited outside the tour instead of writing over it', async () => {
+    const tour = await generatedPlanTour();
+    let onDisk = '';
+    vi.mocked(invoke).mockImplementation(((
+      channel: IPC,
+      args?: { path?: string; content?: string; expected?: string },
+    ) => {
+      if (channel !== IPC.SaveTourFile) return Promise.resolve(undefined);
+      if (args?.expected !== undefined && args.expected !== onDisk)
+        return Promise.reject(new Error(`Error invoking remote method: ${TOUR_FILE_CHANGED}`));
+      onDisk = args?.content ?? '';
+      return Promise.resolve(args?.path);
+    }) as typeof invoke);
+    await tour.save();
+    expect(tour.savedPath()).toBe('output-buffering.tour.md');
+    // Someone edits the file; the next answer must not overwrite it.
+    onDisk = 'edited by hand';
+    void tour.ask('Why buffer first?');
+    await flush();
+    stream(1, BRANCH_JSON);
+    await flush();
+    await flush();
+    expect(onDisk).toBe('edited by hand');
+    expect(tour.savedPath()).toBe('');
+    expect(tour.error()).toContain('output-buffering.tour.md changed outside the tour');
   });
 
   it('falls back to the cards when what a saved tour explains is gone', async () => {

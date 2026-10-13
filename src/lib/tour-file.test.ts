@@ -119,6 +119,8 @@ describe('tour file', () => {
     const text = serializeTour(file, { forFile: false });
     expect(text.startsWith('# Tour: docs/worktrees.md\n')).toBe(true);
     expect(text).not.toContain('parallel-code-tour');
+    expect(text).not.toContain('tour-card');
+    expect(text).not.toContain('<!-- points -->');
     expect(text.trimEnd().endsWith('_Not covered: Appendix, the long one_')).toBe(true);
   });
 
@@ -190,6 +192,96 @@ describe('tour file', () => {
     expect(reference).not.toContain('tour-card');
     expect(cardReference({ subject: 'x', trail: [roots[1]] })).not.toContain('saved in');
     expect(cardReference({ subject: 'x', trail: [] })).toBe('');
+  });
+
+  describe('round trips that must not change a card', () => {
+    const roundTrip = (cards: TourCard[]) => {
+      const roots = cards.map((card, index) => ({ id: `c${index}`, card, children: [] }));
+      const text = serializeTour({ subject: 'S', kind: 'file', roots }, { forFile: true });
+      return { text, cards: parseTourFile(text).roots.map((root) => root.card) };
+    };
+    const base = { label: 'LABEL', title: 'Title', tone: 'neutral' as const, refs: [] };
+
+    it('keeps a fence left open, or a line of inline code, from swallowing later cards', () => {
+      const open: TourCard = { ...base, body: 'Run:\n```sh\nnpm i' };
+      const inline: TourCard = { ...base, title: 'Inline', body: '```npm i``` installs it' };
+      const after: TourCard = { ...base, title: 'After', body: 'Still here.' };
+      const { cards } = roundTrip([open, inline, after]);
+      expect(cards.map((card) => card.title)).toEqual(['Title', 'Inline', 'After']);
+      expect(cards[0].body).toBe('Run:\n```sh\nnpm i\n```');
+      expect(cards[1].body).toBe(inline.body);
+      expect(cards[2].body).toBe('Still here.');
+    });
+
+    it('leaves tables, text fences, lists and field-like lines in a prose body alone', () => {
+      const body = [
+        '| Option | Cost |',
+        '| --- | --- |',
+        '| A | low |',
+        '| B | high |',
+        '',
+        '```text',
+        'a -> b',
+        '```',
+        '',
+        '- one',
+        '- two',
+        '',
+        'Refs: `not/a/ref.ts`',
+        '> Source: “not a quote”',
+        '> **Why this matters:** not the field',
+      ].join('\n');
+      const { cards } = roundTrip([{ ...base, body }]);
+      expect(cards[0]).toEqual({ ...base, body });
+    });
+
+    it('keeps a caption list apart from the points', () => {
+      const card: TourCard = {
+        ...base,
+        body: 'Caption:\n\n- part of the caption',
+        points: ['A point'],
+      };
+      const { text, cards } = roundTrip([card]);
+      expect(text).toContain('<!-- points -->\n- A point');
+      expect(cards[0]).toEqual(card);
+    });
+
+    it('keeps notes whole when they quote the closing tag in code', () => {
+      const notes = 'Before\n\n```html\n</details>\n```\n\nAfter';
+      const { cards } = roundTrip([{ ...base, body: '', points: ['p'], notes }]);
+      expect(cards[0].notes).toBe(notes);
+    });
+
+    it('keeps a title ending in "#" and a body whose first line is bold', () => {
+      const { cards } = roundTrip([
+        { ...base, title: 'Use C #', label: '', body: '**Bold start**\n\nThen text.' },
+        { ...base, title: 'Prefer C#', body: '' },
+      ]);
+      expect(cards[0]).toMatchObject({
+        title: 'Use C #',
+        label: '',
+        body: '**Bold start**\n\nThen text.',
+      });
+      expect(cards[1].title).toBe('Prefer C#');
+    });
+  });
+
+  it('reads single-quoted and bare front matter values', () => {
+    const parsed = parseTourFile(
+      "---\nparallel-code-tour: 1\nkind: document\nsubject: 'It''s docs/cache.md'\nsource: docs/cache.md\n---\n## Card\n",
+    );
+    expect(parsed).toMatchObject({ subject: "It's docs/cache.md", source: 'docs/cache.md' });
+  });
+
+  it('reads a crafted file quickly and caps what it keeps', () => {
+    const spaces = ' '.repeat(200_000);
+    const started = performance.now();
+    const parsed = parseTourFile(
+      `---\nparallel-code-tour: 1\n---\n## A${spaces}title${spaces}#\n- ${'x'.repeat(5000)}\n`,
+    );
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(parsed.roots[0].card.title.length).toBeLessThanOrEqual(300);
+    expect(parsed.roots[0].card.points?.[0].length).toBeLessThanOrEqual(300);
   });
 
   it('names a file after the subject and recognises tour files', () => {
