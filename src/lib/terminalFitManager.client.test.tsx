@@ -185,3 +185,61 @@ describe('deferred resizes', () => {
     expect(addon.fit).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('repainting terminals', () => {
+  const ids = ['repaint-a', 'repaint-b', 'repaint-c'];
+
+  function registerRepaintable() {
+    return ids.map((id) => {
+      const term = {
+        rows: 24,
+        buffer: { active: { viewportY: 0, baseY: 0 } },
+        clearTextureAtlas: vi.fn(),
+        refresh: vi.fn(),
+      };
+      manager.registerTerminal(
+        id,
+        document.createElement('div'),
+        { fit() {} } as unknown as FitAddon,
+        term as unknown as Terminal,
+      );
+      return { id, term };
+    });
+  }
+
+  afterEach(() => {
+    for (const id of ids) manager.unregisterTerminal(id);
+  });
+
+  it('resets every terminal, since they share one glyph atlas', async () => {
+    const terms = registerRepaintable();
+    // A terminal torn down mid-repaint must not stop the others.
+    terms[1].term.clearTextureAtlas.mockImplementation(() => {
+      throw new Error('disposed');
+    });
+
+    manager.redrawAllTerminals();
+    await Promise.resolve();
+
+    for (const { id, term } of terms) {
+      expect(term.clearTextureAtlas).toHaveBeenCalledTimes(1);
+      if (id !== 'repaint-b') expect(term.refresh).toHaveBeenCalledWith(0, 23);
+    }
+  });
+
+  it('shares one repaint between requests made in the same tick', async () => {
+    const terms = registerRepaintable();
+
+    // Every pane of a task returning on screen asks at once.
+    manager.redrawAllTerminals();
+    manager.redrawAllTerminals();
+    manager.redrawAllTerminals();
+    await Promise.resolve();
+    for (const { term } of terms) expect(term.clearTextureAtlas).toHaveBeenCalledTimes(1);
+
+    // A later request repaints again.
+    manager.redrawAllTerminals();
+    await Promise.resolve();
+    for (const { term } of terms) expect(term.clearTextureAtlas).toHaveBeenCalledTimes(2);
+  });
+});
