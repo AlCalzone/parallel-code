@@ -266,6 +266,39 @@ describe('tour file', () => {
     });
   });
 
+  it('keeps lines that look like its own markers as text', () => {
+    const roots = [
+      {
+        id: 'a',
+        card: {
+          label: 'L',
+          title: 'T',
+          tone: 'neutral' as const,
+          refs: [],
+          body: 'intro\n<!-- points -->\nafter\n</details>',
+          points: ['p'],
+          notes: 'Notes\n<details><summary>Notes</summary>\ninner',
+        },
+        children: [],
+      },
+    ];
+    const text = serializeTour({ subject: 'S', kind: 'agent', roots }, { forFile: true });
+    const [card] = parseTourFile(text).roots.map((root) => root.card);
+    expect(card).toEqual(roots[0].card);
+  });
+
+  it('reads and writes a very long crafted body without overflowing the stack', () => {
+    const body = Array.from({ length: 260_000 }, () => 'x').join('\n');
+    const text = `---\nparallel-code-tour: 1\n---\n## Card\n<!-- tour-card {"fields":["body"]} -->\n${body}\n`;
+    const parsed = parseTourFile(text);
+    expect(parsed.roots[0].card.body.length).toBeLessThanOrEqual(8000);
+    const diagram = { kind: 'text' as const, source: '`'.repeat(200_000) };
+    const roots = [{ id: 'a', card: { ...parsed.roots[0].card, diagram }, children: [] }];
+    expect(() =>
+      serializeTour({ subject: 'S', kind: 'agent', roots }, { forFile: true }),
+    ).not.toThrow();
+  });
+
   it('reads single-quoted and bare front matter values', () => {
     const parsed = parseTourFile(
       "---\nparallel-code-tour: 1\nkind: document\nsubject: 'It''s docs/cache.md'\nsource: docs/cache.md\n---\n## Card\n",

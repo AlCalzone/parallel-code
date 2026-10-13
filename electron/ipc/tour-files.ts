@@ -40,6 +40,12 @@ function numbered(relative: string, attempt: number): string {
   return `${stem}-${attempt}${TOUR_FILE_SUFFIX}`;
 }
 
+/** Whether the file no longer holds `expected`; a size mismatch spares reading it. */
+function changed(target: string, expected: string): boolean {
+  if (fs.statSync(target).size !== Buffer.byteLength(expected, 'utf8')) return true;
+  return fs.readFileSync(target, 'utf8') !== expected;
+}
+
 /** What is at `target`: nothing, a regular file, or anything else. */
 function entryAt(target: string): 'missing' | 'file' | 'other' {
   try {
@@ -87,11 +93,7 @@ export function saveTourFile(
       continue;
     }
     if (entry === 'file' && args.replace !== true) continue;
-    if (
-      entry === 'file' &&
-      typeof args.expected === 'string' &&
-      fs.readFileSync(target, 'utf8') !== args.expected
-    )
+    if (entry === 'file' && typeof args.expected === 'string' && changed(target, args.expected))
       throw new Error(TOUR_FILE_CHANGED);
     atomicWriteFileSync(target, args.content);
     return candidate;

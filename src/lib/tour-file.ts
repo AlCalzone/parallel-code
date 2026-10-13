@@ -30,8 +30,6 @@ const TOUR_FILE_MAX_CARDS = 200;
 const KINDS: readonly UnderstandingTourKind[] = ['plan', 'file', 'document', 'agent'];
 const WARNED = new Set<TourTone>(['risk', 'uncertainty']);
 const META_PREFIX = '<!-- tour-card ';
-const NOTES_OPEN = '<details><summary>Notes</summary>';
-const NOTES_CLOSE = '</details>';
 const SOURCE_PREFIX = '> Source: “';
 const WHY_PREFIX = '> **Why this matters:** ';
 const REFS_PREFIX = 'Refs: ';
@@ -86,7 +84,12 @@ function capped(text: string, cap: number): string {
 
 /** Longer than any backtick run in the source, so a diagram cannot close its own fence. */
 function fence(source: string): string {
-  const longest = Math.max(2, ...(source.match(/`+/g) ?? []).map((run) => run.length));
+  let longest = 2;
+  let run = 0;
+  for (const char of source) {
+    run = char === '`' ? run + 1 : 0;
+    if (run > longest) longest = run;
+  }
   return '`'.repeat(longest + 1);
 }
 
@@ -127,25 +130,40 @@ function fenceState(lines: readonly string[]): { fenced: boolean[]; open?: strin
   return { fenced, open };
 }
 
+/** Lines the reader takes as structure, so card text writes them escaped. */
+const NOTES_OPEN = '<details><summary>Notes</summary>';
+const NOTES_CLOSE = '</details>';
+/** Separates a card's points from a body that may end in a list of its own. */
+const POINTS_MARK = '<!-- points -->';
+const MARKERS = new Set([NOTES_OPEN, NOTES_CLOSE, POINTS_MARK]);
+
+/** A line outside code that the reader would take as structure rather than text. */
+function needsEscape(line: string): boolean {
+  return line.startsWith('#') || MARKERS.has(line.trim());
+}
+
 /**
  * Card text as it goes into the file: never a heading of its own, which would
- * split the card in two, and never an unclosed fence, which would swallow the
- * cards after it.
+ * split the card in two, never one of the reader's markers, and never an
+ * unclosed fence, which would swallow the cards after it. Escaped lines start
+ * with a backslash, which Markdown renders as the plain line.
  */
 function blockText(markdown: string): string {
   const lines = markdown.split('\n');
   const { fenced, open } = fenceState(lines);
   const out = lines.map((line, index) =>
-    !fenced[index] && line.startsWith('#') ? `\\${line}` : line,
+    !fenced[index] && needsEscape(line) ? `\\${line}` : line,
   );
   if (open) out.push(open);
   return out.join('\n');
 }
 
-function unescapeHeadings(lines: readonly string[]): string {
+function unescapeLines(lines: readonly string[]): string {
   const { fenced } = fenceState(lines);
   return lines
-    .map((line, index) => (!fenced[index] && line.startsWith('\\#') ? line.slice(1) : line))
+    .map((line, index) =>
+      !fenced[index] && line.startsWith('\\') && needsEscape(line.slice(1)) ? line.slice(1) : line,
+    )
     .join('\n');
 }
 
@@ -227,9 +245,6 @@ function cardMeta(node: TourNode): Record<string, unknown> {
     fields: cardFields(card),
   };
 }
-
-/** Separates a card's points from a body that may end in a list of its own. */
-const POINTS_MARK = '<!-- points -->';
 
 function cardMarkdown(node: TourNode, depth: number, withMeta: boolean): string {
   const { card } = node;
@@ -427,6 +442,11 @@ interface CardParts {
 
 const LIST_ITEM = /^[-*+][ \t]+/;
 
+/** Appends without spreading, which a body of a few hundred thousand lines would overflow. */
+function append(target: string[], lines: readonly string[]): void {
+  for (const line of lines) target.push(line);
+}
+
 /** List items, with an indented line continuing the item above it. */
 function readPoints(lines: readonly string[]): string[] {
   const points: string[] = [];
@@ -482,7 +502,7 @@ function readDeclaredCard(lines: string[], fields: ReadonlySet<string>): CardPar
     let open = end - 2;
     while (open >= start && (fenced[open] || lines[open].trim() !== NOTES_OPEN)) open -= 1;
     if (open >= start) {
-      const notes = unescapeHeadings(lines.slice(open + 1, end - 1)).trim();
+      const notes = unescapeLines(lines.slice(open + 1, end - 1)).trim();
       if (notes) parts.notes = capped(notes, READ_CAPS.text);
       end = open;
     }
@@ -498,7 +518,10 @@ function readDeclaredCard(lines: string[], fields: ReadonlySet<string>): CardPar
     const opened = start < end ? fenceOpen(lines[start]) : undefined;
     if (opened && (opened.info === 'text' || opened.info === 'mermaid')) {
       const block = fencedBlock(lines, start);
-      parts.diagram = { kind: opened.info, source: block.slice(1, -1).join('\n') };
+      parts.diagram = {
+        kind: opened.info,
+        source: capped(block.slice(1, -1).join('\n'), READ_CAPS.text),
+      };
       start += block.length;
     }
   }
@@ -506,20 +529,21 @@ function readDeclaredCard(lines: string[], fields: ReadonlySet<string>): CardPar
     const rows: string[] = [];
     while (start < end && lines[start].trim().startsWith('|')) rows.push(lines[start++].trim());
     parts.comparison = readComparison(rows);
-    if (!parts.comparison) parts.body.push(...rows);
+    if (!parts.comparison) append(parts.body, rows);
   }
 
   const middle = lines.slice(start, end);
   if (!fields.has('points')) {
-    parts.body.push(...middle);
+    append(parts.body, middle);
     return parts;
   }
   const middleFenced = fenced.slice(start, end);
-  const mark = middle.findIndex(
+  // The writer's own marker is the last one; earlier ones are body text.
+  const mark = middle.findLastIndex(
     (line, index) => !middleFenced[index] && line.trim() === POINTS_MARK,
   );
   if (mark >= 0) {
-    parts.body.push(...middle.slice(0, mark));
+    append(parts.body, middle.slice(0, mark));
     parts.points = readPoints(middle.slice(mark + 1));
   } else if (fields.has('body')) {
     // Marker removed by hand: the list at the end is taken as the points.
@@ -531,7 +555,7 @@ function readDeclaredCard(lines: string[], fields: ReadonlySet<string>): CardPar
         /^\s+\S/.test(middle[split - 1]))
     )
       split -= 1;
-    parts.body.push(...middle.slice(0, split));
+    append(parts.body, middle.slice(0, split));
     parts.points = readPoints(middle.slice(split));
   } else parts.points = readPoints(middle);
   return parts;
@@ -565,15 +589,18 @@ function readLooseCard(lines: string[]): CardParts {
         (opened.info === 'text' || opened.info === 'mermaid') &&
         block.length >= 2
       )
-        parts.diagram = { kind: opened.info, source: block.slice(1, -1).join('\n') };
-      else parts.body.push(...block);
+        parts.diagram = {
+          kind: opened.info,
+          source: capped(block.slice(1, -1).join('\n'), READ_CAPS.text),
+        };
+      else append(parts.body, block);
       continue;
     }
     if (trimmed === NOTES_OPEN) {
       let close = index + 1;
       while (close < lines.length && (fenced[close] || lines[close].trim() !== NOTES_CLOSE))
         close += 1;
-      const notes = unescapeHeadings(lines.slice(index + 1, close)).trim();
+      const notes = unescapeLines(lines.slice(index + 1, close)).trim();
       if (notes) parts.notes = capped(notes, READ_CAPS.text);
       index = close + 1;
       labelAllowed = false;
@@ -598,7 +625,7 @@ function readLooseCard(lines: string[]): CardParts {
       while (index < lines.length && lines[index].trim().startsWith('|'))
         rows.push(lines[index++].trim());
       parts.comparison = readComparison(rows);
-      if (!parts.comparison) parts.body.push(...rows);
+      if (!parts.comparison) append(parts.body, rows);
       continue;
     } else if (LIST_ITEM.test(line)) {
       parts.points.push(trimmed.replace(LIST_ITEM, ''));
@@ -627,7 +654,7 @@ function readCard(title: string, lines: string[]): { card: TourCard; question?: 
   const card: TourCard = {
     label: capped(parts.label, READ_CAPS.label),
     title: capped(title, READ_CAPS.title),
-    body: capped(unescapeHeadings(parts.body).trim(), READ_CAPS.text),
+    body: capped(unescapeLines(parts.body).trim(), READ_CAPS.text),
     tone: readTone(meta?.tone),
     refs: parts.refs,
     ...(points.length && { points }),
