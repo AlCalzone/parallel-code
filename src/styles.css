@@ -4473,7 +4473,14 @@ html[data-look='islands-light'] .window-title-icon {
   }
 
   /* With the outline beside the card, there is nothing for the toggle to show. */
-  .understanding-outline-toggle {
+  .tour-icon.understanding-outline-toggle,
+  .understanding-outline-card {
+    display: none;
+  }
+}
+
+@media not all and (min-width: 960px) {
+  .understanding-stage[data-overview] > :not(.understanding-outline-card) {
     display: none;
   }
 }
@@ -5364,6 +5371,12 @@ button.tour-outline-twisty:hover {
 .tour-icon--primary {
   color: var(--fg);
   opacity: 0.8;
+}
+
+/* A pressed toggle shows its state, such as a tour that is saved. */
+.tour-icon[aria-pressed='true'] {
+  color: var(--accent);
+  opacity: 0.85;
 }
 
 /* Hover popover of a tour button: which file, what the click does. Glance-only. */

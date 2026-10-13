@@ -66,7 +66,11 @@ export function askCanvasBranch(
   if (prompt) stageCanvasRequest(taskId, prompt);
 }
 
-function stageCanvasRequest(taskId: string, request: string): void {
+/**
+ * Appends a request to the task's prompt draft and focuses the prompt, keeping
+ * whatever the user already typed. Nothing is sent; the user reviews it first.
+ */
+export function stageCanvasRequest(taskId: string, request: string): void {
   const task = store.tasks[taskId];
   if (!task || task.closingStatus) return;
   const text = [task.prefillPrompt ?? task.promptDraft ?? '', request].filter(Boolean).join('\n\n');

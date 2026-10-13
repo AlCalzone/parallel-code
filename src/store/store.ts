@@ -29,7 +29,7 @@ export {
   removeCustomAgent,
   setAgentEnvFile,
 } from './agents';
-export { publishAgentTour } from './agent-tour';
+export { publishAgentTour, referenceTourCard } from './agent-tour';
 export {
   openCanvasDocument,
   openCanvasBrowser,

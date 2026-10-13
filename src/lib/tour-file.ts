@@ -7,7 +7,12 @@
  * card. See docs/tour-outline.md.
  */
 
-import { TOUR_FORMS, TOUR_TONES } from '../../electron/shared/understanding-limits';
+import {
+  TOUR_FILE_MAX_CHARS,
+  TOUR_FILE_SUFFIX,
+  TOUR_FORMS,
+  TOUR_TONES,
+} from '../../electron/shared/understanding-limits';
 import { MAX_TOUR_DEPTH, countNodes, createNodeIds, type TourNode } from './tour-tree';
 import type {
   TourCard,
@@ -19,10 +24,7 @@ import type {
   UnderstandingTourKind,
 } from './understanding-tour';
 
-export const TOUR_FILE_SUFFIX = '.tour.md';
 const TOUR_FILE_VERSION = 1;
-/** A saved tour is a few dozen short cards; anything far larger is not one. */
-export const TOUR_FILE_MAX_CHARS = 512 * 1024;
 const TOUR_FILE_MAX_CARDS = 200;
 
 const KINDS: readonly UnderstandingTourKind[] = ['plan', 'file', 'document', 'agent'];
@@ -134,11 +136,11 @@ function cardMeta(node: TourNode): Record<string, unknown> {
   };
 }
 
-function cardMarkdown(node: TourNode, depth: number): string {
+function cardMarkdown(node: TourNode, depth: number, withMeta = true): string {
   const { card } = node;
   const parts = [`${'#'.repeat(depth + 1)} ${oneLine(card.title)}`];
   const label = `${WARNED.has(card.tone) ? '⚠ ' : ''}${oneLine(card.label).replace(/\*/g, '\\*')}`;
-  const meta = cardMeta(node);
+  const meta = withMeta ? cardMeta(node) : {};
   parts.push(
     [
       ...(Object.keys(meta).length ? [`${META_PREFIX}${commentJson(meta)} -->`] : []),
@@ -194,6 +196,31 @@ export function serializeTour(tour: TourFile, options: { forFile: boolean }): st
   const omitted =
     !options.forFile && tour.omitted?.length ? [`_Not covered: ${tour.omitted.join(', ')}_`] : [];
   return `${[header.join('\n'), ...treeMarkdown(tour.roots, 1), ...omitted].join('\n\n')}\n`;
+}
+
+/**
+ * One card for the agent chat: which tour, where in it, what the card says,
+ * and the saved file the agent can read for the rest. Staged in the prompt,
+ * never sent on its own.
+ */
+export function cardReference(input: {
+  subject: string;
+  savedPath?: string;
+  /** The card and the cards above it, outermost first. */
+  trail: readonly TourNode[];
+}): string {
+  const node = input.trail.at(-1);
+  if (!node) return '';
+  const lines = [
+    `Tour card reference — tour: ${oneLine(input.subject)}`,
+    `Position: ${input.trail.map((entry) => oneLine(entry.card.title)).join(' › ')}`,
+  ];
+  if (node.question !== undefined) lines.push(`Asked: ${oneLine(node.question)}`);
+  if (input.savedPath)
+    lines.push(
+      `The whole tour is saved in ${input.savedPath}; read it for the cards around this one.`,
+    );
+  return `${lines.join('\n')}\n\n${cardMarkdown(node, 2, false)}`;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {

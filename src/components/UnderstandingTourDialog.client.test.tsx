@@ -121,6 +121,7 @@ function mount() {
   const host = document.createElement('div');
   document.body.append(host);
   const onClose = vi.fn();
+  const onReference = vi.fn();
   let controller: ReturnType<typeof createUnderstandingTour> | undefined;
   disposers.push(
     render(() => {
@@ -131,12 +132,13 @@ function mount() {
           open={true}
           onClose={onClose}
           worktreePath="/repo"
+          onReference={onReference}
         />
       );
     }, host),
   );
   if (!controller) throw new Error('Controller was not created');
-  return { tour: controller, onClose };
+  return { tour: controller, onClose, onReference };
 }
 
 /** Mounts the dialog with a generated tour, on its first card: the gist. */
@@ -557,6 +559,32 @@ describe('UnderstandingTourDialog', () => {
     expect(markdown).toContain('\n## Third card\n');
     expect(markdown).not.toContain('parallel-code-tour');
     expect(iconButton('Tour copied')).toBeDefined();
+  });
+
+  it('saves the tour to the worktree and shows that it is saved', async () => {
+    const { tour } = await mountWithTour();
+    vi.mocked(invoke).mockImplementation(((channel: IPC) =>
+      channel === IPC.SaveTourFile
+        ? Promise.resolve('output-buffering.tour.md')
+        : Promise.resolve(undefined)) as typeof invoke);
+    expect(iconButton('Save tour').getAttribute('aria-pressed')).toBe('false');
+    clickIcon('Save tour');
+    await flush();
+    expect(tour.savedPath()).toBe('output-buffering.tour.md');
+    const saved = iconButton('Tour saved');
+    expect(saved.getAttribute('aria-pressed')).toBe('true');
+    expect(saved.title).toContain('output-buffering.tour.md');
+  });
+
+  it('hands the card on screen to the chat with its place in the tour', async () => {
+    const { onReference } = await mountWithTour();
+    clickIcon('Next card');
+    clickIcon('Reference in chat');
+    expect(onReference).toHaveBeenCalledOnce();
+    const reference = String(onReference.mock.calls[0][0]);
+    expect(reference).toContain('tour: output buffering');
+    expect(reference).toContain('Position: First card');
+    expect(reference).toContain('### First card');
   });
 
   it('reworks the tour from the rework bar; Escape closes only the bar', async () => {

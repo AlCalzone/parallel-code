@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { TOUR_FILE_MAX_CHARS } from '../../electron/shared/understanding-limits';
 import {
-  TOUR_FILE_MAX_CHARS,
+  cardReference,
   isTourFilePath,
   parseTourFile,
   serializeTour,
@@ -169,6 +170,26 @@ describe('tour file', () => {
     );
     expect(parsed.kind).toBe('agent');
     expect(parsed.roots[0].card.body).toBe('<!-- tour-card {broken -->\nBody');
+  });
+
+  it('references one card for the agent with its place in the tour and the saved file', () => {
+    const roots = tree();
+    const trail = [roots[0], roots[0].children[0]];
+    const reference = cardReference({
+      subject: 'Worktrees',
+      savedPath: 'worktrees.tour.md',
+      trail,
+    });
+    expect(reference).toContain('tour: Worktrees');
+    expect(reference).toContain(
+      'Position: Each task gets its own working copy › Output | input flow',
+    );
+    expect(reference).toContain('Asked: Go deeper on this point: One branch per task');
+    expect(reference).toContain('saved in worktrees.tour.md');
+    expect(reference).toContain('### Output | input flow\n\n**⚠ MAIN FLOW**');
+    expect(reference).not.toContain('tour-card');
+    expect(cardReference({ subject: 'x', trail: [roots[1]] })).not.toContain('saved in');
+    expect(cardReference({ subject: 'x', trail: [] })).toBe('');
   });
 
   it('names a file after the subject and recognises tour files', () => {

@@ -30,6 +30,7 @@ import {
   type UnderstandingTour,
   type UnderstandingTourKind,
 } from './understanding-tour';
+import { serializeTour, tourFileName, type TourFile } from './tour-file';
 import {
   MAX_TOUR_DEPTH,
   appendChildren,
@@ -112,6 +113,16 @@ interface CachedTour {
   input: UnderstandingTourInput;
   /** The cards with every answered follow-up under them, so reopening keeps them. */
   tree: TourNode[];
+  /** Worktree-relative path of the text or file the tour explains. */
+  source?: string;
+  /** Where the reader saved the tour; later answers keep that file up to date. */
+  savedPath?: string;
+}
+
+/** The worktree path a tour explains: what a saved file names as its source. */
+function sourceOf(input: UnderstandingTourInput): string | undefined {
+  if (input.kind === 'file') return input.filePath;
+  return input.kind === 'agent' ? undefined : input.subject;
 }
 
 /** The tour's own cards as the roots of a fresh tree. */
@@ -166,6 +177,9 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
   const [receiving, setReceiving] = createSignal(false);
   /** The file behind the file tour on screen changed after the tour was made. */
   const [stale, setStale] = createSignal(false);
+  /** Worktree-relative path the tour on screen is saved to, or ''. */
+  const [savedPath, setSavedPath] = createSignal('');
+  const [saving, setSaving] = createSignal(false);
   // Finished tours, so starting a file tour does not discard a finished plan
   // tour. A signal (not a bare Map) keeps isReady() reactive for the buttons.
   const [cache, setCache] = createSignal<ReadonlyMap<string, CachedTour>>(new Map());
@@ -175,6 +189,10 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
   let context = '';
   let cwd = '';
   let lastInput: UnderstandingTourInput | undefined;
+  /** What the tour on screen explains, for its saved file. */
+  let source: string | undefined;
+  /** Saves run one after another, so an older tree never lands last. */
+  let writes: Promise<void> = Promise.resolve();
   /** Bumped by every cancel and every new run so late results are ignored. */
   let token = 0;
 
@@ -193,6 +211,7 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     setTour(null);
     setTree([]);
     setCurrentId('');
+    setSavedPath('');
     setError('');
     setElapsedSeconds(0);
     setReceiving(false);
@@ -208,6 +227,7 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     context = '';
     cwd = '';
     lastInput = undefined;
+    source = undefined;
   }
 
   onCleanup(cancel);
@@ -318,6 +338,7 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     const tourSubject = tourInputSubject(input);
     lastInput = input;
     cwd = input.worktreePath;
+    source = sourceOf(input);
     setKind(input.kind);
     setSubject(tourSubject);
     setLoading(true);
@@ -347,6 +368,7 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
           cwd: input.worktreePath,
           input,
           tree: parsedTree,
+          source: sourceOf(input),
         }),
       );
       show(parsed, parsedTree);
@@ -391,6 +413,7 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     context = tourContext;
     cwd = input.worktreePath;
     lastInput = cachedInput;
+    source = undefined;
     const publishedTree = treeOf(input.tour);
     setCache((prev) =>
       new Map(prev).set(cacheKey('agent', input.subject), {
@@ -432,9 +455,11 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
       context = cached.context;
       cwd = cached.cwd;
       lastInput = cached.input;
+      source = cached.source;
       setKind(tourKind);
       setSubject(tourSubject);
       show(cached.tour, cached.tree);
+      setSavedPath(cached.savedPath ?? '');
     }
     void checkFileFreshness(cached);
     return true;
@@ -487,6 +512,199 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
   /** Regenerates the tour on screen with the reader's request for how it should change. */
   function rework(instructions: string): void {
     if (lastInput && instructions.trim()) void generate({ ...lastInput, instructions });
+  }
+
+  /** The tour on screen as the file it saves to. */
+  function currentFile(): TourFile | undefined {
+    const shown = tour();
+    if (!shown) return undefined;
+    return {
+      subject: subject(),
+      kind: shown.kind,
+      ...(source && { source }),
+      ...(shown.omitted && { omitted: shown.omitted }),
+      roots: tree(),
+    };
+  }
+
+  /** Records where a cached tour is saved, so reopening it keeps saving there. */
+  function cacheSavedPath(key: string, path: string): void {
+    setCache((prev) => {
+      const entry = prev.get(key);
+      return entry ? new Map(prev).set(key, { ...entry, savedPath: path }) : prev;
+    });
+  }
+
+  /**
+   * Writes a tour's text to its file and returns where it landed. A first save
+   * picks a free name from the subject; later ones replace that file. The text
+   * and worktree are taken when the save starts, so a tour opened meanwhile
+   * can never be written over this one's file.
+   */
+  function write(target: {
+    worktreePath: string;
+    path: string;
+    content: string;
+    replace: boolean;
+  }) {
+    return invoke<string>(IPC.SaveTourFile, target);
+  }
+
+  /** The tour on screen as the text of its saved file. */
+  function fileText(): string | undefined {
+    const file = currentFile();
+    return file && serializeTour(file, { forFile: true });
+  }
+
+  /**
+   * Saves the tour on screen into the worktree as Markdown, so it can be
+   * reopened from the canvas, committed or handed to the agent. Once saved,
+   * every new answer updates the file.
+   */
+  async function save(): Promise<void> {
+    const shown = tour();
+    const tourKind = kind();
+    const content = fileText();
+    if (!shown || !tourKind || content === undefined || saving()) return;
+    const key = cacheKey(tourKind, subject());
+    const existing = savedPath();
+    setSaving(true);
+    try {
+      const path = await write({
+        worktreePath: cwd,
+        path: existing || tourFileName(subject()),
+        content,
+        replace: existing !== '',
+      });
+      cacheSavedPath(key, path);
+      if (tour() === shown) setSavedPath(path);
+    } catch (cause) {
+      if (tour() === shown) setError(`Could not save the tour: ${errMessage(cause)}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Keeps a saved tour's file in step with its tree; unsaved tours stay in memory. */
+  function persist(): void {
+    const path = savedPath();
+    const content = fileText();
+    if (!path || content === undefined) return;
+    const target = { worktreePath: cwd, path, content, replace: true };
+    const shown = tour();
+    writes = writes.then(() => update(target, shown));
+  }
+
+  async function update(
+    target: Parameters<typeof write>[0],
+    shown: UnderstandingTour | null,
+  ): Promise<void> {
+    try {
+      await write(target);
+    } catch (cause) {
+      if (tour() === shown) setError(`Could not update ${target.path}: ${errMessage(cause)}`);
+    }
+  }
+
+  /**
+   * Shows a tour saved in the worktree, with every answer in it, without a
+   * provider call. Follow-ups replay what it explains: the text passed in,
+   * the file re-read, or the cards themselves when neither is there any more.
+   * Reopening the file already on screen, unchanged, keeps the reader's place.
+   */
+  async function restore(input: {
+    file: TourFile;
+    /** The file's text as read, to tell whether it changed since it was shown. */
+    text: string;
+    savedPath: string;
+    worktreePath: string;
+    taskName: string;
+    /** The plan or document the tour explains, read fresh; absent when gone. */
+    sourceText?: string;
+  }): Promise<void> {
+    const shownFile = currentFile();
+    if (
+      shownFile &&
+      savedPath() === input.savedPath &&
+      serializeTour(shownFile, { forFile: true }) === input.text
+    )
+      return;
+    cancel();
+    clearView();
+    const active = token;
+    const { file, taskName, worktreePath } = input;
+    const cards = file.roots.map((node) => node.card);
+    const fromCards = (): UnderstandingTourInput => ({
+      kind: 'agent',
+      taskName,
+      worktreePath,
+      subject: file.subject,
+      context: compactSpine({ cards }),
+    });
+    let restoredInput: UnderstandingTourInput = fromCards();
+    if (file.source && input.sourceText !== undefined && file.kind === 'plan')
+      restoredInput = {
+        kind: 'plan',
+        taskName,
+        worktreePath,
+        planContent: input.sourceText,
+        subject: file.source,
+      };
+    else if (file.source && input.sourceText !== undefined && file.kind === 'document')
+      restoredInput = {
+        kind: 'document',
+        taskName,
+        worktreePath,
+        content: input.sourceText,
+        subject: file.source,
+      };
+    let restoredContext =
+      restoredInput.kind === 'plan'
+        ? restoredInput.planContent
+        : restoredInput.kind === 'document'
+          ? restoredInput.content
+          : compactSpine({ cards });
+    if (file.kind === 'file' && file.source) {
+      try {
+        const bundle = await invoke<FileTourContext>(IPC.ReadFileTourContext, {
+          worktreePath,
+          filePath: file.source,
+        });
+        restoredInput = { kind: 'file', taskName, worktreePath, filePath: file.source };
+        restoredContext = renderFileTourContext(bundle);
+      } catch (error) {
+        logWarn('understandingTour', 'Could not re-read the toured file', {
+          error: errMessage(error),
+        });
+      }
+      if (active !== token) return;
+    }
+    const restoredSubject = tourInputSubject(restoredInput);
+    const restored: UnderstandingTour = {
+      subject: restoredSubject,
+      kind: restoredInput.kind,
+      cards,
+      ...(file.omitted && { omitted: file.omitted }),
+    };
+    context = restoredContext;
+    cwd = worktreePath;
+    lastInput = restoredInput;
+    source = file.source;
+    setCache((prev) =>
+      new Map(prev).set(cacheKey(restoredInput.kind, restoredSubject), {
+        tour: restored,
+        context: restoredContext,
+        cwd: worktreePath,
+        input: restoredInput,
+        tree: file.roots,
+        source: file.source,
+        savedPath: input.savedPath,
+      }),
+    );
+    setKind(restoredInput.kind);
+    setSubject(restoredSubject);
+    show(restored, file.roots);
+    setSavedPath(input.savedPath);
   }
 
   /** The card on screen. */
@@ -569,6 +787,7 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
       const nextTree = appendChildren(tree(), nodeId, answers);
       setTree(nextTree);
       cacheTree(nextTree);
+      persist();
       setAsking(false);
       setPending(null);
       // Provider stderr can arrive even on a request that then succeeded.
@@ -659,9 +878,13 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     elapsedSeconds,
     receiving,
     stale,
+    savedPath,
+    saving,
     generate,
     publish,
     open,
+    restore,
+    save,
     isReady,
     isLoading,
     errorFor,

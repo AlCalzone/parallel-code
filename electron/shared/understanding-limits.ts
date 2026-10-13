@@ -14,6 +14,11 @@ export const FILE_TOUR_MAX_FILE_CHARS = 60_000;
 export const FILE_TOUR_MAX_TOTAL_CHARS = 200_000;
 export const FILE_TOUR_MAX_IMPORTS = 12;
 
+/** Saved tours are Markdown files the reader keeps in the worktree. */
+export const TOUR_FILE_SUFFIX = '.tour.md';
+/** A saved tour is a few dozen short cards; anything far larger is not one. */
+export const TOUR_FILE_MAX_CHARS = 512 * 1024;
+
 /** Card tones, shared so the validator and the MCP tool description cannot drift. */
 export const TOUR_TONES = ['neutral', 'important', 'risk', 'uncertainty', 'mechanical'] as const;
 

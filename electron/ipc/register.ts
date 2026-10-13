@@ -50,6 +50,7 @@ import {
   readPlanForWorktree,
 } from './plans.js';
 import { readFileTourContext } from './understanding-context.js';
+import { saveTourFile } from './tour-files.js';
 import {
   prepareReasoningFeed,
   readReasoningFeed,
@@ -1476,6 +1477,11 @@ export function registerAllHandlers(win: BrowserWindow): void {
     validatePath(args.worktreePath, 'worktreePath');
     assertString(args.filePath, 'filePath');
     return readFileTourContext(args.worktreePath, args.filePath);
+  });
+
+  ipcMain.handle(IPC.SaveTourFile, (_e, args) => {
+    validatePath(args.worktreePath, 'worktreePath');
+    return saveTourFile(args.worktreePath, args);
   });
 
   // --- Clipboard ---

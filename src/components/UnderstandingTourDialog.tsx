@@ -1,11 +1,13 @@
 import { For, Show, createEffect, createSignal, createUniqueId, on, onCleanup } from 'solid-js';
 import { Dialog } from './Dialog';
 import {
+  BookmarkIcon,
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CloseIcon,
   ListIcon,
+  MentionIcon,
   PencilIcon,
   RedoIcon,
   SyncIcon,
@@ -18,7 +20,7 @@ import { TourIconButton } from './understanding/TourIconButton';
 import { TourOutline } from './understanding/TourOutline';
 import { TourProgress } from './understanding/TourProgress';
 import { TourReworkBar } from './understanding/TourReworkBar';
-import { serializeTour } from '../lib/tour-file';
+import { cardReference, serializeTour } from '../lib/tour-file';
 import { questionPoint } from '../lib/tour-tree';
 import type { UnderstandingTourController } from '../lib/create-understanding-tour';
 import type { TourRef } from '../lib/understanding-tour';
@@ -59,6 +61,8 @@ export function UnderstandingTourDialog(props: {
   worktreePath: string;
   /** Raised above another open dialog, e.g. when started from the plan viewer. */
   zIndex?: number;
+  /** Hands the card on screen to the task's agent chat; absent where there is none. */
+  onReference?: (reference: string) => void;
 }) {
   const headingId = createUniqueId();
   /** The action the reader is most likely to press next; see the focus effect. */
@@ -88,6 +92,15 @@ export function UnderstandingTourDialog(props: {
       },
       { forFile: false },
     );
+  }
+
+  function reference(): void {
+    const text = cardReference({
+      subject: props.tour.subject(),
+      savedPath: props.tour.savedPath() || undefined,
+      trail: props.tour.trail(),
+    });
+    if (text) props.onReference?.(text);
   }
 
   function rework(instructions: string): void {
@@ -286,6 +299,28 @@ export function UnderstandingTourDialog(props: {
               </TourIconButton>
               <TourCopyButton markdown={markdown} />
               <TourIconButton
+                label={props.tour.savedPath() ? 'Tour saved' : 'Save tour'}
+                tooltip={
+                  props.tour.savedPath()
+                    ? `Saved as ${props.tour.savedPath()} · new answers update it`
+                    : 'Save to the worktree as Markdown, to reopen or share'
+                }
+                pressed={props.tour.savedPath() !== ''}
+                disabled={props.tour.saving()}
+                onClick={() => void controller().save()}
+              >
+                <BookmarkIcon size={14} />
+              </TourIconButton>
+              <Show when={props.onReference}>
+                <TourIconButton
+                  label="Reference in chat"
+                  tooltip="Reference this card in the agent chat"
+                  onClick={reference}
+                >
+                  <MentionIcon size={14} />
+                </TourIconButton>
+              </Show>
+              <TourIconButton
                 label="Rework tour"
                 tooltip="Rework tour with your own instructions"
                 onClick={() => setReworking((open) => !open)}
@@ -385,17 +420,15 @@ export function UnderstandingTourDialog(props: {
           </Show>
 
           <Show when={!props.tour.loading() && node()}>
-            <div class="understanding-stage">
-              <Show
-                when={overview()}
-                fallback={
-                  // A fresh card per card, so it opens scrolled to the top with
-                  // its notes closed; the footer stays and keeps its focus.
-                  <Show when={props.tour.currentId()} keyed>
-                    {(_id) => <CardView />}
-                  </Show>
-                }
-              >
+            {/* The outline replaces the card only where it has no room beside it,
+                so widening the window with it open brings the card back. */}
+            <div class="understanding-stage" data-overview={overview() ? '' : undefined}>
+              {/* A fresh card per card, so it opens scrolled to the top with its
+                  notes closed; the footer stays and keeps its focus. */}
+              <Show when={props.tour.currentId()} keyed>
+                {(_id) => <CardView />}
+              </Show>
+              <Show when={overview()}>
                 <div class="understanding-card understanding-outline-card">{outline()}</div>
               </Show>
             </div>

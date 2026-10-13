@@ -15,6 +15,8 @@ export function TourIconButton(props: {
   primary?: boolean;
   /** Extra class, for a control the stylesheet shows only in some layouts. */
   class?: string;
+  /** A toggle's state; a pressed control may carry the accent. */
+  pressed?: boolean;
   ref?: (element: HTMLButtonElement) => void;
   children: JSX.Element;
 }) {
@@ -27,6 +29,7 @@ export function TourIconButton(props: {
       aria-label={props.label}
       title={props.tooltip ?? props.label}
       disabled={props.disabled}
+      aria-pressed={props.pressed}
       onClick={() => props.onClick()}
     >
       {props.children}
