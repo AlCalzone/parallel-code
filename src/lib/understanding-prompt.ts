@@ -11,7 +11,6 @@ import {
 import {
   GIST_LABEL,
   type FileTourContext,
-  type TourBranch,
   type TourCard,
   type UnderstandingTourKind,
   isSlideTourKind,
@@ -280,7 +279,7 @@ export function compactSpine(tour: { cards: TourCard[] }): string {
 }
 
 /** Earlier answers under the same card, so a new question can build on them. */
-function compactThreads(threads: TourBranch[]): string {
+function compactThreads(threads: { question: string; cards: TourCard[] }[]): string {
   return JSON.stringify(
     threads.map((thread) => ({ question: thread.question, cards: thread.cards.map(compactCard) })),
   );
@@ -289,26 +288,38 @@ function compactThreads(threads: TourBranch[]): string {
 export function buildFollowUpPrompt(input: {
   tour: { subject: string; kind: FollowUpTourKind; cards: TourCard[] };
   currentIndex: number;
+  /**
+   * The follow-up cards between the spine card and the reader's card, the
+   * reader's card last; absent or empty when the reader is on the spine.
+   */
+  path?: TourCard[];
   question: string;
   context: string;
   /** What `context` is, when it is not the whole context the tour was built from. */
   contextNote?: string;
   /** Follow-ups already answered under the current card, oldest first. */
-  earlier?: TourBranch[];
+  earlier?: { question: string; cards: TourCard[] }[];
 }): string {
   const { tour, currentIndex } = input;
   const subject = FOLLOW_UP_SUBJECT[tour.kind];
+  const deeper = input.path?.length ? input.path : undefined;
+  const position = deeper
+    ? `The reader went deeper from spine card ${currentIndex + 1} of ${tour.cards.length} through the follow-up cards listed below; answer from the last of them.`
+    : `The reader is on spine card ${currentIndex + 1} of ${tour.cards.length}; answer from there.`;
+  const path = deeper
+    ? `\nThe follow-up cards from that spine card down to the reader's card, as compact JSON, the reader's card last:\n${JSON.stringify(deeper.map(compactCard))}`
+    : '';
   const earlier = input.earlier?.length
     ? `\nFollow-ups already answered under this card, as compact JSON; do not repeat them:\n${compactThreads(input.earlier)}`
     : '';
   return withinBudget(`You are answering a follow-up question inside an understanding tour of ${subject} ${JSON.stringify(tour.subject)}.
 Answer only the question, in 1 to ${TOUR_CARD_LIMITS.branchMaxCards} cards. Do not restate the tour and do not start a new tour.
 ${cardInstructions(BRANCH_OUTPUT, { sources: isTextTourKind(tour.kind), slides: isSlideTourKind(tour.kind) })}
-The reader is on spine card ${currentIndex + 1} of ${tour.cards.length}; answer from there. If the tour follows a concrete example, keep using it.
+${position} If the tour follows a concrete example, keep using it.
 Write in the language the tour is written in.
 ${UNTRUSTED}
 The tour so far, as compact JSON including diagrams and comparisons:
-${compactSpine(tour)}${earlier}
+${compactSpine(tour)}${path}${earlier}
 The question:
 ${JSON.stringify(input.question)}
 The following JSON string contains ${input.contextNote ?? 'the same context the tour was built from'}:

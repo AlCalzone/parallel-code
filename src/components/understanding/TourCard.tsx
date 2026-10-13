@@ -1,4 +1,4 @@
-import { For, Show, createEffect } from 'solid-js';
+import { For, Show, createEffect, type JSX } from 'solid-js';
 import { renderInlineMarkdown } from '../../lib/inline-markdown';
 import { createHighlightedMarkdown } from '../../lib/marked-shiki';
 import { renderMermaidIn } from '../../lib/mermaid';
@@ -52,6 +52,18 @@ export function TourCard(props: {
   answeredQuestions?: string[];
   /** Sections the tour left out; the dialog passes them to the last card only. */
   omitted?: string[];
+  /**
+   * Digging into one point of a slide. `open` says the point already has an
+   * answer under the card, which `onPoint` then shows instead of asking again.
+   */
+  points?: {
+    open: (point: string) => boolean;
+    /** Asking is impossible right now; points with an answer stay usable. */
+    disabled: boolean;
+    onPoint: (point: string) => void;
+  };
+  /** The answers under this card, listed after its own content. */
+  deeper?: JSX.Element;
 }) {
   const bodyHtml = createHighlightedMarkdown(() => props.card.body);
   const notesHtml = createHighlightedMarkdown(() => props.card.notes);
@@ -132,12 +144,35 @@ export function TourCard(props: {
         {(points) => (
           <ul class="understanding-points">
             <For each={points()}>
-              {(point) => (
-                <li
-                  // eslint-disable-next-line solid/no-innerhtml -- renderInlineMarkdown sanitizes with DOMPurify
-                  innerHTML={renderInlineMarkdown(point)}
-                />
-              )}
+              {(point) => {
+                const open = () => props.points?.open(point) ?? false;
+                return (
+                  <li data-open={open() ? '' : undefined}>
+                    <span
+                      // eslint-disable-next-line solid/no-innerhtml -- renderInlineMarkdown sanitizes with DOMPurify
+                      innerHTML={renderInlineMarkdown(point)}
+                    />
+                    {/* Always laid out, shown on hover or when an answer exists,
+                        so the text never moves when it appears. */}
+                    <Show when={props.points}>
+                      {(dig) => (
+                        <button
+                          type="button"
+                          class="understanding-point-dig"
+                          aria-label={
+                            open() ? `Open the answer on: ${point}` : `Go deeper on: ${point}`
+                          }
+                          title={open() ? 'Open the answer' : 'Go deeper on this point'}
+                          disabled={!open() && dig().disabled}
+                          onClick={() => dig().onPoint(point)}
+                        >
+                          ›
+                        </button>
+                      )}
+                    </Show>
+                  </li>
+                );
+              }}
             </For>
           </ul>
         )}
@@ -194,6 +229,7 @@ export function TourCard(props: {
           Not covered: {props.omitted?.join(', ')}
         </p>
       </Show>
+      {props.deeper}
       <Show when={props.onAsk && questions().length > 0}>
         <div class="tour-questions" role="group" aria-label="Explore this card">
           <For each={questions()}>

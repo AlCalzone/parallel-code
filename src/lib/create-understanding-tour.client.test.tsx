@@ -136,6 +136,16 @@ const PUBLISHED_TOUR: UnderstandingTour = {
   cards: [publishedCard('Published gist', GIST_LABEL), publishedCard('Published one')],
 };
 
+/** Titles and questions of the answers under one of the tour's own cards. */
+function answersUnder(tour: ReturnType<typeof setup>, index: number) {
+  return (tour.tree()[index]?.children ?? []).map((node) => ({
+    title: node.card.title,
+    question: node.question,
+  }));
+}
+const answerCount = (tour: ReturnType<typeof setup>) =>
+  tour.tree().reduce((count, root) => count + root.children.length, 0);
+
 async function generatedPlanTour() {
   const tour = setup();
   void tour.generate(PLAN_INPUT);
@@ -252,13 +262,14 @@ describe('createUnderstandingTour', () => {
     expect(tour.tour()).toBeNull();
   });
 
-  it('asks a follow-up and keeps the answer under the current card', async () => {
+  it('asks a follow-up, nests the answer under the card and opens it', async () => {
     const tour = await generatedPlanTour();
     tour.navigate(1);
     void tour.ask('Why buffer first?');
     await flush();
     expect(tour.asking()).toBe(true);
     expect(tour.pendingQuestion()).toBe('Why buffer first?');
+    expect(tour.pending()).toEqual({ question: 'Why buffer first?', nodeId: tour.tree()[1].id });
     expect(channels).toHaveLength(2);
     expect(promptOf(1)).toContain('Why buffer first?');
     expect(promptOf(1)).toContain('Buffer before IPC.');
@@ -266,15 +277,72 @@ describe('createUnderstandingTour', () => {
     await flush();
     expect(tour.asking()).toBe(false);
     expect(tour.pendingQuestion()).toBe('');
+    expect(answersUnder(tour, 1)).toEqual([
+      { title: 'Deep one', question: 'Why buffer first?' },
+      { title: 'Deep two', question: 'Why buffer first?' },
+    ]);
+    expect(answersUnder(tour, 0)).toEqual([]);
+    // The reader lands on the first answer, still under the same tour card.
+    expect(tour.currentNode()?.card.title).toBe('Deep one');
     expect(tour.step()).toBe(1);
-    expect(tour.threadsFor(1)).toHaveLength(1);
-    expect(tour.threadsFor(1)[0].question).toBe('Why buffer first?');
-    expect(tour.threadsFor(1)[0].cards).toHaveLength(2);
-    expect(tour.threadsFor(0)).toHaveLength(0);
-    // Moving on and back does not lose the thread.
+    expect(tour.trail().map((node) => node.card.title)).toEqual(['One', 'Deep one']);
+    // Within the answers, then out past the last one to the next tour card.
     tour.next();
+    expect(tour.currentNode()?.card.title).toBe('Deep two');
+    tour.next();
+    expect(tour.currentNode()?.card.title).toBe('Two');
+    // Back from a first answer leads out to the card it answers.
+    tour.navigate(1);
+    tour.enter();
+    expect(tour.currentNode()?.card.title).toBe('Deep one');
     tour.previous();
-    expect(tour.threadsFor(1)).toHaveLength(1);
+    expect(tour.currentNode()?.card.title).toBe('One');
+    tour.enter();
+    tour.leave();
+    expect(tour.currentNode()?.card.title).toBe('One');
+  });
+
+  it('answers a question asked on an answer under that answer', async () => {
+    const tour = await generatedPlanTour();
+    tour.navigate(1);
+    void tour.ask('Why buffer first?');
+    await flush();
+    stream(1, BRANCH_JSON);
+    await flush();
+    void tour.ask('And the timer?');
+    await flush();
+    expect(promptOf(2)).toContain('went deeper from spine card 2 of 4');
+    expect(promptOf(2)).toContain('"Deep one"');
+    stream(2, JSON.stringify({ cards: [card({ title: 'Deeper still' })] }));
+    await flush();
+    expect(tour.trail().map((node) => node.card.title)).toEqual([
+      'One',
+      'Deep one',
+      'Deeper still',
+    ]);
+  });
+
+  it('digs into one point of a slide with a fixed question', async () => {
+    const tour = await generatedPlanTour();
+    tour.goDeeperOn('Buffers flush on a timer');
+    await flush();
+    expect(promptOf(1)).toContain('Go deeper on this point: Buffers flush on a timer');
+  });
+
+  it('stops nesting answers at the deepest level a saved tour can hold', async () => {
+    const tour = await generatedPlanTour();
+    for (let level = 1; level < 5; level += 1) {
+      expect(tour.canAsk()).toBe(true);
+      void tour.ask(`Level ${level}?`);
+      await flush();
+      stream(level, JSON.stringify({ cards: [card({ title: `Level ${level}` })] }));
+      await flush();
+    }
+    expect(tour.trail()).toHaveLength(5);
+    expect(tour.canAsk()).toBe(false);
+    void tour.ask('Too deep?');
+    await flush();
+    expect(channels).toHaveLength(5);
   });
 
   it('shows the question in flight only under the card it was asked from', async () => {
@@ -292,8 +360,10 @@ describe('createUnderstandingTour', () => {
     stream(1, BRANCH_JSON);
     await flush();
     expect(tour.pendingQuestion()).toBe('');
-    expect(tour.threadsFor(1)).toHaveLength(1);
-    expect(tour.threadsFor(2)).toHaveLength(0);
+    expect(answersUnder(tour, 1)).toHaveLength(2);
+    expect(answersUnder(tour, 2)).toHaveLength(0);
+    // A reader who moved on stays where they are.
+    expect(tour.currentNode()?.card.title).toBe('Two');
   });
 
   it('clears provider stderr once the branch parses', async () => {
@@ -304,7 +374,7 @@ describe('createUnderstandingTour', () => {
     expect(tour.error()).toBe('provider warning on stderr');
     stream(1, BRANCH_JSON);
     await flush();
-    expect(tour.threads()[0]?.cards).toHaveLength(2);
+    expect(answersUnder(tour, 0)).toHaveLength(2);
     expect(tour.error()).toBe('');
   });
 
@@ -339,7 +409,7 @@ describe('createUnderstandingTour', () => {
     expect(tour.error()).toBe('');
     expect(tour.asking()).toBe(false);
     expect(tour.pendingQuestion()).toBe('');
-    expect(tour.threads()).toHaveLength(0);
+    expect(answerCount(tour)).toBe(0);
     // Asking again from the card the reader is on still reports its failure.
     void tour.ask('And here?');
     await flush();
@@ -358,10 +428,10 @@ describe('createUnderstandingTour', () => {
     expect(tour.pendingQuestion()).toBe('');
     stream(1, BRANCH_JSON);
     await flush();
-    expect(tour.threads()).toHaveLength(0);
+    expect(answerCount(tour)).toBe(0);
   });
 
-  it('keeps the threads of a cached tour when it is reopened', async () => {
+  it('keeps the answers of a cached tour when it is reopened', async () => {
     const tour = await generatedPlanTour();
     tour.navigate(2);
     void tour.ask('What breaks?');
@@ -372,11 +442,13 @@ describe('createUnderstandingTour', () => {
     await flush();
     stream(2, TOUR_JSON);
     await flush();
-    expect(tour.threads()).toHaveLength(0);
+    expect(answerCount(tour)).toBe(0);
 
     expect(tour.open(PLAN_INPUT)).toBe(true);
-    expect(tour.threadsFor(2)).toHaveLength(1);
-    expect(tour.threadsFor(2)[0].question).toBe('What breaks?');
+    expect(answersUnder(tour, 2).map((answer) => answer.question)).toEqual([
+      'What breaks?',
+      'What breaks?',
+    ]);
   });
 
   it('adds a second answer under the same card and replays the first', async () => {
@@ -386,15 +458,18 @@ describe('createUnderstandingTour', () => {
     await flush();
     stream(1, BRANCH_JSON);
     await flush();
+    tour.leave();
     void tour.ask('Second?');
     await flush();
     expect(promptOf(2)).toContain('already answered');
     expect(promptOf(2)).toContain('Deep one');
     stream(2, JSON.stringify({ cards: [card({ title: 'Follow-on' })] }));
     await flush();
-    const threads = tour.threadsFor(1);
-    expect(threads.map((thread) => thread.question)).toEqual(['First?', 'Second?']);
-    expect(threads[1].cards).toHaveLength(1);
+    expect(answersUnder(tour, 1).map((answer) => answer.question)).toEqual([
+      'First?',
+      'First?',
+      'Second?',
+    ]);
     // The first question's prompt carried no earlier answers.
     expect(promptOf(1)).not.toContain('already answered');
   });
@@ -429,7 +504,7 @@ describe('createUnderstandingTour', () => {
     expect(tour.tour()).toBeNull();
     expect(tour.kind()).toBeNull();
     expect(tour.subject()).toBe('');
-    expect(tour.threads()).toHaveLength(0);
+    expect(tour.tree()).toHaveLength(0);
     expect(tour.pendingQuestion()).toBe('');
     expect(tour.step()).toBe(0);
     expect(tour.error()).toBe('');
@@ -577,7 +652,7 @@ describe('createUnderstandingTour', () => {
     await flush();
     stream(1, BRANCH_JSON);
     await flush();
-    expect(tour.threads()).toHaveLength(1);
+    expect(answerCount(tour)).toBe(2);
 
     tour.rework('Explain it for a newcomer');
     await flush();
@@ -587,7 +662,7 @@ describe('createUnderstandingTour', () => {
     stream(2, JSON.stringify({ gist: card({ title: 'Simpler gist' }), cards: [card()] }));
     await flush();
     expect(tour.tour()?.cards[0]?.title).toBe('Simpler gist');
-    expect(tour.threads()).toHaveLength(0);
+    expect(answerCount(tour)).toBe(0);
     // The reworked tour replaces the cached one, so the entry button reopens it.
     expect(tour.open(PLAN_INPUT)).toBe(true);
     expect(tour.tour()?.cards[0]?.title).toBe('Simpler gist');
@@ -650,7 +725,7 @@ describe('createUnderstandingTour', () => {
     expect(promptOf(0)).toContain('the topic "the retry bug"');
     stream(0, BRANCH_JSON);
     await flush();
-    expect(tour.threadsFor(0)).toHaveLength(1);
+    expect(answersUnder(tour, 0)).toHaveLength(2);
 
     // Without a context the cards themselves are all a follow-up can reason from.
     tour.publish({

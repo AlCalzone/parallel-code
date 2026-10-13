@@ -255,7 +255,7 @@ describe('UnderstandingTourDialog', () => {
     });
   });
 
-  it('asks a question from the ask bar and keeps the answer under the card', async () => {
+  it('asks a question from the ask bar and opens its answer as a card under the card', async () => {
     await mountWithTour();
     clickIcon('Next card');
     clickIcon('Next card');
@@ -266,8 +266,11 @@ describe('UnderstandingTourDialog', () => {
     await flush();
     expect(input.value).toBe('');
     expect(panel().querySelector('[role="status"]')?.textContent).toContain('Thinking…');
-    const pending = panel().querySelector('.understanding-thread[aria-busy="true"]');
-    expect(pending?.textContent).toContain('↳ Why buffer first?');
+    // Where the answer will land shows at the card's foot and in the outline.
+    expect(panel().querySelector('.tour-deeper-pending')?.textContent).toContain(
+      'Why buffer first?',
+    );
+    expect(panel().querySelector('.tour-outline-pending')).not.toBeNull();
     const asks = vi.mocked(invoke).mock.calls.filter(([channel]) => channel === IPC.AskAboutCode);
     expect(asks).toHaveLength(2);
     expect(asks[1][1]?.purpose).toBe('understand');
@@ -275,20 +278,96 @@ describe('UnderstandingTourDialog', () => {
     channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
     channels[1].onmessage?.({ type: 'done', exitCode: 0 });
     await flush();
-    // The spine stays put: same card, same counter, answer cards below it.
+    // The answer is a card of its own, under the card it was asked on.
     expect(progressText()).toContain('3 / 4');
-    expect(panel().textContent).toContain('Second card');
-    const threads = panel().querySelectorAll('.understanding-thread');
-    expect(threads).toHaveLength(1);
-    expect(threads[0].getAttribute('aria-busy')).toBeNull();
-    expect(threads[0].textContent).toContain('↳ Why buffer first?');
-    expect(threads[0].querySelectorAll('.understanding-card')).toHaveLength(2);
-    expect(threads[0].textContent).toContain('Deep one');
-    // The thread belongs to its card: gone on the next card, back on return.
+    expect(panel().querySelector('.understanding-card-title')?.textContent).toBe('Deep one');
+    expect(panel().querySelector('.understanding-crumb')?.textContent).toBe('↳ Why buffer first?');
+    const outline = () =>
+      [...panel().querySelectorAll('.understanding-aside .tour-outline-link')].map(
+        (link) => link.textContent,
+      );
+    expect(outline()).toEqual([
+      'Gist title',
+      'First card',
+      'Second card',
+      'Deep one',
+      'Deep two',
+      'Third card',
+    ]);
+    expect(
+      panel().querySelector('.understanding-aside [aria-current="location"]')?.textContent,
+    ).toBe('Deep one');
     clickIcon('Next card');
-    expect(panel().querySelector('.understanding-thread')).toBeNull();
-    clickIcon('Previous card');
-    expect(panel().querySelectorAll('.understanding-thread')).toHaveLength(1);
+    expect(panel().querySelector('.understanding-card-title')?.textContent).toBe('Deep two');
+    // The crumb leads back to the card the answer belongs to, which lists it.
+    panel().querySelector<HTMLButtonElement>('.understanding-crumb button')?.click();
+    expect(panel().querySelector('.understanding-card-title')?.textContent).toBe('Second card');
+    expect(panel().querySelector('.understanding-crumb button')).toBeNull();
+    const links = [...panel().querySelectorAll<HTMLButtonElement>('.tour-deeper-link')];
+    expect(links.map((link) => link.textContent)).toEqual(['Deep one›', 'Deep two›']);
+    links[1].click();
+    expect(panel().querySelector('.understanding-card-title')?.textContent).toBe('Deep two');
+  });
+
+  it('goes into answers with the down arrow and back out with the up arrow', async () => {
+    const { tour } = await mountWithTour();
+    clickIcon('Next card');
+    clickIcon('Go deeper');
+    await flush();
+    channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
+    channels[1].onmessage?.({ type: 'done', exitCode: 0 });
+    await flush();
+    const key = (name: string) =>
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true }));
+    expect(tour.currentNode()?.card.title).toBe('Deep one');
+    expect(panel().querySelector('.understanding-crumb')?.textContent).toBe('↳ Deeper: First card');
+    key('ArrowUp');
+    expect(tour.currentNode()?.card.title).toBe('First card');
+    key('ArrowUp');
+    expect(tour.currentNode()?.card.title).toBe('First card');
+    key('ArrowDown');
+    expect(tour.currentNode()?.card.title).toBe('Deep one');
+    key('ArrowRight');
+    key('ArrowRight');
+    // Past the last answer, reading carries on with the next card of the tour.
+    expect(tour.currentNode()?.card.title).toBe('Second card');
+  });
+
+  it('digs into one point of a slide and then opens that answer', async () => {
+    const { tour } = await mountWithTour(
+      JSON.stringify({
+        gist: card({ body: '', points: ['Buffers flush on a timer', 'One message per flush'] }),
+        cards: [card({ title: 'Next step' })],
+      }),
+    );
+    const dig = () => [...panel().querySelectorAll<HTMLButtonElement>('.understanding-point-dig')];
+    expect(dig().map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Go deeper on: Buffers flush on a timer',
+      'Go deeper on: One message per flush',
+    ]);
+    dig()[0].click();
+    await flush();
+    const asks = vi.mocked(invoke).mock.calls.filter(([channel]) => channel === IPC.AskAboutCode);
+    expect(String(asks[1][1]?.prompt)).toContain(
+      JSON.stringify('Go deeper on this point: Buffers flush on a timer'),
+    );
+    // One question at a time: the other point waits.
+    expect(dig()[1].disabled).toBe(true);
+    channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
+    channels[1].onmessage?.({ type: 'done', exitCode: 0 });
+    await flush();
+    expect(panel().querySelector('.understanding-crumb')?.textContent).toBe(
+      '↳ Buffers flush on a timer',
+    );
+    tour.leave();
+    expect(dig()[0].getAttribute('aria-label')).toBe(
+      'Open the answer on: Buffers flush on a timer',
+    );
+    expect(dig()[0].closest('li')?.hasAttribute('data-open')).toBe(true);
+    dig()[0].click();
+    await flush();
+    expect(asks).toHaveLength(2);
+    expect(tour.currentNode()?.card.title).toBe('Deep one');
   });
 
   it('explores a suggested question once and keeps its answer on the source card', async () => {
@@ -310,17 +389,17 @@ describe('UnderstandingTourDialog', () => {
     expect(suggestions().every((button) => button.disabled)).toBe(true);
     clickIcon('Next card');
     expect(suggestions()[0].disabled).toBe(true);
-    expect(panel().querySelector('.understanding-thread')).toBeNull();
+    expect(panel().querySelector('.tour-deeper')).toBeNull();
     channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
     channels[1].onmessage?.({ type: 'done', exitCode: 0 });
     await flush();
+    // The reader moved on, so the answer waits under its card instead.
+    expect(panel().querySelector('.understanding-card-title')?.textContent).toBe('Next step');
     expect(suggestions()[0].disabled).toBe(false);
     clickIcon('Previous card');
     expect(suggestions().map((button) => button.textContent)).toEqual(['↳Why flush on a timer?']);
-    expect(panel().querySelector('.understanding-thread')?.getAttribute('aria-label')).toBe(
-      question,
-    );
-    expect(panel().querySelector('.understanding-thread')?.textContent).toContain('Deep one');
+    expect(panel().querySelector('.tour-deeper')?.textContent).toContain('Deep one');
+    expect(panel().querySelector('.tour-deeper-link')?.getAttribute('title')).toBe(question);
   });
 
   it('keeps the waiting question under its own card while the reader moves on', async () => {
@@ -331,19 +410,18 @@ describe('UnderstandingTourDialog', () => {
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     await flush();
-    expect(panel().querySelector('.understanding-thread[aria-busy="true"]')).not.toBeNull();
+    expect(panel().querySelector('.tour-deeper-pending')).not.toBeNull();
     clickIcon('Next card');
-    expect(panel().querySelector('.understanding-thread')).toBeNull();
+    expect(panel().querySelector('.tour-deeper')).toBeNull();
     channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
     channels[1].onmessage?.({ type: 'done', exitCode: 0 });
     await flush();
     // The answer belongs to the card it was asked from, so this card stays bare.
-    expect(panel().querySelector('.understanding-thread')).toBeNull();
+    expect(panel().querySelector('.tour-deeper')).toBeNull();
     clickIcon('Previous card');
-    const threads = panel().querySelectorAll('.understanding-thread');
-    expect(threads).toHaveLength(1);
-    expect(threads[0].textContent).toContain('↳ Why buffer first?');
-    expect(threads[0].textContent).toContain('Deep one');
+    const links = [...panel().querySelectorAll('.tour-deeper-link')];
+    expect(links).toHaveLength(2);
+    expect(links[0].textContent).toContain('Deep one');
   });
 
   it('offers Cancel only on the card whose question is in flight', async () => {
@@ -400,15 +478,45 @@ describe('UnderstandingTourDialog', () => {
     expect(panel().textContent).toContain('Third card');
   });
 
-  it('shows every card title in the overview and opens the one picked', async () => {
+  it('shows the outline in place of the card and opens the one picked', async () => {
     await mountWithTour();
-    clickIcon('Show overview');
-    const items = [...panel().querySelectorAll('.understanding-overview li')];
-    expect(items).toHaveLength(4);
-    expect(items[0].textContent).toContain('Gist title');
-    items[3].querySelector('button')?.click();
-    expect(panel().querySelector('.understanding-overview')).toBeNull();
+    clickIcon('Show outline');
+    const links = [
+      ...panel().querySelectorAll<HTMLButtonElement>(
+        '.understanding-outline-card .tour-outline-link',
+      ),
+    ];
+    expect(links.map((link) => link.textContent)).toEqual([
+      'Gist title',
+      'First card',
+      'Second card',
+      'Third card',
+    ]);
+    links[3].click();
+    expect(panel().querySelector('.understanding-outline-card')).toBeNull();
     expect(progressText()).toContain('4 / 4');
+  });
+
+  it('opens a card from the outline beside it and folds branches on request', async () => {
+    const { tour } = await mountWithTour();
+    clickIcon('Next card');
+    clickIcon('Go deeper');
+    await flush();
+    channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
+    channels[1].onmessage?.({ type: 'done', exitCode: 0 });
+    await flush();
+    const aside = () => panel().querySelector('.understanding-aside');
+    const titles = () =>
+      [...(aside()?.querySelectorAll('.tour-outline-link') ?? [])].map((link) => link.textContent);
+    // Away from the branch, it folds; its twisty opens it again.
+    clickIcon('Card 4 of 4: Third card');
+    expect(titles()).toEqual(['Gist title', 'First card', 'Second card', 'Third card']);
+    aside()?.querySelector<HTMLButtonElement>('[aria-label="Expand First card"]')?.click();
+    expect(titles()).toContain('Deep two');
+    [...(aside()?.querySelectorAll<HTMLButtonElement>('.tour-outline-link') ?? [])]
+      .find((link) => link.textContent === 'Deep two')
+      ?.click();
+    expect(tour.currentNode()?.card.title).toBe('Deep two');
   });
 
   it('marks the progress segment of a card that has answers', async () => {
@@ -446,7 +554,8 @@ describe('UnderstandingTourDialog', () => {
     await flush();
     const markdown = String(writeText.mock.calls[0]?.[0 as never]);
     expect(markdown).toContain('# Tour: output buffering');
-    expect(markdown).toContain('## 4. Third card');
+    expect(markdown).toContain('\n## Third card\n');
+    expect(markdown).not.toContain('parallel-code-tour');
     expect(iconButton('Tour copied')).toBeDefined();
   });
 
@@ -514,7 +623,7 @@ describe('UnderstandingTourDialog', () => {
     channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
     channels[1].onmessage?.({ type: 'done', exitCode: 0 });
     await flush();
-    expect(tour.threads()).toHaveLength(0);
+    expect(tour.tree()[1].children).toHaveLength(0);
     expect(panel().textContent).toContain('First card');
   });
 

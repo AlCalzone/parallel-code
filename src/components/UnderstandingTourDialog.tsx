@@ -13,21 +13,23 @@ import {
 import { TourAskBar } from './understanding/TourAskBar';
 import { TourCard } from './understanding/TourCard';
 import { TourCopyButton } from './understanding/TourCopyButton';
+import { TourDeeper, questionLabel } from './understanding/TourDeeper';
 import { TourIconButton } from './understanding/TourIconButton';
-import { TourOverview } from './understanding/TourOverview';
+import { TourOutline } from './understanding/TourOutline';
 import { TourProgress } from './understanding/TourProgress';
 import { TourReworkBar } from './understanding/TourReworkBar';
-import { TourThreads } from './understanding/TourThreads';
-import { tourMarkdown } from '../lib/tour-markdown';
+import { serializeTour } from '../lib/tour-file';
+import { questionPoint } from '../lib/tour-tree';
 import type { UnderstandingTourController } from '../lib/create-understanding-tour';
 import type { TourRef } from '../lib/understanding-tour';
 import { errMessage, warn as logWarn } from '../lib/log';
 import { openFileInEditor } from '../lib/shell';
-import { TOUR_KEYS, isTypingTarget } from '../lib/tour-keys';
+import { isTypingTarget } from '../lib/tour-keys';
 import { store } from '../store/store';
 
 /** The panel is only a layout box here: the card inside it is the one surface. */
 const PANEL_STYLE = {
+  width: 'auto',
   padding: '0',
   gap: '0',
   background: 'transparent',
@@ -45,7 +47,11 @@ const OVERLAY_STYLE = {
 /** Three lines standing in for the card that is still generating. */
 const SKELETON_WIDTHS = ['100%', '92%', '64%'];
 
-/** Viewer for a generated understanding tour: the spine and one branch level. */
+/**
+ * Viewer for a generated understanding tour: one card at a time, with the
+ * tour's outline beside it when the window has room. Answers to the reader's
+ * questions become cards under the card they were asked on.
+ */
 export function UnderstandingTourDialog(props: {
   tour: UnderstandingTourController;
   open: boolean;
@@ -58,28 +64,30 @@ export function UnderstandingTourDialog(props: {
   /** The action the reader is most likely to press next; see the focus effect. */
   let primaryRef: HTMLButtonElement | undefined;
   const controller = () => props.tour;
-  /** The scrolling column of the current card and the threads under it. */
-  let stageRef: HTMLDivElement | undefined;
   const tour = () => props.tour.tour();
-  const cards = () => tour()?.cards ?? [];
-  const spineCard = () => cards()[props.tour.step()];
-  const onLastCard = () => props.tour.step() >= cards().length - 1;
-  /** Answered follow-ups under the card on screen. */
-  const threads = () => props.tour.threadsFor(props.tour.step());
-  /** Spine cards with at least one answered follow-up, for the progress markers. */
-  const answered = () => new Set(props.tour.threads().map((thread) => thread.fromIndex));
+  const roots = () => props.tour.tree();
+  const node = () => props.tour.currentNode();
+  const parent = () => props.tour.trail().at(-2);
+  const onLastCard = () => !props.tour.hasNext();
+  /** Tour cards with answers under them, for the progress markers. */
+  const answered = () =>
+    new Set(roots().flatMap((root, index) => (root.children.length > 0 ? [index] : [])));
   const [reworking, setReworking] = createSignal(false);
   const [overview, setOverview] = createSignal(false);
   /** The finished tour on screen, when there is one to copy or rework. */
   const shownTour = () => (props.tour.loading() ? null : tour());
 
   function markdown(): string {
-    return tourMarkdown({
-      title: `Tour: ${props.tour.subject()}`,
-      cards: cards(),
-      threads: props.tour.threads(),
-      omitted: tour()?.omitted,
-    });
+    const shown = tour();
+    return serializeTour(
+      {
+        subject: props.tour.subject(),
+        kind: shown?.kind ?? 'agent',
+        omitted: shown?.omitted,
+        roots: roots(),
+      },
+      { forFile: false },
+    );
   }
 
   function rework(instructions: string): void {
@@ -96,25 +104,11 @@ export function UnderstandingTourDialog(props: {
   // Moving to a card, from the overview or otherwise, shows that card.
   createEffect(
     on(
-      () => props.tour.step(),
+      () => props.tour.currentId(),
       () => setOverview(false),
       { defer: true },
     ),
   );
-
-  // A new answer (or the question waiting for one) appears below the card, so
-  // bring it into view. Arriving at a card that already has threads must not
-  // scroll: the card itself is what the reader came for.
-  let seen = { step: -1, count: 0 };
-  createEffect(() => {
-    const step = props.tour.step();
-    const count = threads().length + (props.tour.pendingQuestion() ? 1 : 0);
-    const grew = step === seen.step && count > seen.count;
-    seen = { step, count };
-    if (!grew) return;
-    const last = stageRef?.querySelector('.understanding-thread:last-child');
-    last?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  });
 
   function openRef(ref: TourRef): void {
     const at = { line: ref.line, editorCommand: store.editorCommand.trim() };
@@ -123,13 +117,53 @@ export function UnderstandingTourDialog(props: {
     );
   }
 
-  /** Arrow keys step, Home and End jump to the gist and the bottom line, except while typing. */
+  /** Digs into one point, or opens the answer it already has. */
+  function onPoint(point: string): void {
+    const answer = node()?.children.find((child) => questionPoint(child.question) === point);
+    if (answer) controller().select(answer.id);
+    else controller().goDeeperOn(point);
+  }
+
+  function hasPointAnswer(point: string): boolean {
+    return node()?.children.some((child) => questionPoint(child.question) === point) ?? false;
+  }
+
+  /**
+   * Left and right step through the cards at one level; down enters the
+   * answers under a card and up leaves them. Down and up keep scrolling a
+   * long card where there is nowhere to go. Returns whether the key moved.
+   */
+  function move(key: string): boolean {
+    switch (key) {
+      case 'ArrowLeft':
+        controller().previous();
+        return true;
+      case 'ArrowRight':
+        controller().next();
+        return true;
+      case 'ArrowDown':
+        if (!node()?.children.length) return false;
+        controller().enter();
+        return true;
+      case 'ArrowUp':
+        if (!parent()) return false;
+        controller().leave();
+        return true;
+      case 'Home':
+        controller().navigate(0);
+        return true;
+      case 'End':
+        controller().navigate(roots().length - 1);
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /** Never while typing: the keys move the caret there. */
   function onKeyDown(event: KeyboardEvent): void {
-    const move = TOUR_KEYS[event.key];
-    if (!move || isTypingTarget(event.target) || !tour()) return;
-    event.preventDefault();
-    const last = cards().length - 1;
-    props.tour.navigate(move(props.tour.step(), last));
+    if (isTypingTarget(event.target) || !tour()) return;
+    if (move(event.key)) event.preventDefault();
   }
 
   // Reading means clicking on the card, which hands focus to the dialog panel
@@ -141,21 +175,63 @@ export function UnderstandingTourDialog(props: {
     onCleanup(() => document.removeEventListener('keydown', onKeyDown));
   });
 
-  /**
-   * The ask affordance and the follow-up controls shared by spine and branch.
-   * Only the card the question came from shows it in flight, so the Cancel next
-   * to it always belongs to the request it aborts. Every card's input stays
-   * disabled meanwhile: one question is answered at a time.
-   */
-  function askBar() {
+  function outline() {
     return (
-      <TourAskBar
-        disabled={props.tour.asking()}
-        asking={props.tour.pendingQuestion() !== ''}
-        onAsk={(question) => void controller().ask(question)}
-        onGoDeeper={() => controller().goDeeper()}
-        onCancel={() => controller().cancel()}
+      <TourOutline
+        roots={roots()}
+        currentId={props.tour.currentId()}
+        pending={props.tour.pending()}
+        onSelect={(id) => controller().select(id)}
       />
+    );
+  }
+
+  /**
+   * The card on screen, under a line that is always laid out, so a tour card
+   * and an answer start at the same height. On an answer the line names the
+   * question and leads back to the card it answers.
+   */
+  function CardView() {
+    const blocked = () => props.tour.asking() || !props.tour.canAsk();
+    return (
+      <Show when={node()}>
+        {(current) => (
+          <>
+            <p class="understanding-crumb">
+              <Show when={parent()}>
+                {(above) => (
+                  <button
+                    type="button"
+                    title={`Back to: ${above().card.title}`}
+                    onClick={() => controller().leave()}
+                  >
+                    ↳ {questionLabel(current().question ?? '', above().card.title)}
+                  </button>
+                )}
+              </Show>
+            </p>
+            <TourCard
+              card={current().card}
+              onOpenRef={openRef}
+              onAsk={(question) => void controller().ask(question)}
+              asking={blocked()}
+              answeredQuestions={current().children.flatMap((child) =>
+                child.question === undefined ? [] : [child.question],
+              )}
+              omitted={roots().at(-1)?.id === current().id ? tour()?.omitted : undefined}
+              points={{ open: hasPointAnswer, disabled: blocked(), onPoint }}
+              deeper={
+                <TourDeeper
+                  answers={current().children}
+                  pendingQuestion={props.tour.pendingQuestion()}
+                  parentTitle={current().card.title}
+                  onSelect={(id) => controller().select(id)}
+                />
+              }
+            />
+          </>
+        )}
+      </Show>
     );
   }
 
@@ -171,199 +247,191 @@ export function UnderstandingTourDialog(props: {
     <Dialog
       open={props.open}
       onClose={props.onClose}
-      width="620px"
       zIndex={props.zIndex}
       panelStyle={PANEL_STYLE}
       overlayStyle={OVERLAY_STYLE}
       labelledBy={headingId}
     >
       <div class="understanding-dialog">
-        {/* No visible header: the card carries every word the reader needs. The
-            heading exists so the dialog still has an accessible name. */}
-        <h1 id={headingId} class="dialog-sr-only">
-          Understanding tour of {props.tour.subject()}
-        </h1>
+        <div class="understanding-main">
+          {/* No visible header: the card carries every word the reader needs. The
+              heading exists so the dialog still has an accessible name. */}
+          <h1 id={headingId} class="dialog-sr-only">
+            Understanding tour of {props.tour.subject()}
+          </h1>
 
-        <div class="understanding-top">
-          <Show
-            when={!props.tour.loading() && tour()}
-            fallback={<span class="understanding-footer-fill" />}
-          >
-            <TourProgress
-              subject={props.tour.subject()}
-              titles={cards().map((card) => card.title)}
-              current={props.tour.step()}
-              onSelect={(index) => controller().navigate(index)}
-              answered={answered()}
-            />
-          </Show>
-          <Show when={shownTour()}>
-            <TourIconButton
-              label={overview() ? 'Hide overview' : 'Show overview'}
-              tooltip="All cards at a glance"
-              onClick={() => setOverview((open) => !open)}
+          <div class="understanding-top">
+            <Show
+              when={!props.tour.loading() && tour()}
+              fallback={<span class="understanding-footer-fill" />}
             >
-              <ListIcon size={14} />
-            </TourIconButton>
-            <TourCopyButton markdown={markdown} />
-            <TourIconButton
-              label="Rework tour"
-              tooltip="Rework tour with your own instructions"
-              onClick={() => setReworking((open) => !open)}
-            >
-              <PencilIcon size={14} />
-            </TourIconButton>
-          </Show>
-          {closeButton()}
-        </div>
-
-        <Show when={reworking() && shownTour()}>
-          <TourReworkBar onSubmit={rework} onCancel={() => setReworking(false)} />
-        </Show>
-
-        <Show when={shownTour() && props.tour.stale()}>
-          <div class="understanding-notice" role="status">
-            <span>This file changed after the tour was made.</span>
-            <button
-              type="button"
-              class="understanding-notice-action btn-with-icon"
-              onClick={() => controller().retry()}
-            >
-              <SyncIcon size={12} />
-              Regenerate
-            </button>
+              <TourProgress
+                subject={props.tour.subject()}
+                titles={roots().map((root) => root.card.title)}
+                current={props.tour.step()}
+                onSelect={(index) => controller().navigate(index)}
+                answered={answered()}
+              />
+            </Show>
+            <Show when={shownTour()}>
+              {/* The outline stands beside the card where the window has room;
+                  this shows it in the card's place where it has not. */}
+              <TourIconButton
+                class="understanding-outline-toggle"
+                label={overview() ? 'Hide outline' : 'Show outline'}
+                tooltip="All cards at a glance"
+                onClick={() => setOverview((open) => !open)}
+              >
+                <ListIcon size={14} />
+              </TourIconButton>
+              <TourCopyButton markdown={markdown} />
+              <TourIconButton
+                label="Rework tour"
+                tooltip="Rework tour with your own instructions"
+                onClick={() => setReworking((open) => !open)}
+              >
+                <PencilIcon size={14} />
+              </TourIconButton>
+            </Show>
+            {closeButton()}
           </div>
-        </Show>
 
-        <Show when={props.tour.loading()}>
-          <div class="understanding-stage" aria-busy="true">
-            <div class="understanding-card understanding-card--message">
-              <p class="understanding-status">
-                <span class="inline-spinner" aria-hidden="true" />
-                {props.tour.progress()}
-              </p>
-              <p role="status" class="understanding-substatus">
-                {props.tour.receiving() ? 'Receiving response' : 'Waiting for provider'} ·{' '}
-                {props.tour.elapsedSeconds()}s
-              </p>
-              <div class="understanding-skeleton" aria-hidden="true">
-                <For each={SKELETON_WIDTHS}>{(width) => <span style={{ width }} />}</For>
+          <Show when={reworking() && shownTour()}>
+            <TourReworkBar onSubmit={rework} onCancel={() => setReworking(false)} />
+          </Show>
+
+          <Show when={shownTour() && props.tour.stale()}>
+            <div class="understanding-notice" role="status">
+              <span>This file changed after the tour was made.</span>
+              <button
+                type="button"
+                class="understanding-notice-action btn-with-icon"
+                onClick={() => controller().retry()}
+              >
+                <SyncIcon size={12} />
+                Regenerate
+              </button>
+            </div>
+          </Show>
+
+          <Show when={props.tour.loading()}>
+            <div class="understanding-stage" aria-busy="true">
+              <div class="understanding-card understanding-card--message">
+                <p class="understanding-status">
+                  <span class="inline-spinner" aria-hidden="true" />
+                  {props.tour.progress()}
+                </p>
+                <p role="status" class="understanding-substatus">
+                  {props.tour.receiving() ? 'Receiving response' : 'Waiting for provider'} ·{' '}
+                  {props.tour.elapsedSeconds()}s
+                </p>
+                <div class="understanding-skeleton" aria-hidden="true">
+                  <For each={SKELETON_WIDTHS}>{(width) => <span style={{ width }} />}</For>
+                </div>
               </div>
             </div>
-          </div>
-          <div class="understanding-footer">
-            <span class="understanding-footer-fill" />
-            <TourIconButton
-              label="Cancel generation"
-              tooltip="Cancel generation"
-              onClick={() => controller().cancel()}
-            >
-              <CloseIcon size={14} />
-            </TourIconButton>
-          </div>
-        </Show>
-
-        <Show when={!tour() && !props.tour.loading()}>
-          <div class="understanding-stage understanding-stage--message">
-            <div class="understanding-card understanding-card--message">
-              <Show
-                when={props.tour.error()}
-                fallback={<p class="understanding-status">Generation cancelled.</p>}
-              >
-                {(message) => (
-                  <p role="alert" class="understanding-alert">
-                    {message()}
-                  </p>
-                )}
-              </Show>
-            </div>
-          </div>
-          {/* Cancelling was deliberate, so only a failure offers another attempt. */}
-          <Show when={props.tour.error()}>
             <div class="understanding-footer">
               <span class="understanding-footer-fill" />
               <TourIconButton
-                primary
-                label="Retry"
-                tooltip="Retry"
-                onClick={() => controller().retry()}
+                label="Cancel generation"
+                tooltip="Cancel generation"
+                onClick={() => controller().cancel()}
               >
-                <RedoIcon />
+                <CloseIcon size={14} />
               </TourIconButton>
             </div>
           </Show>
-        </Show>
 
-        {/* A failed follow-up keeps the tour on screen, so its message sits above the card. */}
-        <Show when={tour() && !props.tour.loading() ? props.tour.error() : ''}>
-          {(message) => (
-            <div class="understanding-alert-row">
-              <p role="alert" class="understanding-alert">
-                {message()}
-              </p>
-            </div>
-          )}
-        </Show>
-
-        <Show when={spineCard()}>
-          {(card) => (
-            <>
-              <div class="understanding-stage understanding-stage--thread" ref={stageRef}>
+          <Show when={!tour() && !props.tour.loading()}>
+            <div class="understanding-stage understanding-stage--message">
+              <div class="understanding-card understanding-card--message">
                 <Show
-                  when={overview()}
-                  fallback={
-                    <>
-                      <TourCard
-                        card={card()}
-                        onOpenRef={openRef}
-                        onAsk={(question) => void controller().ask(question)}
-                        asking={props.tour.asking()}
-                        answeredQuestions={threads().map((thread) => thread.question)}
-                        omitted={onLastCard() ? tour()?.omitted : undefined}
-                      />
-                      {/* Every question asked here stays, in the order asked, under the card. */}
-                      <TourThreads
-                        threads={threads()}
-                        pendingQuestion={props.tour.pendingQuestion()}
-                        onOpenRef={openRef}
-                      />
-                    </>
-                  }
+                  when={props.tour.error()}
+                  fallback={<p class="understanding-status">Generation cancelled.</p>}
                 >
-                  <TourOverview
-                    cards={cards()}
-                    current={props.tour.step()}
-                    onSelect={(index) => {
-                      setOverview(false);
-                      controller().navigate(index);
-                    }}
-                  />
+                  {(message) => (
+                    <p role="alert" class="understanding-alert">
+                      {message()}
+                    </p>
+                  )}
                 </Show>
               </div>
+            </div>
+            {/* Cancelling was deliberate, so only a failure offers another attempt. */}
+            <Show when={props.tour.error()}>
               <div class="understanding-footer">
-                <TourIconButton
-                  label="Previous card"
-                  tooltip="Previous card"
-                  disabled={props.tour.step() === 0}
-                  onClick={() => controller().previous()}
-                >
-                  <ChevronLeftIcon />
-                </TourIconButton>
-                {askBar()}
+                <span class="understanding-footer-fill" />
                 <TourIconButton
                   primary
-                  ref={(element) => (primaryRef = element)}
-                  label={onLastCard() ? 'Finish tour' : 'Next card'}
-                  tooltip={onLastCard() ? 'Finish' : 'Next card · Arrow keys navigate'}
-                  onClick={() => (onLastCard() ? props.onClose() : controller().next())}
+                  label="Retry"
+                  tooltip="Retry"
+                  onClick={() => controller().retry()}
                 >
-                  <Show when={onLastCard()} fallback={<ChevronRightIcon />}>
-                    <CheckIcon />
-                  </Show>
+                  <RedoIcon />
                 </TourIconButton>
               </div>
-            </>
-          )}
+            </Show>
+          </Show>
+
+          {/* A failed follow-up keeps the tour on screen, so its message sits above the card. */}
+          <Show when={tour() && !props.tour.loading() ? props.tour.error() : ''}>
+            {(message) => (
+              <div class="understanding-alert-row">
+                <p role="alert" class="understanding-alert">
+                  {message()}
+                </p>
+              </div>
+            )}
+          </Show>
+
+          <Show when={!props.tour.loading() && node()}>
+            <div class="understanding-stage">
+              <Show
+                when={overview()}
+                fallback={
+                  // A fresh card per card, so it opens scrolled to the top with
+                  // its notes closed; the footer stays and keeps its focus.
+                  <Show when={props.tour.currentId()} keyed>
+                    {(_id) => <CardView />}
+                  </Show>
+                }
+              >
+                <div class="understanding-card understanding-outline-card">{outline()}</div>
+              </Show>
+            </div>
+            <div class="understanding-footer">
+              <TourIconButton
+                label="Previous card"
+                tooltip="Previous card · ↑ ↓ go into and out of answers"
+                disabled={!props.tour.hasPrevious()}
+                onClick={() => controller().previous()}
+              >
+                <ChevronLeftIcon />
+              </TourIconButton>
+              <TourAskBar
+                disabled={props.tour.asking() || !props.tour.canAsk()}
+                asking={props.tour.pendingQuestion() !== ''}
+                onAsk={(question) => void controller().ask(question)}
+                onGoDeeper={() => controller().goDeeper()}
+                onCancel={() => controller().cancel()}
+              />
+              <TourIconButton
+                primary
+                ref={(element) => (primaryRef = element)}
+                label={onLastCard() ? 'Finish tour' : 'Next card'}
+                tooltip={onLastCard() ? 'Finish' : 'Next card · Arrow keys navigate'}
+                onClick={() => (onLastCard() ? props.onClose() : controller().next())}
+              >
+                <Show when={onLastCard()} fallback={<ChevronRightIcon />}>
+                  <CheckIcon />
+                </Show>
+              </TourIconButton>
+            </div>
+          </Show>
+        </div>
+
+        <Show when={!props.tour.loading() && node()}>
+          <aside class="understanding-aside">{outline()}</aside>
         </Show>
       </div>
     </Dialog>

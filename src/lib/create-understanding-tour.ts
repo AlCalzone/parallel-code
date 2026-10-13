@@ -1,8 +1,9 @@
 /**
  * Controller for guided understanding tours: plan tours, file tours and tours
  * the coding agent publishes through MCP.
- * Owns generation, the follow-up threads under each card and navigation; the
- * tour lives in renderer memory only. See docs/guided-understanding-plan.md.
+ * Owns generation, the tree of follow-up answers under each card and the
+ * navigation through it; the tour lives in renderer memory only.
+ * See docs/guided-understanding-plan.md.
  */
 
 import { createSignal, onCleanup } from 'solid-js';
@@ -26,10 +27,22 @@ import {
   parseTourBranch,
   parseUnderstandingTour,
   type FileTourContext,
-  type TourBranch,
   type UnderstandingTour,
   type UnderstandingTourKind,
 } from './understanding-tour';
+import {
+  MAX_TOUR_DEPTH,
+  appendChildren,
+  createNodeIds,
+  findNode,
+  nextNodeId,
+  nodeTrail,
+  nodesFromCards,
+  pointQuestion,
+  previousNodeId,
+  rootIndexOf,
+  type TourNode,
+} from './tour-tree';
 
 /**
  * Subject of a plan tour. The entry-point button compares it with the running
@@ -97,8 +110,25 @@ interface CachedTour {
   context: string;
   cwd: string;
   input: UnderstandingTourInput;
-  /** Answered follow-ups, so reopening the tour keeps them under their cards. */
-  threads: TourBranch[];
+  /** The cards with every answered follow-up under them, so reopening keeps them. */
+  tree: TourNode[];
+}
+
+/** The tour's own cards as the roots of a fresh tree. */
+function treeOf(tour: UnderstandingTour): TourNode[] {
+  return nodesFromCards(tour.cards, createNodeIds());
+}
+
+/** The answers under one card, grouped by the question each answered, oldest first. */
+function answersUnder(node: TourNode): { question: string; cards: UnderstandingTour['cards'] }[] {
+  const groups: { question: string; cards: UnderstandingTour['cards'] }[] = [];
+  for (const child of node.children) {
+    if (child.question === undefined) continue;
+    const last = groups.at(-1);
+    if (last?.question === child.question) last.cards.push(child.card);
+    else groups.push({ question: child.question, cards: [child.card] });
+  }
+  return groups;
 }
 
 function cacheKey(kind: UnderstandingTourKind, subject: string): string {
@@ -122,11 +152,12 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
   const [tour, setTour] = createSignal<UnderstandingTour | null>(null);
   const [kind, setKind] = createSignal<UnderstandingTourKind | null>(null);
   const [subject, setSubject] = createSignal('');
-  const [step, setStep] = createSignal(0);
-  // Every answered follow-up, in the order asked; each remembers its card.
-  const [threads, setThreads] = createSignal<TourBranch[]>([]);
-  /** The question in flight and the card it was asked from, or null when idle. */
-  const [pending, setPending] = createSignal<{ question: string; fromIndex: number } | null>(null);
+  /** The tour's cards with every answered follow-up nested under its card. */
+  const [tree, setTree] = createSignal<TourNode[]>([]);
+  /** The card on screen; empty while there is no tour. */
+  const [currentId, setCurrentId] = createSignal('');
+  /** The question in flight and the card it was asked on, or null when idle. */
+  const [pending, setPending] = createSignal<{ question: string; nodeId: string } | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [asking, setAsking] = createSignal(false);
   const [error, setError] = createSignal('');
@@ -160,8 +191,8 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
   /** Clears what is on screen; finished tours stay in the cache. */
   function clearView(): void {
     setTour(null);
-    setStep(0);
-    setThreads([]);
+    setTree([]);
+    setCurrentId('');
     setError('');
     setElapsedSeconds(0);
     setReceiving(false);
@@ -182,13 +213,20 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
   onCleanup(cancel);
 
   /**
-   * Reports a failure. A follow-up's belongs to the card it was asked from, so
+   * Reports a failure. A follow-up's belongs to the card it was asked on, so
    * once the reader has moved on it is dropped — the same as navigating away
    * from a failed ask. A tour-level failure passes no card and always shows.
    */
-  function reportError(message: string, fromIndex?: number): void {
-    if (fromIndex !== undefined && fromIndex !== step()) return;
+  function reportError(message: string, nodeId?: string): void {
+    if (nodeId !== undefined && nodeId !== currentId()) return;
     setError(message);
+  }
+
+  /** Puts a tour and its tree on screen, opening on the gist. */
+  function show(shown: UnderstandingTour, shownTree: TourNode[]): void {
+    setTour(shown);
+    setTree(shownTree);
+    setCurrentId(shownTree[0]?.id ?? '');
   }
 
   /**
@@ -199,8 +237,8 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     prompt: string;
     request: UnderstandingRequestKind;
     active: number;
-    /** The card a follow-up was asked from; its provider errors belong there. */
-    fromIndex?: number;
+    /** The card a follow-up was asked on; its provider errors belong there. */
+    nodeId?: string;
   }): Promise<string | undefined> {
     const { active } = options;
     const handle = startUnderstandingRequest({
@@ -214,7 +252,7 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
         if (active === token) setReceiving(true);
       },
       onProviderError: (message) => {
-        if (active === token) reportError(message, options.fromIndex);
+        if (active === token) reportError(message, options.nodeId);
       },
     });
     request = handle;
@@ -301,17 +339,17 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
         parseUnderstandingTour(text, input.kind, tourSubject),
         built.context,
       );
+      const parsedTree = treeOf(parsed);
       setCache((prev) =>
         new Map(prev).set(cacheKey(input.kind, tourSubject), {
           tour: parsed,
           context: built.context,
           cwd: input.worktreePath,
           input,
-          threads: [],
+          tree: parsedTree,
         }),
       );
-      setTour(parsed);
-      setStep(0);
+      show(parsed, parsedTree);
       setError('');
       setLoading(false);
       setProgress('');
@@ -353,19 +391,19 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     context = tourContext;
     cwd = input.worktreePath;
     lastInput = cachedInput;
+    const publishedTree = treeOf(input.tour);
     setCache((prev) =>
       new Map(prev).set(cacheKey('agent', input.subject), {
         tour: input.tour,
         context: tourContext,
         cwd: input.worktreePath,
         input: cachedInput,
-        threads: [],
+        tree: publishedTree,
       }),
     );
     setKind('agent');
     setSubject(input.subject);
-    setTour(input.tour);
-    setStep(0);
+    show(input.tour, publishedTree);
     options.onReady?.(input.subject);
   }
 
@@ -396,8 +434,7 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
       lastInput = cached.input;
       setKind(tourKind);
       setSubject(tourSubject);
-      setTour(cached.tour);
-      setThreads(cached.threads);
+      show(cached.tour, cached.tree);
     }
     void checkFileFreshness(cached);
     return true;
@@ -452,74 +489,96 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     if (lastInput && instructions.trim()) void generate({ ...lastInput, instructions });
   }
 
-  /** The answered follow-ups under one spine card, oldest first. */
-  function threadsFor(index: number): TourBranch[] {
-    return threads().filter((thread) => thread.fromIndex === index);
+  /** The card on screen. */
+  function currentNode(): TourNode | undefined {
+    return findNode(tree(), currentId());
+  }
+
+  /** The card on screen and the cards above it, outermost first. */
+  function trail(): TourNode[] {
+    return nodeTrail(tree(), currentId());
+  }
+
+  /** Index of the tour card the reader is under, for the progress strip. */
+  function step(): number {
+    return Math.max(0, rootIndexOf(tree(), currentId()));
+  }
+
+  /** Answers nest one level per question, down to MAX_TOUR_DEPTH. */
+  function canAsk(): boolean {
+    const depth = trail().length;
+    return depth > 0 && depth < MAX_TOUR_DEPTH;
   }
 
   /**
    * The question waiting for an answer under the card on screen. The answer
-   * joins the thread of the card it was asked from, so no other card may show
-   * it waiting — it would vanish from there the moment the answer arrived.
+   * lands under the card it was asked on, so no other card may show it
+   * waiting — it would vanish from there the moment the answer arrived.
    */
   function pendingQuestion(): string {
     const inFlight = pending();
-    return inFlight && inFlight.fromIndex === step() ? inFlight.question : '';
+    return inFlight && inFlight.nodeId === currentId() ? inFlight.question : '';
   }
 
-  /** Keeps the cache entry of the tour on screen in step with its threads. */
-  function cacheThreads(nextThreads: TourBranch[]): void {
+  /** Keeps the cache entry of the tour on screen in step with its tree. */
+  function cacheTree(nextTree: TourNode[]): void {
     const tourKind = kind();
     if (!tourKind) return;
     const key = cacheKey(tourKind, subject());
     setCache((prev) => {
       const entry = prev.get(key);
-      return entry ? new Map(prev).set(key, { ...entry, threads: nextThreads }) : prev;
+      return entry ? new Map(prev).set(key, { ...entry, tree: nextTree }) : prev;
     });
   }
 
   /**
-   * Asks about the current card. The answer joins the thread under that card;
-   * earlier answers there are replayed so a second question builds on them.
+   * Asks about the card on screen. The answer's cards become its children,
+   * and a reader still on that card is taken into the first of them; earlier
+   * answers there are replayed so a second question builds on them.
    */
   async function ask(question: string): Promise<void> {
     const current = tour();
-    if (!current || !question.trim()) return;
+    const asked = currentNode();
+    if (!current || !asked || !question.trim() || !canAsk()) return;
     request?.cancel();
     const active = ++token;
-    const fromIndex = step();
+    const nodeId = asked.id;
+    const path = trail();
     setAsking(true);
-    setPending({ question, fromIndex });
+    setPending({ question, nodeId });
     setError('');
     setElapsedSeconds(0);
     setReceiving(false);
     try {
       const prompt = buildFollowUpPrompt({
         tour: current,
-        currentIndex: fromIndex,
+        currentIndex: rootIndexOf(tree(), nodeId),
+        path: path.slice(1).map((node) => node.card),
         question,
         context,
-        earlier: threadsFor(fromIndex),
+        earlier: answersUnder(asked),
       });
-      const text = await run({ prompt, request: 'follow-up', active, fromIndex });
+      const text = await run({ prompt, request: 'follow-up', active, nodeId });
       if (text === undefined) return;
       const branch = groundBranch(
-        parseTourBranch(text, fromIndex, question),
+        parseTourBranch(text, rootIndexOf(tree(), nodeId), question),
         current.kind,
         context,
       );
-      const nextThreads = [...threads(), branch];
-      setThreads(nextThreads);
-      cacheThreads(nextThreads);
+      const answers = nodesFromCards(branch.cards, createNodeIds(tree()), question);
+      const nextTree = appendChildren(tree(), nodeId, answers);
+      setTree(nextTree);
+      cacheTree(nextTree);
       setAsking(false);
       setPending(null);
       // Provider stderr can arrive even on a request that then succeeded.
       setError('');
+      if (currentId() === nodeId) setCurrentId(answers[0].id);
     } catch (cause) {
       if (active !== token) return;
       setAsking(false);
       setPending(null);
-      reportError(errMessage(cause), fromIndex);
+      reportError(errMessage(cause), nodeId);
     }
   }
 
@@ -527,35 +586,72 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     void ask(GO_DEEPER_QUESTION);
   }
 
-  /** A failed ask belonged to the card it was asked from, not to the next one. */
+  /** Digs into one point of the slide on screen. */
+  function goDeeperOn(point: string): void {
+    void ask(pointQuestion(point));
+  }
+
+  /** A failed ask belonged to the card it was asked on, not to the next one. */
   function clearError(): void {
     setError('');
   }
 
-  /** Clamped index into the spine. */
-  function navigate(index: number): void {
-    const total = tour()?.cards.length ?? 0;
-    if (total === 0) return;
+  /** Shows one card of the tree; an unknown id changes nothing. */
+  function select(id: string | undefined): void {
+    if (!id || !findNode(tree(), id) || id === currentId()) return;
     clearError();
-    setStep(Math.min(Math.max(index, 0), total - 1));
+    setCurrentId(id);
   }
 
+  /** Shows one of the tour's own cards, clamped to the first and last. */
+  function navigate(index: number): void {
+    const roots = tree();
+    if (roots.length === 0) return;
+    select(roots[Math.min(Math.max(index, 0), roots.length - 1)].id);
+  }
+
+  /** The next card at this level, climbing out after the last child. */
   function next(): void {
-    navigate(step() + 1);
+    select(nextNodeId(tree(), currentId()));
   }
 
+  /** The previous card at this level, or the parent from a first child. */
   function previous(): void {
-    navigate(step() - 1);
+    select(previousNodeId(tree(), currentId()));
+  }
+
+  /** Into the first answer under the card on screen. */
+  function enter(): void {
+    select(currentNode()?.children[0]?.id);
+  }
+
+  /** Back out to the card this one answers. */
+  function leave(): void {
+    const path = trail();
+    select(path.at(-2)?.id);
+  }
+
+  /** Whether next() has anywhere to go; the last card offers Finish instead. */
+  function hasNext(): boolean {
+    return nextNodeId(tree(), currentId()) !== undefined;
+  }
+
+  function hasPrevious(): boolean {
+    return previousNodeId(tree(), currentId()) !== undefined;
   }
 
   return {
     tour,
     kind,
     subject,
+    tree,
+    currentId,
+    currentNode,
+    trail,
     step,
-    threads,
-    threadsFor,
+    pending,
     pendingQuestion,
+    canAsk,
     loading,
     asking,
     error,
@@ -572,10 +668,16 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     retry,
     rework,
     navigate,
+    select,
     next,
     previous,
+    enter,
+    leave,
+    hasNext,
+    hasPrevious,
     ask,
     goDeeper,
+    goDeeperOn,
     cancel,
     reset,
   };

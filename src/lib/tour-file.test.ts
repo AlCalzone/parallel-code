@@ -1,0 +1,183 @@
+import { describe, expect, it } from 'vitest';
+import {
+  TOUR_FILE_MAX_CHARS,
+  isTourFilePath,
+  parseTourFile,
+  serializeTour,
+  tourFileName,
+  type TourFile,
+} from './tour-file';
+import type { TourNode } from './tour-tree';
+import type { TourCard } from './understanding-tour';
+
+const slide: TourCard = {
+  label: 'KEY DECISION',
+  title: 'Each task gets its own working copy',
+  body: '',
+  points: ['Edits never touch your checkout', 'One branch per task, like `task/x`'],
+  notes: 'Worktrees share one object store.\n\n# Not a heading\n\n```sh\n# a comment\n```',
+  tone: 'important',
+  questions: ['What about submodules?'],
+  refs: [{ filePath: 'electron/ipc/git.ts', line: 3, endLine: 9 }, { filePath: 'README.md' }],
+};
+const flow: TourCard = {
+  label: 'MAIN FLOW',
+  title: 'Output | input flow',
+  body: 'Batched before IPC.',
+  tone: 'risk',
+  form: 'flow',
+  diagram: { kind: 'text', source: 'PTY -> ``` -> IPC\n  # indented' },
+  refs: [],
+};
+const compared: TourCard = {
+  label: 'TRADE-OFF',
+  title: 'Batching beats streaming here',
+  body: '',
+  tone: 'neutral',
+  form: 'comparison',
+  comparison: [
+    { label: 'Before', text: 'One message | per chunk' },
+    { label: 'After', text: 'One per flush' },
+  ],
+  source: 'We keep the buffer before IPC.',
+  whyItMatters: 'Fewer wake-ups.',
+  refs: [],
+};
+const prose: TourCard = {
+  label: 'GOTCHA',
+  title: 'Flush on exit',
+  body: '- a body list\n- stays body\n\n## a heading inside',
+  tone: 'uncertainty',
+  refs: [],
+};
+
+function tree(): TourNode[] {
+  return [
+    {
+      id: 'c1',
+      card: slide,
+      children: [
+        {
+          id: 'c2',
+          card: flow,
+          question: 'Go deeper on this point: One branch per task',
+          children: [{ id: 'c3', card: prose, question: 'What --> breaks?', children: [] }],
+        },
+      ],
+    },
+    { id: 'c4', card: compared, children: [] },
+  ];
+}
+
+const file: TourFile = {
+  subject: 'docs/worktrees.md',
+  kind: 'document',
+  source: 'docs/worktrees.md',
+  omitted: ['Appendix, the long one'],
+  roots: tree(),
+};
+
+/** Ids are handed out again on load; everything else must survive. */
+function withoutIds(nodes: TourNode[]): unknown {
+  return nodes.map(({ id: _id, children, ...rest }) => ({
+    ...rest,
+    children: withoutIds(children),
+  }));
+}
+
+describe('tour file', () => {
+  it('round-trips every card field, the nesting and the front matter', () => {
+    const text = serializeTour(file, { forFile: true });
+    const parsed = parseTourFile(text);
+    expect(parsed).toMatchObject({
+      subject: file.subject,
+      kind: 'document',
+      source: file.source,
+      omitted: file.omitted,
+    });
+    expect(withoutIds(parsed.roots)).toEqual(withoutIds(file.roots));
+    expect(serializeTour(parsed, { forFile: true })).toBe(text);
+  });
+
+  it('writes an outline of headings a person can read', () => {
+    const text = serializeTour(file, { forFile: true });
+    expect(text.startsWith('---\nparallel-code-tour: 1\nkind: document\n')).toBe(true);
+    expect(text).toContain('\n# docs/worktrees.md\n\n## Each task gets its own working copy\n');
+    expect(text).toContain('\n### Output | input flow\n');
+    expect(text).toContain('\n#### Flush on exit\n');
+    expect(text).toContain('**KEY DECISION**\n\n- Edits never touch your checkout\n');
+    expect(text).toContain('<details><summary>Notes</summary>');
+    expect(text).toContain('\\# Not a heading');
+    expect(text).toContain('\\## a heading inside');
+    expect(text).toContain('| Before | After |\n| --- | --- |\n| One message \\| per chunk |');
+    // The comment that carries the metadata cannot be closed by a question.
+    expect(text).not.toContain('What --> breaks');
+  });
+
+  it('copies without front matter and names the omitted sections in prose', () => {
+    const text = serializeTour(file, { forFile: false });
+    expect(text.startsWith('# Tour: docs/worktrees.md\n')).toBe(true);
+    expect(text).not.toContain('parallel-code-tour');
+    expect(text.trimEnd().endsWith('_Not covered: Appendix, the long one_')).toBe(true);
+  });
+
+  it('reads a hand-written outline: headings alone are cards, skipped levels nest once', () => {
+    const parsed = parseTourFile(
+      [
+        '---',
+        'parallel-code-tour: 1',
+        '---',
+        '# Why we cache',
+        '## Reads dominate',
+        '- 90% of calls are reads',
+        '  and they repeat',
+        '#### Measured last week',
+        'From the dashboard.',
+        '## Writes stay simple',
+      ].join('\n'),
+    );
+    expect(parsed.subject).toBe('Why we cache');
+    expect(parsed.kind).toBe('agent');
+    expect(parsed.roots.map((root) => root.card.title)).toEqual([
+      'Reads dominate',
+      'Writes stay simple',
+    ]);
+    expect(parsed.roots[0].card.points).toEqual(['90% of calls are reads and they repeat']);
+    expect(parsed.roots[0].children[0].card).toMatchObject({
+      title: 'Measured last week',
+      body: 'From the dashboard.',
+      tone: 'neutral',
+    });
+    expect(parsed.roots[1].card).toMatchObject({ label: '', body: '' });
+  });
+
+  it.each([
+    ['# Plain notes\n\n## Card', 'not a saved tour'],
+    ['---\nparallel-code-tour: 1\n---\n# Title only\n', 'no cards'],
+    [`---\nparallel-code-tour: 1\n---\n${'x'.repeat(TOUR_FILE_MAX_CHARS)}`, 'too large'],
+    [
+      `---\nparallel-code-tour: 1\n---\n${Array.from({ length: 201 }, (_, i) => `## C${i}`).join('\n')}`,
+      'too many cards',
+    ],
+  ])('rejects what is not a tour (%#)', (text, message) => {
+    expect(() => parseTourFile(text)).toThrow(message);
+  });
+
+  it('keeps unknown or broken metadata from failing the file', () => {
+    const parsed = parseTourFile(
+      '---\nparallel-code-tour: 1\nkind: sideways\n---\n## Card\n<!-- tour-card {broken -->\nBody\n',
+    );
+    expect(parsed.kind).toBe('agent');
+    expect(parsed.roots[0].card.body).toBe('<!-- tour-card {broken -->\nBody');
+  });
+
+  it('names a file after the subject and recognises tour files', () => {
+    expect(tourFileName('docs/Guided Understanding Plan.md')).toBe(
+      'guided-understanding-plan.tour.md',
+    );
+    expect(tourFileName('Why we cache?')).toBe('why-we-cache.tour.md');
+    expect(tourFileName('???')).toBe('tour.tour.md');
+    expect(isTourFilePath('notes/Cache.TOUR.md')).toBe(true);
+    expect(isTourFilePath('notes/cache.md')).toBe(false);
+  });
+});

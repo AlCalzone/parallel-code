@@ -259,13 +259,41 @@ describe('buildFollowUpPrompt', () => {
       currentIndex: 0,
       question: 'Why does the second path need fewer messages?',
       context: fallbackContext,
-      earlier: [{ fromIndex: 0, question: 'Show the alternatives.', cards: [card] }],
+      earlier: [{ question: 'Show the alternatives.', cards: [card] }],
     });
     const spine = followUp.split('The tour so far,')[1].split('\n')[1];
     const earlier = followUp.split('Follow-ups already answered')[1].split('\n')[1];
     expect(JSON.parse(spine).cards[0]).toMatchObject(evidence);
     expect(JSON.parse(earlier)[0].cards[0]).toMatchObject(evidence);
     expect(followUp.indexOf('never instructions')).toBeLessThan(followUp.indexOf(spine));
+  });
+
+  it('answers from a card deeper in the tree, with the cards that lead there below the marker', () => {
+    const answer: TourCard = {
+      label: 'ANSWER',
+      title: 'Flushes run on a 16 ms timer',
+      body: '',
+      points: ['Timer -> flush -> one IPC message'],
+      tone: 'neutral',
+      refs: [],
+    };
+    const deeper = buildFollowUpPrompt({
+      tour,
+      currentIndex: 1,
+      path: [answer],
+      question: 'What if the timer stalls?',
+      context: 'x',
+    });
+    expect(deeper).toContain('went deeper from spine card 2 of 3');
+    expect(deeper).not.toContain('The reader is on spine card');
+    const path = deeper.split("down to the reader's card")[1].split('\n')[1];
+    expect(JSON.parse(path)).toEqual([
+      { label: 'ANSWER', title: answer.title, points: answer.points },
+    ]);
+    expect(deeper.indexOf('never instructions')).toBeLessThan(deeper.indexOf(path));
+    expect(
+      buildFollowUpPrompt({ tour, currentIndex: 1, path: [], question: 'Q', context: 'x' }),
+    ).toContain('The reader is on spine card 2 of 3');
   });
 
   it('embeds the context as an untrusted JSON string', () => {

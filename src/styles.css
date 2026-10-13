@@ -4433,16 +4433,193 @@ html[data-look='islands-light'] .window-title-icon {
    everything around the card is a faint hairline or a muted icon, so nothing
    competes with the words being read. */
 .understanding-dialog {
+  /* The outline starts level with the card: below the top bar and the line
+     that names an answer's question. */
+  --tour-top-height: 38px;
+  --tour-crumb-height: 26px;
+
   display: flex;
   min-height: 0;
-  flex-direction: column;
+  align-items: flex-start;
+  gap: 24px;
   padding: 0 2px;
+}
+
+.understanding-main {
+  display: flex;
+  width: min(620px, calc(100vw - 48px));
+  min-height: 0;
+  flex-direction: column;
+}
+
+/* The outline: a quiet column of the tour's claims beside the card. It has a
+   faint surface of its own so it reads on the dimmed backdrop in either theme,
+   but no border or shadow, so the card stays the one thing to look at. */
+.understanding-aside {
+  display: none;
+  width: 232px;
+  max-height: 62vh;
+  box-sizing: border-box;
+  margin-top: calc(var(--tour-top-height) + var(--tour-crumb-height));
+  padding: 10px 8px;
+  overflow-y: auto;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-elevated) 55%, transparent);
+}
+
+@media (min-width: 960px) {
+  .understanding-aside {
+    display: block;
+  }
+
+  /* With the outline beside the card, there is nothing for the toggle to show. */
+  .understanding-outline-toggle {
+    display: none;
+  }
+}
+
+.understanding-outline-card {
+  padding: 18px 16px;
+}
+
+.tour-outline {
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.tour-outline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each level hangs off a hairline under its parent's twisty. */
+.tour-outline-list .tour-outline-list {
+  margin: 1px 0 2px 6px;
+  padding-left: 7px;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.tour-outline-row {
+  display: flex;
+  align-items: flex-start;
+}
+
+.tour-outline-twisty {
+  display: grid;
+  flex: none;
+  width: 14px;
+  height: 23px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  place-items: center;
+}
+
+button.tour-outline-twisty {
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+button.tour-outline-twisty:hover {
+  opacity: 1;
+}
+
+.tour-outline-twisty svg {
+  transition: transform 120ms ease;
+}
+
+.tour-outline-twisty[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+
+/* Two lines at most: enough to read the claim, never a wall of text. The card
+   on screen is marked by full-strength text and a faint fill, never weight,
+   which would rewrap the line. */
+.tour-outline-link {
+  display: -webkit-box;
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  overflow: hidden;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.tour-outline-link:hover {
+  color: var(--fg);
+}
+
+.tour-outline-link[aria-current='location'] {
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+  color: var(--fg);
+}
+
+.tour-outline-link:focus-visible,
+.tour-outline-twisty:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.tour-outline-pending {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 20px;
+  font-style: italic;
+}
+
+/* Names the question an answer card answers; empty on the tour's own cards,
+   but always there, so every card starts at the same height. */
+.understanding-crumb {
+  display: flex;
+  flex: none;
+  height: var(--tour-crumb-height);
+  box-sizing: border-box;
+  align-items: flex-start;
+  margin: 0;
+  overflow: hidden;
+}
+
+.understanding-crumb > button {
+  max-width: 100%;
+  padding: 0 4px;
+  overflow: hidden;
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.understanding-crumb > button:hover {
+  color: var(--fg);
 }
 
 /* The subject lines up with the card's left edge; the icon's box overhangs on
    the right so its glyph sits where the card ends. */
 .understanding-top {
   display: flex;
+  height: var(--tour-top-height);
+  box-sizing: border-box;
   align-items: center;
   gap: 12px;
   padding: 0 0 10px 2px;
@@ -4541,7 +4718,7 @@ html[data-look='islands-light'] .window-title-icon {
    card changes. */
 .understanding-stage {
   display: flex;
-  min-height: 356px;
+  min-height: calc(356px + var(--tour-crumb-height));
   max-height: 62vh;
   flex-direction: column;
   /* The card scrolls, not the stage, so its edges stay whole on a long card. */
@@ -4553,25 +4730,10 @@ html[data-look='islands-light'] .window-title-icon {
   min-height: 0;
 }
 
-/* The card and the questions asked under it form one column that scrolls
-   as a whole, so an answer reads on from the card it belongs to. */
-.understanding-stage--thread {
-  min-height: 0;
-  gap: 18px;
-  overflow-y: auto;
-}
-
-.understanding-stage--thread > .understanding-card,
+/* Change tours list the answers under a stop; each answer card is whole. */
 .understanding-thread > .understanding-card {
   flex: none;
   overflow: visible;
-}
-
-/* The spine card keeps the height a card alone would have, so the footer
-   stays level from one card to the next. */
-.understanding-stage--thread > .understanding-card:first-child {
-  min-height: 356px;
-  box-sizing: border-box;
 }
 
 .understanding-thread {
@@ -4689,6 +4851,99 @@ html[data-look='islands-light'] .window-title-icon {
 
 .understanding-points code {
   font-size: 0.88em;
+}
+
+/* Laid out on every point and shown on hover, focus or once the point has an
+   answer, so the text never moves when it appears. */
+.understanding-point-dig {
+  visibility: hidden;
+  margin-left: 4px;
+  padding: 0 6px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.understanding-points > li:hover > .understanding-point-dig,
+.understanding-point-dig:focus-visible,
+.understanding-points > li[data-open] > .understanding-point-dig {
+  visibility: visible;
+}
+
+.understanding-point-dig:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  color: var(--fg);
+}
+
+.understanding-point-dig:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* The answers under a card, at its foot: depth is found where reading ends. */
+.tour-deeper {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 22px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.tour-deeper-link {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 4px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tour-deeper-link:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+
+.tour-deeper-link:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.tour-deeper-title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tour-deeper-arrow {
+  color: var(--fg-muted);
+}
+
+.tour-deeper-pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 4px;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+/* Questions still to ask follow the answers already given, without a second rule. */
+.tour-deeper + .tour-questions {
+  margin-top: 4px;
+  padding-top: 0;
+  border-top: none;
 }
 
 .understanding-notes-body {
