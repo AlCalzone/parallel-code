@@ -1,6 +1,14 @@
 import { For, Show, createEffect, createSignal } from 'solid-js';
 import { nodeTrail, type TourNode } from '../../lib/tour-tree';
 
+function Chevron() {
+  return (
+    <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true">
+      <path d="M2.5 1.5 5.5 4l-3 2.5" fill="none" stroke="currentColor" />
+    </svg>
+  );
+}
+
 /**
  * The tour as a quiet tree of card titles: where you are, what is above and
  * below, and every answer you dug into. Titles are claims, so the outline reads
@@ -14,14 +22,14 @@ export function TourOutline(props: {
   pending?: { question: string; nodeId: string } | null;
   onSelect: (id: string) => void;
 }) {
-  /** Branches the reader opened or closed against the default. */
-  const [toggled, setToggled] = createSignal<ReadonlySet<string>>(new Set());
+  /** Branches off the path that the reader opened. The path itself is always open. */
+  const [opened, setOpened] = createSignal<ReadonlySet<string>>(new Set());
   const onPath = () => new Set(nodeTrail(props.roots, props.currentId).map((node) => node.id));
-  const expanded = (node: TourNode) => onPath().has(node.id) !== toggled().has(node.id);
+  const expanded = (node: TourNode) => onPath().has(node.id) || opened().has(node.id);
   let navRef: HTMLElement | undefined;
 
   function toggle(id: string): void {
-    setToggled((prev) => {
+    setOpened((prev) => {
       const next = new Set(prev);
       if (!next.delete(id)) next.add(id);
       return next;
@@ -44,17 +52,25 @@ export function TourOutline(props: {
       <li class="tour-outline-item">
         <div class="tour-outline-row">
           <Show when={hasChildren()} fallback={<span class="tour-outline-twisty" />}>
-            <button
-              type="button"
-              class="tour-outline-twisty"
-              aria-label={`${expanded(node()) ? 'Collapse' : 'Expand'} ${node().card.title}`}
-              aria-expanded={expanded(node())}
-              onClick={() => toggle(node().id)}
+            {/* The path to the card on screen stays open, so its twisty only shows that. */}
+            <Show
+              when={!onPath().has(node().id)}
+              fallback={
+                <span class="tour-outline-twisty" data-open="">
+                  <Chevron />
+                </span>
+              }
             >
-              <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true">
-                <path d="M2.5 1.5 5.5 4l-3 2.5" fill="none" stroke="currentColor" />
-              </svg>
-            </button>
+              <button
+                type="button"
+                class="tour-outline-twisty"
+                aria-label={`${expanded(node()) ? 'Collapse' : 'Expand'} ${node().card.title}`}
+                aria-expanded={expanded(node())}
+                onClick={() => toggle(node().id)}
+              >
+                <Chevron />
+              </button>
+            </Show>
           </Show>
           <button
             type="button"

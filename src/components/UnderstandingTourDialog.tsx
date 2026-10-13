@@ -116,14 +116,24 @@ export function UnderstandingTourDialog(props: {
     if (props.open && tour() && !props.tour.loading()) primaryRef?.focus();
   });
 
-  // Moving to a card, from the overview or otherwise, shows that card.
+  // Moving to a card, from the overview or otherwise, shows that card. A
+  // control inside the old card that had focus is gone with it, so focus
+  // returns to the way forward rather than dropping to the page.
   createEffect(
     on(
       () => props.tour.currentId(),
-      () => setOverview(false),
+      () => {
+        setOverview(false);
+        if (props.open) queueMicrotask(refocus);
+      },
       { defer: true },
     ),
   );
+
+  function refocus(): void {
+    const active = document.activeElement;
+    if (!active || active === document.body) primaryRef?.focus();
+  }
 
   function openRef(ref: TourRef): void {
     const at = { line: ref.line, editorCommand: store.editorCommand.trim() };
@@ -203,14 +213,19 @@ export function UnderstandingTourDialog(props: {
     onCleanup(() => document.removeEventListener('keydown', onKeyDown));
   });
 
+  /** A fresh outline per tour, so branches opened in one never open in the next. */
   function outline() {
     return (
-      <TourOutline
-        roots={roots()}
-        currentId={props.tour.currentId()}
-        pending={props.tour.pending()}
-        onSelect={(id) => controller().select(id)}
-      />
+      <Show when={tour()} keyed>
+        {(_shown) => (
+          <TourOutline
+            roots={roots()}
+            currentId={props.tour.currentId()}
+            pending={props.tour.pending()}
+            onSelect={(id) => controller().select(id)}
+          />
+        )}
+      </Show>
     );
   }
 
@@ -313,19 +328,32 @@ export function UnderstandingTourDialog(props: {
                 <ListIcon size={14} />
               </TourIconButton>
               <TourCopyButton markdown={markdown} />
-              <TourIconButton
-                label={props.tour.savedPath() ? 'Tour saved' : 'Save tour'}
-                tooltip={
-                  props.tour.savedPath()
-                    ? `Saved as ${props.tour.savedPath()} · new answers update it`
-                    : 'Save to the worktree as Markdown, to reopen or share'
+              {/* Once saved there is nothing left to press: new answers update the
+                  file, so the control turns into a mark of where it lives. */}
+              <Show
+                when={props.tour.savedPath()}
+                fallback={
+                  <TourIconButton
+                    label="Save tour"
+                    tooltip="Save to the worktree as Markdown, to reopen or share"
+                    disabled={props.tour.saving()}
+                    onClick={() => void controller().save()}
+                  >
+                    <BookmarkIcon size={14} />
+                  </TourIconButton>
                 }
-                pressed={props.tour.savedPath() !== ''}
-                disabled={props.tour.saving()}
-                onClick={() => void controller().save()}
               >
-                <BookmarkIcon size={14} />
-              </TourIconButton>
+                {(path) => (
+                  <span
+                    class="tour-icon tour-icon--saved"
+                    role="img"
+                    aria-label={`Saved as ${path()}`}
+                    title={`Saved as ${path()} · new answers update it`}
+                  >
+                    <BookmarkIcon size={14} />
+                  </span>
+                )}
+              </Show>
               <Show when={props.onReference}>
                 <TourIconButton
                   label="Reference in chat"
@@ -335,32 +363,38 @@ export function UnderstandingTourDialog(props: {
                   <MentionIcon size={14} />
                 </TourIconButton>
               </Show>
-              <TourIconButton
-                label="Rework tour"
-                tooltip="Rework tour with your own instructions"
-                onClick={() => setReworking((open) => !open)}
-              >
-                <PencilIcon size={14} />
-              </TourIconButton>
+              {/* A tour reopened from its file is that file's record; a new
+                  tour of its subject starts from the subject's Take Tour. */}
+              <Show when={!props.tour.fromFile()}>
+                <TourIconButton
+                  label="Rework tour"
+                  tooltip="Rework tour with your own instructions"
+                  onClick={() => setReworking((open) => !open)}
+                >
+                  <PencilIcon size={14} />
+                </TourIconButton>
+              </Show>
             </Show>
             {closeButton()}
           </div>
 
-          <Show when={reworking() && shownTour()}>
+          <Show when={reworking() && shownTour() && !props.tour.fromFile()}>
             <TourReworkBar onSubmit={rework} onCancel={() => setReworking(false)} />
           </Show>
 
           <Show when={shownTour() && props.tour.stale()}>
             <div class="understanding-notice" role="status">
               <span>This file changed after the tour was made.</span>
-              <button
-                type="button"
-                class="understanding-notice-action btn-with-icon"
-                onClick={() => controller().retry()}
-              >
-                <SyncIcon size={12} />
-                Regenerate
-              </button>
+              <Show when={!props.tour.fromFile()}>
+                <button
+                  type="button"
+                  class="understanding-notice-action btn-with-icon"
+                  onClick={() => controller().retry()}
+                >
+                  <SyncIcon size={12} />
+                  Regenerate
+                </button>
+              </Show>
             </div>
           </Show>
 

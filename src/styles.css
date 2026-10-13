@@ -4542,8 +4542,12 @@ button.tour-outline-twisty:hover {
   transition: transform 120ms ease;
 }
 
-.tour-outline-twisty[aria-expanded='true'] svg {
+.tour-outline-twisty:is([aria-expanded='true'], [data-open]) svg {
   transform: rotate(90deg);
+}
+
+span.tour-outline-twisty[data-open] {
+  opacity: 0.45;
 }
 
 /* Two lines at most: enough to read the claim, never a wall of text. The card
@@ -5379,10 +5383,11 @@ button.tour-outline-twisty:hover {
   opacity: 0.8;
 }
 
-/* A pressed toggle shows its state, such as a tour that is saved. */
-.tour-icon[aria-pressed='true'] {
+/* State, not an action: a saved tour's mark, which updates on its own. */
+.tour-icon--saved {
   color: var(--accent);
   opacity: 0.85;
+  cursor: default;
 }
 
 /* Hover popover of a tour button: which file, what the click does. Glance-only. */

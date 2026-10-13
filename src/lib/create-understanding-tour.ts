@@ -118,7 +118,10 @@ interface CachedTour {
   source?: string;
   /** Where the reader saved the tour; later answers keep that file up to date. */
   savedPath?: string;
-  /** The file's text as last written or read, to notice edits made outside the tour. */
+  /**
+   * What the saved file held when the tour last wrote or read it, to notice
+   * edits made outside the tour; only a write that landed changes it.
+   */
   savedText?: string;
   /**
    * The kind a reopened file was saved with, written back to it, when what it
@@ -158,8 +161,10 @@ function cacheKey(kind: UnderstandingTourKind, subject: string): string {
  * A tour reopened from its file is its own entry, so it never replaces a
  * generated tour of the same subject, answers the reader has not saved included.
  */
+const SAVED_KEY_PREFIX = 'saved:';
+
 function savedKey(path: string): string {
-  return `saved:${path}`;
+  return `${SAVED_KEY_PREFIX}${path}`;
 }
 
 /** A cached tour as the text of its saved file. */
@@ -223,8 +228,6 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
   let source: string | undefined;
   /** The cache entry of the tour on screen. */
   let shownKey = '';
-  /** Its saved file's text as last written or read; '' while unsaved. */
-  let savedText = '';
   /** See CachedTour.fileKind. */
   let fileKind: UnderstandingTourKind | undefined;
   /** Saves run one after another, so an older tree never lands last. */
@@ -249,7 +252,6 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     setCurrentId('');
     setSavedPath('');
     shownKey = '';
-    savedText = '';
     fileKind = undefined;
     setError('');
     setElapsedSeconds(0);
@@ -369,12 +371,8 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     };
   }
 
-  /**
-   * Runs in the background: nothing opens the viewer, so callers watch the hooks.
-   * `key` keeps a regenerated tour in its own cache entry: reworking a tour
-   * reopened from its file must not replace another tour of the same subject.
-   */
-  async function generate(input: UnderstandingTourInput, key?: string): Promise<void> {
+  /** Runs in the background: nothing opens the viewer, so callers watch the hooks. */
+  async function generate(input: UnderstandingTourInput): Promise<void> {
     cancel();
     clearView();
     const active = ++token;
@@ -382,7 +380,7 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     lastInput = input;
     cwd = input.worktreePath;
     source = sourceOf(input);
-    shownKey = key ?? cacheKey(input.kind, tourSubject);
+    shownKey = cacheKey(input.kind, tourSubject);
     setKind(input.kind);
     setSubject(tourSubject);
     setLoading(true);
@@ -508,7 +506,6 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     lastInput = cached.input;
     source = cached.source;
     shownKey = key;
-    savedText = cached.savedText ?? '';
     fileKind = cached.fileKind;
     setKind(cached.input.kind);
     setSubject(tourInputSubject(cached.input));
@@ -555,15 +552,24 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     return kind() === tourKind && subject() === tourSubject ? error() : '';
   }
 
+  /**
+   * A tour reopened from its file is that file's record of an exploration, so
+   * it is never regenerated in place: a new tour of its subject starts from the
+   * subject's own Take Tour.
+   */
+  function fromFile(): boolean {
+    return shownKey.startsWith(SAVED_KEY_PREFIX);
+  }
+
   /** Re-runs the last generate input; used by Retry and by Regenerate on a stale tour. */
   function retry(): void {
-    if (lastInput) void generate(lastInput, shownKey || undefined);
+    if (lastInput && !fromFile()) void generate(lastInput);
   }
 
   /** Regenerates the tour on screen with the reader's request for how it should change. */
   function rework(instructions: string): void {
-    if (lastInput && instructions.trim())
-      void generate({ ...lastInput, instructions }, shownKey || undefined);
+    if (lastInput && instructions.trim() && !fromFile())
+      void generate({ ...lastInput, instructions });
   }
 
   /** The tour on screen as the file it saves to. */
@@ -621,38 +627,25 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
   /**
    * Saves the tour on screen into the worktree as Markdown, so it can be
    * reopened from the canvas, committed or handed to the agent. Once saved,
-   * every new answer updates the file.
+   * every new answer updates the file, so saving again has nothing to do.
    */
   async function save(): Promise<void> {
     const shown = tour();
     const content = fileText();
-    if (!shown || content === undefined || saving()) return;
+    if (!shown || content === undefined || saving() || savedPath()) return;
     const key = shownKey;
-    const existing = savedPath();
-    const target = {
-      worktreePath: cwd,
-      path: existing || tourFileName(subject()),
-      content,
-      replace: existing !== '',
-      ...(existing && savedText && { expected: savedText }),
-    };
-    if (existing) expectNext(key, existing, content);
     setSaving(true);
-    const path = await queueWrite(target, key, shown, 'Could not save the tour');
+    const path = await queueWrite(
+      { worktreePath: cwd, path: tourFileName(subject()), content, replace: false },
+      key,
+      shown,
+      'Could not save the tour',
+    );
     setSaving(false);
-    if (path && tour() === shown) {
-      setSavedPath(path);
-      savedText = content;
-    }
-  }
-
-  /**
-   * Records, before a queued write runs, the text it will leave in the file,
-   * so the write queued after it expects exactly that.
-   */
-  function expectNext(key: string, path: string, content: string): void {
-    savedText = content;
-    cacheSaved(key, { path, text: content });
+    if (!path || tour() !== shown) return;
+    setSavedPath(path);
+    // Answers that arrived while the first save ran are written now.
+    if (fileText() !== content) persist();
   }
 
   /** Keeps a saved tour's file in step with its tree; unsaved tours stay in memory. */
@@ -660,24 +653,21 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     const path = savedPath();
     const content = fileText();
     if (!path || content === undefined) return;
-    const target = {
-      worktreePath: cwd,
-      path,
-      content,
-      replace: true,
-      ...(savedText && { expected: savedText }),
-    };
-    expectNext(shownKey, path, content);
-    void queueWrite(target, shownKey, tour(), `Could not update ${path}`);
+    void queueWrite(
+      { worktreePath: cwd, path, content, replace: true },
+      shownKey,
+      tour(),
+      `Could not update ${path}`,
+    );
   }
 
   /**
    * Runs writes one after another, saves and updates alike, so an older tree
-   * never lands last and each write's expected text is what the one before it
-   * left. Resolves with the path written, or undefined after a failure.
+   * never lands last. Resolves with the path written, or undefined when the
+   * write failed or its tour has gone from the cache.
    */
   function queueWrite(
-    target: Parameters<typeof write>[0],
+    target: Omit<Parameters<typeof write>[0], 'expected'>,
     key: string,
     shown: UnderstandingTour | null,
     failed: string,
@@ -687,29 +677,28 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     return run;
   }
 
+  /** Whether `key` still holds the tour a write was queued for. */
+  function stillCached(key: string, shown: UnderstandingTour | null): boolean {
+    return shown !== null && cache().get(key)?.tour === shown;
+  }
+
   async function writeQueued(
-    target: Parameters<typeof write>[0],
+    target: Omit<Parameters<typeof write>[0], 'expected'>,
     key: string,
     shown: UnderstandingTour | null,
     failed: string,
   ): Promise<string | undefined> {
+    if (!stillCached(key, shown)) return undefined;
+    // What the last write that landed left there, read only now that it has.
+    const expected = target.replace ? cache().get(key)?.savedText : undefined;
     try {
-      const path = await write(target);
-      // A first save learns its path only now; later writes record theirs ahead.
-      if (!target.replace) cacheSaved(key, { path, text: target.content });
+      const path = await write({ ...target, ...(expected !== undefined && { expected }) });
+      if (stillCached(key, shown)) cacheSaved(key, { path, text: target.content });
       return path;
     } catch (cause) {
       const conflict = errMessage(cause).includes(TOUR_FILE_CHANGED);
-      // Nothing landed: the file still holds what this write expected, unless
-      // a write queued after it has already recorded its own text.
-      const recorded = cache().get(key)?.savedText;
-      if (conflict) cacheSaved(key);
-      else if (target.replace && recorded === target.content)
-        cacheSaved(key, { path: target.path, text: target.expected ?? '' });
-      if (tour() === shown) {
-        if (!conflict && savedText === target.content) savedText = target.expected ?? '';
-        forgetFile(key, target.replace ? target.path : '', cause, failed);
-      }
+      if (conflict && stillCached(key, shown)) cacheSaved(key);
+      if (tour() === shown) forgetFile(target.replace ? target.path : '', cause, failed);
       return undefined;
     }
   }
@@ -718,17 +707,15 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
    * Reports a failed write. A file edited outside the tour is never written
    * over: the tour lets go of it, so the next save makes a new file.
    */
-  function forgetFile(key: string, path: string, cause: unknown, failed: string): void {
+  function forgetFile(path: string, cause: unknown, failed: string): void {
     const message = errMessage(cause);
     if (!path || !message.includes(TOUR_FILE_CHANGED)) {
       setError(`${failed}: ${message}`);
       return;
     }
-    cacheSaved(key);
     setSavedPath('');
-    savedText = '';
     setError(
-      `${path} changed outside the tour, so it was left as it is. Open it again from the canvas, or save this tour as a new file.`,
+      `${path} was changed or removed outside the tour, so it was left as it is. Open it again from the canvas, or save this tour as a new file.`,
     );
   }
 
@@ -827,7 +814,6 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     lastInput = restoredInput;
     source = file.source;
     shownKey = savedKey(input.savedPath);
-    savedText = input.text;
     fileKind = file.kind === restoredInput.kind ? undefined : file.kind;
     setCache((prev) => {
       const next = new Map(prev);
@@ -1047,6 +1033,7 @@ export function createUnderstandingTour(options: UnderstandingTourOptions = {}) 
     goDeeperOn,
     cancel,
     reset,
+    fromFile,
   };
 }
 

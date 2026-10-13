@@ -519,6 +519,9 @@ describe('UnderstandingTourDialog', () => {
       .find((link) => link.textContent === 'Deep two')
       ?.click();
     expect(tour.currentNode()?.card.title).toBe('Deep two');
+    // The branch holding the card on screen stays open, and cannot be folded.
+    expect(titles()).toContain('Deep two');
+    expect(aside()?.querySelector('[aria-label="Collapse First card"]')).toBeNull();
   });
 
   it('marks the progress segment of a card that has answers', async () => {
@@ -567,13 +570,32 @@ describe('UnderstandingTourDialog', () => {
       channel === IPC.SaveTourFile
         ? Promise.resolve('output-buffering.tour.md')
         : Promise.resolve(undefined)) as typeof invoke);
-    expect(iconButton('Save tour').getAttribute('aria-pressed')).toBe('false');
     clickIcon('Save tour');
     await flush();
     expect(tour.savedPath()).toBe('output-buffering.tour.md');
-    const saved = iconButton('Tour saved');
-    expect(saved.getAttribute('aria-pressed')).toBe('true');
-    expect(saved.title).toContain('output-buffering.tour.md');
+    // Saved is a state, not something left to press.
+    expect(buttons().some((button) => button.getAttribute('aria-label') === 'Save tour')).toBe(
+      false,
+    );
+    const saved = panel().querySelector<HTMLElement>('.tour-icon--saved');
+    expect(saved?.getAttribute('aria-label')).toBe('Saved as output-buffering.tour.md');
+    expect(saved?.title).toContain('new answers update it');
+  });
+
+  it('returns focus to the way forward when a control inside the card moves on', async () => {
+    await mountWithTour();
+    clickIcon('Next card');
+    clickIcon('Go deeper');
+    await flush();
+    channels[1].onmessage?.({ type: 'chunk', text: BRANCH_JSON });
+    channels[1].onmessage?.({ type: 'done', exitCode: 0 });
+    await flush();
+    const crumb = panel().querySelector<HTMLButtonElement>('.understanding-crumb button');
+    crumb?.focus();
+    crumb?.click();
+    await flush();
+    expect(panel().querySelector('.understanding-card-title')?.textContent).toBe('First card');
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Next card');
   });
 
   it('hands the card on screen to the chat with its place in the tour', async () => {

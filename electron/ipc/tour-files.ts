@@ -61,7 +61,8 @@ function entryAt(target: string): 'missing' | 'file' | 'other' {
  * landed at. A first save never overwrites: an existing file of that name
  * moves the tour to the next free numbered name. Later saves of the same tour
  * pass `replace` and update their own file, and `expected`, the text they last
- * wrote or read: a file someone edited since is refused, not overwritten.
+ * wrote or read: a file someone edited or removed since is refused, not
+ * overwritten or recreated.
  * Either way the target must be a regular file in a folder that really is
  * inside the worktree, so a symlink can never carry the write out of it.
  */
@@ -93,6 +94,8 @@ export function saveTourFile(
       continue;
     }
     if (entry === 'file' && args.replace !== true) continue;
+    // A saved tour that is gone was removed on purpose; it is not brought back.
+    if (entry === 'missing' && args.replace === true) throw new Error(TOUR_FILE_CHANGED);
     if (entry === 'file' && typeof args.expected === 'string' && changed(target, args.expected))
       throw new Error(TOUR_FILE_CHANGED);
     atomicWriteFileSync(target, args.content);

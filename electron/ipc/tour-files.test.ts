@@ -57,6 +57,13 @@ describe('saveTourFile', () => {
     ).toBe('cache.tour.md');
   });
 
+  it('does not bring back a saved tour that was removed', () => {
+    save('cache.tour.md', 'one');
+    fs.rmSync(path.join(worktree, 'cache.tour.md'));
+    expect(() => save('cache.tour.md', 'two', true)).toThrow('changed on disk');
+    expect(fs.existsSync(path.join(worktree, 'cache.tour.md'))).toBe(false);
+  });
+
   it('saves into an existing folder of the worktree', () => {
     fs.mkdirSync(path.join(worktree, 'docs'));
     expect(save('./docs//plan.tour.md')).toBe('docs/plan.tour.md');

@@ -29,7 +29,8 @@ that the reader can dive in and out of, keep, and hand to the agent.
 **Save tour** (bookmark icon) writes the tour, with every answer, to
 `<subject>.tour.md` at the root of the task's worktree. A first save never
 overwrites: an existing file of that name moves the tour to `-2`, `-3` and so on.
-After that, each new answer updates the same file. The file is an ordinary
+After that, each new answer updates the same file, and the icon becomes a mark
+naming it. The file is an ordinary
 untracked file: commit it to keep it with the branch, or it goes when the
 worktree is removed.
 
@@ -37,7 +38,9 @@ Open a `.tour.md` file on the canvas and press **Open Tour**: it opens as a tour
 straight away, with no provider call, and follow-ups replay the plan, document or
 file it names as its source (or the cards themselves when that is gone). A
 reopened file is a tour of its own: it never replaces a tour generated from the
-same document, so answers not yet saved there are kept.
+same document, so answers not yet saved there are kept. It is the file's record,
+so it offers no Rework or Regenerate; the document's own **Take Tour** makes a
+new tour.
 
 ### File format
 
@@ -81,10 +84,10 @@ list is its points, a two-column table its comparison, a text fence its
 diagram, and a heading alone is a valid card. Card text never starts a heading
 of its own (such lines are written as `\#`) and never leaves a fence open.
 
-Edits made to the file outside the tour are never overwritten. When the next
-answer would replace a file that changed since the tour last wrote or read it,
-the tour lets go of the file and says so; open the file again, or save the tour
-as a new file.
+Edits made to the file outside the tour are never overwritten, and a removed
+file is not brought back. When the next answer would replace a file that changed
+or went away since the tour last wrote or read it, the tour lets go of the file
+and says so; open the file again, or save the tour as a new file.
 
 ## Referencing a card in the chat
 
