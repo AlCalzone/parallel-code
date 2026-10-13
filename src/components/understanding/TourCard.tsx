@@ -1,4 +1,5 @@
 import { For, Show, createEffect } from 'solid-js';
+import { renderInlineMarkdown } from '../../lib/inline-markdown';
 import { createHighlightedMarkdown } from '../../lib/marked-shiki';
 import { renderMermaidIn } from '../../lib/mermaid';
 import { theme } from '../../lib/theme';
@@ -39,8 +40,9 @@ function FileGlyph() {
 
 /**
  * One tour card: label, title, optional evidence (diagram or comparison),
- * markdown body, source quote, why-it-matters, refs. `data-form` lets the stylesheet give a
- * takeaway, comparison or flow card its own shape.
+ * markdown body, a slide's points and notes, source quote, why-it-matters, refs.
+ * `data-form` lets the stylesheet give a takeaway, comparison or flow card its
+ * own shape.
  */
 export function TourCard(props: {
   card: TourCardData;
@@ -52,6 +54,7 @@ export function TourCard(props: {
   omitted?: string[];
 }) {
   const bodyHtml = createHighlightedMarkdown(() => props.card.body);
+  const notesHtml = createHighlightedMarkdown(() => props.card.notes);
   const tone = () => props.card.tone;
   const warned = () => WARNED.includes(tone());
   const questions = () =>
@@ -118,11 +121,38 @@ export function TourCard(props: {
           </div>
         )}
       </Show>
-      <div
-        class="understanding-body plan-markdown"
-        // eslint-disable-next-line solid/no-innerhtml -- createHighlightedMarkdown sanitizes with DOMPurify
-        innerHTML={bodyHtml()}
-      />
+      <Show when={props.card.body}>
+        <div
+          class="understanding-body plan-markdown"
+          // eslint-disable-next-line solid/no-innerhtml -- createHighlightedMarkdown sanitizes with DOMPurify
+          innerHTML={bodyHtml()}
+        />
+      </Show>
+      <Show when={props.card.points}>
+        {(points) => (
+          <ul class="understanding-points">
+            <For each={points()}>
+              {(point) => (
+                <li
+                  // eslint-disable-next-line solid/no-innerhtml -- renderInlineMarkdown sanitizes with DOMPurify
+                  innerHTML={renderInlineMarkdown(point)}
+                />
+              )}
+            </For>
+          </ul>
+        )}
+      </Show>
+      {/* Speaker notes: the reasoning behind the slide, one click away. */}
+      <Show when={props.card.notes}>
+        <details class="understanding-source understanding-notes">
+          <summary>Notes</summary>
+          <div
+            class="understanding-notes-body plan-markdown"
+            // eslint-disable-next-line solid/no-innerhtml -- createHighlightedMarkdown sanitizes with DOMPurify
+            innerHTML={notesHtml()}
+          />
+        </details>
+      </Show>
       {/* Collapsed: the quote answers "where does it say that?" without adding
           a second body to read. groundTour() already checked it is verbatim. */}
       <Show when={props.card.source}>

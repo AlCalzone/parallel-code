@@ -33,6 +33,11 @@ export const TOUR_CARD_LIMITS = {
   label: 40,
   title: 120,
   body: 700,
+  /** Slide cards: bullet points instead of prose, each a short fragment. */
+  points: 5,
+  point: 100,
+  /** Slide cards: the speaker notes, read only on demand. */
+  notes: 1000,
   whyItMatters: 300,
   textDiagram: 1200,
   mermaidDiagram: 1500,
@@ -78,6 +83,8 @@ export const UNDERSTANDING_MAX_OUTPUT_CHARS =
     (toleratedCap(TOUR_CARD_LIMITS.label) +
       toleratedCap(TOUR_CARD_LIMITS.title) +
       toleratedCap(TOUR_CARD_LIMITS.body) +
+      (TOUR_CARD_LIMITS.points + 1) * (toleratedCap(TOUR_CARD_LIMITS.point) + 3) +
+      toleratedCap(TOUR_CARD_LIMITS.notes) +
       toleratedCap(TOUR_CARD_LIMITS.whyItMatters) +
       toleratedCap(TOUR_CARD_LIMITS.mermaidDiagram) +
       2 *

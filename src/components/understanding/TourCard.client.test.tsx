@@ -45,6 +45,32 @@ describe('TourCard', () => {
     );
   });
 
+  it('shows a slide as its points, with the notes collapsed and no empty body', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const card = {
+      label: 'KEY DECISION',
+      title: 'Each task gets its own working copy',
+      body: '',
+      points: ['Edits never touch **your** checkout', 'One `branch`'],
+      notes: 'Worktrees are cheap.',
+      tone: 'neutral' as const,
+      refs: [],
+    };
+    dispose = render(() => <TourCard card={card} />, host);
+    expect(host.querySelector('.understanding-body')).toBeNull();
+    const items = [...host.querySelectorAll('.understanding-points > li')];
+    expect(items.map((item) => item.textContent)).toEqual([
+      'Edits never touch your checkout',
+      'One branch',
+    ]);
+    expect(items[0].querySelector('strong')?.textContent).toBe('your');
+    expect(items[1].querySelector('code')?.textContent).toBe('branch');
+    const notes = host.querySelector('details.understanding-notes');
+    expect(notes?.hasAttribute('open')).toBe(false);
+    expect(notes?.querySelector('summary')?.textContent).toBe('Notes');
+  });
+
   it('shows neither a quote nor an omitted line when there is none', () => {
     const article = mountCard('neutral');
     expect(article.querySelector('.understanding-source')).toBeNull();

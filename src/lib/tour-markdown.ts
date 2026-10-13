@@ -15,7 +15,9 @@ function fence(source: string): string {
 
 function cardMarkdown(card: TourCard, heading: string): string {
   const label = `${WARNED.has(card.tone) ? '⚠ ' : ''}${card.label}`;
-  const parts = [`${heading} ${card.title}`, `**${label}**`, card.body];
+  const parts = [`${heading} ${card.title}`, `**${label}**`];
+  if (card.body) parts.push(card.body);
+  if (card.points) parts.push(card.points.map((point) => `- ${point}`).join('\n'));
   if (card.diagram) {
     const marks = fence(card.diagram.source);
     const lang = card.diagram.kind === 'mermaid' ? 'mermaid' : 'text';
@@ -23,6 +25,7 @@ function cardMarkdown(card: TourCard, heading: string): string {
   }
   if (card.comparison)
     parts.push(card.comparison.map((side) => `- **${side.label}:** ${side.text}`).join('\n'));
+  if (card.notes) parts.push(`<details><summary>Notes</summary>\n\n${card.notes}\n\n</details>`);
   if (card.source) parts.push(`> Source: “${card.source}”`);
   if (card.whyItMatters) parts.push(`> **Why this matters:** ${card.whyItMatters}`);
   if (card.refs.length) parts.push(`Refs: ${card.refs.map(refText).join(', ')}`);

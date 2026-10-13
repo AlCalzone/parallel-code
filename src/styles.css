@@ -4668,6 +4668,44 @@ html[data-look='islands-light'] .window-title-icon {
   margin-bottom: 0;
 }
 
+/* A slide's points: few, short and spaced so each reads at a glance. */
+.understanding-points {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 0 0;
+  padding: 0 0 0 1.15em;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.understanding-body + .understanding-points {
+  margin-top: 14px;
+}
+
+.understanding-points > li::marker {
+  color: var(--fg-muted);
+}
+
+.understanding-points code {
+  font-size: 0.88em;
+}
+
+.understanding-notes-body {
+  margin-top: 8px;
+  color: var(--fg-muted);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.understanding-notes-body > :first-child {
+  margin-top: 0;
+}
+
+.understanding-notes-body > :last-child {
+  margin-bottom: 0;
+}
+
 /* Card forms. A takeaway is its claim; comparison and flow cards give the
    evidence the room and shrink the prose to a caption under it. */
 .understanding-card[data-form='takeaway'] .understanding-card-title {
