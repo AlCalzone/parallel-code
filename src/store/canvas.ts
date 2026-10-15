@@ -9,9 +9,6 @@ import { parseCanvasView } from '../../electron/shared/canvas-view';
 import { branchPrompt, type BranchRequest } from '../graph/agentActions';
 import { produce, unwrap } from 'solid-js/store';
 import { batch } from 'solid-js';
-import { IPC } from '../../electron/ipc/channels';
-import { isAgentHookEventPayload } from '../../electron/agent-hooks/status';
-import { isPlanApprovalEvent, nextCanvasOpen } from '../lib/canvas-auto-open';
 import { canvasTabKey, isTaskCanvasVisible, withTab, withoutTab } from '../lib/canvas-tabs';
 import { resizeTaskColumnForCanvas } from './task-column';
 import { store, setStore } from './core';
@@ -94,13 +91,13 @@ function updateCanvas(taskId: string, next: CanvasState): void {
 }
 
 /** Opens or activates a canvas tab without replacing its neighbours. */
-function openCanvasTab(taskId: string, tab: CanvasTab, activate = true): void {
+function openCanvasTab(taskId: string, tab: CanvasTab): void {
   const task = store.tasks[taskId];
   if (!task) return;
   updateCanvas(taskId, {
     canvasTabs: withTab(task.canvasTabs ?? [], tab),
-    canvasActiveTab: activate ? canvasTabKey(tab) : task.canvasActiveTab,
-    canvasOpen: activate ? true : task.canvasOpen,
+    canvasActiveTab: canvasTabKey(tab),
+    canvasOpen: true,
   });
   void saveState();
 }
@@ -255,59 +252,11 @@ export interface PlanContentMessage {
   recovered?: boolean;
 }
 
-/**
- * Applies a plan publish. The plan tab always follows the file on disk, but a
- * plan only opens the canvas when this session was seen writing it, and then
- * once per file so repeated edits leave the user's choice of tab alone.
- *
- * A recovered publish deliberately leaves `livePlanPath` untouched rather than
- * clearing it: the watcher restarts on every agent spawn and republishes what
- * it finds, which would otherwise demote the plan the agent just wrote.
- */
+/** Updates plan content without opening a document or changing the user's active tab. */
 export function applyPlanContent(msg: PlanContentMessage): void {
-  const task = store.tasks[msg.taskId];
-  if (!task) return;
+  if (!store.tasks[msg.taskId]) return;
   const path = msg.relativePath ?? null;
-  const opens = !msg.recovered && path !== null && path !== task.livePlanPath;
-  batch(() => {
-    setPlanContent(msg.taskId, msg.content, msg.fileName, path);
-    if (!msg.recovered) setStore('tasks', msg.taskId, 'livePlanPath', path ?? undefined);
-  });
-  if (opens && path) {
-    // Reporting a Markdown plan must not hide the live graph and stop its reader.
-    // An explicit plan-approval request can still activate the plan below.
-    const keepReasoning = isTaskCanvasVisible(task) && task.canvasActiveTab === 'reasoning';
-    openCanvasTab(msg.taskId, { kind: 'markdown', path }, !keepReasoning);
-  }
-}
-
-/** Brings this session's plan back to the front when approval is asked for. A
- *  plan merely found on disk is left alone: it is not what is being approved,
- *  and opening it is the wrong-file bug this guard exists to stop. */
-function openLivePlan(taskId: string): void {
-  const path = store.tasks[taskId]?.livePlanPath;
-  if (path) openCanvasDocument(taskId, path);
-}
-
-/**
- * Puts the Markdown file an agent just wrote on its task's canvas, when
- * nothing is open there. Tabs the user has stay; they can switch by hand.
- * A plan waiting for approval comes back to the front, provided this run is
- * what produced it. Returns the unsubscribe.
- */
-export function startCanvasAutoOpen(): () => void {
-  const pending = new Map<string, string>();
-  return window.electron.ipcRenderer.on(IPC.AgentHookEvent, (data: unknown) => {
-    if (!isAgentHookEventPayload(data)) return;
-    const task = store.tasks[data.taskId];
-    if (!task?.worktreePath) return;
-    if (isPlanApprovalEvent(data)) {
-      openLivePlan(data.taskId);
-      return;
-    }
-    const opened = nextCanvasOpen(pending, data, task.worktreePath);
-    if (opened && !task.canvasTabs?.length) openCanvasDocument(task.id, opened);
-  });
+  batch(() => setPlanContent(msg.taskId, msg.content, msg.fileName, path));
 }
 
 /** One browser per task; its last URL survives closing the tab. */
