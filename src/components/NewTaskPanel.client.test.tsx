@@ -470,3 +470,38 @@ it('does not attach a batch triage task to the first URL in its prompt', async (
   await vi.waitFor(() => expect(store.tasks['batch-triage']).toBeDefined());
   expect(store.tasks['batch-triage'].githubUrl).toBeUndefined();
 });
+
+it('re-detects agents and explains how to install one when none is found', async () => {
+  dispose();
+  host.replaceChildren();
+  const missing = (id: string, command: string) => ({
+    id,
+    name: id,
+    command,
+    args: [],
+    resume_args: [],
+    skip_permissions_args: [],
+    description: '',
+    available: false,
+  });
+  const detected = [missing('Claude Code', 'claude'), missing('Codex CLI', 'codex')];
+  const originalInvoke = vi.mocked(invoke).getMockImplementation();
+  vi.mocked(invoke).mockImplementation((channel, args) =>
+    channel === IPC.ListAgents
+      ? Promise.resolve(detected)
+      : Promise.resolve(originalInvoke?.(channel, args)),
+  );
+  setStore({ availableAgents: detected, lastAgentId: null, customAgents: [] });
+
+  dispose = render(() => <NewTaskPanel open={true} onClose={vi.fn()} />, host);
+
+  await vi.waitFor(() => expect(host.textContent).toContain('No coding agent CLI found'));
+  expect(vi.mocked(invoke).mock.calls.some(([channel]) => channel === IPC.ListAgents)).toBe(true);
+
+  // With one agent installed, choosing a missing one names what is missing.
+  setStore('availableAgents', 1, 'available', true);
+  host.querySelector<HTMLButtonElement>('button[role="radio"]')?.click();
+  await vi.waitFor(() =>
+    expect(host.textContent).toContain('Claude Code was not found on this machine'),
+  );
+});

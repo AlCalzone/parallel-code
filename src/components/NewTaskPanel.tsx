@@ -51,6 +51,7 @@ import {
 } from '../lib/branch-name';
 import { SegmentedButtons } from './SegmentedButtons';
 import { autoTaskNameFromPrompt, nextDefaultTaskName } from '../lib/clean-task-name';
+import { isAgentInstalled, pickDefaultAgent } from '../lib/default-agent';
 import { extractGitHubUrl } from '../lib/github-url';
 import { buildIssuePrompt, buildPrTaskPrompt, workItemTaskName } from '../lib/github-prompts';
 import { getGitHubIssue } from '../store/github';
@@ -596,14 +597,13 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
             setInitialPrompt(prompt());
             setInitialName(name());
 
-            if (store.availableAgents.length === 0) {
+            // Re-detect while nothing is installed, so a CLI installed after
+            // launch shows up on the next open instead of after a restart.
+            if (!store.availableAgents.some(isAgentInstalled)) {
               await loadAgents();
             }
             if (cancelled) return;
-            const lastAgent = store.lastAgentId
-              ? (store.availableAgents.find((a) => a.id === store.lastAgentId) ?? null)
-              : null;
-            setSelectedAgent(lastAgent ?? store.availableAgents[0] ?? null);
+            setSelectedAgent(pickDefaultAgent(store.availableAgents, store.lastAgentId));
           })().catch((err) => {
             if (!cancelled) setError(errMessage(err));
           });
@@ -1360,6 +1360,25 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
             selectedAgent={selectedAgent()}
             onSelect={setSelectedAgent}
           />
+          <Show when={selectedAgent()?.available === false ? selectedAgent() : undefined}>
+            {(agent) => (
+              <InlineBanner color={theme.warning}>
+                <Show
+                  when={store.availableAgents.some(isAgentInstalled)}
+                  fallback={
+                    <>
+                      No coding agent CLI found on this machine. Install one, such as Claude Code (
+                      <code>claude</code>), Codex CLI (<code>codex</code>) or Gemini CLI (
+                      <code>gemini</code>), then reopen this panel.
+                    </>
+                  }
+                >
+                  {agent().name} was not found on this machine (<code>{agent().command}</code>).
+                  Unless it runs in a Docker image, pick an installed agent.
+                </Show>
+              </InlineBanner>
+            )}
+          </Show>
 
           <Show when={gitIsolation() === 'direct' && !isNonGitProject()}>
             <InlineBanner color={theme.warning}>
