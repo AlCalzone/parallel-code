@@ -555,40 +555,44 @@ export function SettingsDialog(props: SettingsDialogProps) {
                 </select>
               </label>
             </Show>
-            <label
-              style={{
-                display: 'flex',
-                'flex-direction': 'column',
-                gap: '6px',
-                padding: '8px 12px',
-                'border-radius': 'var(--radius-md)',
-                background: theme.bgInput,
-                border: `1px solid ${theme.border}`,
-              }}
-            >
-              <span style={{ 'font-size': '13px', color: theme.fg }}>Confidence rating prompt</span>
-              <span style={{ 'font-size': '12px', color: theme.fgMuted }}>
-                Sent to the agent by Rate confidence on the task brief card. Leave empty for the
-                built-in audit, or name your own rating skill. It should end with the agent calling
-                confidence_publish.
-              </span>
-              <textarea
-                rows={3}
-                value={store.confidencePrompt}
-                placeholder={DEFAULT_CONFIDENCE_PROMPT}
-                onChange={(e) => setConfidencePrompt(e.currentTarget.value)}
+            <Show when={store.taskBriefs}>
+              <label
                 style={{
-                  resize: 'vertical',
-                  background: theme.taskPanelBg,
+                  display: 'flex',
+                  'flex-direction': 'column',
+                  gap: '6px',
+                  padding: '8px 12px',
+                  'border-radius': 'var(--radius-md)',
+                  background: theme.bgInput,
                   border: `1px solid ${theme.border}`,
-                  'border-radius': 'var(--radius-sm)',
-                  padding: '6px 10px',
-                  color: theme.fg,
-                  'font-size': '12px',
-                  'font-family': 'inherit',
                 }}
-              />
-            </label>
+              >
+                <span style={{ 'font-size': '13px', color: theme.fg }}>
+                  Confidence rating prompt
+                </span>
+                <span style={{ 'font-size': '12px', color: theme.fgMuted }}>
+                  Sent to the agent by Rate confidence on the task brief card. Leave empty for the
+                  built-in audit, or name your own rating skill. It should end with the agent
+                  calling confidence_publish.
+                </span>
+                <textarea
+                  rows={3}
+                  value={store.confidencePrompt}
+                  placeholder={DEFAULT_CONFIDENCE_PROMPT}
+                  onChange={(e) => setConfidencePrompt(e.currentTarget.value)}
+                  style={{
+                    resize: 'vertical',
+                    background: theme.taskPanelBg,
+                    border: `1px solid ${theme.border}`,
+                    'border-radius': 'var(--radius-sm)',
+                    padding: '6px 10px',
+                    color: theme.fg,
+                    'font-size': '12px',
+                    'font-family': 'inherit',
+                  }}
+                />
+              </label>
+            </Show>
             <SettingsCheckboxRow
               label="Show ownership badges on canvases"
               checked={store.canvasOwnershipBadges}

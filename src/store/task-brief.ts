@@ -231,7 +231,7 @@ function noteCodeFingerprint(taskId: string, fingerprint: string, at: number): v
 
 /**
  * Reads the diff to tell whether a rating is still current. Briefs do this
- * after every turn; with briefs off the card calls it when it opens.
+ * after every turn; the card also calls it when it opens, for changes made between turns.
  */
 export async function refreshCodeFingerprint(taskId: string): Promise<void> {
   const task = store.tasks[taskId];

@@ -19,7 +19,6 @@ import {
   requestConfidenceRating,
 } from '../store/task-brief';
 import { showNotification } from '../store/notification';
-import { store } from '../store/core';
 import type { Task } from '../store/types';
 import {
   AlertIcon,
@@ -203,13 +202,11 @@ export function TaskBriefBar(props: TaskBriefBarProps) {
     if (open() && props.task.brief?.unread) markBriefRead(props.task.id);
   });
   // Routine briefs stay quiet; a claim the diff does not back needs a look now.
-  const urgent = () => store.taskBriefs && !!props.task.brief?.brief.unbacked.length;
-  // A brief kept from before briefs were turned off is not shown, so neither are its signals.
-  const unread = () => store.taskBriefs && !!props.task.brief?.unread;
+  const urgent = () => !!props.task.brief?.brief.unbacked.length;
+  const unread = () => !!props.task.brief?.unread;
 
   const headline = () => {
     const brief = props.task.brief?.brief;
-    if (!store.taskBriefs) return props.task.confidence ? 'Confidence rating' : 'Rate confidence…';
     if (brief) return brief.headline || brief.goal;
     if (props.task.briefStatus?.state === 'generating') return 'Writing the brief…';
     return 'The brief appears after the agent finishes a turn';
@@ -282,7 +279,7 @@ export function TaskBriefBar(props: TaskBriefBarProps) {
             // Larger than the info bar above it, so it reads as content rather than chrome.
             'font-size': sf(14),
             // Always, not only while unread: bold is wider, and the clamped lines would reflow.
-            'font-weight': store.taskBriefs && props.task.brief ? '600' : undefined,
+            'font-weight': props.task.brief ? '600' : undefined,
             overflow: 'hidden',
             'white-space': 'normal',
             'overflow-wrap': 'anywhere',
@@ -397,8 +394,7 @@ export function TaskBriefBar(props: TaskBriefBarProps) {
 function BriefCounts(props: { task: Task }) {
   const counts = () => {
     const brief = props.task.brief?.brief;
-    // The bar hides a brief kept from before briefs were turned off, so it hides its counts too.
-    if (!brief || !store.taskBriefs) return [];
+    if (!brief) return [];
     const all = [
       { kind: 'unbacked', count: brief.unbacked.length },
       { kind: 'changed', count: brief.changed.length },
@@ -757,9 +753,7 @@ function TaskBriefCard(props: {
             <span style={{ 'font-size': sf(13), color: theme.fgMuted, 'line-height': '1.45' }}>
               {props.task.briefStatus?.state === 'failed'
                 ? `The brief could not be written: ${props.task.briefStatus.message}`
-                : store.taskBriefs
-                  ? 'The brief is written after each agent turn.'
-                  : 'Turn on Write task briefs in Settings for a summary after each turn.'}
+                : 'The brief is written after each agent turn.'}
             </span>
           }
         >
@@ -979,16 +973,14 @@ function TaskBriefCard(props: {
             {showTurns() ? 'Hide turns' : `Turns (${props.task.brief?.turns.length ?? 0})`}
           </button>
         </Show>
-        <Show when={store.taskBriefs}>
-          <button
-            type="button"
-            style={linkButton}
-            disabled={props.task.briefStatus?.state === 'generating'}
-            onClick={() => void refreshTaskBrief(props.task.id, { force: true })}
-          >
-            Update now
-          </button>
-        </Show>
+        <button
+          type="button"
+          style={linkButton}
+          disabled={props.task.briefStatus?.state === 'generating'}
+          onClick={() => void refreshTaskBrief(props.task.id, { force: true })}
+        >
+          Update now
+        </button>
         <button type="button" style={linkButton} disabled={rating()} onClick={() => void rate()}>
           {props.task.confidence ? 'Re-rate confidence' : 'Rate confidence'}
           <Show when={briefTargetAgentName(props.task)}>{(name) => ` · ${name()}`}</Show>

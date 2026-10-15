@@ -23,14 +23,12 @@ vi.mock('../store/task-brief', () => ({
   requestConfidenceRating: mockRate,
 }));
 
-import { setStore } from '../store/core';
 import type { Task } from '../store/types';
 import { TaskBriefBar, TaskBriefLine } from './TaskBrief';
 
 let dispose: (() => void) | undefined;
 let lastSetState: SetStoreFunction<Task> | undefined;
 beforeEach(() => {
-  setStore('taskBriefs', true);
   mockTargetName.mockReturnValue(undefined);
 });
 afterEach(() => {
@@ -189,22 +187,6 @@ describe('TaskBriefBar', () => {
     expect(dot()?.style.visibility).toBe('hidden');
   });
 
-  it('shows no brief signals on the bar while briefs are off', () => {
-    setStore('taskBriefs', false);
-    const task = baseTask();
-    const brief = task.brief;
-    if (!brief) throw new Error('Missing brief');
-    const { bar } = mount({
-      ...task,
-      brief: { ...brief, unread: true, brief: { ...brief.brief, unbacked: [{ text: 'X.' }] } },
-    });
-    expect(bar.getAttribute('style')).not.toContain('var(--warning)');
-    expect(bar.querySelector<HTMLElement>('.task-brief-unread')?.style.visibility).toBe('hidden');
-    expect(bar.textContent).toContain('Confidence rating');
-    expect(bar.innerHTML).not.toContain('font-weight: 600');
-    expect(bar.querySelector('[aria-label*="unbacked"]')).toBeNull();
-  });
-
   it('flags claims the diff does not back on the bar and leads the card with them', () => {
     const task = baseTask();
     const brief = task.brief;
@@ -285,13 +267,10 @@ describe('TaskBriefBar', () => {
     expect(fields()[0].value).toBe('Alert on-call instead');
   });
 
-  it('checks a rating against the current code when opened with briefs off', () => {
-    setStore('taskBriefs', false);
+  it('checks a rating against the current code when opened', () => {
     const { bar } = mount(baseTask({ brief: undefined }));
-    expect(bar.textContent).toContain('Confidence rating');
     bar.click();
     expect(mockRefreshCode).toHaveBeenCalledWith('task');
-    expect(card()?.textContent).toContain('Write task briefs');
   });
 
   it('marks a rating out of date from a newer code check', () => {
@@ -334,15 +313,6 @@ describe('TaskBriefBar', () => {
     const { bar } = mount(baseTask({ confidence: undefined }));
     bar.click();
     expect(button('Rate confidence · Codex')).toBeDefined();
-  });
-
-  it('offers a rating and points to briefs when briefs are off and nothing is rated', () => {
-    setStore('taskBriefs', false);
-    const { bar } = mount(baseTask({ brief: undefined, confidence: undefined }));
-    expect(bar.textContent).toContain('Rate confidence…');
-    bar.click();
-    expect(card()?.textContent).toContain('Write task briefs');
-    expect(button('Rate confidence')).toBeDefined();
   });
 
   it('explains the empty state before the first brief', () => {

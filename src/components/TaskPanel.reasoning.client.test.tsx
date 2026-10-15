@@ -1,5 +1,13 @@
 import { expectDefined } from '../store/test-helpers';
-import { For, Show, createEffect, createSignal, onCleanup, type ComponentProps } from 'solid-js';
+import {
+  For,
+  Show,
+  createEffect,
+  createSignal,
+  onCleanup,
+  type ComponentProps,
+  type JSX,
+} from 'solid-js';
 import { render } from 'solid-js/web';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeAll, expect, it, vi } from 'vitest';
@@ -16,6 +24,7 @@ import {
   showNotification,
   toggleFocusMode,
   setTaskFocusedPanel,
+  setTaskBriefs,
 } from '../store/store';
 import { GIST_LABEL } from '../lib/understanding-tour';
 import type { Task } from '../store/types';
@@ -57,6 +66,7 @@ vi.mock('../store/store', () => {
     taskViewportVisibility: {} as Record<string, string>,
     askCodeProvider: 'minimax',
     agentEnvFiles: {},
+    taskBriefs: true,
   });
   parentNavigation.setCollapsed = (value: boolean) =>
     setStore('tasks', 'parent', 'collapsed', value);
@@ -89,6 +99,7 @@ vi.mock('../store/store', () => {
     activateTaskFromPointer: (id: string) => setStore('activeTaskId', id),
     uncollapseTask: vi.fn(),
     toggleFocusMode: (on?: boolean) => setStore('focusMode', on ?? !store.focusMode),
+    setTaskBriefs: (on: boolean) => setStore('taskBriefs', on),
   };
 });
 vi.mock('../lib/theme', () => ({ theme: {} }));
@@ -103,8 +114,9 @@ vi.mock('../lib/ipc', () => ({
   },
 }));
 vi.mock('./TaskAITerminal', () => ({
-  TaskAITerminal: (props: { onReview?: (path?: string) => void }) => (
+  TaskAITerminal: (props: { onReview?: (path?: string) => void; brief?: JSX.Element }) => (
     <div class="test-terminal">
+      {props.brief}
       Scrollback
       <button
         class="test-chat-review"
@@ -119,6 +131,7 @@ vi.mock('./TaskAITerminal', () => ({
     </div>
   ),
 }));
+vi.mock('./TaskBrief', () => ({ TaskBriefBar: () => <div class="test-brief-bar" /> }));
 vi.mock('./PromptInput', () => ({
   PromptInput: () => <textarea class="test-prompt" value="Draft" />,
 }));
@@ -265,6 +278,32 @@ afterEach(() => {
   vi.mocked(invoke).mockReset();
   vi.mocked(invoke).mockResolvedValue(undefined);
   vi.useRealTimers();
+});
+
+it('hides the brief bar, and with it Rate confidence, while briefs are off', () => {
+  const task: Task = {
+    id: 'task',
+    name: 'Task',
+    projectId: 'project',
+    agentIds: ['agent'],
+    shellAgentIds: [],
+    notes: '',
+    gitIsolation: 'none',
+    branchName: '',
+    worktreePath: '/tmp/task',
+    lastPrompt: '',
+  };
+  const container = document.createElement('div');
+  document.body.append(container);
+  dispose = render(() => <TaskPanel task={task} isActive />, container);
+  const bar = () => container.querySelector('.test-brief-bar');
+  expect(bar()).not.toBeNull();
+  setTaskBriefs(false);
+  try {
+    expect(bar()).toBeNull();
+  } finally {
+    setTaskBriefs(true);
+  }
 });
 
 const tourCard = (title: string, label = 'KEY DECISION') => ({

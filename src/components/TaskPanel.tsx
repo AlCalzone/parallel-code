@@ -617,10 +617,12 @@ export function TaskPanel(props: TaskPanelProps) {
         onSelectAgent={setActiveAgent}
         promptHandle={promptHandle}
         onTranscriptMarksReady={handleTranscriptMarks}
-        // Shown with briefs off too, so Rate confidence stays reachable; a task
+        // Turning briefs off hides the whole card, Rate confidence included; a task
         // without agents has no one to ask, unless a rating is already there.
         brief={
-          <Show when={props.task.agentIds.length > 0 || props.task.confidence}>
+          <Show
+            when={store.taskBriefs && (props.task.agentIds.length > 0 || props.task.confidence)}
+          >
             <TaskBriefBar
               task={props.task}
               onFileClick={(file) => setDiffScrollTarget(file)}
