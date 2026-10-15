@@ -74,6 +74,7 @@ import {
   setPlanContent,
   setDockerAvailable,
   toggleTaskFocusMode,
+  toggleFocusMode,
   initMCPListeners,
   markTaskMcpPending,
   applyTaskMcpLaunchResult,
@@ -762,8 +763,13 @@ function App() {
           return;
         }
         // Not global, so an Escape typed into the agent terminal still
-        // reaches the agent instead of leaving focus mode.
-        if (store.focusMode) toggleTaskFocusMode();
+        // reaches the agent instead of leaving focus mode. Exits directly:
+        // toggleTaskFocusMode ignores a standalone terminal as the active item.
+        // The new-task panel and GitHub page hide focus mode; leave it for
+        // when they close rather than flipping it unseen.
+        if (store.focusMode && !store.showNewTaskPanel && !store.githubIssuesProjectId) {
+          toggleFocusMode(false);
+        }
       },
       zoomIn: () => adjustGlobalScale(1),
       zoomOut: () => adjustGlobalScale(-1),

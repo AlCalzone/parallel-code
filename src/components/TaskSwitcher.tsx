@@ -36,6 +36,8 @@ export function TaskSwitcher(props: { open: boolean; onClose: () => void }) {
   const [query, setQuery] = createSignal('');
   const [selected, setSelected] = createSignal(0);
   const matches = () => filterSwitcherItems(switcherItems(), query());
+  // Clamped, so a task closing while the switcher is open can't strand the highlight.
+  const active = () => Math.max(0, Math.min(selected(), matches().length - 1));
   let inputRef: HTMLInputElement | undefined;
 
   createEffect(
@@ -62,10 +64,10 @@ export function TaskSwitcher(props: { open: boolean; onClose: () => void }) {
       e.preventDefault();
       if (count === 0) return;
       const step = e.key === 'ArrowDown' ? 1 : -1;
-      setSelected((selected() + step + count) % count);
+      setSelected((active() + step + count) % count);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const item = matches()[selected()];
+      const item = matches()[active()];
       if (item) choose(item.id);
     }
   }
@@ -74,7 +76,7 @@ export function TaskSwitcher(props: { open: boolean; onClose: () => void }) {
 
   createEffect(() => {
     if (!props.open) return;
-    document.getElementById(optionId(selected()))?.scrollIntoView({ block: 'nearest' });
+    document.getElementById(optionId(active()))?.scrollIntoView({ block: 'nearest' });
   });
 
   return (
@@ -94,7 +96,7 @@ export function TaskSwitcher(props: { open: boolean; onClose: () => void }) {
         aria-label="Switch to task"
         aria-expanded="true"
         aria-controls={listId}
-        aria-activedescendant={matches().length > 0 ? optionId(selected()) : undefined}
+        aria-activedescendant={matches().length > 0 ? optionId(active()) : undefined}
         placeholder="Switch to task…"
         value={query()}
         onInput={(e) => {
@@ -109,7 +111,7 @@ export function TaskSwitcher(props: { open: boolean; onClose: () => void }) {
             <li
               id={optionId(index())}
               role="option"
-              aria-selected={index() === selected()}
+              aria-selected={index() === active()}
               class="task-switcher-option"
               onMouseMove={() => setSelected(index())}
               onClick={() => choose(item.id)}
@@ -132,7 +134,7 @@ export function TaskSwitcher(props: { open: boolean; onClose: () => void }) {
       </ul>
       <Show when={matches().length === 0}>
         <p class="task-switcher-empty">
-          {store.taskOrder.length === 0 ? 'No open tasks.' : 'No open task matches.'}
+          {switcherItems().length === 0 ? 'No open tasks.' : 'No open task matches.'}
         </p>
       </Show>
     </Dialog>

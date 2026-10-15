@@ -665,7 +665,11 @@ export function GraphCanvas<N extends MapNode>(props: GraphProps<N>) {
           }
           if (event.key === '+' || event.key === '=') scaleBy(1.2);
           if (event.key === '-') scaleBy(1 / 1.2);
-          if (event.key === 'Escape') setHovered(undefined);
+          // Mark it handled so the same press doesn't also leave focus mode.
+          if (event.key === 'Escape' && hovered()) {
+            event.preventDefault();
+            setHovered(undefined);
+          }
         }}
       >
         <g transform={camera().toString()}>

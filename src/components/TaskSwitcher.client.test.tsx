@@ -102,3 +102,13 @@ it('activates a task on click', () => {
   expect(store.activeTaskId).toBe('dark');
   expect(open()).toBe(false);
 });
+
+it('keeps a valid selection when the highlighted task closes while open', () => {
+  press('ArrowUp');
+  expect(options()[2].getAttribute('aria-selected')).toBe('true');
+  setStore('taskOrder', ['login', 'dark']);
+  expect(options()[1].getAttribute('aria-selected')).toBe('true');
+  expect(input()?.getAttribute('aria-activedescendant')).toBe(options()[1].id);
+  press('Enter');
+  expect(store.activeTaskId).toBe('dark');
+});

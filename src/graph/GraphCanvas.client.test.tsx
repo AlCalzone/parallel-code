@@ -219,3 +219,17 @@ it('shows ownership marks only when asked', () => {
   mount('vertical', true);
   expect(node('a')?.querySelector('.mindmap-ownership')).toBeNull();
 });
+
+it('takes Escape only when it closes a note preview', () => {
+  mount();
+  const surface = container.querySelector<SVGSVGElement>('svg.investigation-graph');
+  const escape = () => {
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    surface?.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  node('a')?.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
+  // Handled, so the same press does not also leave focus mode behind it.
+  expect(escape()).toBe(true);
+  expect(escape()).toBe(false);
+});
