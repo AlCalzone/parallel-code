@@ -199,9 +199,10 @@ Notifications show the task name and a request for input; terminal output and co
 | **App**                |                                    |
 | `Ctrl+,`               | Open settings                      |
 | `Ctrl+/` or `F1`       | Show all shortcuts                 |
+| `Ctrl+=` / `Ctrl+-`    | Zoom in / out                      |
 | `Ctrl+0`               | Reset zoom                         |
 | `Ctrl+Scroll`          | Adjust zoom                        |
-| `Escape`               | Close dialog                       |
+| `Escape`               | Close dialog or leave focus mode   |
 
 </details>
 

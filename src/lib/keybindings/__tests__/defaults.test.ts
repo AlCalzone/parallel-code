@@ -26,6 +26,8 @@ const APP_LAYER_IDS = [
   'app.toggle-help-f1',
   'app.toggle-settings',
   'app.close-dialogs',
+  'app.zoom-in',
+  'app.zoom-out',
   'app.reset-zoom',
   ...Array.from({ length: 9 }, (_, i) => `app.nav.jump-to-task-${i + 1}`),
 ];

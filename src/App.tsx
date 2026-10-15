@@ -758,14 +758,18 @@ function App() {
           toggleSettingsDialog(false);
           return;
         }
+        // Not global, so an Escape typed into the agent terminal still
+        // reaches the agent instead of leaving focus mode.
+        if (store.focusMode) toggleTaskFocusMode();
       },
+      zoomIn: () => adjustGlobalScale(1),
+      zoomOut: () => adjustGlobalScale(-1),
       resetZoom: () => resetGlobalScale(),
       redrawTerminals: () => redrawAllTerminals(),
     };
 
     const cleanupZoomShortcuts = registerZoomShortcuts({
       zoomIn: () => adjustGlobalScale(1),
-      zoomOut: () => adjustGlobalScale(-1),
       resetZoom: () => resetGlobalScale(),
     });
 
