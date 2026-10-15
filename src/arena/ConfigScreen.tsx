@@ -202,6 +202,7 @@ export function ConfigScreen() {
         value={store.projects.find((p) => p.path === arenaStore.cwd)?.id ?? null}
         onChange={(id) => setCwd(id ? (getProject(id)?.path ?? '') : '')}
         placeholder="Select a project..."
+        showPath
       />
 
       {/* Prompt */}

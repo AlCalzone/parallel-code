@@ -8,6 +8,7 @@ interface ProjectSelectProps {
   onChange: (projectId: string | null) => void;
   placeholder?: string;
   class?: string;
+  showPath?: boolean;
 }
 
 export function ProjectSelect(props: ProjectSelectProps) {
@@ -33,7 +34,8 @@ export function ProjectSelect(props: ProjectSelectProps) {
           <option value={project.id}>
             <ProjectSwatch color={project.color} />
             <span>
-              {project.name} — {project.path}
+              {project.name}
+              <Show when={props.showPath}> — {project.path}</Show>
             </span>
           </option>
         )}

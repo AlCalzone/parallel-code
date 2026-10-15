@@ -46,6 +46,17 @@ describe('ProjectSelect', () => {
 
     expect(
       Array.from(container.querySelectorAll('option'), (option) => option.textContent),
-    ).toEqual(['alpha — /alpha', 'Beta — /beta', 'Zulu — /zulu']);
+    ).toEqual(['alpha', 'Beta', 'Zulu']);
+  });
+
+  it('appends the project path when showPath is set', () => {
+    setStore('projects', [{ id: 'alpha', name: 'Alpha', path: '/alpha', color: '' }]);
+    const container = document.createElement('div');
+    document.body.append(container);
+    disposers.push(
+      render(() => <ProjectSelect value={null} onChange={() => undefined} showPath />, container),
+    );
+
+    expect(container.querySelector('option')?.textContent).toBe('Alpha — /alpha');
   });
 });
