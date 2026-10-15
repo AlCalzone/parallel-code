@@ -3785,6 +3785,58 @@ html[data-look='islands-light'] .window-title-icon {
   outline-offset: 2px;
 }
 
+/* Task switcher (Cmd+K). Neutral rows; the selected one uses the plain
+   selection background, never an accent fill. */
+.task-switcher-input {
+  padding: 9px 10px;
+  font-size: 14px;
+  color: var(--fg);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.task-switcher-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.task-switcher-option {
+  display: grid;
+  grid-template-columns: 14px minmax(0, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  font-size: 13px;
+  color: var(--fg);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.task-switcher-option[aria-selected='true'] {
+  background: var(--bg-selected);
+}
+
+.task-switcher-name,
+.task-switcher-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-switcher-detail,
+.task-switcher-empty {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.task-switcher-empty {
+  margin: 4px 8px;
+}
+
 /* macOS native titlebar spacer (overlay style) */
 .mac-titlebar-spacer {
   padding-left: 90px;

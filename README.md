@@ -191,6 +191,8 @@ Notifications show the task name and a request for input; terminal output and co
 | **Navigation**         |                                    |
 | `Alt+Arrows`           | Focus pane/task in arrow direction |
 | `Alt+Shift+Left/Right` | Move task (macOS: `Ctrl+Shift`)    |
+| `Ctrl+Shift+J`         | Switch task by name (Linux)        |
+| `Cmd+K`                | Switch task by name (macOS)        |
 | `Ctrl+B`               | Toggle sidebar                     |
 | `Ctrl+Shift+F`         | Toggle focus mode                  |
 | **Terminals**          |                                    |

@@ -31,6 +31,7 @@ import { resolvePanelCloseTarget } from './store/close-target';
 import { Sidebar } from './components/Sidebar';
 import { TilingLayout } from './components/TilingLayout';
 import { HelpDialog } from './components/HelpDialog';
+import { TaskSwitcher } from './components/TaskSwitcher';
 import { SettingsDialog } from './components/SettingsDialog';
 import { WorkspaceControls } from './components/WorkspaceControls';
 import { WindowTitleBar } from './components/WindowTitleBar';
@@ -188,6 +189,7 @@ function App() {
   const [windowMaximized, setWindowMaximized] = createSignal(false);
   const [showDropOverlay, setShowDropOverlay] = createSignal(false);
   const [closeHandlerReady, setCloseHandlerReady] = createSignal(false);
+  const [taskSwitcherOpen, setTaskSwitcherOpen] = createSignal(false);
   let dragCounter = 0;
 
   function closeArena() {
@@ -728,6 +730,7 @@ function App() {
           setFilesOpen(true);
       },
       toggleHelp: () => toggleHelpDialog(),
+      openTaskSwitcher: () => setTaskSwitcherOpen(true),
       toggleSettings: () => toggleSettingsDialog(),
       newThinkingTour: () => openThinkingSpace('new'),
       closeDialogs: () => {
@@ -951,6 +954,7 @@ function App() {
         </main>
         <UsageStatusBar />
         <HelpDialog open={store.showHelpDialog} onClose={() => toggleHelpDialog(false)} />
+        <TaskSwitcher open={taskSwitcherOpen()} onClose={() => setTaskSwitcherOpen(false)} />
         <SettingsDialog
           open={store.showSettingsDialog}
           onClose={() => toggleSettingsDialog(false)}

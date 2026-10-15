@@ -5,8 +5,7 @@ import {
   activateTaskFromPointer,
   store,
 } from '../store/store';
-import { openPanelOrder } from '../store/navigation';
-import { documentAgentTaskId } from '../documents/task-id';
+import { openItemName, openPanelOrder } from '../store/navigation';
 import { StatusDot } from './StatusDot';
 
 /** Title-bar switcher: one named pill per open item. The active pill is
@@ -17,13 +16,7 @@ export function FocusModeTaskIndicators() {
     openPanelOrder().map((id) => ({
       id,
       isTask: Boolean(store.tasks[id]),
-      name:
-        (store.activeDocumentProjectId && id === documentAgentTaskId(store.activeDocumentProjectId)
-          ? store.projects.find((p) => p.id === store.activeDocumentProjectId)?.name
-          : undefined) ??
-        store.tasks[id]?.name ??
-        store.terminals[id]?.name ??
-        'Open item',
+      name: openItemName(id),
     }));
 
   return (

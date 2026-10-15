@@ -170,6 +170,31 @@ export const DEFAULT_BINDINGS: KeyBinding[] = [
     global: true,
   })),
 
+  {
+    id: 'app.nav.task-switcher',
+    layer: 'app',
+    category: 'Navigation',
+    description: 'Switch to task by name',
+    platform: 'mac',
+    key: 'k',
+    modifiers: { meta: true },
+    action: 'openTaskSwitcher',
+    global: true,
+  },
+  {
+    // Not Ctrl+K: a global binding would swallow kill-line in shells and
+    // agent prompts.
+    id: 'app.nav.task-switcher-linux',
+    layer: 'app',
+    category: 'Navigation',
+    description: 'Switch to task by name',
+    platform: 'linux',
+    key: 'J',
+    modifiers: { ctrl: true, shift: true },
+    action: 'openTaskSwitcher',
+    global: true,
+  },
+
   // -------------------------------------------------------------------------
   // App layer — Task actions
   // -------------------------------------------------------------------------

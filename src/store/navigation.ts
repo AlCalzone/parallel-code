@@ -39,6 +39,19 @@ export function openPanelOrder(): string[] {
     : taskOrder;
 }
 
+/** Display name of an open item: a task, a terminal or the document workspace. */
+export function openItemName(id: string): string {
+  const documentProjectId = store.activeDocumentProjectId;
+  return (
+    (documentProjectId && id === documentAgentTaskId(documentProjectId)
+      ? store.projects.find((p) => p.id === documentProjectId)?.name
+      : undefined) ??
+    store.tasks[id]?.name ??
+    store.terminals[id]?.name ??
+    'Open item'
+  );
+}
+
 export function setActiveTask(id: string): void {
   // Its panel lives on the GitHub page, which an active task would close.
   if (isGitHubAgentTaskId(id)) return;
