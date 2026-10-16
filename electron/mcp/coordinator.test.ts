@@ -388,6 +388,42 @@ describe('Coordinator registerCoordinator — idempotency', () => {
     }
   });
 
+  // Codex 0.163 draws its whole screen with cursor moves and no newlines, so the
+  // composer row ends up after the logo once ANSI is stripped. Trimmed recording.
+  it('delivers coordinated initial prompts when Codex positions its composer with cursor moves', async () => {
+    vi.useFakeTimers();
+    try {
+      coordinator.registerCoordinator('coord-1', 'proj-1');
+
+      const task = await coordinator.createTask({
+        name: 'one',
+        prompt: 'do one',
+        coordinatorTaskId: 'coord-1',
+      });
+      const output = mockSubscribeToAgent.mock.calls[0]?.[1] as (encoded: string) => void;
+
+      output(
+        encode(
+          '\x1b[?1049h\x1b[>4;0m\x1b[>7u\x1b[1;1H\x1b[J\x1b[2;3H>_ \x1b[1mOpenAI Codex\x1b[22m\x1b[2m (v0.163.0)' +
+            '\x1b[3;6Hloading\x1b[12;56H⣀⣤⣤⣤⣀⣀\x1b[13;53H⣠⣶⣿⣿⣿⣿' +
+            '\x1b[37;1H\x1b[22m\x1b[1m›\x1b[37;3H\x1b[22m\x1b[2mAsk Codex to do anything' +
+            '\x1b[40;3H\x1b[22m\x1b[1m?\x1b[40;5H\x1b[22mfor\x1b[40;9Hshortcuts\x1b[0m' +
+            '\x1b[1;1H\x1b[0 q\x1b[1;1H \x1b[37;3H\x1b[?25h',
+        ),
+      );
+      await vi.advanceTimersByTimeAsync(1_500);
+      await vi.advanceTimersByTimeAsync(500);
+
+      expect(mockWriteToAgent).toHaveBeenCalledWith(
+        task.agentId,
+        expect.stringContaining('do one'),
+      );
+      expect(mockWriteToAgent).toHaveBeenCalledWith(task.agentId, '\r');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('detects an initial prompt-ready agent from scrollback after renderer reattach', async () => {
     vi.useFakeTimers();
     try {

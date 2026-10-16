@@ -8,6 +8,22 @@ export function stripAnsi(text: string): string {
 }
 
 /**
+ * Give cursor-positioned output its row structure before ANSI stripping: a move
+ * to another row starts a line, a jump within the row becomes a space. Codex
+ * 0.163+ draws its whole screen this way without newlines, which otherwise puts
+ * the composer mid-line behind the logo where line-anchored patterns miss it.
+ */
+export function cursorRowsToLines(text: string): string {
+  let row: string | undefined;
+  // eslint-disable-next-line no-control-regex -- CUP/HVP: ESC [ row ; col H|f
+  return text.replace(/\x1b\[(\d*)(?:;\d*)?[Hf]/g, (_match, nextRow: string) => {
+    const sameRow = (nextRow || '1') === row;
+    row = nextRow || '1';
+    return sameRow ? ' ' : '\n';
+  });
+}
+
+/**
  * Patterns that indicate the agent is waiting for user input (i.e. idle).
  * Each regex is tested against the last non-empty line of stripped output.
  */

@@ -60,6 +60,7 @@ import {
 } from '../ipc/git.js';
 import {
   stripAnsi,
+  cursorRowsToLines,
   chunkContainsAgentPrompt,
   getAgentPromptReadiness,
   AGENT_READY_TAIL_CHARS,
@@ -493,7 +494,7 @@ export class Coordinator {
   private normalizedTail(agentId: string): string {
     const tail = (this.tailBuffers.get(agentId) ?? '').slice(-AGENT_READY_TAIL_CHARS * 2);
     return (
-      stripAnsi(tail)
+      stripAnsi(cursorRowsToLines(tail))
         // eslint-disable-next-line no-control-regex -- preserve line breaks for anchored prompt detection.
         .replace(/[\x00-\x09\x0b-\x0c\x0e-\x1f\x7f]/g, ' ')
         .replace(/[ \t]+/g, ' ')
