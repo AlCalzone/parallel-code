@@ -75,8 +75,16 @@ export function InlineReview(props: {
   return (
     <section class="docws-inline-review" aria-label="Proposal review">
       <div class="docws-inline-review-bar">
-        <span class="docws-inline-review-summary" title={props.candidate.rationale?.summary}>
-          {props.candidate.rationale?.summary ?? 'Proposal ready'}
+        {/* A stale run says why Accept is off where the summary was, so the
+            buttons stay where they are. */}
+        <span
+          class="docws-inline-review-summary"
+          classList={{ 'docws-warning': props.run.status === 'stale' }}
+          title={props.candidate.rationale?.summary}
+        >
+          {props.run.status === 'stale'
+            ? 'The document moved since this run; re-run it to apply.'
+            : (props.candidate.rationale?.summary ?? 'Proposal ready')}
         </span>
         <Show when={changeCount() > 1}>
           <span class="docws-inline-review-count">{countLabel(changeCount(), 'change')}</span>

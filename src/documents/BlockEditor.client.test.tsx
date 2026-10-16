@@ -1,3 +1,4 @@
+import { EditorView } from '@codemirror/view';
 import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BlockEditor, type BlockEditTarget } from './BlockEditor';
@@ -113,5 +114,107 @@ describe('BlockEditor', () => {
     expect(input.value).toBe('My correction');
     expect(onClose).not.toHaveBeenCalled();
     expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  describe('inline', () => {
+    function mountInline() {
+      const host = document.createElement('div');
+      document.body.append(host);
+      const onClose = vi.fn();
+      dispose = render(
+        () => <BlockEditor target={target} inline onClose={onClose} onSaved={() => {}} />,
+        host,
+      );
+      const content = host.querySelector<HTMLElement>('.cm-content');
+      const view = content && EditorView.findFromDOM(content);
+      if (!content || !view) throw new Error('No live Markdown editor');
+      const type = (text: string) =>
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } });
+      return { host, onClose, content, view, type };
+    }
+
+    it('edits in the page with the live Markdown editor rather than in a dialog', () => {
+      const { host, view } = mountInline();
+      expect(view.state.doc.toString()).toBe('Typo.');
+      expect(host.querySelector('textarea')).toBeNull();
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+    });
+
+    it('puts an untouched editor away on Escape or a press elsewhere', () => {
+      const { onClose, content } = mountInline();
+      content.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      expect(onClose).not.toHaveBeenCalled();
+      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      expect(onClose).toHaveBeenCalledOnce();
+      content.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(onClose).toHaveBeenCalledTimes(2);
+    });
+
+    it('hands the field back for another try when saving fails', async () => {
+      vi.mocked(invoke).mockRejectedValue(new Error('The document changed.'));
+      const { host, content, type } = mountInline();
+      type('Fixed.');
+      content.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }),
+      );
+      await vi.waitFor(() => expect(host.querySelector('[role="alert"]')).not.toBeNull());
+      expect(document.activeElement).toBe(content);
+    });
+
+    it('leaves the focus where the user put it while a failed save ran', async () => {
+      let fail: (err: Error) => void = () => {};
+      vi.mocked(invoke).mockImplementation(() => new Promise((_, reject) => (fail = reject)));
+      const { host, content, type } = mountInline();
+      const elsewhere = document.createElement('input');
+      document.body.append(elsewhere);
+      type('Fixed.');
+      content.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }),
+      );
+      elsewhere.focus();
+      fail(new Error('The document changed.'));
+      await vi.waitFor(() => expect(host.querySelector('[role="alert"]')).not.toBeNull());
+      expect(document.activeElement).toBe(elsewhere);
+    });
+
+    it('stays open while the page is scrolled from its scrollbar', () => {
+      const { onClose } = mountInline();
+      const page = document.createElement('div');
+      document.body.append(page);
+      for (const [key, value] of Object.entries({
+        clientWidth: 300,
+        scrollHeight: 900,
+        clientHeight: 400,
+      }))
+        Object.defineProperty(page, key, { value });
+      const press = new MouseEvent('mousedown', { bubbles: true });
+      Object.defineProperty(press, 'offsetX', { value: 305 });
+      page.dispatchEvent(press);
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('keeps an edit in progress when the press lands elsewhere', () => {
+      const { onClose, view, type } = mountInline();
+      type('Half done');
+      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      expect(onClose).not.toHaveBeenCalled();
+      expect(view.state.doc.toString()).toBe('Half done');
+    });
+
+    it('saves what was typed on Ctrl+Enter, without the editor adding a line', async () => {
+      vi.mocked(invoke).mockResolvedValue(undefined);
+      const { host, onClose, content, type } = mountInline();
+      type('Fixed.\nNext.');
+      content.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }),
+      );
+      // Typing on while it saves would be closed away unsaved.
+      expect(host.querySelector('.docws-block-editor')?.hasAttribute('inert')).toBe(true);
+      await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+      expect(invoke).toHaveBeenCalledWith(
+        IPC.WriteDocumentBlock,
+        expect.objectContaining({ replacement: 'Fixed.\r\nNext.' }),
+      );
+    });
   });
 });

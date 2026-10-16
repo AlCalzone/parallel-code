@@ -1,5 +1,6 @@
 import { render } from 'solid-js/web';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { EditorView } from '@codemirror/view';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { setStore, store } from '../store/core';
 import { DocumentWorkspacePanel } from './DocumentWorkspacePanel';
 import {
@@ -7,10 +8,14 @@ import {
   setDocumentComposerDraft,
   setDocumentSelection,
   openDocumentWorkspace,
+  openDocumentFile,
+  refreshDocumentSnapshot,
+  setDocumentView,
 } from './store';
 import { IPC } from '../../electron/ipc/channels';
 import * as ipc from '../lib/ipc';
 import { createRenderedBlocks } from './use-blocks';
+import { clearBlockEdits } from './block-edit-state';
 import { createTask, uncollapseTask } from '../store/tasks';
 import { createTerminal } from '../store/terminals';
 import { setActiveTask } from '../store/navigation';
@@ -41,6 +46,7 @@ const disposers: Array<() => void> = [];
 
 afterEach(() => {
   while (disposers.length > 0) disposers.pop()?.();
+  clearBlockEdits();
   for (const id of Object.keys(store.agents)) clearAgentActivity(id);
   document.body.replaceChildren();
   setStore({
@@ -100,6 +106,11 @@ function button(host: HTMLElement, label: string): HTMLButtonElement | null {
   return (
     Array.from(host.querySelectorAll('button')).find((b) => b.textContent?.trim() === label) ?? null
   );
+}
+
+/** An action of the toolbar over the selected or hovered passage. */
+function blockAction(kind: 'proposals' | 'note' | 'question'): HTMLButtonElement | null {
+  return document.querySelector(`.docws-block-action[data-kind="${kind}"]`);
 }
 
 describe('DocumentWorkspacePanel', () => {
@@ -291,8 +302,66 @@ describe('DocumentWorkspacePanel', () => {
     const host = openWorkspace();
     setStore('documentWorkspacesEnabled', true);
     await openDocumentWorkspace('docs');
-    await vi.waitFor(() => expect(button(host, 'Edit block')).toBeTruthy());
-    expect(button(host, 'Full width')).toBeFalsy();
+    await vi.waitFor(() => expect(host.querySelector('.docws-page')).not.toBeNull());
+    expect(host.querySelector('[aria-label="Full width"]')).toBeNull();
+    // Double-click or E edits a block; the bar keeps no button for it.
+    expect(button(host, 'Edit block')).toBeNull();
+  });
+
+  it("edits an HTML page's block in a dialog, on a double-click or E", async () => {
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel) =>
+      channel === IPC.ReadDocument
+        ? {
+            content:
+              '<!doctype html>\n<html>\n<body>\n<p>One.</p>\n\n<p>Two.</p>\n</body>\n</html>\n',
+            missing: false,
+          }
+        : [],
+    );
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() =>
+      expect(host.querySelector('.docws-page [data-block-index="1"]')).not.toBeNull(),
+    );
+    const source = () =>
+      document.querySelector<HTMLTextAreaElement>('[role="dialog"] textarea')?.value;
+    const marked = (text: string) =>
+      Array.from(host.querySelectorAll('.docws-page [data-block-index]')).find(
+        (el) => el.textContent?.trim() === text,
+      );
+    await vi.waitFor(() => expect(marked('One.')).toBeDefined());
+    const block = marked('One.');
+    // Like E, a double-click waits out a render of the page's blocks in progress.
+    await vi.waitFor(async () => {
+      for (const detail of [1, 2]) {
+        block?.dispatchEvent(
+          new MouseEvent('mousedown', { bubbles: true, cancelable: true, detail }),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      expect(source()).toContain('One.');
+    });
+    button(document.body, 'Cancel')?.click();
+    await vi.waitFor(() => expect(source()).toBeUndefined());
+
+    const second = host.querySelector('.docws-page [data-block-index="1"]');
+    if (!second) throw new Error('No second block');
+    const range = document.createRange();
+    range.selectNodeContents(second);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+    second.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    window.getSelection()?.removeAllRanges();
+    await vi.waitFor(() => {
+      host
+        .querySelector('.docws-workspace')
+        ?.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'e', bubbles: true, cancelable: true }),
+        );
+      expect(source()).toContain('Two.');
+    });
   });
 
   it('uses the entire title-bar background as the window drag region', () => {
@@ -329,7 +398,7 @@ describe('DocumentWorkspacePanel', () => {
     expect(store.activeDocumentProjectId).toBeNull();
   });
 
-  it('opens the Ask composer from the toolbar for the selected passage', async () => {
+  it('asks about the selected passage from its own toolbar, not the bar above', async () => {
     vi.spyOn(ipc, 'invoke').mockImplementation(async (channel) =>
       channel === IPC.ReadDocument
         ? { content: 'First paragraph.\n', missing: false, dirty: false }
@@ -339,13 +408,579 @@ describe('DocumentWorkspacePanel', () => {
     setStore('documentWorkspacesEnabled', true);
     await openDocumentWorkspace('docs');
     await vi.waitFor(() => expect(host.querySelector('[data-block-index="0"]')).not.toBeNull());
-    const ask = button(host, 'Ask');
-    expect(ask?.disabled).toBe(true);
+    expect(button(host, 'Ask')).toBeNull();
+    expect(button(host, 'Comment')).toBeNull();
     selectText(host, 0);
-    expect(ask?.disabled).toBe(false);
-    ask?.click();
+    blockAction('question')?.click();
     expect(documentStore.composerDraft?.mode).toBe('question');
     expect(host.querySelector('[aria-label="Ask about this passage"]')).not.toBeNull();
+  });
+
+  it('comments on, asks about or edits a selected passage from the keyboard', async () => {
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel) =>
+      channel === IPC.ReadDocument
+        ? { content: 'First paragraph.\n', missing: false, dirty: false }
+        : [],
+    );
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="0"]')).not.toBeNull());
+    const key = (k: string, init: KeyboardEventInit = {}) => {
+      const press = new KeyboardEvent('keydown', {
+        key: k,
+        bubbles: true,
+        cancelable: true,
+        ...init,
+      });
+      // A click or a closed editor leaves the focus on the workspace itself.
+      host.querySelector<HTMLElement>('.docws-workspace')?.dispatchEvent(press);
+      return press;
+    };
+    // Nothing selected, nothing to act on: the keys stay ordinary keys.
+    expect(key('c').defaultPrevented).toBe(false);
+    selectText(host, 0);
+    // The selection's label names the keys, as no button shows E.
+    expect(document.querySelector('.docws-toolbar-label')?.getAttribute('title')).toContain(
+      'E edits its block',
+    );
+    expect(key('c', { ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(documentStore.composerDraft).toBeNull();
+
+    expect(key('c').defaultPrevented).toBe(true);
+    expect(documentStore.composerDraft?.mode).toBe('note');
+    setDocumentComposerDraft(null);
+    key('a');
+    expect(documentStore.composerDraft?.mode).toBe('question');
+    setDocumentComposerDraft(null);
+    // Like a double-click, E waits out a render of the blocks in progress.
+    await vi.waitFor(() => {
+      key('e');
+      expect(host.querySelector('[data-block-index="0"] .cm-content')).not.toBeNull();
+    });
+    expect(blockAction('note')?.getAttribute('aria-keyshortcuts')).toBe('C');
+    expect(blockAction('question')?.getAttribute('aria-keyshortcuts')).toBe('A');
+  });
+
+  it('leaves the passage keys to a focused link and to the Markdown editor', async () => {
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel) =>
+      channel === IPC.ReadDocument
+        ? {
+            content: 'First [link](https://example.com) paragraph.\n',
+            missing: false,
+            dirty: false,
+          }
+        : [],
+    );
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="0"] a')).not.toBeNull());
+    const press = (target: Element | null) => {
+      const e = new KeyboardEvent('keydown', { key: 'c', bubbles: true, cancelable: true });
+      target?.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    selectText(host, 0);
+
+    // A link or button in the page has the key while it has the focus.
+    expect(press(host.querySelector('[data-block-index="0"] a'))).toBe(false);
+    expect(documentStore.composerDraft).toBeNull();
+    // The prose around it does not; Chromium can focus the scroller itself.
+    expect(press(host.querySelector('[data-block-index="0"] > div'))).toBe(true);
+    expect(documentStore.composerDraft?.mode).toBe('note');
+    setDocumentComposerDraft(null);
+
+    // Editing the Markdown hides the page; nothing opens over it unseen.
+    button(document.body, 'Edit')?.click();
+    await vi.waitFor(() => expect(host.querySelector('.docws-scroll.is-hidden')).not.toBeNull());
+    expect(press(host.querySelector('.docws-workspace'))).toBe(false);
+    expect(documentStore.composerDraft).toBeNull();
+  });
+
+  it('moves a comment to the next clicked block at once, while the first still saves', async () => {
+    let landSave: (() => void) | undefined;
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel, args) => {
+      if (channel === IPC.ReadDocument)
+        return { content: 'First paragraph.\n\nSecond paragraph.\n', missing: false, dirty: false };
+      if (channel === IPC.SaveDocumentAnnotation) {
+        await new Promise<void>((resolve) => (landSave = resolve));
+        return (args as { annotation: unknown }).annotation;
+      }
+      return [];
+    });
+    // A save left hanging would hold later tests' comments open.
+    onTestFinished(() => landSave?.());
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="1"]')).not.toBeNull());
+    const press = (index: number) => {
+      const el = host.querySelector(`[data-block-index="${index}"] > div`);
+      el?.dispatchEvent(
+        new MouseEvent('mousedown', { bubbles: true, cancelable: true, detail: 1 }),
+      );
+      el?.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+      el?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+    };
+
+    press(0);
+    await vi.waitFor(() => expect(documentStore.selection?.startBlock).toBe(0));
+    const field = host.querySelector<HTMLTextAreaElement>('textarea');
+    if (!field) throw new Error('No comment field');
+    field.value = 'First comment.';
+    field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+
+    press(1);
+    // Opens without waiting for the first comment's save, which is still out.
+    await vi.waitFor(() => expect(documentStore.selection?.startBlock).toBe(1));
+    expect(landSave).toBeDefined();
+    const next = documentStore.composerDraft?.id;
+    expect(documentStore.composerDraft?.text).toBe('');
+
+    landSave?.();
+    await vi.waitFor(() =>
+      expect(documentStore.annotations.map((a) => a.text)).toEqual(['First comment.']),
+    );
+    expect(documentStore.composerDraft?.id).toBe(next);
+  });
+
+  it('hands a comment whose save failed behind it to the empty one that replaced it', async () => {
+    let failSave: ((err: Error) => void) | undefined;
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel) => {
+      if (channel === IPC.ReadDocument)
+        return { content: 'First paragraph.\n\nSecond paragraph.\n', missing: false, dirty: false };
+      if (channel === IPC.SaveDocumentAnnotation)
+        return new Promise((_, reject) => (failSave = reject));
+      return [];
+    });
+    onTestFinished(() => failSave?.(new Error('done')));
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="1"]')).not.toBeNull());
+    const press = (index: number) =>
+      host
+        .querySelector(`[data-block-index="${index}"] > div`)
+        ?.dispatchEvent(
+          new MouseEvent('mousedown', { bubbles: true, cancelable: true, detail: 1 }),
+        );
+
+    press(0);
+    await vi.waitFor(() => expect(documentStore.selection?.startBlock).toBe(0));
+    const field = host.querySelector<HTMLTextAreaElement>('textarea');
+    if (!field) throw new Error('No comment field');
+    field.value = 'First comment.';
+    field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    press(1);
+    await vi.waitFor(() => expect(documentStore.selection?.startBlock).toBe(1));
+    expect(documentStore.composerDraft?.text).toBe('');
+
+    failSave?.(new Error('Disk full'));
+    await vi.waitFor(() => expect(documentStore.composerDraft?.text).toBe('First comment.'));
+    expect(documentStore.composerDraft?.noteSaveStatus).toBe('error');
+    // Back on the passage it was written about, so Retry saves it there.
+    expect(documentStore.selection?.startBlock).toBe(0);
+    await vi.waitFor(() =>
+      expect(host.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('First comment.'),
+    );
+    // Its backup would otherwise come back in the tests after this one.
+    const open = documentStore.composerDraft;
+    if (open) setDocumentComposerDraft({ ...open, text: '' });
+  });
+
+  it('keeps a failed comment for later when the next one already has text', async () => {
+    let failSave: ((err: Error) => void) | undefined;
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel) => {
+      if (channel === IPC.ReadDocument)
+        return { content: 'First paragraph.\n\nSecond paragraph.\n', missing: false, dirty: false };
+      if (channel === IPC.SaveDocumentAnnotation)
+        return new Promise((_, reject) => (failSave = reject));
+      return [];
+    });
+    onTestFinished(() => failSave?.(new Error('done')));
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="1"]')).not.toBeNull());
+    const press = (index: number) =>
+      host
+        .querySelector(`[data-block-index="${index}"] > div`)
+        ?.dispatchEvent(
+          new MouseEvent('mousedown', { bubbles: true, cancelable: true, detail: 1 }),
+        );
+    const type = (text: string) => {
+      const field = host.querySelector<HTMLTextAreaElement>('textarea');
+      if (!field) throw new Error('No comment field');
+      field.value = text;
+      field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    };
+
+    press(0);
+    await vi.waitFor(() => expect(documentStore.selection?.startBlock).toBe(0));
+    type('First comment.');
+    press(1);
+    await vi.waitFor(() => expect(documentStore.selection?.startBlock).toBe(1));
+    type('Second');
+    failSave?.(new Error('Disk full'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // The comment being written keeps its own text.
+    expect(documentStore.composerDraft?.text).toBe('Second');
+
+    // Given up, the second makes way; the next comment brings the failed one back.
+    type('');
+    setDocumentComposerDraft(null);
+    press(1);
+    await vi.waitFor(() => expect(documentStore.composerDraft?.text).toBe('First comment.'));
+    expect(documentStore.composerDraft?.noteSaveStatus).toBe('error');
+    expect(documentStore.selection?.startBlock).toBe(0);
+    const open = documentStore.composerDraft;
+    if (open) setDocumentComposerDraft({ ...open, text: '' });
+  });
+
+  it('edits a double-clicked block in place, leaving the clicked passage where it is', async () => {
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel) =>
+      channel === IPC.ReadDocument
+        ? { content: 'First paragraph.\n\nSecond paragraph.\n', missing: false, dirty: false }
+        : [],
+    );
+    const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView');
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="1"]')).not.toBeNull());
+    const el = host.querySelector('[data-block-index="1"] > div');
+    const down = (detail: number) =>
+      el?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, detail }));
+
+    down(1);
+    await vi.waitFor(() => expect(documentStore.composerDraft?.mode).toBe('note'));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    // Scrolling under the pointer would land a double-click's second press elsewhere.
+    expect(scrolled).not.toHaveBeenCalled();
+    down(2);
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+
+    await vi.waitFor(() =>
+      expect(host.querySelector('[data-block-index="1"] .cm-content')?.textContent).toBe(
+        'Second paragraph.',
+      ),
+    );
+    expect(documentStore.composerDraft).toBeNull();
+  });
+
+  it('keeps a block edit in progress through a re-render and a double-click elsewhere', async () => {
+    let content = 'First paragraph.\n\nSecond paragraph.\n';
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel, args) =>
+      channel === IPC.ReadDocument
+        ? {
+            content:
+              (args as { documentPath?: string }).documentPath === 'other.md'
+                ? 'Other paragraph.\n'
+                : content,
+            missing: false,
+            dirty: false,
+          }
+        : [],
+    );
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="1"]')).not.toBeNull());
+    const doubleClick = async (index: number) => {
+      const el = host.querySelector(`[data-block-index="${index}"] > div`);
+      for (const detail of [1, 2]) {
+        el?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, detail }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    };
+    const live = () => {
+      const el = host.querySelector<HTMLElement>('[data-block-index="1"] .cm-content');
+      return el ? EditorView.findFromDOM(el) : null;
+    };
+    await doubleClick(1);
+    await vi.waitFor(() => expect(live()).not.toBeNull());
+    live()?.dispatch({ changes: { from: 0, insert: 'Edited. ' } });
+
+    await doubleClick(0);
+    expect(host.querySelector('[data-block-index="0"] .cm-content')).toBeNull();
+    expect(live()?.state.doc.toString()).toBe('Edited. Second paragraph.');
+
+    content += '\nThird paragraph.\n';
+    await refreshDocumentSnapshot();
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="2"]')).not.toBeNull());
+    await vi.waitFor(() => expect(live()?.state.doc.toString()).toBe('Edited. Second paragraph.'));
+
+    // A paragraph added above moves the block; the editor goes with it.
+    content = `Zeroth paragraph.\n\n${content}`;
+    await refreshDocumentSnapshot();
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="3"]')).not.toBeNull());
+    await vi.waitFor(() =>
+      expect(
+        host.querySelector<HTMLElement>('[data-block-index="2"] .cm-content')?.textContent,
+      ).toBe('Edited. Second paragraph.'),
+    );
+    expect(host.querySelector('[data-block-index="1"]')?.textContent?.trim()).toBe(
+      'First paragraph.',
+    );
+
+    // Rewritten, the block is gone; the edit moves to a dialog rather than
+    // standing in for another block, still in reach to be cancelled.
+    content = 'Only paragraph.\n';
+    await refreshDocumentSnapshot();
+    const inDialog = () =>
+      document.querySelector<HTMLTextAreaElement>('[role="dialog"] textarea')?.value;
+    await vi.waitFor(() => expect(inDialog()).toBe('Edited. Second paragraph.'));
+    expect(host.querySelector('[data-block-index="0"]')?.textContent?.trim()).toBe(
+      'Only paragraph.',
+    );
+
+    // Another document has edits of its own; this one waits for its return.
+    await openDocumentFile('other.md');
+    await vi.waitFor(() =>
+      expect(host.querySelector('[data-block-index="0"]')?.textContent?.trim()).toBe(
+        'Other paragraph.',
+      ),
+    );
+    await doubleClick(0);
+    await vi.waitFor(() =>
+      expect(host.querySelector('[data-block-index="0"] .cm-content')?.textContent).toBe(
+        'Other paragraph.',
+      ),
+    );
+    await openDocumentFile('notes.md');
+    await vi.waitFor(() => expect(inDialog()).toBe('Edited. Second paragraph.'));
+  });
+
+  it('leaves the focus where the user is typing when the file changes under a block edit', async () => {
+    let content = 'First paragraph.\n';
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel) =>
+      channel === IPC.ReadDocument ? { content, missing: false, dirty: false } : [],
+    );
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="0"]')).not.toBeNull());
+    const el = host.querySelector('[data-block-index="0"] > div');
+    for (const detail of [1, 2]) {
+      el?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, detail }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(document.activeElement?.classList.contains('cm-content')).toBe(true),
+    );
+    const elsewhere = document.createElement('input');
+    document.body.append(elsewhere);
+    elsewhere.focus();
+
+    // An agent writes the file; the blocks are rebuilt and the editor with them.
+    content = 'First paragraph.\n\nSecond paragraph.\n';
+    await refreshDocumentSnapshot();
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="1"]')).not.toBeNull());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.activeElement).toBe(elsewhere);
+    elsewhere.remove();
+  });
+
+  it('leaves the focus alone on a re-render after the opening press became a drag', async () => {
+    let content = 'First paragraph.\n';
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel) =>
+      channel === IPC.ReadDocument ? { content, missing: false, dirty: false } : [],
+    );
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="0"]')).not.toBeNull());
+    const el = host.querySelector('[data-block-index="0"] > div');
+    for (const detail of [1, 2]) {
+      el?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, detail }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    // The press ends in a drop, without a release: the editor never takes the focus.
+    document.dispatchEvent(new Event('dragend'));
+    await vi.waitFor(() => expect(host.querySelector('.cm-content')).not.toBeNull());
+    const elsewhere = document.createElement('input');
+    document.body.append(elsewhere);
+    elsewhere.focus();
+
+    content = 'First paragraph.\n\nSecond paragraph.\n';
+    await refreshDocumentSnapshot();
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="1"]')).not.toBeNull());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.activeElement).toBe(elsewhere);
+    elsewhere.remove();
+  });
+
+  it('puts an untouched block editor away when its block is rewritten', async () => {
+    let content = 'First paragraph.\n';
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel) =>
+      channel === IPC.ReadDocument ? { content, missing: false, dirty: false } : [],
+    );
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="0"]')).not.toBeNull());
+    const el = host.querySelector('[data-block-index="0"] > div');
+    for (const detail of [1, 2]) {
+      el?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, detail }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    await vi.waitFor(() => expect(host.querySelector('.cm-content')).not.toBeNull());
+
+    content = 'Rewritten paragraph.\n';
+    await refreshDocumentSnapshot();
+    await vi.waitFor(() =>
+      expect(host.querySelector('[data-block-index="0"]')?.textContent?.trim()).toBe(
+        'Rewritten paragraph.',
+      ),
+    );
+    // Nothing typed, nothing to keep: no dialog takes over the screen.
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(host.querySelector('.cm-content')).toBeNull();
+  });
+
+  it('moves a block edit in progress to a dialog when its document is emptied', async () => {
+    let content = 'First paragraph.\n';
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel) =>
+      channel === IPC.ReadDocument ? { content, missing: false, dirty: false } : [],
+    );
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="0"]')).not.toBeNull());
+    const el = host.querySelector('[data-block-index="0"] > div');
+    for (const detail of [1, 2]) {
+      el?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, detail }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    const live = await vi.waitFor(() => {
+      const field = host.querySelector<HTMLElement>('.cm-content');
+      const view = field && EditorView.findFromDOM(field);
+      if (!view) throw new Error('No inline editor yet');
+      return view;
+    });
+    live.dispatch({ changes: { from: 0, insert: 'Edited. ' } });
+
+    // No block is left to edit in place; the draft must stay in reach, to be cancelled.
+    content = '';
+    await refreshDocumentSnapshot();
+    await vi.waitFor(() =>
+      expect(document.querySelector<HTMLTextAreaElement>('[role="dialog"] textarea')?.value).toBe(
+        'Edited. First paragraph.',
+      ),
+    );
+  });
+
+  it('keeps a block edit in progress while History is looked at', async () => {
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel) =>
+      channel === IPC.ReadDocument
+        ? { content: 'First paragraph.\n', missing: false, dirty: false }
+        : [],
+    );
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="0"]')).not.toBeNull());
+    const el = host.querySelector('[data-block-index="0"] > div');
+    for (const detail of [1, 2]) {
+      el?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, detail }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    const live = () => {
+      const content = host.querySelector<HTMLElement>('.cm-content');
+      return content ? EditorView.findFromDOM(content) : null;
+    };
+    await vi.waitFor(() => expect(live()).not.toBeNull());
+    live()?.dispatch({ changes: { from: 0, insert: 'Edited. ' } });
+
+    setDocumentView('history');
+    await vi.waitFor(() => expect(live()).toBeNull());
+    setDocumentView('document');
+
+    await vi.waitFor(() => expect(live()?.state.doc.toString()).toBe('Edited. First paragraph.'));
+  });
+
+  it('hands the focus back to the workspace when a block edit closes', async () => {
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel) =>
+      channel === IPC.ReadDocument
+        ? { content: 'First paragraph.\n', missing: false, dirty: false }
+        : [],
+    );
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="0"]')).not.toBeNull());
+    const el = host.querySelector('[data-block-index="0"] > div');
+    for (const detail of [1, 2]) {
+      el?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, detail }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    await vi.waitFor(() => expect(host.querySelector('.cm-content')).not.toBeNull());
+    const content = host.querySelector<HTMLElement>('.cm-content');
+    content?.focus();
+
+    content?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(host.querySelector('.cm-content')).toBeNull();
+    expect(document.activeElement).toBe(host.querySelector('.docws-workspace'));
+  });
+
+  it('leaves focus where a click put it when that click closes a comment', async () => {
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel) =>
+      channel === IPC.ReadDocument
+        ? { content: 'First paragraph.\n', missing: false, dirty: false }
+        : [],
+    );
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="0"]')).not.toBeNull());
+    const field = document.createElement('input');
+    document.body.append(field);
+    const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+
+    // A click on something focusable keeps the focus it gives.
+    selectText(host, 0);
+    blockAction('note')?.click();
+    await nextFrame();
+    field.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    field.focus();
+    await nextFrame();
+    expect(documentStore.composerDraft).toBeNull();
+    expect(document.activeElement).toBe(field);
+
+    // A click on plain prose gives none, so focus lands on Rewrite.
+    selectText(host, 0);
+    blockAction('note')?.click();
+    await nextFrame();
+    (document.activeElement as HTMLElement | null)?.blur();
+    host
+      .querySelector('[data-block-index="0"]')
+      ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    await nextFrame();
+    expect(document.activeElement).toBe(button(document.body, 'Rewrite'));
+  });
+
+  it('holds the resolved toggle in the toolbar before the first comment', async () => {
+    vi.spyOn(ipc, 'invoke').mockImplementation(async (channel) =>
+      channel === IPC.ReadDocument
+        ? { content: 'First paragraph.\n', missing: false, dirty: false }
+        : [],
+    );
+    const host = openWorkspace();
+    setStore('documentWorkspacesEnabled', true);
+    await openDocumentWorkspace('docs');
+    await vi.waitFor(() => expect(host.querySelector('[data-block-index="0"]')).not.toBeNull());
+
+    const toggle = document.querySelector<HTMLElement>('.docws-toggle');
+    expect(toggle?.style.visibility).toBe('hidden');
+    expect(toggle?.querySelector('input')?.disabled).toBe(true);
   });
 
   it('switches a typed comment to Ask without first saving it as a comment', async () => {
@@ -365,19 +1000,28 @@ describe('DocumentWorkspacePanel', () => {
     await openDocumentWorkspace('docs');
     await vi.waitFor(() => expect(host.querySelector('[data-block-index="0"]')).not.toBeNull());
     selectText(host, 0);
-    button(host, 'Comment')?.click();
+    blockAction('note')?.click();
     const box = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Comment"]');
     if (!box) throw new Error('No comment field');
     box.value = 'Is this still true?';
     box.dispatchEvent(new Event('input', { bubbles: true }));
     // A real press moves focus on mousedown, which would autosave the comment;
-    // the mode buttons keep focus in the field, so the text moves over instead.
-    for (const label of ['Ask', 'Comment', 'Rewrite']) {
+    // over its passage the toolbar keeps focus in the field, so the text moves over instead.
+    host
+      .querySelector('[data-block-index="0"] > *')
+      ?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    for (const kind of ['question', 'note', 'proposals'] as const) {
       const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
-      button(host, label)?.dispatchEvent(press);
+      blockAction(kind)?.dispatchEvent(press);
       expect(press.defaultPrevented).toBe(true);
     }
-    button(host, 'Ask')?.click();
+    // Comment over its own open comment is that comment, not a new one.
+    const draft = documentStore.composerDraft;
+    if (!draft) throw new Error('No comment open');
+    setDocumentComposerDraft({ ...draft, noteSaveStatus: 'error' });
+    blockAction('note')?.click();
+    expect(documentStore.composerDraft).toMatchObject({ id: draft.id, noteSaveStatus: 'error' });
+    blockAction('question')?.click();
     expect(documentStore.composerDraft).toMatchObject({
       mode: 'question',
       text: 'Is this still true?',
@@ -390,8 +1034,8 @@ describe('DocumentWorkspacePanel', () => {
       mode: 'note',
       noteSaveStatus: 'saving',
     });
-    for (const label of ['Ask', 'Comment', 'Rewrite'])
-      expect(button(host, label)?.disabled).toBe(true);
+    blockAction('question')?.click();
+    expect(documentStore.composerDraft?.mode).toBe('note');
     // Emptying the comment drops its backup, so later tests start clean.
     setDocumentComposerDraft({ text: '', mode: 'note' });
     setDocumentComposerDraft(null);
@@ -452,7 +1096,7 @@ describe('DocumentWorkspacePanel', () => {
     selectText(host, 0);
     expect(documentStore.selection?.startBlock).toBe(0);
     expect(host.querySelector('.docws-composer')).toBeNull();
-    button(host, 'Comment')?.click();
+    blockAction('note')?.click();
     const box = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Comment"]');
     if (!box) throw new Error('No comment composer');
     box.value = 'Check this assumption.';
@@ -489,7 +1133,7 @@ describe('DocumentWorkspacePanel', () => {
 
   it('lets the document take the full width of the pane', () => {
     const host = openWorkspace();
-    const toggle = button(host, 'Full width');
+    const toggle = host.querySelector<HTMLButtonElement>('[aria-label="Full width"]');
     expect(toggle?.getAttribute('aria-pressed')).toBe('false');
     expect(host.querySelector('.docws-doc')?.classList.contains('is-full-width')).toBe(false);
 

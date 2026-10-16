@@ -9,6 +9,7 @@ import {
   on,
   onCleanup,
   onMount,
+  untrack,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { store } from '../store/core';
@@ -61,7 +62,8 @@ import { InlineReview } from './InlineReview';
 import { FilesPopover } from './FilesPopover';
 import { QuickEditChip } from './QuickEditChip';
 import { CandidateOutputDialog } from './CandidateOutputDialog';
-import { BlockEditor, type BlockEditTarget } from './BlockEditor';
+import { BlockEditor } from './BlockEditor';
+import { blockEditIn, endBlockEdit, setBlockEditDraft, startBlockEdit } from './block-edit-state';
 import { MarkdownEditor } from './MarkdownEditor';
 import { afterSavingMarkdown, readMarkdownDraft } from './markdown-editing';
 import { ResizablePanel, type PanelChild } from '../components/ResizablePanel';
@@ -70,7 +72,7 @@ import { DocumentIcon } from './DocumentIcon';
 import { ActionIcon } from './BlockActions';
 import { Dialog } from '../components/Dialog';
 import { openInEditor, revealItemInDir } from '../lib/shell';
-import { PencilIcon, UndoIcon } from '../components/icons';
+import { UndoIcon } from '../components/icons';
 import { setDocumentFullWidth, toggleTaskFocusMode } from '../store/ui';
 import { isTerminalPaneOnScreen } from '../lib/terminalPaneVisibility';
 import { errMessage } from '../lib/log';
@@ -119,7 +121,6 @@ function DocumentPane(props: { project: Project; toolbarSlot: HTMLElement | unde
   );
   const documentPath = () => activeDocumentPath() ?? props.project.documentPath ?? '';
   const selection = () => documentStore.selection;
-  const [blockEdit, setBlockEdit] = createSignal<BlockEditTarget | null>(null);
   const editableBlock = () => {
     const s = selection();
     if (!s || s.wholeDocument || s.startBlock !== s.endBlock || blocks.rendering()) return null;
@@ -140,7 +141,50 @@ function DocumentPane(props: { project: Project; toolbarSlot: HTMLElement | unde
     // Mid-render the blocks belong to an older read of the file than the source.
     if (!block || source === undefined || blocks.rendering()) return;
     if (block.startOffset === undefined || block.endOffset === undefined) return;
-    setBlockEdit({ projectRoot: props.project.path, documentPath: documentPath(), source, block });
+    // An edit in progress is saved or cancelled first, not dropped.
+    if (currentDraft() !== undefined) {
+      showNotification('Save or cancel the block you are editing first.');
+      return;
+    }
+    startBlockEdit({
+      projectRoot: props.project.path,
+      documentPath: documentPath(),
+      source,
+      block,
+    });
+  }
+
+  // Markdown blocks are edited where they stand; a page's blocks live inside
+  // its own markup, so they are edited in a dialog.
+  // An editor opened on another document stays with it.
+  const currentEdit = () => blockEditIn(props.project.path, documentPath())?.target ?? null;
+  const currentDraft = () => blockEditIn(props.project.path, documentPath())?.draft;
+  const inlineEdit = () => (blocks.page() ? null : currentEdit());
+  // The file can change under an edit; the editor stays with its block where
+  // that has moved (saving then reports the change rather than overwriting it).
+  // -1 once the block is gone.
+  const editingIndex = () => {
+    const block = inlineEdit()?.block;
+    if (!block) return undefined;
+    // A block's trailing blank lines depend on what follows it.
+    const same = (b: DocumentBlock | undefined) =>
+      b?.raw.replace(/\n+$/, '') === block.raw.replace(/\n+$/, '');
+    const all = blocks.blocks();
+    return same(all[block.index]) ? block.index : all.findIndex(same);
+  };
+  // Rewritten or emptied, the document no longer has the block; rather than
+  // stand in for another one, the edit moves to the dialog, its draft in reach
+  // to be saved (and refused as stale) or cancelled.
+  const editHasNoBlock = () =>
+    !!documentStore.snapshot && !blocks.rendering() && editingIndex() === -1;
+  // An untouched editor has nothing to keep; it goes the way of its block.
+  createEffect(() => {
+    const target = currentEdit();
+    if (target && editHasNoBlock() && currentDraft() === undefined) endBlockEdit(target);
+  });
+  function blockSaved() {
+    setDocumentSelection(null);
+    void refreshDocumentSnapshot();
   }
 
   // Relocate every bubble on the current version; the ones that cannot be
@@ -204,10 +248,10 @@ function DocumentPane(props: { project: Project; toolbarSlot: HTMLElement | unde
     });
   }
 
-  // The undo offer expires on its own.
+  // The undo offer expires on its own, counted from the latest delete.
   createEffect(
     on(
-      () => documentStore.lastDeleted,
+      () => documentStore.recentlyDeleted.at(-1),
       (deleted) => {
         if (!deleted) return;
         const timer = setTimeout(() => dismissUndo(), 10_000);
@@ -254,8 +298,15 @@ function DocumentPane(props: { project: Project; toolbarSlot: HTMLElement | unde
   createEffect(
     on([selectedRange, blocks.blocks, composerOpen], () => {
       const s = selection();
+      // Placed now, before the first paint, so a new comment never shows where
+      // the last one was; again once the passage has scrolled into view.
+      placeComposer();
+      // A comment opens on a passage just clicked, so it is in view; scrolling
+      // it would move the prose under a double-click. The comment hangs above
+      // the passage when there is no room below.
+      const comment = documentStore.composerDraft?.mode === 'note';
       requestAnimationFrame(() => {
-        if (composerOpen() && s && !s.wholeDocument)
+        if (composerOpen() && !comment && s && !s.wholeDocument)
           blockElement(s.endBlock)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         placeComposer();
       });
@@ -362,7 +413,38 @@ function DocumentPane(props: { project: Project; toolbarSlot: HTMLElement | unde
   const keepComposerFocus = (e: MouseEvent) => e.preventDefault();
   // Switching while a comment saves would post its text a second time.
   const noteSaving = () => documentStore.composerDraft?.noteSaveStatus === 'saving';
-  const needsPassage = 'Select a passage first';
+
+  // Keyboard routes to what a click or the block toolbar does on a selected
+  // passage: C comments, A asks, E edits its block.
+  function passageKey(e: KeyboardEvent) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.repeat) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('input, textarea, select, [contenteditable="true"], .cm-editor')) return;
+    const key = e.key.toLowerCase();
+    // In Edit mode the page, and whatever would open over it, is hidden.
+    if (!range() || editingMarkdown() || composerOpen() || noteSaving()) return;
+    if (!['c', 'a', 'e'].includes(key)) return;
+    e.preventDefault();
+    if (key === 'e') editBlock(editableBlock());
+    else openComposer(key === 'c' ? 'note' : 'question');
+  }
+
+  // A click in the prose, or a closed block editor, leaves the focus on the
+  // workspace itself rather than in the page, so the keys are heard there.
+  onMount(() => {
+    const workspace = mainRef?.closest<HTMLElement>('.docws-workspace');
+    if (!workspace) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target === workspace) return passageKey(e);
+      // A focused link, button or bubble in the page keeps its own keys.
+      // The workspace around the page is focusable too; only the page's own count.
+      const el = e.target instanceof Element ? e.target : null;
+      const control = el?.closest('a[href], button, [tabindex]');
+      if (el && scrollRef?.contains(el) && !(control && scrollRef.contains(control))) passageKey(e);
+    };
+    workspace.addEventListener('keydown', onKey);
+    onCleanup(() => workspace.removeEventListener('keydown', onKey));
+  });
 
   const toolbarLabel = () => {
     if (editingMarkdown()) return 'Edit Markdown directly · autosaves when you pause';
@@ -372,6 +454,12 @@ function DocumentPane(props: { project: Project; toolbarSlot: HTMLElement | unde
       ? `Selected line ${s.startLine}`
       : `Selected lines ${s.startLine}–${s.endLine}`;
   };
+
+  // The label stays quiet; its tooltip names the keys, as no button shows E.
+  const toolbarTitle = () =>
+    range() && !editingMarkdown() && toolbarLabel()
+      ? `${toolbarLabel()} · C comments, A asks, E edits its block`
+      : toolbarLabel();
 
   return (
     <div class="docws-main docws-doc-main" ref={mainRef}>
@@ -402,58 +490,28 @@ function DocumentPane(props: { project: Project; toolbarSlot: HTMLElement | unde
                 </button>
               </div>
             </Show>
-            <Show when={!editingMarkdown()}>
-              <button
-                type="button"
-                ref={reviseRef}
-                class="docws-btn docws-btn-sm docws-toolbar-task"
-                disabled={noteSaving()}
-                title="Suggest changes to the selected passage or whole document"
-                onMouseDown={keepComposerFocus}
-                onClick={() => openComposer('proposals')}
-              >
-                <ActionIcon kind="proposals" />
-                Rewrite
-              </button>
-            </Show>
+            {/* Hidden, not removed, while editing Markdown so the buttons after it stay put. */}
             <button
               type="button"
-              class="docws-btn docws-btn-sm"
-              disabled={!range() || editingMarkdown() || noteSaving()}
-              title={range() ? 'Comment on the selected passage' : needsPassage}
+              ref={reviseRef}
+              class="docws-btn docws-btn-sm docws-toolbar-task"
+              style={{ visibility: editingMarkdown() ? 'hidden' : 'visible' }}
+              disabled={noteSaving() || editingMarkdown()}
+              title="Suggest changes to the selected passage or whole document"
               onMouseDown={keepComposerFocus}
-              onClick={() => openComposer('note')}
+              onClick={() => openComposer('proposals')}
             >
-              Comment
+              <ActionIcon kind="proposals" />
+              Rewrite
             </button>
-            <button
-              type="button"
-              class="docws-btn docws-btn-sm"
-              disabled={!range() || editingMarkdown() || noteSaving()}
-              title={range() ? 'Ask an agent about the selected passage' : needsPassage}
-              onMouseDown={keepComposerFocus}
-              onClick={() => openComposer('question')}
-            >
-              Ask
-            </button>
-            <span class="docws-toolbar-label" title={toolbarLabel()}>
+            {/* Comment and Ask live beside the passage, where a click or the
+                block toolbar opens them; the bar keeps to the whole document. */}
+            <span class="docws-toolbar-label" title={toolbarTitle()}>
               {toolbarLabel()}
             </span>
-            <Show when={isHtml()}>
-              <button
-                type="button"
-                class="docws-btn docws-btn-sm"
-                style={{ visibility: editableBlock() ? 'visible' : 'hidden' }}
-                disabled={!editableBlock()}
-                onClick={() => editBlock(editableBlock())}
-              >
-                <PencilIcon size={12} />
-                Edit block
-              </button>
-            </Show>
-            <Show when={documentStore.lastDeleted}>
+            <Show when={documentStore.recentlyDeleted.at(-1)}>
               <span class="docws-undo">
-                Deleted a {documentStore.lastDeleted?.kind}.
+                Deleted a {documentStore.recentlyDeleted.at(-1)?.kind}.
                 <button
                   type="button"
                   class="docws-btn docws-btn-sm"
@@ -520,28 +578,26 @@ function DocumentPane(props: { project: Project; toolbarSlot: HTMLElement | unde
                   >
                     <path d="M2 3v10M14 3v10M5 8h6M6 6 4 8l2 2M10 6l2 2-2 2" />
                   </svg>
-                  <span class="docws-width-label">Full width</span>
                 </button>
               </Show>
             </div>
-            {/* Kept in place once the document has comments, so resolving one
+            {/* Always holds its place, so the first comment or resolving one
                 does not shift the bar. */}
-            <Show when={documentStore.annotations.some((a) => a.anchor.path === documentPath())}>
-              <label
-                class="docws-toggle"
-                title="Resolved bubbles collapse to one line"
-                style={{
-                  visibility: resolvedCount() > 0 && !editingMarkdown() ? 'visible' : 'hidden',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={documentStore.showResolved}
-                  onChange={(e) => setShowResolvedAnnotations(e.currentTarget.checked)}
-                />
-                {resolvedCount()} resolved
-              </label>
-            </Show>
+            <label
+              class="docws-toggle"
+              title="Resolved bubbles collapse to one line"
+              style={{
+                visibility: resolvedCount() > 0 && !editingMarkdown() ? 'visible' : 'hidden',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={documentStore.showResolved}
+                disabled={resolvedCount() === 0}
+                onChange={(e) => setShowResolvedAnnotations(e.currentTarget.checked)}
+              />
+              {resolvedCount()} resolved
+            </label>
           </Portal>
         )}
       </Show>
@@ -620,6 +676,11 @@ function DocumentPane(props: { project: Project; toolbarSlot: HTMLElement | unde
               documentPath={documentPath()}
               onNavigate={(path, anchor) => void navigate(path, anchor)}
               onAction={(action, index, selectedRange) => {
+                // Mid-save, switching would post the same text twice.
+                if (noteSaving()) return;
+                // The same action over the open composer's passage is that
+                // composer; a new draft would lose its id and save status.
+                if (selectedRange && documentStore.composerDraft?.mode === action) return;
                 batch(() => {
                   setDocumentSelection(
                     selectionFromRange(
@@ -631,6 +692,35 @@ function DocumentPane(props: { project: Project; toolbarSlot: HTMLElement | unde
                     text: documentStore.composerDraft?.text ?? '',
                     mode: action,
                   });
+                });
+              }}
+              onEditBlock={(index) => editBlock(blocks.blocks()[index] ?? null)}
+              editingBlock={editingIndex()}
+              blockEditor={() => (
+                <Show keyed when={inlineEdit()}>
+                  {(target) => (
+                    <BlockEditor
+                      target={target}
+                      inline
+                      draft={untrack(currentDraft)}
+                      onDraft={(text) => setBlockEditDraft(target, text)}
+                      onClose={() => {
+                        endBlockEdit(target);
+                        // The focus went with the editor; keep the keys in the workspace.
+                        if (document.activeElement === document.body)
+                          scrollRef
+                            ?.closest<HTMLElement>('.docws-workspace')
+                            ?.focus({ preventScroll: true });
+                      }}
+                      onSaved={blockSaved}
+                    />
+                  )}
+                </Show>
+              )}
+              onDismissComment={() => {
+                batch(() => {
+                  setDocumentComposerDraft(null);
+                  setDocumentSelection(null);
                 });
               }}
               hasMarker={(index) => (placed().byBlock.get(index)?.length ?? 0) > 0}
@@ -696,20 +786,23 @@ function DocumentPane(props: { project: Project; toolbarSlot: HTMLElement | unde
               setDocumentComposerDraft(null);
               // The composer takes the focused textarea with it; the toolbar
               // button that reopens it is the nearest place for focus to land.
-              requestAnimationFrame(() => reviseRef?.focus({ preventScroll: true }));
+              // A click that closed it on something focusable keeps that focus.
+              requestAnimationFrame(() => {
+                const active = document.activeElement;
+                if (!active || active === document.body) reviseRef?.focus({ preventScroll: true });
+              });
             }}
           />
         </div>
       </Show>
-      <Show keyed when={blockEdit()}>
+      <Show keyed when={blocks.page() || editHasNoBlock() ? currentEdit() : null}>
         {(target) => (
           <BlockEditor
             target={target}
-            onClose={() => setBlockEdit(null)}
-            onSaved={() => {
-              setDocumentSelection(null);
-              void refreshDocumentSnapshot();
-            }}
+            draft={untrack(currentDraft)}
+            onDraft={(text) => setBlockEditDraft(target, text)}
+            onClose={() => endBlockEdit(target)}
+            onSaved={blockSaved}
           />
         )}
       </Show>

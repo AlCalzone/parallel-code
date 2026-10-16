@@ -71,8 +71,8 @@ interface DocumentWorkspaceState {
   /** Documents left behind by links and file picks, oldest first; Back walks it. */
   documentTrail: string[];
   annotations: DocumentAnnotation[];
-  /** Last deleted bubble, kept for a single-step undo. */
-  lastDeleted: DocumentAnnotation | null;
+  /** Bubbles deleted while the undo offer is up, newest last; Undo restores them one by one. */
+  recentlyDeleted: DocumentAnnotation[];
   showResolved: boolean;
   composerDraft: ComposerDraft | null;
   snapshot: DocumentSnapshot | null;
@@ -100,7 +100,7 @@ const [docStore, setDocStore] = createStore<DocumentWorkspaceState>({
   documentPath: null,
   documentTrail: [],
   annotations: [],
-  lastDeleted: null,
+  recentlyDeleted: [],
   showResolved: false,
   composerDraft: null,
   snapshot: null,
@@ -247,10 +247,18 @@ function notifyConflict(target: QuickEditTarget): void {
   if (target.warning) showNotification(target.warning);
 }
 
-/** Opens `sourcePath` as a quick edit, reusing the project it already has. */
-export async function openQuickEdit(sourcePath: string, create = false): Promise<void> {
+/**
+ * Opens `sourcePath` as a quick edit, reusing the project it already has.
+ * `stillWanted` is asked once the copy is ready; false adds and opens nothing.
+ */
+export async function openQuickEdit(
+  sourcePath: string,
+  create = false,
+  stillWanted: () => boolean = () => true,
+): Promise<void> {
   const target = await invoke<QuickEditTarget>(IPC.OpenQuickEdit, { sourcePath, create });
   notifyConflict(target);
+  if (!stillWanted()) return;
   const existing = store.projects.find(
     (p) => p.quickEditSource === target.sourcePath && p.path === target.projectRoot,
   );
@@ -299,7 +307,7 @@ export async function openDocumentWorkspace(projectId: string): Promise<void> {
     reviewRunId: null,
     selection: null,
     annotations: [],
-    lastDeleted: null,
+    recentlyDeleted: [],
     composerDraft: recoveredNoteDraft(project.path, documentPath),
   });
   setStore('activeDocumentProjectId', projectId);
@@ -442,11 +450,36 @@ function backupNoteDraft(root: string, path: string, draft: ComposerDraft | null
   }
 }
 
+interface FailedNote {
+  draft: ComposerDraft;
+  selection: DocumentSelection | null;
+}
+// Comments whose save failed while another was being written. Each comes back,
+// oldest first, in place of a next empty comment.
+// shortcut: kept for the session only — persist like noteDraftBackups if a
+// restart between the failure and the next comment matters.
+const failedNotes = new Map<string, FailedNote[]>();
+
+function takeFailedNote(root: string, path: string): FailedNote | undefined {
+  return failedNotes.get(noteDraftKey(root, path))?.shift();
+}
+
 export function setDocumentComposerDraft(draft: ComposerDraft | null): void {
   const project = activeProject();
   const path = docStore.documentPath;
-  if (project && path && draft?.mode === 'note' && !draft.text && !docStore.composerDraft)
-    draft = recoveredNoteDraft(project.path, path) ?? draft;
+  const opensEmpty =
+    !!project && !!path && draft?.mode === 'note' && !draft.text && !docStore.composerDraft;
+  // A comment still saving has just been put away; it is not a draft to resume.
+  const backup = opensEmpty && project && path ? recoveredNoteDraft(project.path, path) : null;
+  if (backup && backup.noteSaveStatus !== 'saving') draft = backup;
+  else if (opensEmpty && project && path) {
+    const failed = takeFailedNote(project.path, path);
+    if (failed) {
+      draft = { ...failed.draft, noteSaveStatus: 'error' };
+      // Back on the passage it was written about, so Retry saves it there.
+      if (failed.selection) setDocStore('selection', failed.selection);
+    }
+  }
   // A save status belongs to the comment; another mode starts without one.
   if (draft)
     draft = {
@@ -481,6 +514,36 @@ export function setDocumentComposerDraft(draft: ComposerDraft | null): void {
 
 const pendingNoteSaves = new Map<string, Promise<boolean>>();
 
+/**
+ * A comment put away while saving has failed. The empty comment that took its
+ * place gives way to it, back on its passage and with Retry. A comment already
+ * being written keeps its own text, and the failed one waits for the next.
+ */
+function keepFailedNote(
+  project: { id: string; path: string },
+  path: string,
+  failed: { draft: ComposerDraft; selection: DocumentSelection | null },
+) {
+  const open = docStore.composerDraft;
+  const here = stillOpen(project.id) && docStore.documentPath === path;
+  if (here && open?.mode === 'note' && !open.text.trim()) {
+    setDocStore({
+      composerDraft: {
+        ...open,
+        id: failed.draft.id,
+        text: failed.draft.text,
+        noteSaveStatus: 'error',
+      },
+      selection: failed.selection,
+    });
+    backupNoteDraft(project.path, path, failed.draft);
+  } else if (recoveredNoteDraft(project.path, path)?.id !== failed.draft.id) {
+    // Its own backup, still in place, already brings it back.
+    const key = noteDraftKey(project.path, path);
+    failedNotes.set(key, [...(failedNotes.get(key) ?? []), failed]);
+  }
+}
+
 /** Save on leaving a note. Shared by composer instances so remounting cannot duplicate it. */
 export function saveDocumentNoteDraft(anchor: DocumentAnchor): Promise<boolean> {
   const draft = docStore.composerDraft;
@@ -490,6 +553,7 @@ export function saveDocumentNoteDraft(anchor: DocumentAnchor): Promise<boolean> 
   const { project, documentPath } = requireProject();
   const id = draft.id;
   const text = draft.text;
+  const selection = docStore.selection;
   const isCurrent = () =>
     stillOpen(project.id) &&
     docStore.documentPath === documentPath &&
@@ -522,6 +586,7 @@ export function saveDocumentNoteDraft(anchor: DocumentAnchor): Promise<boolean> 
       return true;
     } catch (err) {
       if (isCurrent()) setDocStore('composerDraft', 'noteSaveStatus', 'error');
+      else keepFailedNote(project, documentPath, { draft: { id, text, mode: 'note' }, selection });
       showNotification(errMessage(err));
       return false;
     } finally {
@@ -1151,7 +1216,7 @@ export async function updateDocumentAnnotationText(id: string, text: string): Pr
   }
 }
 
-/** One click removes a bubble; the last one removed can be brought back. */
+/** One click removes a bubble; Undo brings back the recent ones, newest first. */
 export async function deleteDocumentAnnotation(id: string): Promise<void> {
   const { project } = requireProject();
   const current = docStore.annotations.find((a) => a.id === id);
@@ -1159,7 +1224,7 @@ export async function deleteDocumentAnnotation(id: string): Promise<void> {
   setDocStore(
     produce((s) => {
       s.annotations = s.annotations.filter((a) => a.id !== id);
-      s.lastDeleted = current;
+      s.recentlyDeleted = [...s.recentlyDeleted, current];
     }),
   );
   try {
@@ -1167,14 +1232,14 @@ export async function deleteDocumentAnnotation(id: string): Promise<void> {
   } catch (err) {
     showNotification(errMessage(err));
     putAnnotation(current);
-    setDocStore('lastDeleted', null);
+    setDocStore('recentlyDeleted', (list) => list.filter((a) => a.id !== id));
   }
 }
 
 export async function undoDeleteDocumentAnnotation(): Promise<void> {
-  const last = docStore.lastDeleted;
+  const last = docStore.recentlyDeleted.at(-1);
   if (!last) return;
-  setDocStore('lastDeleted', null);
+  setDocStore('recentlyDeleted', (list) => list.slice(0, -1));
   try {
     await persistAnnotation(last);
   } catch (err) {
@@ -1183,7 +1248,7 @@ export async function undoDeleteDocumentAnnotation(): Promise<void> {
 }
 
 export function dismissUndo(): void {
-  setDocStore('lastDeleted', null);
+  setDocStore('recentlyDeleted', []);
 }
 
 export function setShowResolvedAnnotations(show: boolean): void {

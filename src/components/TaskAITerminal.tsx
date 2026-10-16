@@ -35,6 +35,8 @@ import { AgentChatView } from './AgentChatView';
 import { isAgentChat, agentChatProvider, agentChatUnavailableReason } from '../store/agent-chat';
 import { agentViewHandsOff, agentViewSwitchCost, switchMainAgentView } from '../store/agent-view';
 import { setStore } from '../store/core';
+import { DocumentIcon } from '../documents/DocumentIcon';
+import { isEditableDocumentPath } from '../lib/document-path';
 import { editAsDocument } from '../documents/store';
 import { saveState } from '../store/persistence';
 import { registerAction, unregisterAction } from '../store/focus';
@@ -626,6 +628,7 @@ export function TaskAITerminal(props: TaskAITerminalProps) {
         content={mdViewerContent()}
         fileName={mdViewerFileName()}
         filePath={mdViewerFilePath()}
+        onEditAsDocument={store.documentWorkspacesEnabled ? editAsDocument : undefined}
       />
       <Show when={pendingSwitch()}>
         {(mode) => (
@@ -1051,6 +1054,7 @@ function MarkdownViewerDialog(props: {
   content: string;
   fileName: string;
   filePath: string;
+  onEditAsDocument?: (filePath: string) => void;
 }) {
   const html = createHighlightedMarkdown(() => props.content);
   const [copied, setCopied] = createSignal(false);
@@ -1142,6 +1146,28 @@ function MarkdownViewerDialog(props: {
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
               <path d="M3.5 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5v-3a.75.75 0 0 1 1.5 0v3A3 3 0 0 1 12.5 16h-9A3 3 0 0 1 0 12.5v-9A3 3 0 0 1 3.5 0h3a.75.75 0 0 1 0 1.5h-3ZM10 .75a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V2.56L8.53 8.53a.75.75 0 0 1-1.06-1.06L13.44 1.5H10.75A.75.75 0 0 1 10 .75Z" />
             </svg>
+          </button>
+        </Show>
+        <Show when={props.onEditAsDocument && isEditableDocumentPath(props.filePath)}>
+          <button
+            onClick={() => {
+              props.onEditAsDocument?.(props.filePath);
+              props.onClose();
+            }}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: theme.fgMuted,
+              cursor: 'pointer',
+              padding: '4px',
+              display: 'flex',
+              'align-items': 'center',
+              'border-radius': 'var(--radius-xs)',
+            }}
+            title={`Edit ${props.fileName} as a document (nothing is committed here)`}
+            aria-label="Edit as document"
+          >
+            <DocumentIcon size={16} />
           </button>
         </Show>
         <button

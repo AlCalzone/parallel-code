@@ -726,6 +726,17 @@
   font-size: 12px;
 }
 
+/* Wraps rather than truncates: a save error has to be readable in full. */
+.docws-editor-notice {
+  flex: 1;
+  min-width: 0;
+  color: var(--warning);
+}
+
+.docws-editor-notice.is-error {
+  color: var(--error);
+}
+
 .docws-editor-pane .cm-editor {
   font-size: 16px;
 }
@@ -1104,8 +1115,7 @@
    wrap to a second row at the default width. */
 @container docws-header (max-width: 1100px) {
   .docws-title,
-  .docws-toolbar-label,
-  .docws-width-label {
+  .docws-toolbar-label {
     display: none;
   }
 }
@@ -1225,6 +1235,40 @@
   flex: 1;
   text-align: right;
   color: var(--fg-muted);
+}
+
+.docws-composer.is-note {
+  position: relative;
+}
+
+/* Over the field's top-right corner; only its visible controls take clicks,
+   so the rest of the corner still reaches the field. */
+.docws-composer.is-note .docws-composer-head {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.docws-composer.is-note .docws-composer-head > * {
+  pointer-events: auto;
+}
+
+.docws-composer.is-note .docws-note-status:not(:empty) {
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+
+.docws-composer.is-note textarea {
+  padding-right: 34px;
+}
+
+/* "Saving…" or "Not saved" and Retry sit over the first line; the text makes
+   way for them while they show, rather than hide under them. */
+.docws-composer.is-note.has-note-status textarea {
+  padding-right: 160px;
 }
 
 /* The selected passage gives way to the action and close button. */
@@ -1400,6 +1444,28 @@
   font-family: var(--font-mono);
   font-size: 14px;
   line-height: 1.5;
+}
+
+/* In place of the block, the source takes the block's room and grows with it. */
+.docws-block-editor.is-inline {
+  margin: 4px 0;
+}
+
+.docws-block-live {
+  padding: 6px 0;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+/* Over the live editor's own padding, sized for a whole document. */
+.docws-block-live .cm-editor .cm-content {
+  min-height: 2lh;
+  padding: 0 10px;
+}
+
+.docws-block-live .cm-editor {
+  font-size: 16px;
 }
 
 .docws-agent-row {
@@ -2378,7 +2444,9 @@
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--island-bg);
+  /* The comment box's own surface, so a saved comment stands off the prose
+     the same way the one being written does. */
+  background: var(--bg-elevated);
   box-shadow: var(--shadow-pop);
   font-family: var(--font-ui);
   color: var(--fg);

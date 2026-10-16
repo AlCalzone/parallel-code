@@ -267,3 +267,42 @@ it('shows an external revision arriving during a save once the editor is clean',
   await flushMarkdownEditor();
   expect(view.state.doc.toString()).toBe(disk);
 });
+
+it('asks a second time before a reload discards the draft', () => {
+  const { view, setSource } = mount();
+  view.dispatch({ changes: { from: 0, insert: Text.of('Mine\n'.split('\n')) } });
+  setSource('# Theirs\r\n');
+  const reload = () =>
+    Array.from(host.querySelectorAll('button')).find((b) =>
+      /Reload from disk|Discard my draft\?/.test(b.textContent ?? ''),
+    );
+  expect(host.textContent).toContain('changed on disk');
+
+  reload()?.click();
+  expect(view.state.doc.toString()).toContain('Mine');
+  expect(reload()?.textContent).toContain('Discard my draft?');
+
+  reload()?.click();
+  expect(view.state.doc.toString()).toBe('# Theirs\n');
+});
+
+it('lets the discard offer lapse, so a later click only asks again', () => {
+  const { view, setSource } = mount();
+  view.dispatch({ changes: { from: 0, insert: Text.of('Mine\n'.split('\n')) } });
+  setSource('# Theirs\r\n');
+  const reload = () =>
+    Array.from(host.querySelectorAll('button')).find((b) =>
+      /Reload from disk|Discard my draft\?/.test(b.textContent ?? ''),
+    );
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    reload()?.click();
+    vi.advanceTimersByTime(4000);
+    expect(reload()?.textContent).toContain('Reload from disk');
+
+    reload()?.click();
+    expect(view.state.doc.toString()).toContain('Mine');
+  } finally {
+    vi.useRealTimers();
+  }
+});

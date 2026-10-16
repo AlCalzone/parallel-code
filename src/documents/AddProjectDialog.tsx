@@ -169,6 +169,18 @@ export function AddProjectDialog(props: AddProjectDialogProps) {
     props.onClose();
   }
 
+  // Setting up cannot be called back halfway, but Cancel never waits for it
+  // (it may hang): the dialog closes now and the result is dropped on arrival,
+  // so no project is added and nothing opens. Each try has its own number, so a
+  // late result from a cancelled try cannot pass for the one after it.
+  let attempt = 0;
+  const cancelled = (mine: number) => mine !== attempt;
+  function dismiss() {
+    attempt++;
+    setBusy(false);
+    close();
+  }
+
   async function chooseFolder() {
     const selected = await openDialog({ directory: true, multiple: false });
     if (selected) setFolder(selected as string);
@@ -189,9 +201,10 @@ export function AddProjectDialog(props: AddProjectDialogProps) {
     !busy() &&
     !missingCodeFolder();
 
-  async function addCodeProject() {
+  async function addCodeProject(mine: number) {
     const path = folder().trim();
     const isGitRepo = await invoke<boolean>(IPC.CheckIsGitRepo, { path });
+    if (cancelled(mine)) return;
     const id = addProject(projectName().trim(), path, isGitRepo);
     close();
     props.onCodeProjectAdded(id);
@@ -199,13 +212,18 @@ export function AddProjectDialog(props: AddProjectDialogProps) {
 
   async function create() {
     if (!canCreate()) return;
+    const mine = ++attempt;
     setBusy(true);
     setError('');
     try {
-      if (kind() === 'code') return await addCodeProject();
+      if (kind() === 'code') return await addCodeProject(mine);
       if (quickRepo()) {
-        await openQuickEdit(joinFolderPath(folder().trim(), documentPath()), isNewDocument());
-        close();
+        await openQuickEdit(
+          joinFolderPath(folder().trim(), documentPath()),
+          isNewDocument(),
+          () => !cancelled(mine),
+        );
+        if (!cancelled(mine)) close();
         return;
       }
       const setup = await invoke<DocumentProjectSetup>(IPC.PrepareDocumentProject, {
@@ -213,14 +231,15 @@ export function AddProjectDialog(props: AddProjectDialogProps) {
         documentPath: documentPath().trim(),
         title: projectName().trim(),
       });
+      if (cancelled(mine)) return;
       const id = addDocumentProject(projectName().trim(), folder().trim(), setup.documentPath);
       if (setup.actions.length > 0) showNotification(setup.actions.join(' · '));
       close();
       await openDocumentWorkspace(id);
     } catch (err) {
-      setError(errMessage(err));
+      if (!cancelled(mine)) setError(errMessage(err));
     } finally {
-      setBusy(false);
+      if (!cancelled(mine)) setBusy(false);
     }
   }
 
@@ -283,7 +302,7 @@ export function AddProjectDialog(props: AddProjectDialogProps) {
   };
 
   return (
-    <Dialog open={props.open} onClose={close} width="520px" labelledBy="add-project-title">
+    <Dialog open={props.open} onClose={dismiss} width="520px" labelledBy="add-project-title">
       <div style={{ display: 'flex', 'flex-direction': 'column', gap: '14px' }}>
         <h2 id="add-project-title" style={{ margin: 0, 'font-size': '16px' }}>
           Add project
@@ -413,13 +432,16 @@ export function AddProjectDialog(props: AddProjectDialogProps) {
             </Show>
           </div>
         </Show>
-        <Show when={error()}>
-          <div class="docws-error" style={{ 'font-size': '13px' }}>
-            {error()}
-          </div>
-        </Show>
+        {/* Holds a line, so an error does not push the buttons down. */}
+        <div
+          class="docws-error"
+          role="alert"
+          style={{ 'font-size': '13px', 'min-height': '1.4em' }}
+        >
+          {error()}
+        </div>
         <div style={{ display: 'flex', 'justify-content': 'flex-end', gap: '8px' }}>
-          <button type="button" class="docws-btn" onClick={close}>
+          <button type="button" class="docws-btn" onClick={dismiss}>
             Cancel
           </button>
           <button

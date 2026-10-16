@@ -6,6 +6,7 @@ import { store, setStore } from './core';
 import type { Project } from './types';
 import { sanitizeBranchPrefix } from '../lib/branch-name';
 import { documentAgentTaskId, githubAgentTaskId } from '../documents/task-id';
+import { forgetBlockEdits } from '../documents/block-edit-state';
 import { forgetGitHubLists } from './github-list-storage';
 import { clearAgentActivity } from './taskStatus';
 import { assignFreshSessionId } from './session-ids';
@@ -94,6 +95,16 @@ export function codeProjects(): Project[] {
   return store.projects.filter((project) => !isDocumentProject(project));
 }
 
+// A project added later at the same path would otherwise reopen stale editors.
+// Another document project in the same repo still shows them; a code project
+// never does.
+function forgetBlockEditsLeftBy(projectId: string, root: string): void {
+  const kept = store.projects.some(
+    (p) => p.id !== projectId && p.path === root && isDocumentProject(p),
+  );
+  if (!kept) forgetBlockEdits(root);
+}
+
 export function removeProject(projectId: string): void {
   // Guard: skip removal if any tasks still reference this project
   const allTaskIds = [...store.taskOrder, ...store.collapsedTaskOrder];
@@ -105,6 +116,8 @@ export function removeProject(projectId: string): void {
     return;
   }
 
+  const root = store.projects.find((p) => p.id === projectId)?.path;
+  if (root) forgetBlockEditsLeftBy(projectId, root);
   const quickEditRoot = store.projects.find((p) => p.id === projectId && p.quickEditSource)?.path;
   // A removed quick edit stops writing to its original; its copy stays for a later reopen.
   if (quickEditRoot)
@@ -290,6 +303,7 @@ export async function relinkProject(projectId: string): Promise<boolean> {
   if (!exists) return false;
   const project = getProject(projectId);
   if (!project) return false;
+  if (project.path !== newPath) forgetBlockEditsLeftBy(projectId, project.path);
   const task =
     store.tasks[
       project.kind === 'document' ? documentAgentTaskId(projectId) : githubAgentTaskId(projectId)

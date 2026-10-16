@@ -282,3 +282,15 @@ it('keeps the editor visible if saving fails while revealing a note, and permits
   focusAnnotation(note.id);
   await vi.waitFor(() => expect(button('Preview')?.getAttribute('aria-pressed')).toBe('true'));
 });
+
+it('keeps Rewrite in its place, hidden and off, while the Markdown is edited', async () => {
+  await mount();
+  const rewrite = button('Rewrite');
+  expect(rewrite?.style.visibility).toBe('visible');
+
+  edit();
+
+  expect(button('Rewrite')).toBe(rewrite);
+  expect(rewrite?.style.visibility).toBe('hidden');
+  expect(rewrite?.disabled).toBe(true);
+});

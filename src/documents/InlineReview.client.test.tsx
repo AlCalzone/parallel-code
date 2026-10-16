@@ -230,3 +230,20 @@ it('shows a compact error when a version cannot be read', async () => {
   );
   expect(button(host, 'Accept').disabled).toBe(true);
 });
+
+it('says in the bar why Accept is off once the run is stale', async () => {
+  await openWith([candidate('a')]);
+  const host = document.createElement('div');
+  document.body.append(host);
+  const stale = { ...run([candidate('a')]), status: 'stale' as const };
+  const disposeStale = render(
+    () => <InlineReview run={stale} candidate={stale.candidates[0]} />,
+    host,
+  );
+
+  expect(button(host, 'Accept').disabled).toBe(true);
+  expect(host.querySelector('.docws-inline-review-bar')?.textContent).toContain(
+    'The document moved since this run',
+  );
+  disposeStale();
+});

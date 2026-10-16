@@ -22,6 +22,7 @@ import { IPC } from '../../electron/ipc/channels';
 import { invoke } from '../lib/ipc';
 import { setStore, store } from './core';
 import {
+  addDocumentProject,
   addProject,
   addQuickEditProject,
   relinkProject,
@@ -31,6 +32,8 @@ import {
 } from './projects';
 import { openDialog } from '../lib/dialog';
 import type { Task } from './types';
+import { blockEditIn, startBlockEdit } from '../documents/block-edit-state';
+import type { DocumentBlock } from '../documents/markdown-blocks';
 
 describe('relinkProject document terminals', () => {
   afterEach(() => {
@@ -377,6 +380,72 @@ describe('quick edit projects', () => {
       projectRoot: '/data/quick-edits/abc',
     });
     expect(store.projects.some((p) => p.id === id)).toBe(false);
+  });
+
+  it("forgets a removed project's block edits, so a re-added one starts clean", () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+    const id = addQuickEditProject({
+      projectRoot: '/data/quick-edits/def',
+      documentPath: 'spec.md',
+      sourcePath: '/work/app/docs/spec.md',
+    });
+    startBlockEdit({
+      projectRoot: '/data/quick-edits/def',
+      documentPath: 'spec.md',
+      source: 'Text.\n',
+      block: { index: 0, raw: 'Text.\n' } as DocumentBlock,
+    });
+
+    removeProject(id);
+
+    expect(blockEditIn('/data/quick-edits/def', 'spec.md')).toBeNull();
+  });
+
+  it("forgets the block edits left at a relinked project's old path", async () => {
+    const id = addDocumentProject('spec', '/work/before', 'spec.md');
+    startBlockEdit({
+      projectRoot: '/work/before',
+      documentPath: 'spec.md',
+      source: 'Text.\n',
+      block: { index: 0, raw: 'Text.\n' } as DocumentBlock,
+    });
+    vi.mocked(openDialog).mockResolvedValue('/work/after');
+    vi.mocked(invoke).mockResolvedValue(true);
+
+    expect(await relinkProject(id)).toBe(true);
+
+    expect(blockEditIn('/work/before', 'spec.md')).toBeNull();
+  });
+
+  it('forgets the block edits of a document project removed beside a code project', () => {
+    addProject('app', '/work/repo', true);
+    const docs = addDocumentProject('spec', '/work/repo', 'spec.md');
+    startBlockEdit({
+      projectRoot: '/work/repo',
+      documentPath: 'spec.md',
+      source: 'Text.\n',
+      block: { index: 0, raw: 'Text.\n' } as DocumentBlock,
+    });
+
+    removeProject(docs);
+
+    // A code project never shows them; only a document project could.
+    expect(blockEditIn('/work/repo', 'spec.md')).toBeNull();
+  });
+
+  it('keeps the block edits of a path another project still opens', () => {
+    const code = addProject('app', '/work/shared', true);
+    addDocumentProject('spec', '/work/shared', 'spec.md');
+    startBlockEdit({
+      projectRoot: '/work/shared',
+      documentPath: 'spec.md',
+      source: 'Text.\n',
+      block: { index: 0, raw: 'Text.\n' } as DocumentBlock,
+    });
+
+    removeProject(code);
+
+    expect(blockEditIn('/work/shared', 'spec.md')).not.toBeNull();
   });
 });
 

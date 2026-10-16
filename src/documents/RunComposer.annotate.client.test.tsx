@@ -1,3 +1,4 @@
+import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setStore } from '../store/core';
@@ -163,7 +164,9 @@ describe('RunComposer after a comment or question is saved', () => {
     expect(host.querySelector('[role="tablist"]')).toBeNull();
     expect(host.querySelector('.docws-composer-quote')).toBeNull();
     expect(host.querySelector('.docws-composer-scope')).toBeNull();
+    // Retry only holds its place until a save fails.
     expect(Array.from(host.querySelectorAll('button')).map((b) => b.textContent?.trim())).toEqual([
+      'Retry',
       '',
     ]);
     pressEnter(textarea, true);
@@ -171,6 +174,126 @@ describe('RunComposer after a comment or question is saved', () => {
 
     expect(saveDocumentNoteDraft).toHaveBeenCalledOnce();
     expect(addDocumentAnnotation).not.toHaveBeenCalled();
+  });
+
+  it('closes an empty comment on a click outside it, and not on one inside', () => {
+    const onClose = vi.fn();
+    const host = document.createElement('div');
+    const outside = document.createElement('p');
+    document.body.append(host, outside);
+    disposers.push(
+      render(() => <RunComposer selection={passage} blocks={blocks} onClose={onClose} />, host),
+    );
+    setDocumentComposerDraft({ text: '', mode: 'note' });
+
+    host.querySelector('textarea')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    outside.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(saveDocumentNoteDraft).not.toHaveBeenCalled();
+  });
+
+  it('closes a written comment at once on a click outside it and saves it behind', () => {
+    const onClose = vi.fn();
+    const host = document.createElement('div');
+    const outside = document.createElement('p');
+    document.body.append(host, outside);
+    disposers.push(
+      render(() => <RunComposer selection={passage} blocks={blocks} onClose={onClose} />, host),
+    );
+    setDocumentComposerDraft({ text: '', mode: 'note' });
+    type(host, 'Tighten this.');
+
+    outside.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(saveDocumentNoteDraft).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a comment open for a press that keeps focus in it, or with no passage yet', () => {
+    const onClose = vi.fn();
+    const [picked, setPicked] = createSignal<DocumentSelection | null>(passage);
+    const host = document.createElement('div');
+    const outside = document.createElement('button');
+    outside.addEventListener('mousedown', (e) => e.preventDefault());
+    document.body.append(host, outside);
+    disposers.push(
+      render(() => <RunComposer selection={picked()} blocks={blocks} onClose={onClose} />, host),
+    );
+    setDocumentComposerDraft({ text: '', mode: 'note' });
+
+    outside.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    setPicked(null);
+    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes a comment on Escape from its buttons, not only from the field', () => {
+    const onClose = vi.fn();
+    const host = document.createElement('div');
+    document.body.append(host);
+    disposers.push(
+      render(() => <RunComposer selection={passage} blocks={blocks} onClose={onClose} />, host),
+    );
+    setDocumentComposerDraft({ text: '', mode: 'note' });
+
+    host
+      .querySelector('[aria-label="Close"]')
+      ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('shows Retry and gives the field its focus back after a failed save', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    disposers.push(
+      render(() => <RunComposer selection={passage} blocks={blocks} onClose={() => {}} />, host),
+    );
+    setDocumentComposerDraft({ text: 'Tighten this.', mode: 'note' });
+    const retry = Array.from(host.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Retry',
+    );
+    expect(retry?.style.visibility).toBe('hidden');
+    (document.activeElement as HTMLElement | null)?.blur();
+
+    setDocumentComposerDraft({ text: 'Tighten this.', mode: 'note', noteSaveStatus: 'error' });
+
+    expect(retry?.style.visibility).toBe('visible');
+    expect(document.activeElement).toBe(host.querySelector('textarea'));
+  });
+
+  it('makes room in the field for a failed save notice', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    disposers.push(
+      render(() => <RunComposer selection={passage} blocks={blocks} onClose={() => {}} />, host),
+    );
+    setDocumentComposerDraft({ text: 'Tighten this.', mode: 'note' });
+    const composer = host.querySelector('.docws-composer');
+    expect(composer?.classList.contains('has-note-status')).toBe(false);
+
+    setDocumentComposerDraft({ text: 'Tighten this.', mode: 'note', noteSaveStatus: 'error' });
+
+    // The CSS widens the field's right padding so the notice covers no text.
+    expect(composer?.classList.contains('has-note-status')).toBe(true);
+  });
+
+  it('keeps a rewrite open on a click outside it', () => {
+    const onClose = vi.fn();
+    const host = document.createElement('div');
+    const outside = document.createElement('p');
+    document.body.append(host, outside);
+    disposers.push(
+      render(() => <RunComposer selection={passage} blocks={blocks} onClose={onClose} />, host),
+    );
+    setDocumentComposerDraft({ text: '', mode: 'proposals' });
+
+    outside.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('keeps the text when saving failed, so nothing typed is lost', async () => {

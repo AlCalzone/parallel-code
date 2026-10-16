@@ -93,6 +93,8 @@ export function Dialog(props: DialogProps) {
     onCleanup(() => el.removeEventListener('keydown', handler));
   });
 
+  let pressedBackdrop = false;
+
   return (
     <Portal>
       <Show when={props.open}>
@@ -108,8 +110,17 @@ export function Dialog(props: DialogProps) {
             'z-index': String(props.zIndex ?? 1000),
             ...props.overlayStyle,
           }}
+          // A drag between the panel and the backdrop, either way, clicks the
+          // backdrop too (their common ancestor); only a press that began and
+          // ended there closes.
+          onMouseDown={(e) => (pressedBackdrop = e.target === e.currentTarget)}
+          onMouseUp={(e) => {
+            if (e.target !== e.currentTarget) pressedBackdrop = false;
+          }}
           onClick={(e) => {
-            if (e.target === e.currentTarget) props.onClose();
+            const closes = e.target === e.currentTarget && pressedBackdrop;
+            pressedBackdrop = false;
+            if (closes) props.onClose();
           }}
         >
           <div

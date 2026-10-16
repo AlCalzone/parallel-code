@@ -69,3 +69,57 @@ describe('Dialog focus trap with stacked dialogs', () => {
     expect(lower.contains(document.activeElement)).toBe(true);
   });
 });
+
+describe('Dialog backdrop', () => {
+  function mountOne() {
+    const onClose = vi.fn();
+    const host = document.createElement('div');
+    document.body.append(host);
+    disposers.push(
+      render(
+        () => (
+          <Dialog open={true} onClose={onClose}>
+            <input aria-label="field" />
+          </Dialog>
+        ),
+        host,
+      ),
+    );
+    const overlay = document.querySelector<HTMLElement>('.dialog-overlay');
+    if (!overlay) throw new Error('No overlay');
+    return { onClose, overlay };
+  }
+  const press = (el: Element | null, type: string) =>
+    el?.dispatchEvent(new MouseEvent(type, { bubbles: true }));
+
+  it('closes on a click that starts and ends on the backdrop', () => {
+    const { onClose, overlay } = mountOne();
+
+    press(overlay, 'mousedown');
+    press(overlay, 'mouseup');
+    press(overlay, 'click');
+
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('stays open when a press on the backdrop is released in the panel', () => {
+    const { onClose, overlay } = mountOne();
+
+    press(overlay, 'mousedown');
+    press(document.querySelector('[aria-label="field"]'), 'mouseup');
+    press(overlay, 'click');
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('stays open when a text selection is dragged out onto the backdrop', () => {
+    const { onClose, overlay } = mountOne();
+
+    // The browser sends the click to the common ancestor: the backdrop.
+    press(document.querySelector('[aria-label="field"]'), 'mousedown');
+    press(overlay, 'mouseup');
+    press(overlay, 'click');
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});

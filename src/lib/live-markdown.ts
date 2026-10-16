@@ -41,6 +41,8 @@ export interface CanvasEditor {
   load(markdown: string): void;
   /** Puts the cursor at the start of a 1-based line and scrolls it into view. */
   goToLine(line: number): void;
+  /** Takes the focus with the cursor at the end, leaving the page's scroll alone. */
+  focus(): void;
   destroy(): void;
 }
 
@@ -430,6 +432,10 @@ export function createCanvasEditor(options: CanvasEditorOptions): CanvasEditor {
         effects: EditorView.scrollIntoView(pos, { y: 'start', yMargin: 24 }),
       });
       view.focus();
+    },
+    focus: () => {
+      view.dispatch({ selection: { anchor: view.state.doc.length } });
+      view.contentDOM.focus({ preventScroll: true });
     },
     destroy: () => {
       clearTimeout(selectionTimer);

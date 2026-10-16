@@ -44,6 +44,14 @@ it('reopens the quick edit it already has instead of adding another', async () =
   expect(store.projects.filter((p) => p.quickEditSource)).toHaveLength(1);
 });
 
+it('opens nothing when the quick edit is no longer wanted once it is ready', async () => {
+  backend();
+  setStore({ documentWorkspacesEnabled: true });
+  await openQuickEdit('/work/app/docs/spec.md', false, () => false);
+  expect(store.projects).toHaveLength(0);
+  expect(store.activeDocumentProjectId).toBeNull();
+});
+
 it('tells the user when opening set a clashing copy aside', async () => {
   backend('Quick edit changed on both sides; saved the copy to /data/x.conflict.md');
   setStore({ documentWorkspacesEnabled: true });

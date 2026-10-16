@@ -13,8 +13,6 @@ import { createHeldSignal } from '../lib/floating';
 
 /** How long the hover toolbar waits for the pointer to reach it from the block. */
 const TOOLBAR_HOLD_MS = 100;
-/** How long a click waits to learn it was the first of a double- or triple-click. */
-export const CLICK_COMMENT_DELAY_MS = 300;
 
 interface DocumentViewerProps {
   /** Portalled controls must follow their owning panel’s visibility. */
@@ -58,6 +56,16 @@ interface DocumentViewerProps {
   onNavigate?: (path: string, anchor?: string) => void;
   /** A block's hover toolbar was used: pick the block and open the composer on `action`. */
   onAction?: (action: BlockActionKind, index: number, range?: BlockRange) => void;
+  /**
+   * The press that opened a comment became a drag to select text, or a
+   * double-click to edit the block: put the comment away.
+   */
+  onDismissComment?: () => void;
+  /** A block was double-clicked: edit its source. */
+  onEditBlock?: (index: number) => void;
+  /** The block being edited in place; `blockEditor` renders instead of it. */
+  editingBlock?: number;
+  blockEditor?: () => JSX.Element;
 }
 
 export function selectionFromRange(
@@ -93,9 +101,10 @@ const SELECTION_KEYS = new Set([
   'PageUp',
   'PageDown',
 ]);
-const CONTROLS = 'a, button, input, textarea, .docws-marker, .docws-marker-pop, .docws-bubble';
+const CONTROLS =
+  'a, button, input, textarea, .docws-marker, .docws-marker-pop, .docws-bubble, .docws-block-editor';
 /** A click on these does its own thing in a page, so it never opens a comment. */
-const CLICK_SKIP = `${CONTROLS}, select, summary, label, video, audio`;
+const CLICK_SKIP = `${CONTROLS}, select, summary, label, video, audio, [role="button"], [contenteditable]`;
 
 /**
  * True for a mouse-up on the backdrop: the margins and the space below the
@@ -120,6 +129,27 @@ function blockIndexOf(node: Node | null, container: HTMLElement): number | null 
   return null;
 }
 
+/** How far a press may move and still be a click rather than a drag. */
+const DRAG_PX = 4;
+
+/** Calls `dragged` once if the pointer moves away while pressed; returns a stop. */
+function onDrag(press: MouseEvent, dragged: () => void): () => void {
+  const move = (e: MouseEvent) => {
+    if (Math.hypot(e.clientX - press.clientX, e.clientY - press.clientY) < DRAG_PX) return;
+    stop();
+    dragged();
+  };
+  const listening = new AbortController();
+  const stop = () => listening.abort();
+  const { signal } = listening;
+  document.addEventListener('mousemove', move, { signal });
+  document.addEventListener('mouseup', stop, { signal });
+  // A press the window lost, or one a drag of text ended, has no release here.
+  window.addEventListener('blur', stop, { signal });
+  document.addEventListener('dragend', stop, { capture: true, signal });
+  return stop;
+}
+
 export function DocumentViewer(props: DocumentViewerProps) {
   let containerRef: HTMLDivElement | undefined;
 
@@ -131,10 +161,22 @@ export function DocumentViewer(props: DocumentViewerProps) {
 
   // Keep actions on a selected passage until explicitly used or dismissed.
   const hovered = createHeldSignal<number>(TOOLBAR_HOLD_MS);
-  const toolbarIndex = () => (props.composerOpen ? null : (selected()?.end ?? hovered.value()));
+  // While a comment is open its passage stays picked, but the toolbar follows
+  // the hover so other blocks keep their actions; using one closes the comment.
+  const toolbarIndex = () =>
+    props.composerOpen ? hovered.value() : (selected()?.end ?? hovered.value());
+  /** The selected passage, when the toolbar is on one of its blocks. */
+  const toolbarSelection = () => {
+    const index = toolbarIndex();
+    const range = selected();
+    return index !== null && range && index >= range.start && index <= range.end
+      ? range
+      : undefined;
+  };
   const toolbarBlock = (): HTMLElement | null => {
     const index = toolbarIndex();
-    return index === null
+    // The block being edited has its own buttons, and the toolbar would cover them.
+    return index === null || index === props.editingBlock
       ? null
       : (containerRef?.querySelector<HTMLElement>(`[data-block-index="${index}"]`) ?? null);
   };
@@ -206,32 +248,62 @@ export function DocumentViewer(props: DocumentViewerProps) {
     emitRange({ start, end });
   }
 
-  // Commenting is what a click on the prose is most often for. A drag or a
-  // double-click selects text instead, so the comment waits out the
-  // double-click window; links and controls keep their own clicks.
+  // Commenting is what a click on the prose is most often for, so it opens on
+  // the press rather than the release. A drag selects text instead and puts the
+  // still-empty comment away; a double-click's second press closes it before the
+  // word is selected, and edits the block in place of selecting the word.
+  // Links and controls keep their own clicks.
   let pendingComment: ReturnType<typeof setTimeout> | undefined;
-  onCleanup(() => clearTimeout(pendingComment));
-  function commentOnClick(e: MouseEvent) {
+  let stopDrag: (() => void) | undefined;
+  // Whether the last press opened a comment that is still empty.
+  let opened = false;
+  onCleanup(() => {
     clearTimeout(pendingComment);
-    if (!props.selectable || !props.onAction || props.composerOpen || !containerRef) return;
-    if (e.detail > 1 || (e.target as HTMLElement | null)?.closest(CLICK_SKIP)) return;
+    stopDrag?.();
+  });
+  function dismissOpened() {
+    if (opened) props.onDismissComment?.();
+  }
+  function commentOnPress(e: MouseEvent) {
+    if (!props.selectable || !props.onAction || !containerRef) return;
+    // Ctrl+click is the context menu on macOS.
+    if (e.button !== 0 || e.shiftKey || e.ctrlKey || e.detail > 2) return;
+    if ((e.target as HTMLElement | null)?.closest(CLICK_SKIP)) return;
     const index = blockIndexOf(e.target as Node, containerRef);
     if (index === null) return;
+    if (e.detail === 2) {
+      if (!props.onEditBlock) return;
+      // Kept from selecting a word, the press also no longer reads as leaving
+      // the comment; the one its first click opened is put away here.
+      e.preventDefault();
+      dismissOpened();
+      props.onEditBlock(index);
+      return;
+    }
+    opened = false;
+    stopDrag?.();
+    // eslint-disable-next-line solid/reactivity -- runs from onDrag's mousemove listener, an event handler
+    stopDrag = onDrag(e, () => {
+      clearTimeout(pendingComment);
+      dismissOpened();
+    });
+    // After the press's other handlers, so an open comment it closes is gone first.
     pendingComment = setTimeout(() => {
       const native = window.getSelection();
       if (props.composerOpen || (native && !native.isCollapsed)) return;
       // A click inside the picked passage comments on all of it.
       const range = selected();
       const inRange = range && index >= range.start && index <= range.end;
+      opened = true;
       props.onAction?.('note', inRange ? range.end : index, inRange ? range : undefined);
-    }, CLICK_COMMENT_DELAY_MS);
+    });
   }
 
   // Links never navigate the app window: web links go to the browser, anchors
   // scroll, and other files of the project open in the workspace.
   function handleClick(e: MouseEvent) {
     const anchorEl = (e.target as HTMLElement | null)?.closest<HTMLAnchorElement>('a[href]');
-    if (!anchorEl || !containerRef?.contains(anchorEl)) return commentOnClick(e);
+    if (!anchorEl || !containerRef?.contains(anchorEl)) return;
     e.preventDefault();
     const link = resolveDocumentLink(anchorEl.getAttribute('href') ?? '', props.documentPath ?? '');
     if (!link) return;
@@ -257,6 +329,7 @@ export function DocumentViewer(props: DocumentViewerProps) {
         'docws-selectable': props.selectable === true,
         'docws-hunk-gutter': hasHunkToggles(),
       }}
+      onMouseDown={commentOnPress}
       onMouseUp={handleSelectionEnd}
       onKeyUp={(e) => {
         if (SELECTION_KEYS.has(e.key)) handleSelectionEnd(e);
@@ -272,8 +345,10 @@ export function DocumentViewer(props: DocumentViewerProps) {
           alignLeft={isPage()}
           onAction={(kind) => {
             const index = toolbarIndex();
-            if (index !== null) props.onAction?.(kind, index, selected() ?? undefined);
+            if (index === null) return;
+            props.onAction?.(kind, index, toolbarSelection());
           }}
+          keepsComposer={() => !!props.composerOpen && !!toolbarSelection()}
           onPointer={(inside) => (inside ? hovered.hold() : hovered.clear())}
         />
       </Show>
@@ -354,8 +429,15 @@ export function DocumentViewer(props: DocumentViewerProps) {
                   it is not part of the passage, so clicking it must not toggle
                   the selection and the highlight stops at the text. */}
                 {props.blockMarker?.(i())}
-                {/* eslint-disable-next-line solid/no-innerhtml -- block HTML is DOMPurify-sanitized markdown from a local file */}
-                <div innerHTML={block.html} />
+                <Show
+                  when={props.editingBlock === i() && props.blockEditor}
+                  fallback={
+                    // eslint-disable-next-line solid/no-innerhtml -- block HTML is DOMPurify-sanitized markdown from a local file
+                    <div innerHTML={block.html} />
+                  }
+                >
+                  {(editor) => editor()()}
+                </Show>
               </div>
             </>
           );

@@ -83,10 +83,12 @@ the document.
    remembered per project and leaves the app controls and terminal unchanged.
 4. Select text, or press **§** beside a heading (a button, so the keyboard reaches it), to
    pick a passage. A plain click on a block opens **Comment** on it, or on the whole
-   passage when the click lands inside the picked one. The comment waits a moment so a
-   double-click can still select a word; links, controls and an open composer keep their
-   own behaviour. Selection keeps normal copying available, including within one
-   paragraph, and shows labeled **Rewrite**, **Comment** and **Ask** actions. The actions apply to the selected
+   passage when the click lands inside the picked one. The comment opens on the press; a
+   drag to select text puts the still-empty comment away again. A comment does not scroll
+   the passage it opens on. Double-click a block to edit its source in place (see item 8). Links, controls and an open composer keep their own behaviour. A click outside an open comment saves and closes it (an empty one just
+   closes); a plain click on a block also opens the next comment there. Selection keeps normal copying available, including within one
+   paragraph, and shows labeled **Rewrite**, **Comment** and **Ask** actions. With a passage selected and
+   no field focused, `C` comments on it, `A` asks about it and `E` edits its block. The actions apply to the selected
    blocks; the composers show the passage as their scope. Selecting alone, with the
    mouse or Shift+arrows, never opens
    or focuses the composer. **Rewrite** in the toolbar works on the selected
@@ -105,7 +107,7 @@ the document.
    fine-tuning of the candidate agents, and model/session settings. Generating proposals opens Runs; sending
    a direct instruction opens Agent. The **×** or Esc closes the composer. Draft text and
    mode survive switching to History or temporarily editing the Markdown.
-   For Markdown, the toolbar's **Full width** lets the document use the whole pane instead
+   For Markdown, the toolbar's **Full width** icon lets the document use the whole pane instead
    of a reading column; the choice is remembered. HTML pages always fill the pane. Mermaid diagrams, here and in every other Markdown
    surface of the app, carry an enlarge button that opens them at the size of the window.
 5. The side panel has Agent, Runs, and Comments tabs and a draggable seam. Below 800px panel width,
@@ -172,10 +174,15 @@ the document.
    older-version previews, diffs, and commit reverts.
 7. **Comments and questions.** A comment is a note on a passage, kept for you; a question
    is asked of an agent, which answers it beside the passage. They are separate actions:
-   choose **Comment** or **Ask** beside a selected passage or in the toolbar.
+   choose **Comment** or **Ask** beside a selected passage.
    Enter inserts a new line. Leaving the field or closing the popover saves it
    automatically, without an agent; Ctrl/Cmd+Enter saves too, and a failed save keeps the
-   draft with a Retry action. The **Ask** composer is never autosaved: **Ask** or
+   draft with a Retry action. A click outside the comment closes it at once and saves it
+   behind; if that save fails, an error is shown and its text, with Retry, takes the
+   place of the next comment; when that one has text of its own, the failed text waits
+   for the comment after it (for this session). While "Saving…" or "Not saved" shows,
+   the field's text makes way for it. The block toolbar stays available on hover while a comment is open; over the
+   comment's own passage it switches the comment to Ask or Rewrite and keeps the text. The **Ask** composer is never autosaved: **Ask** or
    Enter (Shift+Enter for a new line), like Rewrite, saves the question and asks the agent (a picker appears when more than
    one is installed). The **Comments**
    tab lists the current document's comments, with passage quotes and a Show resolved
@@ -190,17 +197,22 @@ the document.
    that answered: the follow-up is a new question on the same passage, and the agent is
    handed the earlier exchange along with it. Resolve (`r`) collapses a bubble to one
    line, Delete removes it with an Undo
-   in the toolbar, and **Rewrite from this** reopens the composer on the passage with the
+   in the toolbar (several quick deletes come back one per Undo), and **Rewrite from this** reopens the composer on the passage with the
    bubble's text (and answer) as the instruction; the bubble then collapses as `task`.
 
-8. **Edit a block (HTML).** In an HTML document, select text inside one block and choose
-   **Edit block** in the toolbar. Edit its source, then **Save block** to update the
+8. **Edit a block.** Double-click a block to edit its source. In Markdown the source
+   replaces the block in place, in the same live editor as **Edit**: **Save block** or Ctrl+Enter saves, Escape or **Cancel**
+   discards (asking first once edited), and a click elsewhere puts away an untouched editor. An edited one stays,
+   also through a reload of the document, until it is saved or discarded. In
+   an HTML document the source opens in a dialog. If the document changes so that the
+   block is gone, an edited editor moves to that dialog, where saving reports the change
+   and Cancel discards; an untouched one just closes. Saving updates the
    document directly. Surrounding content and line endings are preserved. If the file
    changed meanwhile, saving refuses to overwrite it and keeps your text available to copy.
    Edits made this way, or in an outside editor, are recorded as a version automatically
    or with **Save version** in History, or discarded with **Restore last version…**. Next
-   to the editor button, a folder button opens the project in the file manager. Markdown
-   documents have no separate block dialog: see the next item.
+   to the editor button, a folder button opens the project in the file manager. To edit a
+   whole Markdown document, see the next item.
 
 9. **Edit Markdown directly.** For `.md` and `.markdown` files, choose **Edit** in the
    document toolbar. With a passage selected, the cursor lands at the start of its first
@@ -213,8 +225,9 @@ the document.
    their document, including after switching files or closing the workspace. Reopening
    waits for an outstanding save so subsequent typing and undo remain recoverable. If an
    agent or external editor changes the file while a draft is unsaved, the draft is
-   preserved and saving refuses to overwrite the changed file. Copy the draft before
-   choosing **Reload and discard my draft**. HTML retains its existing block editor.
+   preserved and saving refuses to overwrite the changed file; the status row says so.
+   Copy the draft before choosing **Reload from disk**, which asks again
+   (**Discard my draft?**) before throwing it away. HTML retains its existing block editor.
 
 ### How it works
 

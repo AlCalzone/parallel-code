@@ -1,4 +1,13 @@
-import { For, Show, createEffect, createMemo, createSignal, on, untrack } from 'solid-js';
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  untrack,
+} from 'solid-js';
 import { store } from '../store/core';
 import {
   activeDocumentPath,
@@ -18,6 +27,7 @@ import {
   type DocumentSelection,
 } from './store';
 import { createAnchor } from './annotation-anchor';
+import { afterPress, onScrollbar } from './press';
 import type { DocumentBlock } from './markdown-blocks';
 import { getProject } from '../store/projects';
 import { showNotification } from '../store/notification';
@@ -29,7 +39,6 @@ import type { DocumentModelChoice } from '../store/types';
 import { ModelRows, type ChoiceSlot, type ModelSlot } from './ModelRows';
 import { buildInteractivePrompt } from './interactive-prompt';
 import { sendToDocumentAgent } from './agent-task';
-import { ActionIcon } from './BlockActions';
 import { SendIcon, SparkleIcon } from '../components/icons';
 
 interface RunComposerProps {
@@ -248,9 +257,39 @@ export function RunComposer(props: RunComposerProps) {
         if (d) setInstruction(d.text);
         if (d?.mode) setMode(d.mode);
         setFresh(true);
-        requestAnimationFrame(() => textareaRef?.focus({ preventScroll: true }));
+        requestAnimationFrame(() => afterPress(() => textareaRef?.focus({ preventScroll: true })));
       },
     ),
+  );
+
+  // A comment is quick to reopen and saves on the way out, so a click anywhere
+  // else puts it away, like a comment box in a word processor. The other modes
+  // hold model choices and a longer draft, and stay up until closed.
+  createEffect(() => {
+    if (mode() !== 'note') return;
+    const outside = (e: MouseEvent) => {
+      if (e.target instanceof Node && rootRef?.contains(e.target)) return;
+      // A press that keeps focus here (the toolbar's mode buttons) is not
+      // leaving; nor is one on a scrollbar. Without a passage, the next click
+      // is how the reader picks one for the waiting draft.
+      if (e.defaultPrevented || onScrollbar(e) || !hasPassage()) return;
+      // The click is usually on the next passage to comment on, so the comment
+      // makes way at once and saves behind it. A failed save is reported, and
+      // its backup returns with the next comment.
+      if (!noteSaveFailed()) void saveNote();
+      props.onClose();
+    };
+    document.addEventListener('mousedown', outside);
+    onCleanup(() => document.removeEventListener('mousedown', outside));
+  });
+
+  // The field is disabled while saving, which drops its focus; after a failure
+  // the reader types on, so it gets the focus back unless they went elsewhere.
+  createEffect(
+    on(noteSaveFailed, (failed) => {
+      const active = document.activeElement;
+      if (failed && (!active || active === document.body)) textareaRef?.focus();
+    }),
   );
 
   function changeMode(next: ComposerMode) {
@@ -397,15 +436,28 @@ export function RunComposer(props: RunComposerProps) {
             ? 'Ask about this passage'
             : 'Rewrite'
       }
-      classList={{ 'is-scoped': hasPassage(), 'is-fresh': fresh(), 'is-note': mode() === 'note' }}
+      classList={{
+        'is-scoped': hasPassage(),
+        'is-fresh': fresh(),
+        'is-note': mode() === 'note',
+        'has-note-status': mode() === 'note' && (noteSaving() || noteSaveFailed()),
+      }}
       onFocusOut={handleFocusOut}
+      onKeyDown={(e) => {
+        // The field handles its own keys. Escape from the comment's buttons
+        // closes it too; the other modes have pickers whose Escape is their own.
+        if (e.key !== 'Escape' || mode() !== 'note' || e.target === textareaRef) return;
+        e.preventDefault();
+        e.stopPropagation();
+        close();
+      }}
     >
+      {/* A comment has no title row: its close button and save status sit over
+          the field's corner, so the box is little more than the field. */}
       <div class="docws-composer-head">
-        <span class="docws-composer-title">
-          <Show when={mode() === 'note'} fallback={mode() === 'question' ? 'Ask' : 'Rewrite'}>
-            <ActionIcon kind="note" />
-          </Show>
-        </span>
+        <Show when={mode() !== 'note'}>
+          <span class="docws-composer-title">{mode() === 'question' ? 'Ask' : 'Rewrite'}</span>
+        </Show>
         <Show when={mode() !== 'note' && !hasPassage()}>
           <span class="docws-composer-scope" title={scopeLabel()}>
             {scopeLabel()}
@@ -415,11 +467,15 @@ export function RunComposer(props: RunComposerProps) {
           <span class="docws-note-status" role="status">
             {noteSaving() ? 'Saving…' : noteSaveFailed() ? 'Not saved' : ''}
           </span>
-          <Show when={noteSaveFailed()}>
-            <button type="button" class="docws-btn docws-btn-sm" onClick={() => void saveNote()}>
-              Retry
-            </button>
-          </Show>
+          {/* Kept in the layout so a failed save does not shift the header. */}
+          <button
+            type="button"
+            class="docws-btn docws-btn-sm"
+            style={{ visibility: noteSaveFailed() ? 'visible' : 'hidden' }}
+            onClick={() => void saveNote()}
+          >
+            Retry
+          </button>
         </Show>
         <button
           type="button"
