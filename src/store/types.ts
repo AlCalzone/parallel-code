@@ -140,6 +140,14 @@ export interface Project {
   superProductivityProjectId?: string;
 }
 
+/** The Kanban card a new task was started from; see src/store/kanban.ts. */
+export interface KanbanNewTaskSource {
+  projectId: string;
+  title: string;
+  column: string;
+  ref: { column: number; card: number };
+}
+
 /** A Super Productivity task the New Task form was opened from. */
 export interface SpNewTaskSource {
   taskId: string;
@@ -665,12 +673,16 @@ export interface AppStore {
     githubPr?: import('../ipc/types').GitHubWorkItem;
     /** Set when the form was opened from a Super Productivity task. */
     superProductivity?: SpNewTaskSource;
+    /** Set when the form was opened from a Kanban card. */
+    kanban?: KanbanNewTaskSource;
   } | null;
   missingProjectIds: Record<string, true>;
   remoteAccess: RemoteAccess;
   /** Persisted: start the remote (Connect Phone) server automatically on launch. */
   autoStartRemoteAccess: boolean;
   githubIssuesProjectId: string | null;
+  /** Project whose Kanban board occupies the task area. */
+  kanbanProjectId: string | null;
   showArena: boolean;
   /** The thinking space: how it opens, or null when closed. */
   thinkingSpace: 'list' | 'new' | null;

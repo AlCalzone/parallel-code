@@ -14,6 +14,7 @@ import {
   startGitHubIssueTask,
   updateGitHubIssue,
 } from '../store/github';
+import { addIssuesToBoard, issueBoardColumn, openKanban } from '../store/kanban';
 import { GitHubItemBadges } from './GitHubItemBadges';
 import {
   ChevronLeftIcon,
@@ -22,6 +23,7 @@ import {
   ExternalLinkIcon,
   PencilIcon,
   PersonIcon,
+  KanbanIcon,
   PlayIcon,
   SyncIcon,
 } from './icons';
@@ -46,6 +48,20 @@ export function GitHubIssueDetail(props: {
   );
   // Reading an errored resource throws to the app-wide ErrorBoundary; show the error inline instead.
   const loadedIssue = () => (issue.error ? undefined : issue());
+  const [boardColumn, { refetch: refetchBoardColumn }] = createResource(
+    () => ({ projectId: props.projectId, url: props.url }),
+    ({ projectId, url }) => issueBoardColumn(projectId, url),
+  );
+  const [addingToBoard, setAddingToBoard] = createSignal(false);
+  async function addToBoard(item: { title: string; url: string }) {
+    setAddingToBoard(true);
+    try {
+      await addIssuesToBoard(props.projectId, [item]);
+      await refetchBoardColumn();
+    } finally {
+      setAddingToBoard(false);
+    }
+  }
   const linkedTasks = createMemo(() =>
     Object.values(store.tasks).filter(
       (t) => sameGitHubIssue(t.githubUrl, props.url) || sameGitHubIssue(t.prUrl, props.url),
@@ -106,6 +122,29 @@ export function GitHubIssueDetail(props: {
               </button>
               <button disabled={busy() || !!editing() || issue.loading} onClick={refresh}>
                 <SyncIcon /> Refresh issue
+              </button>
+              {/* One button whose label follows the board, so focus stays on it. */}
+              <button
+                aria-busy={addingToBoard() || boardColumn.loading || undefined}
+                title={
+                  boardColumn()
+                    ? "Open the project's Kanban board"
+                    : "Add a card for this item to the project's Kanban board (KANBAN.md)"
+                }
+                onClick={() => {
+                  if (addingToBoard() || boardColumn.loading) return;
+                  if (boardColumn()) openKanban(props.projectId);
+                  else void addToBoard(current());
+                }}
+              >
+                <KanbanIcon />{' '}
+                {boardColumn.loading && boardColumn() === undefined
+                  ? 'Board…'
+                  : addingToBoard()
+                    ? 'Adding…'
+                    : boardColumn()
+                      ? `On board · ${boardColumn()}`
+                      : 'Add to board'}
               </button>
             </div>
             <h2>{current().title}</h2>

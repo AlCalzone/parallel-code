@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { For, Show, createSignal } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { githubAgentTaskId } from '../documents/task-id';
 import { store } from '../store/core';
@@ -8,7 +8,9 @@ import type { GitHubIssueSummary } from '../ipc/types';
 import type { Project } from '../store/types';
 import { agentsLoadingText, type AgentPaneState } from './GitHubAgentPane';
 import type { BrowserSession } from './github-issues-session';
-import { CheckIcon, CloseIcon, ListIcon, SparkleIcon } from './icons';
+import { CheckIcon, CloseIcon, KanbanIcon, ListIcon, SparkleIcon } from './icons';
+import { addIssuesToBoard } from '../store/kanban';
+import { showNotification } from '../store/notification';
 
 export function GitHubBatchBar(props: {
   project: Project;
@@ -20,6 +22,29 @@ export function GitHubBatchBar(props: {
   toggleSelected: (item: GitHubIssueSummary) => void;
 }) {
   const agentReady = () => githubAgentAvailability() === 'ready';
+  const [addingToBoard, setAddingToBoard] = createSignal(false);
+  async function addSelectedToBoard() {
+    setAddingToBoard(true);
+    try {
+      const total = props.view.selected.length;
+      const result = await addIssuesToBoard(props.project.id, [...props.view.selected]);
+      if (result) {
+        const { added, created, column } = result;
+        const cards = `${added} ${added === 1 ? 'card' : 'cards'}`;
+        const skipped = total - added;
+        showNotification(
+          added === 0
+            ? `All ${total} are already on the Kanban board`
+            : (created
+                ? `Created KANBAN.md with ${cards} in ${column}`
+                : `Added ${cards} to ${column}`) +
+                (skipped ? `; ${skipped} already on the board` : ''),
+        );
+      }
+    } finally {
+      setAddingToBoard(false);
+    }
+  }
   function selectPage(items: GitHubIssueSummary[]) {
     props.setView('selected', (selected) => {
       const all = new Map(selected.map((item) => [item.url, item]));
@@ -41,6 +66,13 @@ export function GitHubBatchBar(props: {
       </span>
       <button disabled={!props.view.selected.length} onClick={() => props.setView('selected', [])}>
         <CloseIcon /> Clear selection
+      </button>
+      <button
+        disabled={!props.view.selected.length || addingToBoard()}
+        title="Add the selected items as cards to the project's Kanban board"
+        onClick={() => void addSelectedToBoard()}
+      >
+        <KanbanIcon /> Add to board
       </button>
       <button
         class="github-issue-primary"

@@ -9,6 +9,11 @@ const SEARCH_DEBOUNCE_MS = 400;
 interface GitHubItemPickerProps {
   projectRoot: string;
   onPick: (item: GitHubWorkItem) => void;
+  /** Marks items that are already taken (e.g. on the Kanban board) and disables them. */
+  pickedLabel?: (item: GitHubWorkItem) => string | null;
+  /** Without its own frame, for use inside a popover that already has one. */
+  bare?: boolean;
+  autofocus?: boolean;
 }
 
 /** Lists the project repo's open issues and PRs, searchable through `gh --search`. */
@@ -28,13 +33,20 @@ export function GitHubItemPicker(props: GitHubItemPickerProps) {
         display: 'flex',
         'flex-direction': 'column',
         gap: '6px',
-        padding: '8px',
-        border: `1px solid ${theme.border}`,
-        'border-radius': 'var(--radius-md)',
-        background: theme.bgInput,
+        ...(props.bare
+          ? {}
+          : {
+              padding: '8px',
+              border: `1px solid ${theme.border}`,
+              'border-radius': 'var(--radius-md)',
+              background: theme.bgInput,
+            }),
       }}
     >
       <input
+        ref={(el) => {
+          if (props.autofocus) queueMicrotask(() => el.focus());
+        }}
         class="input-field"
         type="search"
         aria-label="Search issues and pull requests"
@@ -57,7 +69,8 @@ export function GitHubItemPicker(props: GitHubItemPickerProps) {
       <Show when={items.error}>
         {(err) => (
           <div role="alert" style={{ ...bannerStyle(theme.error), 'font-size': '12px' }}>
-            {errMessage(err())}
+            {/* Electron wraps IPC errors in its own prefix; the cause is what helps. */}
+            {errMessage(err()).replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')}
           </div>
         )}
       </Show>
@@ -85,7 +98,11 @@ export function GitHubItemPicker(props: GitHubItemPickerProps) {
               <button
                 type="button"
                 class="github-item-option"
-                onClick={() => props.onPick(item)}
+                // aria-disabled, not disabled: a picked item keeps focus for the next pick.
+                aria-disabled={props.pickedLabel?.(item) ? true : undefined}
+                onClick={() => {
+                  if (!props.pickedLabel?.(item)) props.onPick(item);
+                }}
                 title={item.url}
                 style={{
                   display: 'flex',
@@ -99,7 +116,8 @@ export function GitHubItemPicker(props: GitHubItemPickerProps) {
                   color: theme.fg,
                   'font-size': '13px',
                   'text-align': 'left',
-                  cursor: 'pointer',
+                  cursor: props.pickedLabel?.(item) ? 'default' : 'pointer',
+                  opacity: props.pickedLabel?.(item) ? '0.6' : '1',
                 }}
               >
                 <span
@@ -123,8 +141,8 @@ export function GitHubItemPicker(props: GitHubItemPickerProps) {
                 >
                   {item.title}
                 </span>
-                <span style={{ 'flex-shrink': '0', 'font-size': '11px', color: theme.fgSubtle }}>
-                  {item.author}
+                <span style={{ 'flex-shrink': '0', 'font-size': '11px', color: theme.fgMuted }}>
+                  {props.pickedLabel?.(item) ?? item.author}
                 </span>
               </button>
             </li>

@@ -95,6 +95,7 @@ export const [store, setStore] = createStore<AppStore>({
   },
   autoStartRemoteAccess: false,
   githubIssuesProjectId: null,
+  kanbanProjectId: null,
   showArena: false,
   thinkingSpace: null,
   keybindingPreset: 'default',
