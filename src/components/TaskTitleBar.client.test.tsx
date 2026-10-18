@@ -210,7 +210,15 @@ it('offers running snooze presets directly in a submenu without a dialog', () =>
     [...document.querySelectorAll('[role="menu"][aria-label="Snooze · keep running"] button')].map(
       (item) => item.textContent?.trim(),
     ),
-  ).toEqual(['15 minutes', '30 minutes', '1 hour', '2 hours', '4 hours', '8 hours']);
+  ).toEqual([
+    '15 minutes',
+    '30 minutes',
+    '1 hour',
+    '2 hours',
+    '4 hours',
+    '8 hours',
+    'Tomorrow morning',
+  ]);
   const now = Date.now();
   menuItem('15 minutes')?.click();
   expect(getTaskSnoozedUntil('one')).toBeGreaterThanOrEqual(now + 0.25 * 3_600_000);
@@ -226,12 +234,26 @@ it('offers longer presets for stopping agents while snoozed', async () => {
     [...document.querySelectorAll('[role="menu"][aria-label="Snooze · stop agents"] button')].map(
       (item) => item.textContent?.trim(),
     ),
-  ).toEqual(['1 hour', '4 hours', '8 hours', '1 day', '3 days', '1 week']);
+  ).toEqual(['1 hour', '4 hours', '8 hours', 'Tomorrow morning', '1 day', '3 days', '1 week']);
   const now = Date.now();
   menuItem('3 days')?.click();
   await vi.waitFor(() => expect(store.tasks.one.collapsed).toBe(true));
   expect(store.tasks.one.snoozedUntil).toBeGreaterThanOrEqual(now + 72 * 3_600_000);
   expect(document.querySelector('[role="dialog"]')).toBeNull();
+});
+
+it('snoozes until 9:00 tomorrow', () => {
+  // A pinned clock keeps the expected day fixed even if a run crosses midnight.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  try {
+    vi.setSystemTime(new Date(2026, 9, 21, 17, 30));
+    button('Later')?.click();
+    menuItem('Snooze · keep running')?.click();
+    menuItem('Tomorrow morning')?.click();
+    expect(getTaskSnoozedUntil('one')).toBeCloseTo(new Date(2026, 9, 22, 9, 0).getTime(), -1);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it('disables the stop-agents submenu for coordinated tasks', () => {

@@ -34,6 +34,7 @@ import { taskCheckSignal } from '../lib/task-check-signal';
 import { handleDragReorder } from '../lib/dragReorder';
 import { getTaskDockerBadgeLabel } from '../lib/docker';
 import { displayTaskNameFromPrompt, shouldUsePromptDerivedTaskName } from '../lib/clean-task-name';
+import { hoursUntilTomorrowMorning } from '../lib/date';
 import type { Task } from '../store/types';
 import { isLandedTaskState } from '../store/landing';
 import {
@@ -61,21 +62,34 @@ interface TaskTitleBarProps {
 export function TaskTitleBar(props: TaskTitleBarProps) {
   const canStopAgents = () =>
     !props.task.coordinatorMode && !props.task.delegationParent && !props.task.coordinatedBy;
-  const snoozeChoices = (keepRunning: boolean) =>
-    (keepRunning ? [0.25, 0.5, 1, 2, 4, 8] : [1, 4, 8, 24, 72, 168]).map((hours) => ({
-      label:
-        hours < 1
-          ? `${hours * 60} minutes`
-          : hours === 1
-            ? '1 hour'
-            : hours === 168
-              ? '1 week'
-              : hours >= 24
-                ? `${hours / 24} ${hours === 24 ? 'day' : 'days'}`
-                : `${hours} hours`,
-      icon: <ClockIcon size={14} />,
-      run: () => void snoozeTask(props.task.id, hours, keepRunning),
-    }));
+  const snoozePreset = (hours: number, keepRunning: boolean) => ({
+    label:
+      hours < 1
+        ? `${hours * 60} minutes`
+        : hours === 1
+          ? '1 hour'
+          : hours === 168
+            ? '1 week'
+            : hours >= 24
+              ? `${hours / 24} ${hours === 24 ? 'day' : 'days'}`
+              : `${hours} hours`,
+    icon: <ClockIcon size={14} />,
+    run: () => void snoozeTask(props.task.id, hours, keepRunning),
+  });
+  const tomorrowMorning = (keepRunning: boolean) => ({
+    label: 'Tomorrow morning',
+    title: 'Returns at 9:00 tomorrow.',
+    icon: <ClockIcon size={14} />,
+    // Computed on click, not render, so a menu left open across midnight still means tomorrow.
+    run: () => void snoozeTask(props.task.id, hoursUntilTomorrowMorning(), keepRunning),
+  });
+  const snoozeChoices = (keepRunning: boolean) => {
+    const presets = (hours: number[]) => hours.map((h) => snoozePreset(h, keepRunning));
+    // Placed after the 8-hour preset, before the day-long ones.
+    return keepRunning
+      ? [...presets([0.25, 0.5, 1, 2, 4, 8]), tomorrowMorning(true)]
+      : [...presets([1, 4, 8]), tomorrowMorning(false), ...presets([24, 72, 168])];
+  };
   const snoozedUntil = () => getTaskSnoozedUntil(props.task.id);
   const dockerBadgeLabel = () => getTaskDockerBadgeLabel(props.task.dockerSource);
   const isLandedTask = () => isLandedTaskState(props.task.landingState);
