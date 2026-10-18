@@ -448,6 +448,17 @@ it('replaces a snooze deadline and supports early manual restore', () => {
   expect(getTaskSnoozedUntil('one')).toBeUndefined();
 });
 
+it('keeps snoozed tasks behind tasks added while they wait', () => {
+  sendTaskToBack('one', 1);
+  setStore('tasks', 'four', task('four'));
+  // createTask, uncollapseTask and spawned subtasks all append to the order.
+  setStore('taskOrder', [...store.taskOrder, 'four']);
+  expect(store.taskOrder).toEqual(['two', 'three', 'four', 'one']);
+  expect(isTaskBackgrounded('one')).toBe(true);
+  setStore('taskOrder', (order) => order.filter((id) => id !== 'four'));
+  setStore('tasks', 'four', undefined as unknown as Task);
+});
+
 it('ends timed snooze when the task is selected', () => {
   sendTaskToBack('one', 1);
   setActiveTask('one');

@@ -318,6 +318,15 @@ export function startBackgroundTaskWatcher(): () => void {
         }
       }
     });
+    // New, resumed and spawned tasks are appended to the order, which would land
+    // them behind waiting tiles. Keep the waiting tiles last instead.
+    createEffect(() => {
+      const order = store.taskOrder;
+      const back = order.filter(isTaskBackgrounded);
+      if (order.slice(order.length - back.length).every(isTaskBackgrounded)) return;
+      const front = order.filter((id) => !isTaskBackgrounded(id));
+      untrack(() => setStore('taskOrder', [...front, ...back]));
+    });
     createEffect(() => {
       const deadlines = [...backgroundTasks().values()].flatMap((task) =>
         task.snoozedUntil === undefined ? [] : [task.snoozedUntil],
