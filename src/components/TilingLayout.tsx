@@ -753,7 +753,7 @@ export function TilingLayout() {
                   </div>
                   <Show when={showHandle()}>
                     <div
-                      class={`resize-handle resize-handle-h ${dragging() === i() ? 'dragging' : ''}`}
+                      class={`resize-handle resize-handle-h tiling-strip-handle ${dragging() === i() ? 'dragging' : ''}`}
                       onMouseDown={(e) => handleDragStart(i(), e)}
                       onDblClick={() => {
                         if (dragging() !== null) return;

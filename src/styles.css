@@ -1908,6 +1908,13 @@ html[data-look='workbench'] .resize-handle-h::before {
   pointer-events: none;
 }
 
+/* The divider still spans the columns; only the strip handle's hit area stops
+   short of the scrollbar. */
+html[data-look='workbench'] .tiling-strip-handle::before,
+html[data-look^='islands-'] .tiling-strip-handle::before {
+  bottom: -8px;
+}
+
 * {
   box-sizing: border-box;
   scrollbar-width: thin;
@@ -2536,6 +2543,15 @@ html:is(
      neighbor visible, and edge clamping snaps the first/last task flush.
      Keep in sync with TASK_CLICKABLE_PREVIEW_PX in src/store/focused-panel.ts. */
   scroll-padding-inline: 64px;
+  /* The scrollbar is the strip's only drag-to-scroll target; the global thin
+     one leaves a ~6px thumb that is hard to hit (#255). */
+  scrollbar-width: auto;
+}
+
+/* Stop column handles short of the scrollbar so a near miss above it does not
+   land on a col-resize handle (#255). */
+.tiling-strip-handle {
+  margin-bottom: 8px;
 }
 
 .tiling-layout-scroll-affordance {

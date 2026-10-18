@@ -1,5 +1,6 @@
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { CaretDownIcon } from './icons';
 import { createAnchorEffect, placeBelow } from '../lib/floating';
 import { codeProjects } from '../store/projects';
 import { store } from '../store/core';
@@ -61,9 +62,7 @@ export function TaskProjectFilter() {
           {(project) => <ProjectSwatch color={project().color} size={7} />}
         </Show>
         <span>{selected()?.name ?? 'All projects'}</span>
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-          <path d="m4 6 4 4 4-4z" />
-        </svg>
+        <CaretDownIcon size={12} />
       </button>
       <Show when={selected()}>
         <button

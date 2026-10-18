@@ -439,8 +439,20 @@ export function looksLikeQuestion(tail: string): boolean {
   // We scan the last 8 lines (not just the last 3) because some TUI agents
   // (e.g. Codex CLI) render a multi-line footer/help bar *below* the prompt,
   // pushing the bare ❯/› line several positions up from the end.
+  //
+  // A dialog Claude redraws in place over its input box leaves the replaced box
+  // ahead of the dialog in the tail (#259); a live selection menu after the
+  // newest question marks that case, so only a prompt after it counts. Other
+  // renderers can emit a reply after a prompt they leave in place, so without
+  // a menu the whole tail still decides.
+  const questionLine = lines.findLast(isQuestionLine);
+  if (questionLine === undefined) return false;
+  const afterQuestion = visible.slice(visible.lastIndexOf(questionLine));
+  const scope = SELECTION_CURSOR_LINE.test(afterQuestion) ? afterQuestion : visible;
+  if (scope === afterQuestion && PROMPT_AFTER_MENU.test(afterQuestion)) return false;
+  const scopeLines = scope.split(/\r?\n/).filter((l) => l.trim().length > 0);
   const lastLine = lines[lines.length - 1].trimEnd();
-  const recentLines = lines.slice(-8);
+  const recentLines = scopeLines.slice(-8);
   // Suppress when the agent is sitting at its real main input prompt — any
   // earlier question/dialog text still lingering in the buffer has already been
   // answered.  chunkContainsAgentPrompt is the same readiness detector the
@@ -451,7 +463,7 @@ export function looksLikeQuestion(tail: string): boolean {
   // returns not-ready for trust/permission/selection dialogs and busy states,
   // so real questions are preserved.  Normalisation mirrors
   // coordinator.ts:normalizedTail (control chars → space, preserving \r and \n).
-  const readyProbe = visible
+  const readyProbe = scope
     // eslint-disable-next-line no-control-regex -- preserve \r and \n as line breaks for anchored prompt detection.
     .replace(/[\x00-\x09\x0b-\x0c\x0e-\x1f\x7f]/g, ' ')
     .replace(/[ \t]+/g, ' ')
@@ -465,11 +477,17 @@ export function looksLikeQuestion(tail: string): boolean {
     return false;
   }
 
-  return lines.some((line) => {
-    const trimmed = line.trimEnd();
-    if (trimmed.length === 0) return false;
-    return QUESTION_PATTERNS.some((re) => re.test(trimmed));
-  });
+  return true;
+}
+
+/** A selection cursor on a numbered option, e.g. `❯ 1. Yes`. */
+const SELECTION_CURSOR_LINE = /^\s*[❯›]\s*\d+\./m;
+/** The input box back below a menu, even holding typed text: it was answered. */
+const PROMPT_AFTER_MENU = /^\s*[❯›]\s*\d+\.[^]*^\s*[❯›](?!\s*\d+\.)/m;
+
+function isQuestionLine(line: string): boolean {
+  const trimmed = line.trimEnd();
+  return trimmed.length > 0 && QUESTION_PATTERNS.some((re) => re.test(trimmed));
 }
 
 function isAutoHandledTrustQuestion(tail: string): boolean {

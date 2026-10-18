@@ -544,6 +544,91 @@ describe('looksLikeQuestion', () => {
     const liveDialog = ['Do you want to proceed?', '❯ 1. Yes', '  2. No'].join('\n');
     expect(looksLikeQuestion(liveDialog)).toBe(true);
   });
+
+  it('detects a Claude permission dialog drawn over the empty input box it replaced', () => {
+    // #259: Claude keeps its empty `❯` input box on screen while it works, then
+    // redraws in place (erase-line + cursor-up, no screen clear) to show the
+    // permission dialog. The replaced frame's bare `❯` stays in the tail.
+    const workingFrame = [
+      '⏺ Bash(npm test)',
+      '  ⎿  Running…',
+      '',
+      '✻ Cogitating… (esc to interrupt)',
+      '',
+      '─'.repeat(60),
+      '❯ ',
+      '─'.repeat(60),
+      '  ⏵⏵ accept edits on (shift+tab to cycle)',
+    ].join('\r\n');
+    const redraw = '\x1b[2K\x1b[1A'.repeat(8) + '\x1b[2K\x1b[G';
+    const dialogFrame = [
+      '⏺ Bash(npm test)',
+      '',
+      '─'.repeat(60),
+      ' Bash command',
+      '',
+      '   npm run test:unit -- src/store/taskStatus.test.ts --reporter=verbose',
+      '   Run the task status tests',
+      '',
+      ' Do you want to proceed?',
+      ' ❯ 1. Yes',
+      "   2. Yes, and don't ask again for npm test commands in /home/user/project",
+      '   3. No, and tell Claude what to do differently (esc)',
+    ].join('\r\n');
+    expect(looksLikeQuestion(workingFrame + redraw + dialogFrame)).toBe(true);
+  });
+
+  it('ignores an answered Claude permission dialog once the input box is back', () => {
+    const answered = [
+      ' Do you want to proceed?',
+      ' ❯ 1. Yes',
+      '   3. No, and tell Claude what to do differently (esc)',
+      '\x1b[2K\x1b[1A'.repeat(3),
+      '⏺ Bash(npm test)',
+      '  ⎿  Tests passed',
+      '',
+      '─'.repeat(60),
+      '❯ ',
+      '─'.repeat(60),
+      '  ? for shortcuts',
+    ].join('\r\n');
+    expect(looksLikeQuestion(answered)).toBe(false);
+  });
+
+  it('ignores an answered Claude permission dialog once the input box holds typed text', () => {
+    const answered = [
+      '─'.repeat(60),
+      '❯ ',
+      '─'.repeat(60),
+      '\x1b[2K\x1b[1A'.repeat(3),
+      ' Do you want to proceed?',
+      ' ❯ 1. Yes',
+      '   3. No, and tell Claude what to do differently (esc)',
+      '\x1b[2K\x1b[1A'.repeat(3),
+      '⏺ Bash(npm test)',
+      '  ⎿  Tests passed',
+      '',
+      '✻ Cogitating… (esc to interrupt)',
+      '─'.repeat(60),
+      '❯ also update the docs',
+      '─'.repeat(60),
+      '  ? for shortcuts',
+    ].join('\r\n');
+    expect(looksLikeQuestion(answered)).toBe(false);
+  });
+
+  it('keeps an idle agent quiet when its reply lands after the prompt was drawn', () => {
+    // Renderers that insert history above an unchanged composer (Codex's
+    // scroll-region inserts) emit the reply after the prompt in the stream.
+    const idle = [
+      '› ',
+      '  gpt-5.5 · ~/project',
+      '\x1b[1;20r\x1b[20;1H',
+      '• Tests pass. Would you like me to continue with the docs?',
+      '\x1b[r',
+    ].join('\r\n');
+    expect(looksLikeQuestion(idle)).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

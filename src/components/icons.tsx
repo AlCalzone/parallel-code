@@ -550,3 +550,67 @@ export function CircleCheckIcon(props: IconProps): JSX.Element {
     </SvgIcon>
   );
 }
+
+/** Filled caret for dropdown triggers. */
+export function CaretDownIcon(props: IconProps): JSX.Element {
+  return (
+    <SvgIcon {...props}>
+      <path d="m4 6 4 4 4-4z" />
+    </SvgIcon>
+  );
+}
+
+/** Thin stroke chevron for popover triggers; no end caps, unlike ChevronDownIcon. */
+export function DisclosureChevronIcon(props: IconProps): JSX.Element {
+  return (
+    <SvgIcon {...props}>
+      <path d="m5 6 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" />
+    </SvgIcon>
+  );
+}
+
+/** Hairline chevron for tree rows; drawn for an 8px render (stroke 2 in the 16 box). */
+export function TreeChevronIcon(props: IconProps): JSX.Element {
+  return (
+    <SvgIcon {...props}>
+      <path d="M5 3 11 8l-6 5" fill="none" stroke="currentColor" stroke-width="2" />
+    </SvgIcon>
+  );
+}
+
+/** Padlock marking user-edited items. */
+export function LockIcon(props: IconProps): JSX.Element {
+  return (
+    <SvgIcon {...props}>
+      <g fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="3" y="7" width="10" height="8" rx="1.5" />
+        <path d="M5 7V5a3 3 0 0 1 6 0v2" stroke-linecap="round" />
+      </g>
+    </SvgIcon>
+  );
+}
+
+/** Outlined document for evidence notes; taller than wide, so it draws its own
+ *  16x18 box instead of using the square `SvgIcon`. */
+export function EvidenceNoteIcon(props: { size?: number }): JSX.Element {
+  const size = () => props.size ?? 14;
+  return (
+    <svg
+      width={size()}
+      height={size() * (8 / 7)}
+      viewBox="0 0 16 18"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.4"
+      aria-hidden="true"
+    >
+      <path
+        d="M3 1h7l3 3v13H3zM10 1v3h3M5.5 7h5M5.5 10h5M5.5 13h3"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
+  );
+}
