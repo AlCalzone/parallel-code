@@ -189,7 +189,18 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
           Uncommitted changes only
         </div>
       </Show>
-      <div style={{ flex: '1', overflow: 'hidden' }}>
+      {/* A grid row gives the list's `height: 100%` a definite size even when
+          the section is content-sized (focus-mode side column without shells);
+          otherwise the list grows past the section and its footer is clipped. */}
+      <div
+        style={{
+          flex: '1',
+          overflow: 'hidden',
+          display: 'grid',
+          'grid-template-rows': 'minmax(0, 1fr)',
+          'grid-template-columns': 'minmax(0, 1fr)',
+        }}
+      >
         <ChangedFilesList
           worktreePath={props.task.worktreePath}
           projectRoot={getProject(props.task.projectId)?.path}
