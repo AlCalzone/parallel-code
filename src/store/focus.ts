@@ -211,7 +211,7 @@ export function unfocusPlaceholder(): void {
 }
 
 /** Arrow-key travel order. It skips snoozed tiles: activating one ends its
- *  snooze, so passing through would undo the snooze. Clicks and Ctrl+N still reach them. */
+ *  snooze, so passing through would undo the snooze. Sidebar clicks and Ctrl+N still reach them. */
 function travelOrder(): string[] {
   return openPanelOrder().filter((id) => !isTaskBackgrounded(id));
 }
@@ -380,7 +380,8 @@ export function navigateColumn(direction: 'left' | 'right'): void {
   // The open draft is a real tile between the last task and the add controls.
   if (store.showNewTaskPanel && store.newTaskPanelFocused) {
     if (direction === 'right') {
-      if (openPanelOrder().length > 0) focusPlaceholder('add-task');
+      // The add-task tile is only rendered beside a visible tile.
+      if (travelOrder().length > 0) focusPlaceholder('add-task');
     } else {
       const lastTaskId = travelOrder().at(-1);
       if (lastTaskId) {

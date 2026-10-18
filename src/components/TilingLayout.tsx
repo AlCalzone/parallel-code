@@ -29,6 +29,7 @@ import {
 } from '../store/store';
 import { documentAgentTaskId } from '../documents/task-id';
 import { scrollTaskIntoView } from '../store/focused-panel';
+import { isTaskBackgrounded } from '../store/background-tasks';
 import { codeProjects } from '../store/projects';
 import { closeTask } from '../store/tasks';
 import { TaskPanel } from './TaskPanel';
@@ -68,7 +69,14 @@ interface TileChild {
 export function TilingLayout() {
   const documentTaskId = () =>
     store.activeDocumentProjectId ? documentAgentTaskId(store.activeDocumentProjectId) : null;
-  const hasPanels = () => store.taskOrder.some(matchesTaskProjectFilter) || !!documentTaskId();
+  // Snoozed tiles stay mounted, like filtered-out ones, so running agents keep
+  // their terminals; hiding them means no click into one can end its snooze.
+  const isHiddenTask = (id: string) => !matchesTaskProjectFilter(id) || isTaskBackgrounded(id);
+  const hasPanels = () => store.taskOrder.some((id) => !isHiddenTask(id)) || !!documentTaskId();
+  const hasSnoozedTasks = () =>
+    [...store.taskOrder, ...store.collapsedTaskOrder].some(
+      (id) => matchesTaskProjectFilter(id) && isTaskBackgrounded(id),
+    );
   const focusMode = () => store.focusMode && hasPanels() && !store.showNewTaskPanel;
   let containerRef: HTMLDivElement | undefined;
   createProjectFilterTransition(taskProjectFilter, () => containerRef);
@@ -128,7 +136,7 @@ export function TilingLayout() {
     for (const el of taskEls) {
       const taskId = el.dataset.taskId;
       if (!taskId || (!store.tasks[taskId] && taskId !== documentTaskId())) continue;
-      if (store.tasks[taskId] && !matchesTaskProjectFilter(taskId)) continue;
+      if (store.tasks[taskId] && isHiddenTask(taskId)) continue;
       const rect = el.getBoundingClientRect();
       if (rect.right <= containerRect.left + VIEWPORT_EPSILON_PX) {
         nextVisibility[taskId] = 'offscreen-left';
@@ -211,6 +219,7 @@ export function TilingLayout() {
   // Recompute viewport state when panel order/structure changes.
   createEffect(() => {
     void store.taskOrder.join('|');
+    void store.taskOrder.filter(isTaskBackgrounded).join('|');
     void taskProjectFilter();
     void documentTaskId();
     requestAnimationFrame(() => updateViewportState());
@@ -569,7 +578,7 @@ export function TilingLayout() {
               }}
             >
               <Show
-                when={store.collapsedTaskOrder.length === 0}
+                when={store.collapsedTaskOrder.length === 0 && !hasSnoozedTasks()}
                 fallback={
                   <div style={{ 'text-align': 'center' }}>
                     <div
@@ -580,7 +589,7 @@ export function TilingLayout() {
                         'margin-bottom': '6px',
                       }}
                     >
-                      All tasks are collapsed
+                      {hasSnoozedTasks() ? 'All tasks are snoozed' : 'All tasks are collapsed'}
                     </div>
                     <div style={{ 'font-size': '13px', color: theme.fgSubtle }}>
                       Click a task in the sidebar to restore it
@@ -695,7 +704,7 @@ export function TilingLayout() {
           <For each={panelChildren()}>
             {(child, i) => {
               const filteredOut = () =>
-                store.taskOrder.includes(child.id) && !matchesTaskProjectFilter(child.id);
+                store.taskOrder.includes(child.id) && isHiddenTask(child.id);
               const wrapperStyle = createMemo((): JSX.CSSProperties => {
                 if (filteredOut()) return { display: 'none' };
                 const isPlaceholder = child.id === '__placeholder';
@@ -754,8 +763,7 @@ export function TilingLayout() {
                           .slice(i() + 1)
                           .find(
                             (panel) =>
-                              !store.taskOrder.includes(panel.id) ||
-                              matchesTaskProjectFilter(panel.id),
+                              !store.taskOrder.includes(panel.id) || !isHiddenTask(panel.id),
                           );
                         if (!left || !right) return;
                         deletePanelUserSize([`tiling:${left.id}`, `tiling:${right.id}`]);

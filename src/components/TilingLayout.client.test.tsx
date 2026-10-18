@@ -5,6 +5,7 @@ import { IPC } from '../../electron/ipc/channels';
 import { invoke } from '../lib/ipc';
 import { store, setStore } from '../store/core';
 import {
+  jumpToTask,
   openPanelOrder,
   setTaskProjectFilter,
   setActiveTask,
@@ -133,6 +134,66 @@ it('keeps the active tile visible when a background task returns ahead of it', a
     bringTaskToFront('returning');
     currentScroll.mockRestore();
     returningScroll.mockRestore();
+  }
+});
+
+it('hides a snoozed tile from the strip but keeps it mounted until it returns', async () => {
+  for (const id of ['snoozed', 'current']) {
+    setStore('tasks', id, {
+      id,
+      name: id,
+      projectId: 'project',
+      branchName: id,
+      worktreePath: `/repo/${id}`,
+      gitIsolation: 'worktree',
+      agentIds: [],
+      shellAgentIds: [],
+      notes: '',
+      lastPrompt: '',
+    });
+  }
+  setStore('taskOrder', ['snoozed', 'current']);
+  setActiveTask('snoozed');
+  const stop = startBackgroundTaskWatcher();
+  try {
+    sendTaskToBack('snoozed', 1);
+    // A visible snoozed tile woke on any click into it; a hidden one cannot be clicked.
+    const tile = container.querySelector<HTMLElement>('[data-task-id="snoozed"]');
+    assert(tile);
+    expect(tile.parentElement?.style.display).toBe('none');
+    jumpToTask(1);
+    expect(store.activeTaskId).toBe('snoozed');
+    expect(store.tasks.snoozed?.snoozedUntil).toBeUndefined();
+    expect(container.querySelector('[data-task-id="snoozed"]')).toBe(tile);
+    expect(tile.parentElement?.style.display).not.toBe('none');
+  } finally {
+    stop();
+  }
+});
+
+it('says the tasks are snoozed rather than missing when every task is snoozed', () => {
+  setStore('tasks', 'only', {
+    id: 'only',
+    name: 'only',
+    projectId: 'project',
+    branchName: 'only',
+    worktreePath: '/repo/only',
+    gitIsolation: 'worktree',
+    agentIds: [],
+    shellAgentIds: [],
+    notes: '',
+    lastPrompt: '',
+  });
+  setStore('taskOrder', ['only']);
+  setActiveTask('only');
+  const stop = startBackgroundTaskWatcher();
+  try {
+    sendTaskToBack('only');
+    expect(container.textContent).toContain('All tasks are snoozed');
+    expect(container.textContent).not.toContain('No tasks yet');
+  } finally {
+    stop();
+    bringTaskToFront('only');
   }
 });
 
