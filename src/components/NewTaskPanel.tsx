@@ -65,6 +65,7 @@ import {
 import { theme, sectionLabelStyle, bannerStyle } from '../lib/theme';
 import { isMac } from '../lib/platform';
 import { AgentSelector } from './AgentSelector';
+import { FeatureHint } from './FeatureHint';
 import { BranchPrefixField } from './BranchPrefixField';
 import { BranchCombobox } from './BranchCombobox';
 import { ProjectSelect } from './ProjectSelect';
@@ -78,6 +79,12 @@ import {
   MAX_COORDINATOR_CONCURRENT_TASKS,
   MIN_COORDINATOR_CONCURRENT_TASKS,
 } from '../lib/coordinator-limits';
+
+/** Ends with a cue for the user's own goal, so the cursor lands where they type it. */
+const DELEGATION_EXAMPLE_PROMPT =
+  'Split the work below into independent parts. Start a Parallel Code task for each, with a ' +
+  'prompt that stands on its own. Wait for them to finish, then summarize what each one ' +
+  'changed.\n\nThe work: ';
 
 interface NewTaskPanelProps {
   open: boolean;
@@ -450,6 +457,12 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
   );
   const [branchPrefix, setBranchPrefix] = createSignal('');
   let promptRef!: HTMLTextAreaElement;
+  const hasOtherTasks = () => store.taskOrder.length + store.collapsedTaskOrder.length > 0;
+  function applyDelegationExample(): void {
+    setPrompt(DELEGATION_EXAMPLE_PROMPT);
+    promptRef.focus();
+    promptRef.setSelectionRange(promptRef.value.length, promptRef.value.length);
+  }
   const titleId = createUniqueId();
   const branchInputId = createUniqueId();
   const advancedOptionsId = createUniqueId();
@@ -1344,6 +1357,18 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
                 resize: 'vertical',
               }}
             />
+            <FeatureHint
+              id="delegate-subtasks"
+              when={orchestrationEnabled() && !prompt().trim() && hasOtherTasks()}
+              anchor={() => promptRef}
+              title="Let one agent split the work"
+              actions={[{ label: 'Use example prompt', run: applyDelegationExample }]}
+            >
+              {selectedAgent()?.name ?? 'This agent'} can start its own sub-tasks. Ask it to split a
+              change into parts: each part runs as its own task in its own worktree, and the agent
+              keeps track of them.
+              <Show when={!autoMergeChildren()}> You review each result before it merges.</Show>
+            </FeatureHint>
           </div>
 
           {/* Project selector */}

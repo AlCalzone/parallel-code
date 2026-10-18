@@ -7,6 +7,7 @@ import { CompletionReport } from './CompletionReport';
 import { ConfirmDialog } from './ConfirmDialog';
 import { DiffViewerDialog } from './DiffViewerDialog';
 import { EvidencePanel } from './EvidencePanel';
+import { FeatureHint } from './FeatureHint';
 import { MergeReadinessPanel } from './MergeReadinessPanel';
 import { FinishPrSection, PrMergeRoute } from './FinishPrSection';
 import { MergeBlockers, MergeChanges, MergeOptions } from './MergeSection';
@@ -15,7 +16,8 @@ import { ReadinessSection } from './ReadinessSection';
 import { createMergeState } from './merge-state';
 import { PR_MERGE_ACTIONS, createFinishPr, taskPrUrl } from './pr-actions';
 import { createPushRun } from './push-run';
-import { getProject } from '../store/store';
+import { getProject, getTaskChecks } from '../store/store';
+import { markFeatureHintSeen } from '../store/onboarding';
 import { showNotification } from '../store/notification';
 import { theme } from '../lib/theme';
 import { GitMergeIcon, SyncIcon, UploadIcon } from './icons';
@@ -61,6 +63,9 @@ const SHOWN_ELSEWHERE = new Set(['Merge safety', 'Verify command', 'Evidence', '
  */
 export function FinishDialog(props: FinishDialogProps) {
   const merge = createMergeState(props);
+  let readinessAnchor: HTMLDivElement | undefined;
+  // The same test the evidence panel uses to offer Configure checks.
+  const hasChecks = () => getTaskChecks(props.task.id).length > 0;
   const [reviewLocation, setReviewLocation] = createSignal<{
     file: string;
     line?: number;
@@ -210,18 +215,37 @@ export function FinishDialog(props: FinishDialogProps) {
                 />
               </details>
             </Show>
-            <ReadinessSection task={props.task}>
-              <EvidencePanel
-                task={props.task}
-                agentId={merge.selectedAgentId()}
-                headSha={merge.worktreeStatus()?.head_sha}
-                dirty={merge.worktreeStatus()?.has_uncommitted_changes}
-                onConfigure={() => props.onConfigureChecks()}
-                onReviewFile={(file, line, side) => setReviewLocation({ file, line, side })}
-              >
-                <MergeReadinessPanel checks={readinessRows()} />
-              </EvidencePanel>
-            </ReadinessSection>
+            {/* Opening the section or running a check there is taking the tip. */}
+            <div ref={readinessAnchor} onClick={() => markFeatureHintSeen('finish-review')}>
+              <ReadinessSection task={props.task}>
+                <EvidencePanel
+                  task={props.task}
+                  agentId={merge.selectedAgentId()}
+                  headSha={merge.worktreeStatus()?.head_sha}
+                  dirty={merge.worktreeStatus()?.has_uncommitted_changes}
+                  onConfigure={() => props.onConfigureChecks()}
+                  onReviewFile={(file, line, side) => setReviewLocation({ file, line, side })}
+                >
+                  <MergeReadinessPanel checks={readinessRows()} />
+                </EvidencePanel>
+              </ReadinessSection>
+            </div>
+            <FeatureHint
+              id="finish-review"
+              when={props.open}
+              anchor={() => readinessAnchor}
+              title="Check what backs this change"
+              actions={
+                hasChecks()
+                  ? undefined
+                  : // It leaves this dialog for the project settings.
+                    [{ label: 'Configure checks', run: props.onConfigureChecks, quiet: true }]
+              }
+            >
+              Readiness gathers the evidence behind this merge: which checks ran, and what the agent
+              says it did.
+              <Show when={!hasChecks()}> Add a verify command to run your tests from here.</Show>
+            </FeatureHint>
             <FinishPrSection
               task={props.task}
               pr={pr}

@@ -6,6 +6,7 @@ import {
   isPanelFocused,
   openCanvasDocument,
 } from '../store/store';
+import { isTaskWorking } from '../store/taskStatus';
 import { ChangedFilesList } from './ChangedFilesList';
 import { CommitTreeOverlay } from './CommitTreeOverlay';
 import {
@@ -23,6 +24,8 @@ import type { ChangeTourController } from '../lib/create-change-tour';
 import type { UnderstandingTourState } from '../lib/create-understanding-tour';
 import { getTaskDiffBaseBranch } from '../lib/load-task-diff';
 import { ChangeTourButton } from './ChangeTourButton';
+import { FeatureHint } from './FeatureHint';
+import { askCodeModelLabel } from './understanding/ask-code-label';
 
 interface TaskChangedFilesSectionProps {
   tour?: ChangeTourController;
@@ -69,6 +72,7 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
   };
 
   let changedFilesRef: HTMLDivElement | undefined;
+  let tourAnchor: HTMLDivElement | undefined;
 
   onMount(() => {
     const id = props.task.id;
@@ -206,11 +210,30 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
       </div>
       <Show when={props.tour}>
         {(tour) => (
-          <ChangeTourButton
-            tour={tour()}
-            disabled={props.tourDisabled}
-            onClick={() => props.onTourClick?.()}
-          />
+          <div ref={tourAnchor} style={{ 'flex-shrink': '0' }}>
+            <ChangeTourButton
+              tour={tour()}
+              disabled={props.tourDisabled}
+              onClick={() => props.onTourClick?.()}
+            />
+            <FeatureHint
+              id="change-tour"
+              // A tour already generating or ready means the user found it, and
+              // one of a diff the agent is still writing would soon be stale.
+              when={
+                props.isActive &&
+                !props.tourDisabled &&
+                !isTaskWorking(props.task.id) &&
+                !tour().loading() &&
+                tour().stops().length === 0
+              }
+              anchor={() => tourAnchor}
+              title="Take a tour of these changes"
+            >
+              A short guided walkthrough of this task's diff, stop by stop. It generates in the
+              background, so you can keep working, and sends the diff to {askCodeModelLabel()}.
+            </FeatureHint>
+          </div>
         )}
       </Show>
     </div>

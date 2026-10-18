@@ -88,6 +88,9 @@ beforeEach(async () => {
   setStore('availableAgents', []);
   setStore('customAgents', []);
   setStore('coordinatorControlHintDismissed', false);
+  setStore('keybindingMigrationDismissed', false);
+  setStore('featureHintsEnabled', true);
+  setStore('seenFeatureHints', []);
   setStore('autoStartRemoteAccess', false);
   setStore('terminalScreenReaderMode', false);
   setStore('preferUiMode', false);
@@ -1635,6 +1638,44 @@ describe('document full width persistence', () => {
     await loadState();
     expect(store.documentFullWidth).toBe(false);
     expect((await lastSaved()).documentFullWidth).toBeUndefined();
+  });
+});
+
+describe('feature tips persistence', () => {
+  function stateJson(extra: Record<string, unknown>): string {
+    return JSON.stringify({
+      projects: [],
+      taskOrder: [],
+      collapsedTaskOrder: [],
+      tasks: {},
+      ...extra,
+    });
+  }
+
+  async function lastSaved(): Promise<Record<string, unknown>> {
+    mockInvoke.mockResolvedValueOnce(undefined);
+    await saveState();
+    const lastCall = mockInvoke.mock.calls[mockInvoke.mock.calls.length - 1];
+    return JSON.parse(lastCall[1].json) as Record<string, unknown>;
+  }
+
+  it('keeps tips off for an install that predates them', async () => {
+    mockInvoke.mockResolvedValueOnce(stateJson({}));
+    await loadState();
+    expect(store.featureHintsEnabled).toBe(false);
+    expect(store.seenFeatureHints).toEqual([]);
+    // Stored explicitly, so the next load does not mistake it for an older install.
+    expect((await lastSaved()).featureHintsEnabled).toBe(false);
+  });
+
+  it('round-trips seen tips and drops unknown ones', async () => {
+    mockInvoke.mockResolvedValueOnce(
+      stateJson({ featureHintsEnabled: true, seenFeatureHints: ['change-tour', 'retired', 3] }),
+    );
+    await loadState();
+    expect(store.featureHintsEnabled).toBe(true);
+    expect(store.seenFeatureHints).toEqual(['change-tour']);
+    expect((await lastSaved()).seenFeatureHints).toEqual(['change-tour']);
   });
 });
 
