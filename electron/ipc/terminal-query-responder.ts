@@ -33,8 +33,14 @@ export interface TerminalQueryResponder {
    * are stale and get no answer.
    */
   feedDisplayOnly(data: string): void;
-  /** Current visible screen and input mode; null until queued output has been parsed. */
-  snapshot(): { text: string; bracketedPaste: boolean } | null;
+  /**
+   * Current visible screen, input mode and whether a full-screen TUI holds the
+   * alternate screen; null until queued output has been parsed, unless
+   * `parsedSoFar` asks for the screen as parsed so far.
+   */
+  snapshot(options?: {
+    parsedSoFar?: boolean;
+  }): { text: string; bracketedPaste: boolean; alternateScreen: boolean } | null;
   /**
    * The screen and history as ANSI text that redraws them, once everything fed
    * so far is parsed. Null once disposed.
@@ -119,14 +125,18 @@ export function createTerminalQueryResponder(opts: {
         pendingWrites--;
       });
     },
-    snapshot() {
-      if (disposed || pendingWrites > 0) return null;
+    snapshot(options) {
+      if (disposed || (pendingWrites > 0 && !options?.parsedSoFar)) return null;
       const buffer = term.buffer.active;
       const lines: string[] = [];
       for (let row = 0; row < term.rows; row++) {
         lines.push(buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? '');
       }
-      return { text: lines.join('\n'), bracketedPaste: term.modes.bracketedPasteMode };
+      return {
+        text: lines.join('\n'),
+        bracketedPaste: term.modes.bracketedPasteMode,
+        alternateScreen: buffer.type === 'alternate',
+      };
     },
     serialize() {
       if (disposed) return Promise.resolve(null);

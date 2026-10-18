@@ -49,6 +49,10 @@ export const AGENT_READY_TAIL_PATTERNS: RegExp[] = [
   // match the suggestion's wording.
   /^\s*❯\s+Try\s+"[^"]*(?:"|…)\s*$/,
   /^\s*--\s*INSERT\s*--(?:$|\s|[^\w].*$)/i,
+  // shortcut: matches Codex's placeholder wording. 0.163 also ships "Ask a
+  // follow-up question", unseen after turns in fresh or resumed sessions —
+  // if it shows up, detect the dimmed placeholder from the mirror's cells
+  // instead of adding wording.
   /^\s*[›>]\s*(?:Type your message|Ask Codex to do anything|$)/i,
 ];
 

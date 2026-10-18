@@ -48,6 +48,8 @@ export interface CoordinatedTask {
   /** When the latest prompt's Enter was written, and when the agent showed it started. */
   promptSubmittedAt?: number;
   promptStartedAt?: number;
+  /** When the agent last wrote output; a rendered prompt counts once output settles. */
+  lastOutputAt?: number;
   // Ignore the prompt that was already visible when a coordinator-delivered prompt was sent.
   suppressIdleUntil?: number;
   lastPromptEchoText?: string;

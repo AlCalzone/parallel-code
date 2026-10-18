@@ -954,8 +954,9 @@ function writeSessionInput(session: PtySession, data: string): void {
 
 export function getAgentPromptSnapshot(
   agentId: string,
-): { text: string; bracketedPaste: boolean } | null {
-  return sessions.get(agentId)?.queries.snapshot() ?? null;
+  options?: { parsedSoFar?: boolean },
+): { text: string; bracketedPaste: boolean; alternateScreen: boolean } | null {
+  return sessions.get(agentId)?.queries.snapshot(options) ?? null;
 }
 
 /** Why a peer prompt cannot be pasted into the agent's terminal right now, if anything. */

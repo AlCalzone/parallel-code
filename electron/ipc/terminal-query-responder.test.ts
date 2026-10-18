@@ -24,16 +24,44 @@ describe('createTerminalQueryResponder', () => {
     responder.feed('\x1b[2J\x1b[H\x1b[32mready\x1b[0m\x1b[?2004h');
     expect(responder.snapshot()).toBeNull();
     await vi.waitFor(() =>
-      expect(responder.snapshot()).toEqual({ text: 'ready\n\n', bracketedPaste: true }),
+      expect(responder.snapshot()).toEqual({
+        text: 'ready\n\n',
+        bracketedPaste: true,
+        alternateScreen: false,
+      }),
     );
 
     responder.feedDisplayOnly('\r\x1b[2Kupdated\x1b[?2004l');
     expect(responder.snapshot()).toBeNull();
     await vi.waitFor(() =>
-      expect(responder.snapshot()).toEqual({ text: 'updated\n\n', bracketedPaste: false }),
+      expect(responder.snapshot()).toEqual({
+        text: 'updated\n\n',
+        bracketedPaste: false,
+        alternateScreen: false,
+      }),
     );
     responder.dispose();
     expect(responder.snapshot()).toBeNull();
+  });
+
+  it('reports when a full-screen TUI holds the alternate screen', async () => {
+    const { responder } = setup(40, 2);
+    responder.feed('shell history\r\n\x1b[?1049h\x1b[H› ready');
+    await vi.waitFor(() =>
+      expect(responder.snapshot()).toMatchObject({ text: '› ready\n', alternateScreen: true }),
+    );
+    responder.feed('\x1b[?1049l');
+    await vi.waitFor(() => expect(responder.snapshot()).toMatchObject({ alternateScreen: false }));
+  });
+
+  it('shows the screen parsed so far while output is still queued', async () => {
+    const { responder } = setup(40, 2);
+    responder.feed('\x1b[?1049h\x1b[H› ready');
+    await vi.waitFor(() => expect(responder.snapshot()).not.toBeNull());
+    responder.feed('\r\nmore');
+
+    expect(responder.snapshot()).toBeNull();
+    expect(responder.snapshot({ parsedSoFar: true })).toMatchObject({ alternateScreen: true });
   });
 
   it('answers a cursor-position query with the position after the preceding output', async () => {

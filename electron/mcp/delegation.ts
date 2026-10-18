@@ -872,7 +872,8 @@ export class DelegationService {
     this.setWaitingReason(message, this.inputWaitingReason(agentId));
     const previous = this.readyMessages.get(message.deliveryId);
     // Readiness must persist, but unrelated output and status repainting need
-    // not stop. The coordinator uses the same continuous-readiness approach.
+    // not stop. The coordinator instead waits for output to settle on a
+    // full-screen TUI, because Codex streams its reply under a ready prompt.
     if (previous === undefined) {
       this.readyMessages.set(message.deliveryId, Date.now());
       return;

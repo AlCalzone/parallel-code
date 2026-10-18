@@ -468,7 +468,7 @@ export const COORDINATOR_TOOLS: ToolDef[] = [
   {
     name: 'get_task_output',
     description:
-      "Get recent terminal output from a task's agent (stripped of ANSI codes). A startup/default placeholder prompt, such as 'Improve documentation in @filename', can be stale while the dispatched create_task prompt is queued or being processed; do not treat it alone as a reason to resend the task.",
+      "Get recent terminal output from a task's agent (stripped of ANSI codes). For a full-screen agent such as Codex, this is its visible screen, so earlier turns that scrolled out of view are not included. A startup/default placeholder prompt, such as 'Improve documentation in @filename', can be stale while the dispatched create_task prompt is queued or being processed; do not treat it alone as a reason to resend the task.",
     inputSchema: {
       type: 'object',
       properties: { taskId: { type: 'string', description: 'Task ID' } },

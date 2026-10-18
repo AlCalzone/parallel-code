@@ -42,6 +42,7 @@ import {
   getAgentScrollback,
   getActiveAgentIds,
   getAgentMeta,
+  getAgentPromptSnapshot,
   onPtyEvent,
 } from '../ipc/pty.js';
 import { onAgentHookEvent } from '../agent-hooks/events.js';
@@ -118,6 +119,12 @@ const INITIAL_PROMPT_READY_DELAY_MS = 1_500;
 const MAX_PENDING_PROMPTS = 32;
 const MAX_PROMPT_BYTES = 64 * 1024;
 const PROMPT_ECHO_IDLE_SUPPRESSION_MS = 2_000;
+// A full-screen TUI shows its input prompt mid-turn too: Codex clears it on
+// submit before it shows it is working, and keeps it while streaming a reply.
+// Its output only stops once the turn ends, so the prompt counts once output
+// has settled. Delegation waits as long but only for readiness to persist,
+// which a Codex reply streaming under its prompt would pass.
+const PROMPT_SETTLE_MS = 1_500;
 // Tool hooks of an interrupted turn can still land shortly after the Esc; no
 // Stop follows them, so they must not re-arm hook ownership (mirrors the
 // renderer's INTERRUPT_SUPPRESS_MS).
@@ -220,6 +227,11 @@ export class Coordinator {
   private initialPromptReadyTasks = new Set<string>();
   private promptReadySeenAt = new Map<string, number>();
   private queuedPromptFlushTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  // Output whose prompt check waits for the screen mirror or for output to settle.
+  private deferredPromptChecks = new Map<
+    string,
+    { timer: ReturnType<typeof setTimeout>; echoOnly: boolean }
+  >();
   private bracketedPasteAgentIds = new Set<string>();
   private closingTaskIds = new Set<string>();
   private cleanupsInFlight = new Map<string, Promise<void>>();
@@ -502,7 +514,30 @@ export class Coordinator {
     );
   }
 
-  private tailHasAgentPrompt(task: CoordinatedTask): boolean {
+  /**
+   * Whether the agent shows a ready input prompt drawn since the last send, or
+   * undefined while that is not known yet. A full-screen TUI such as Codex
+   * repaints only changed cells, so a prompt that stays on screen through a
+   * turn never reappears in the output stream: read its rendered screen once
+   * output has settled. Main-screen agents redraw their input line each turn,
+   * so their output tail shows it.
+   */
+  private freshAgentPrompt(task: CoordinatedTask): boolean | undefined {
+    // Sends clear the tail, so until new output arrives the prompt on screen
+    // is the one the agent just took.
+    if (!this.tailBuffers.get(task.agentId)) return false;
+    // The screen parsed so far tells which kind of TUI this is without
+    // waiting for the mirror; only its readiness needs the latest output.
+    if (getAgentPromptSnapshot(task.agentId, { parsedSoFar: true })?.alternateScreen) {
+      const screen = getAgentPromptSnapshot(task.agentId);
+      if (!screen) return undefined;
+      const readiness = getAgentPromptReadiness(screen.text);
+      if (readiness.reason === 'busy') this.markPromptStarted(task);
+      if (readiness.ready && Date.now() - (task.lastOutputAt ?? 0) < PROMPT_SETTLE_MS) {
+        return undefined;
+      }
+      return readiness.ready;
+    }
     return chunkContainsAgentPrompt(this.normalizedTail(task.agentId));
   }
 
@@ -525,7 +560,11 @@ export class Coordinator {
       task.agentId,
       decoded.length > 4096 ? decoded.slice(decoded.length - 4096) : decoded,
     );
-    const hasAgentPrompt = this.tailHasAgentPrompt(task);
+    const freshPrompt = this.freshAgentPrompt(task);
+    // A screen still settling is judged like new output once it has.
+    if (freshPrompt === undefined)
+      this.deferPromptCheck(task, this.takeDeferredPromptCheck(task.id));
+    const hasAgentPrompt = freshPrompt === true;
     if (hasAgentPrompt) {
       this.scheduleInitialPromptDelivery(task, INITIAL_PROMPT_READY_DELAY_MS, true);
       // Replayed scrollback may hold a stale ❯ from a mid-turn frame: hook-live
@@ -564,7 +603,11 @@ export class Coordinator {
       if (!this.orchestrationEnabled || !this.tasks.has(task.id)) return;
       if (this.controlMap.get(task.id) === 'human') return;
       if (!this.hasQueuedWork(task)) return;
-      if (!this.tailHasAgentPrompt(task)) return;
+      const ready = this.freshAgentPrompt(task);
+      if (!ready) {
+        if (ready === undefined) this.scheduleQueuedPromptFlush(task);
+        return;
+      }
       if (this.writingPromptTaskIds.has(task.id)) {
         this.scheduleQueuedPromptFlush(task);
         return;
@@ -629,6 +672,7 @@ export class Coordinator {
   private clearPromptDeliveryState(taskId: string): void {
     this.clearInitialPromptDeliveryState(taskId);
     this.clearQueuedPromptFlushTimer(taskId);
+    this.takeDeferredPromptCheck(taskId);
     this.promptReadySeenAt.delete(taskId);
     this.writingPromptTaskIds.delete(taskId);
   }
@@ -669,32 +713,70 @@ export class Coordinator {
         task.agentId,
         combined.length > 4096 ? combined.slice(combined.length - 4096) : combined,
       );
+      task.lastOutputAt = Date.now();
 
-      const hasAgentPrompt = this.tailHasAgentPrompt(task);
-      const stableAgentPrompt = this.markAgentPromptReady(task, hasAgentPrompt);
-      if (!hasAgentPrompt && task.assignedPromptDelivered) {
-        if (task.suppressIdleUntil !== undefined && !this.isPromptEchoOutput(task, text)) {
-          task.suppressIdleUntil = undefined;
-          task.lastPromptEchoText = undefined;
-        }
-      }
+      const hasAgentPrompt = this.freshAgentPrompt(task);
       if (
-        !hasAgentPrompt &&
+        hasAgentPrompt !== true &&
         task.promptSubmittedAt !== undefined &&
         task.promptStartedAt === undefined &&
         getAgentPromptReadiness(this.normalizedTail(task.agentId)).reason === 'busy'
       ) {
         this.markPromptStarted(task);
       }
-      if (hasAgentPrompt) {
-        this.handlePromptDetected(task, stableAgentPrompt);
-      } else if (task.status === 'idle' && !this.hookLiveAgentIds.has(task.agentId)) {
-        // Hook-live agents flip back to running only on hook evidence — TUI
-        // repaints and status-line noise must not override a hook-reported idle.
-        task.status = 'running';
-        this.suppressPendingNotificationForTask(task);
-      }
+      // Earlier output still waiting on the mirror is judged with this chunk.
+      const echoOnly = this.takeDeferredPromptCheck(task.id) && this.isPromptEchoOutput(task, text);
+      if (hasAgentPrompt === undefined) this.deferPromptCheck(task, echoOnly);
+      else this.applyPromptState(task, hasAgentPrompt, echoOnly);
     };
+  }
+
+  /** Re-check output the mirror had not parsed yet, or whose prompt has not settled. */
+  private deferPromptCheck(task: CoordinatedTask, echoOnly: boolean): void {
+    const timer = setTimeout(() => {
+      this.deferredPromptChecks.delete(task.id);
+      // An empty tail means a send cleared it since: this output is stale.
+      if (!this.tasks.has(task.id) || !this.tailBuffers.get(task.agentId)) return;
+      const hasAgentPrompt = this.freshAgentPrompt(task);
+      if (hasAgentPrompt === undefined) this.deferPromptCheck(task, echoOnly);
+      else this.applyPromptState(task, hasAgentPrompt, echoOnly);
+    }, PROMPT_WRITE_DELAY_MS);
+    if (typeof timer === 'object' && 'unref' in timer) timer.unref();
+    this.deferredPromptChecks.set(task.id, { timer, echoOnly });
+  }
+
+  /** Cancel a deferred prompt check; true unless the output it held was more than echo. */
+  private takeDeferredPromptCheck(taskId: string): boolean {
+    const deferred = this.deferredPromptChecks.get(taskId);
+    if (!deferred) return true;
+    clearTimeout(deferred.timer);
+    this.deferredPromptChecks.delete(taskId);
+    return deferred.echoOnly;
+  }
+
+  private applyPromptState(
+    task: CoordinatedTask,
+    hasAgentPrompt: boolean,
+    echoOnly: boolean,
+  ): void {
+    const stableAgentPrompt = this.markAgentPromptReady(task, hasAgentPrompt);
+    // A rendered prompt only counts once output settled, so like a hook Stop
+    // it cannot be prompt echo: clear the echo window instead of consuming it.
+    const settledScreenPrompt =
+      hasAgentPrompt &&
+      getAgentPromptSnapshot(task.agentId, { parsedSoFar: true })?.alternateScreen === true;
+    if ((!hasAgentPrompt && task.assignedPromptDelivered && !echoOnly) || settledScreenPrompt) {
+      task.suppressIdleUntil = undefined;
+      task.lastPromptEchoText = undefined;
+    }
+    if (hasAgentPrompt) {
+      this.handlePromptDetected(task, stableAgentPrompt);
+    } else if (task.status === 'idle' && !this.hookLiveAgentIds.has(task.agentId)) {
+      // Hook-live agents flip back to running only on hook evidence — TUI
+      // repaints and status-line noise must not override a hook-reported idle.
+      task.status = 'running';
+      this.suppressPendingNotificationForTask(task);
+    }
   }
 
   private handlePromptDetected(
@@ -1711,7 +1793,8 @@ export class Coordinator {
       submittedAt: task.promptSubmittedAt,
       startedAt: task.promptStartedAt,
       // No output at all since the submit is as telling as a repainted empty prompt.
-      awaitingInput: this.normalizedTail(task.agentId) === '' || this.tailHasAgentPrompt(task),
+      awaitingInput:
+        this.normalizedTail(task.agentId) === '' || this.freshAgentPrompt(task) === true,
     });
   }
 
@@ -2025,6 +2108,13 @@ export class Coordinator {
     const task = this.tasks.get(taskId);
     if (!task) throw new Error(`Task not found: ${taskId}`);
 
+    // A full-screen TUI such as Codex repaints cells in place, so its raw output
+    // strips to word fragments; the rendered screen is what the user reads.
+    // shortcut: visible rows only, so text scrolled out of the TUI is gone —
+    // read the mirror's scrollback too if callers need earlier turns.
+    // Output a few ms behind is fine, so don't wait for the mirror to catch up.
+    const screen = getAgentPromptSnapshot(task.agentId, { parsedSoFar: true });
+    if (screen?.alternateScreen) return screen.text;
     // Try scrollback buffer first, fall back to tail buffer
     const scrollback = getAgentScrollback(task.agentId);
     if (scrollback) {
