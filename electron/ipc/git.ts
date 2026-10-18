@@ -1,4 +1,5 @@
 import { execFile, execFileSync as _execFileSync, spawn } from 'child_process';
+import { createHash } from 'crypto';
 import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
@@ -697,17 +698,44 @@ async function foldMergedUpstream(
   }
 }
 
+interface RecordedRebase {
+  target: string;
+  previousHead: string;
+  fastForward: boolean;
+}
+
+// A scan spawns one git call per recorded move, serially. Under endpoint
+// security (Jamf on macOS) every spawn blocks the main thread, so a long
+// reflog rescanned on each diff refresh froze the app for seconds.
+const rebaseScanCache = new Map<string, RecordedRebase[]>();
+const REBASE_SCAN_CACHE_MAX = 100;
+
 /**
  * Read rebases (including `git pull --rebase`) and fast-forwards
  * (`git merge`/`git pull` moving the branch onto another tip) oldest first so repeated moves retain the inherited
- * baseline.
+ * baseline. Reflog entries name fixed commits, so a scan is reused until the reflog changes.
  */
-async function findRebases(
-  repoRoot: string,
-  entries: string[],
-): Promise<{ target: string; previousHead: string; fastForward: boolean }[]> {
+async function findRebases(repoRoot: string, entries: string[]): Promise<RecordedRebase[]> {
+  const key = createHash('sha1')
+    .update(`${repoRoot}\0${entries.join('\n')}`)
+    .digest('hex');
+  const cached = rebaseScanCache.get(key);
+  if (cached) return cached;
+  const rebases = await scanRebases(repoRoot, entries);
+  if (!rebases) return [];
+  rebaseScanCache.set(key, rebases);
+  // Map keeps insertion order, so the first key is the oldest scan.
+  const oldest = rebaseScanCache.keys().next().value;
+  if (rebaseScanCache.size > REBASE_SCAN_CACHE_MAX && oldest !== undefined) {
+    rebaseScanCache.delete(oldest);
+  }
+  return rebases;
+}
+
+/** Null when git fails, so a transient error is not cached as "no rebases". */
+async function scanRebases(repoRoot: string, entries: string[]): Promise<RecordedRebase[] | null> {
   try {
-    const rebases: { target: string; previousHead: string; fastForward: boolean }[] = [];
+    const rebases: RecordedRebase[] = [];
     for (let index = 0; index < entries.length; index++) {
       const fastForward = /^[0-9a-f]{40}\0(?:merge|pull)\b.*: Fast-forward$/.test(entries[index]);
       const target = fastForward
@@ -735,7 +763,7 @@ async function findRebases(
     return rebases.reverse();
   } catch {
     // Missing or expired reflogs are not evidence of a changed branch point.
-    return [];
+    return null;
   }
 }
 
