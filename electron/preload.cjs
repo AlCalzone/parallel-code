@@ -48,6 +48,7 @@ const ALLOWED_CHANNELS = new Set([
   'get_commit_diffs',
   'get_uncommitted_changed_files',
   'get_uncommitted_file_diffs',
+  'get_nested_repos',
   'get_coverage_summary',
   'save_app_state',
   'load_app_state',

@@ -129,6 +129,14 @@ export interface MergeResult {
   lines_removed: number;
 }
 
+/** A Git repository inside a task's worktree that the task's own repository does not track. */
+export interface NestedRepo {
+  /** Top-level folder name in the worktree. */
+  name: string;
+  /** Checked-out branch, or `HEAD` when detached. */
+  branch: string;
+}
+
 export interface FileDiffResult {
   diff: string;
   oldContent: string;

@@ -418,3 +418,32 @@ describe('ChangedFilesList polling', () => {
     }
   });
 });
+
+describe('ChangedFilesList nested repositories', () => {
+  it('labels a nested repository folder with its branch', async () => {
+    const files: ChangedFile[] = [
+      { path: 'readme.md', status: 'M', lines_added: 1, lines_removed: 0, committed: false },
+      { path: 'api/src/login.ts', status: 'A', lines_added: 3, lines_removed: 0, committed: true },
+      { path: 'docs/notes.md', status: 'M', lines_added: 1, lines_removed: 0, committed: false },
+    ];
+    vi.mocked(invoke).mockImplementation(((channel: string) => {
+      if (channel === IPC.GetChangedFiles) return Promise.resolve(files);
+      if (channel === IPC.GetNestedRepos) {
+        return Promise.resolve([{ name: 'api', branch: 'feature/login' }]);
+      }
+      return Promise.reject(new Error(`Unexpected IPC call: ${channel}`));
+    }) as typeof invoke);
+
+    const container = document.createElement('div');
+    document.body.append(container);
+    disposers.push(render(() => <ChangedFilesList worktreePath="/task" isActive />, container));
+
+    await waitFor(() => container.textContent?.includes('feature/login') === true);
+
+    const rows = [...container.querySelectorAll('.file-row')];
+    const apiRow = rows.find((row) => row.querySelector('span[title="api/src"]'));
+    expect(apiRow?.textContent).toContain('feature/login');
+    const docsRow = rows.find((row) => row.querySelector('span[title="docs"]'));
+    expect(docsRow?.textContent).not.toContain('feature/login');
+  });
+});

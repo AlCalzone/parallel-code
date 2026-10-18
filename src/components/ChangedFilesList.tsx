@@ -23,7 +23,7 @@ import {
 } from './CommitNavBar';
 import type { UnderstandingTourState } from '../lib/create-understanding-tour';
 import { TourHint } from './understanding/TourHint';
-import type { ChangedFile, CoverageFileSummary, CoverageSummary } from '../ipc/types';
+import type { ChangedFile, CoverageFileSummary, CoverageSummary, NestedRepo } from '../ipc/types';
 
 interface ChangedFilesListProps {
   worktreePath: string;
@@ -472,6 +472,13 @@ export function ChangedFilesList(props: ChangedFilesListProps) {
   const [canOpenFilesInEditor, setCanOpenFilesInEditor] = createSignal(false);
   const [selectedIndex, setSelectedIndex] = createSignal(-1);
   const [collapsed, setCollapsed] = createSignal<Set<string>>(new Set());
+  // Polled with the files; compared by value so unchanged polls don't re-render rows.
+  const [nestedRepos, setNestedRepos] = createSignal<NestedRepo[]>([], {
+    equals: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+  });
+  /** Branch of the separate repo a top-level folder row belongs to, if any. */
+  const nestedRepoBranch = (dirPath: string) =>
+    nestedRepos().find((repo) => repo.name === dirPath.split('/')[0])?.branch;
   const rowRefs: HTMLDivElement[] = [];
 
   const tree = createMemo(() => buildFileTree(files()));
@@ -757,6 +764,13 @@ export function ChangedFilesList(props: ChangedFilesListProps) {
     async function refresh() {
       if (inFlight) return;
       inFlight = true;
+      if (path && !singleCommitHash) {
+        void invoke<NestedRepo[]>(IPC.GetNestedRepos, { worktreePath: path })
+          .then((repos) => {
+            if (!cancelled) setNestedRepos(repos);
+          })
+          .catch((err: unknown) => console.warn('Failed to load nested repositories:', err));
+      }
       try {
         // Single-commit mode: fetch files for that commit only
         if (singleCommitHash && path) {
@@ -1080,6 +1094,20 @@ export function ChangedFilesList(props: ChangedFilesListProps) {
                   >
                     {row().node.name}/
                   </span>
+                  <Show when={row().depth === 0 && nestedRepoBranch(row().node.path)}>
+                    {(branch) => (
+                      <span
+                        style={{
+                          color: theme.fg,
+                          'font-size': sf(11),
+                          'flex-shrink': '0',
+                        }}
+                        title={`Separate Git repository on ${branch()}. Finish and merge leave it untouched.`}
+                      >
+                        {branch()}
+                      </span>
+                    )}
+                  </Show>
                   <Show when={collapsed().has(row().node.path)}>
                     <span
                       style={{

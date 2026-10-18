@@ -1819,7 +1819,7 @@ export async function getChangedFiles(
   return files;
 }
 
-async function buildUntrackedPseudoDiffs(worktreePath: string): Promise<string[]> {
+async function buildUntrackedPseudoDiffs(worktreePath: string, pathPrefix = ''): Promise<string[]> {
   const parts: string[] = [];
   let stdout = '';
   try {
@@ -1836,22 +1836,23 @@ async function buildUntrackedPseudoDiffs(worktreePath: string): Promise<string[]
     const filePath = normalizeStatusPath(line);
     if (!filePath) continue;
     const fullPath = path.join(worktreePath, filePath);
+    const shownPath = pathPrefix + filePath;
     try {
       const stat = await fs.promises.stat(fullPath);
       if (!stat.isFile() || stat.size >= MAX_BUFFER) continue;
       if (await isBinaryFile(fullPath)) {
         parts.push(
-          `diff --git a/${filePath} b/${filePath}\nnew file mode 100644\nBinary files /dev/null and b/${filePath} differ\n`,
+          `diff --git a/${shownPath} b/${shownPath}\nnew file mode 100644\nBinary files /dev/null and b/${shownPath} differ\n`,
         );
         continue;
       }
       const content = await fs.promises.readFile(fullPath, 'utf8');
       const lines = splitContentLines(content);
       const pseudoLines: string[] = [];
-      pseudoLines.push(`diff --git a/${filePath} b/${filePath}`);
+      pseudoLines.push(`diff --git a/${shownPath} b/${shownPath}`);
       pseudoLines.push('new file mode 100644');
       pseudoLines.push('--- /dev/null');
-      pseudoLines.push(`+++ b/${filePath}`);
+      pseudoLines.push(`+++ b/${shownPath}`);
       pseudoLines.push(`@@ -0,0 +1,${lines.length} @@`);
       for (const line of lines) {
         pseudoLines.push(`+${line}`);
@@ -1900,7 +1901,16 @@ export async function getDiffBaseSha(worktreePath: string, baseBranch?: string):
   return diffBase.sha;
 }
 
-export async function getAllFileDiffs(worktreePath: string, baseBranch?: string): Promise<string> {
+/** `git diff` options that show paths under `pathPrefix`, for a repo nested in a task's worktree. */
+function diffPathPrefixArgs(pathPrefix: string): string[] {
+  return pathPrefix ? [`--src-prefix=a/${pathPrefix}`, `--dst-prefix=b/${pathPrefix}`] : [];
+}
+
+export async function getAllFileDiffs(
+  worktreePath: string,
+  baseBranch?: string,
+  pathPrefix = '',
+): Promise<string> {
   const headHash = await pinHead(worktreePath);
 
   // For working-tree output, use the merge-base SHA as a single diff start
@@ -1912,21 +1922,25 @@ export async function getAllFileDiffs(worktreePath: string, baseBranch?: string)
 
   let combinedDiff = '';
   try {
-    const { stdout } = await exec('git', ['diff', '-U3', diffBase.sha], {
-      cwd: worktreePath,
-      maxBuffer: MAX_BUFFER,
-    });
+    const { stdout } = await exec(
+      'git',
+      ['diff', '-U3', ...diffPathPrefixArgs(pathPrefix), diffBase.sha],
+      { cwd: worktreePath, maxBuffer: MAX_BUFFER },
+    );
     combinedDiff = stdout;
   } catch {
     /* empty */
   }
 
-  const untrackedParts = await buildUntrackedPseudoDiffs(worktreePath);
+  const untrackedParts = await buildUntrackedPseudoDiffs(worktreePath, pathPrefix);
   const parts = [combinedDiff, untrackedParts.join('')].filter((p) => p.length > 0);
   return parts.join('\n');
 }
 
-export async function getUncommittedFileDiffs(worktreePath: string): Promise<string> {
+export async function getUncommittedFileDiffs(
+  worktreePath: string,
+  pathPrefix = '',
+): Promise<string> {
   const headHash = await pinHead(worktreePath);
 
   // Diff against HEAD captures only tracked uncommitted changes (working tree
@@ -1934,16 +1948,17 @@ export async function getUncommittedFileDiffs(worktreePath: string): Promise<str
   // not need the index lock and works while an agent holds it.
   let combinedDiff = '';
   try {
-    const { stdout } = await exec('git', ['diff', '-U3', headHash], {
-      cwd: worktreePath,
-      maxBuffer: MAX_BUFFER,
-    });
+    const { stdout } = await exec(
+      'git',
+      ['diff', '-U3', ...diffPathPrefixArgs(pathPrefix), headHash],
+      { cwd: worktreePath, maxBuffer: MAX_BUFFER },
+    );
     combinedDiff = stdout;
   } catch {
     /* empty */
   }
 
-  const untrackedParts = await buildUntrackedPseudoDiffs(worktreePath);
+  const untrackedParts = await buildUntrackedPseudoDiffs(worktreePath, pathPrefix);
   const parts = [combinedDiff, untrackedParts.join('')].filter((p) => p.length > 0);
   return parts.join('\n');
 }

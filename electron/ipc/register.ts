@@ -110,11 +110,8 @@ import {
   getSymlinkCandidates,
   getMainBranch,
   getCurrentBranch,
-  getChangedFiles,
   getChangedFilesFromBranch,
-  getAllFileDiffs,
   getAllFileDiffsFromBranch,
-  getFileDiff,
   getFileDiffFromBranch,
   getWorktreeStatus,
   listImportableWorktrees,
@@ -136,9 +133,15 @@ import {
   getBranchCommits,
   getCommitChangedFiles,
   getCommitDiffs,
-  getUncommittedChangedFiles,
-  getUncommittedFileDiffs,
 } from './git.js';
+import {
+  findNestedRepos,
+  getAllFileDiffsWithNested,
+  getChangedFilesWithNested,
+  getFileDiffWithNested,
+  getUncommittedChangedFilesWithNested,
+  getUncommittedFileDiffsWithNested,
+} from './nested-repos.js';
 import { createPrTask, createTask, deleteTask } from './tasks.js';
 import { settleWorktreeIntents } from './worktree-intents.js';
 import { windowNotifier } from './window-notifier.js';
@@ -1022,7 +1025,7 @@ export function registerAllHandlers(win: BrowserWindow): void {
   // --- Git commands ---
   ipcMain.handle(IPC.GetChangedFiles, (_e, args) => {
     const worktreePath = worktreePathArg(args);
-    return getChangedFiles(worktreePath, optionalBaseBranch(args));
+    return getChangedFilesWithNested(worktreePath, optionalBaseBranch(args));
   });
   ipcMain.handle(IPC.GetChangedFilesFromBranch, (_e, args) => {
     const projectRoot = projectRootArg(args);
@@ -1031,10 +1034,10 @@ export function registerAllHandlers(win: BrowserWindow): void {
   });
   ipcMain.handle(IPC.GetAllFileDiffs, (_e, args) => {
     const worktreePath = worktreePathArg(args);
-    return getAllFileDiffs(worktreePath, optionalBaseBranch(args));
+    return getAllFileDiffsWithNested(worktreePath, optionalBaseBranch(args));
   });
   ipcMain.handle(IPC.GetUncommittedChangedFiles, (_e, args) => {
-    return getUncommittedChangedFiles(worktreePathArg(args));
+    return getUncommittedChangedFilesWithNested(worktreePathArg(args));
   });
   ipcMain.handle(IPC.GetAllFileDiffsFromBranch, (_e, args) => {
     const projectRoot = projectRootArg(args);
@@ -1044,7 +1047,7 @@ export function registerAllHandlers(win: BrowserWindow): void {
   ipcMain.handle(IPC.GetFileDiff, (_e, args) => {
     const worktreePath = worktreePathArg(args);
     validateRelativePath(args.filePath, 'filePath');
-    return getFileDiff(worktreePath, args.filePath, optionalBaseBranch(args));
+    return getFileDiffWithNested(worktreePath, args.filePath, optionalBaseBranch(args));
   });
   ipcMain.handle(IPC.GetFileDiffFromBranch, (_e, args) => {
     const projectRoot = projectRootArg(args);
@@ -1126,7 +1129,10 @@ export function registerAllHandlers(win: BrowserWindow): void {
     return getCommitDiffs(worktreePath, args.commitHash);
   });
   ipcMain.handle(IPC.GetUncommittedFileDiffs, (_e, args) => {
-    return getUncommittedFileDiffs(worktreePathArg(args));
+    return getUncommittedFileDiffsWithNested(worktreePathArg(args));
+  });
+  ipcMain.handle(IPC.GetNestedRepos, (_e, args) => {
+    return findNestedRepos(worktreePathArg(args));
   });
   ipcMain.handle(IPC.GetCoverageSummary, (_e, args) => {
     validatePath(args.repoRoot, 'repoRoot');

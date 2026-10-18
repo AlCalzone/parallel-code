@@ -22,6 +22,7 @@ export type {
   ImportableWorktree,
   MergeResult,
   MergeStatus,
+  NestedRepo,
   PrCheckBucket,
   PrCheckRun,
   PrChecksOverall,

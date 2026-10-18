@@ -41,6 +41,7 @@
   "GetCommitDiffs": "get_commit_diffs",
   "GetUncommittedChangedFiles": "get_uncommitted_changed_files",
   "GetUncommittedFileDiffs": "get_uncommitted_file_diffs",
+  "GetNestedRepos": "get_nested_repos",
   "GetCoverageSummary": "get_coverage_summary",
   "SaveAppState": "save_app_state",
   "LoadAppState": "load_app_state",
