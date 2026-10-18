@@ -1863,8 +1863,12 @@
 
 /* The head is the window drag region while the view fills the window; on
    macOS the traffic lights sit in its top-left corner, so it starts to their
-   right, as the workspace header does. */
+   right, as the workspace header does. Its 32px height matches
+   .mac-titlebar-spacer so the controls centre on the traffic lights. */
 .docws-compare-dialog.is-mac .docws-compare-dialog-head {
+  height: 32px;
+  padding-top: 0;
+  padding-bottom: 0;
   padding-left: 86px;
 }
 

@@ -3858,7 +3858,9 @@ html[data-look='islands-light'] .window-title-icon {
   margin: 4px 8px;
 }
 
-/* macOS native titlebar spacer (overlay style) */
+/* macOS native titlebar spacer (overlay style). Its height is mirrored by
+   trafficLightPosition in electron/main.ts, which centres the traffic lights
+   on this row. */
 .mac-titlebar-spacer {
   padding-left: 90px;
   height: 32px;

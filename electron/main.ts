@@ -138,6 +138,13 @@ function createWindow() {
     icon: getIconPath(),
     frame: process.platform === 'darwin',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : undefined,
+    // Centre the 16px-tall traffic-light buttons on the renderer's 32px
+    // `.mac-titlebar-spacer` row (y + 8 = 16), so they line up with the
+    // workspace controls beside them; x keeps hiddenInset's default inset.
+    // Keep in sync with that row's height (windowChromeTopInset).
+    // shortcut: holds at 100% UI scale only, since webFrame zoom scales the
+    // row but not the native buttons — move them on zoom change if that matters.
+    trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 8 } : undefined,
     resizable: true,
     // Paints until the renderer loads, avoiding a white flash. Matches the
     // default Obsidian background. shortcut: fixed colour, so light-theme users
