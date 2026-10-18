@@ -162,6 +162,9 @@ export interface PrCheckRun {
 
 export interface PrChecksUpdatePayload {
   taskId: string;
+  /** Watcher the update belongs to: the task ID for the task's primary PR,
+   *  another ID for an additional PR. */
+  watchId: string;
   prUrl?: string;
   /** Actual GitHub merge time, not the time the watcher noticed it. */
   mergedAt?: string;
@@ -185,8 +188,19 @@ export interface PrChecksUpdatePayload {
   merged?: boolean;
 }
 
+/** An open PR of a task besides its primary one. */
+export interface TaskExtraPr {
+  url: string;
+  /** Folder of the nested repository the PR belongs to; absent for the task's own repository. */
+  repo?: string;
+}
+
 export interface BranchPrDetectionResult {
   url: string | null;
+  /** The task's other open PRs: further PRs of its branch and PRs of its nested repositories. */
+  extras?: TaskExtraPr[];
+  /** Repositories whose PRs could not be listed: nested folder names, `.` for the task's own. */
+  failedRepos?: string[];
   unavailable?: 'missing' | 'auth';
 }
 

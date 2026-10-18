@@ -1,4 +1,4 @@
-import { Match, Show, Switch, createMemo, createSignal, type JSX } from 'solid-js';
+import { For, Show, createMemo, createSignal, type JSX } from 'solid-js';
 import { errMessage } from '../lib/log';
 import {
   store,
@@ -18,7 +18,9 @@ import { parseGitHubUrl } from '../lib/github-url';
 import { abbreviateHomePath } from '../lib/path';
 import { projectInitials } from '../lib/project-initials';
 import type { Task } from '../store/types';
-import { AlertIcon, CheckIcon, GitMergeIcon, PencilIcon, PersonIcon, ToolsIcon } from './icons';
+import { GitMergeIcon, ToolsIcon } from './icons';
+import { PrChip } from './PrChip';
+import { extraPrWatchId, getTaskExtraPrs } from '../store/pr-checks-state';
 
 const infoBarBtnStyle: JSX.CSSProperties = {
   'align-self': 'stretch',
@@ -31,59 +33,17 @@ const infoBarBtnStyle: JSX.CSSProperties = {
   'font-size': 'inherit',
 };
 
+const prChipStyle: JSX.CSSProperties = {
+  ...infoBarBtnStyle,
+  'margin-right': '8px',
+  color: theme.accent,
+};
+
 const warningChipStyle: JSX.CSSProperties = {
   ...badgeStyle(theme.warning),
   'font-size': '11px',
   padding: '1px 6px',
 };
-
-type ReviewStatusKind = 'approved' | 'changes-requested' | 'review-needed' | 'draft' | 'merged';
-
-/** GitHub's own "merged" purple, so the state reads the same as on github.com. */
-const GITHUB_MERGED_COLOR = '#8957e5';
-
-/** Solid pill like GitHub's merged label: a finished PR is the one state worth a full badge. */
-const mergedBadgeStyle: JSX.CSSProperties = {
-  'font-size': '11px',
-  'font-weight': '600',
-  padding: '1px 6px',
-  gap: '4px',
-  'border-radius': 'var(--radius-xs)',
-  background: GITHUB_MERGED_COLOR,
-  // Fixed white, not a theme token: the fill is theme-independent too.
-  color: '#fff',
-  'white-space': 'nowrap',
-};
-
-interface ReviewStatus {
-  kind: ReviewStatusKind;
-  label: string;
-  accessibleLabel: string;
-  title: string;
-  color: string;
-}
-
-function ReviewStatusIcon(props: { kind: ReviewStatusKind }) {
-  return (
-    <Switch>
-      <Match when={props.kind === 'approved'}>
-        <CheckIcon size={12} />
-      </Match>
-      <Match when={props.kind === 'changes-requested'}>
-        <AlertIcon size={12} />
-      </Match>
-      <Match when={props.kind === 'review-needed'}>
-        <PersonIcon size={12} />
-      </Match>
-      <Match when={props.kind === 'draft'}>
-        <PencilIcon size={12} />
-      </Match>
-      <Match when={props.kind === 'merged'}>
-        <GitMergeIcon size={12} />
-      </Match>
-    </Switch>
-  );
-}
 
 /** Red because a failed PR check is the kind of urgency the fill is reserved for. */
 const fixCiBtnStyle: JSX.CSSProperties = {
@@ -105,7 +65,7 @@ const fixCiBtnStyle: JSX.CSSProperties = {
 };
 
 /** Stages the failed checks and their log tails as a prompt in the task input. */
-function FixCiButton(props: { taskId: string; prUrl: string; prNumber: number }) {
+function FixCiButton(props: { taskId: string; prUrl: string; prNumber: number; repo?: string }) {
   const [busy, setBusy] = createSignal(false);
   const fix = async () => {
     setBusy(true);
@@ -113,6 +73,7 @@ function FixCiButton(props: { taskId: string; prUrl: string; prNumber: number })
       const staged = await stageFailedChecksPrompt(props.taskId, {
         number: props.prNumber,
         url: props.prUrl,
+        repo: props.repo,
       });
       showNotification(
         staged
@@ -247,165 +208,7 @@ export function TaskBranchInfoBar(props: TaskBranchInfoBarProps) {
       <Show when={prLinkUrl()}>
         {(url) => {
           const pr = () => getPrChecks(props.task.id);
-          const reviewStatus = (): ReviewStatus | null => {
-            const c = pr();
-            if (!c) return null;
-            if (c.merged) {
-              return {
-                kind: 'merged',
-                label: 'Merged',
-                accessibleLabel: 'Merged',
-                title: 'Pull request merged',
-                color: GITHUB_MERGED_COLOR,
-              };
-            }
-            if (c.isDraft) {
-              return {
-                kind: 'draft',
-                label: 'Draft',
-                accessibleLabel: 'Draft',
-                title: 'Draft pull request',
-                color: theme.fgMuted,
-              };
-            }
-            switch (c.reviewDecision) {
-              case 'CHANGES_REQUESTED':
-                return {
-                  kind: 'changes-requested',
-                  label: 'Changes',
-                  accessibleLabel: 'Changes requested',
-                  title: 'Review: changes requested',
-                  color: theme.warning,
-                };
-              case 'APPROVED':
-                return {
-                  kind: 'approved',
-                  label: 'Approved',
-                  accessibleLabel: 'Approved',
-                  title: 'Review: approved',
-                  color: theme.success,
-                };
-              case 'REVIEW_REQUIRED':
-                return {
-                  kind: 'review-needed',
-                  label: 'Review',
-                  accessibleLabel: 'Review needed',
-                  title: 'Review required',
-                  color: theme.accent,
-                };
-              default:
-                return null;
-            }
-          };
-          const ciStatus = (): { label: string; title: string; color: string } | null => {
-            const c = pr();
-            if (!c || c.overall === 'none') return null;
-            if (c.overall === 'pending') {
-              return {
-                label: 'CI running',
-                title: `CI running — ${c.pending} pending, ${c.passing} passing${c.failing ? `, ${c.failing} failing` : ''}`,
-                color: theme.warning,
-              };
-            }
-            if (c.overall === 'success') {
-              return {
-                label: 'CI passed',
-                title: `CI passed — ${c.passing} check${c.passing === 1 ? '' : 's'}`,
-                color: theme.success,
-              };
-            }
-            return {
-              label: 'CI failed',
-              title: `CI failed — ${c.failing} failing, ${c.passing} passing${c.pending ? `, ${c.pending} pending` : ''}`,
-              color: theme.error,
-            };
-          };
           const hasConflicts = () => pr()?.mergeable === 'CONFLICTING';
-          const buttonTitle = () =>
-            [
-              reviewStatus()?.title,
-              ciStatus()?.title,
-              hasConflicts() ? 'Merge conflicts with the base branch' : null,
-              url(),
-              props.onOpenPullRequest ? `${mod}+Click to open on GitHub` : null,
-            ]
-              .filter(Boolean)
-              .join('\n');
-          const buttonLabel = () =>
-            [
-              `PR #${prNumber()}`,
-              reviewStatus()?.accessibleLabel,
-              ciStatus()?.label,
-              hasConflicts() ? 'Conflicts' : null,
-            ]
-              .filter(Boolean)
-              .join(', ');
-          const openPr = (e: MouseEvent) => {
-            if (props.onOpenPullRequest && !(e.metaKey || e.ctrlKey)) {
-              props.onOpenPullRequest(url());
-            } else {
-              window.open(url(), '_blank');
-            }
-          };
-          const prButton = (
-            <button
-              type="button"
-              class="task-branch-info-button task-pr-link"
-              onClick={openPr}
-              title={buttonTitle()}
-              aria-label={buttonLabel()}
-              style={{ ...infoBarBtnStyle, 'margin-right': '8px', color: theme.accent }}
-            >
-              <Show when={ciStatus()}>
-                {(ci) => (
-                  <span class="task-pr-ci-state">
-                    <Show
-                      when={pr()?.overall === 'pending'}
-                      fallback={
-                        <span
-                          style={{
-                            width: '7px',
-                            height: '7px',
-                            'border-radius': '50%',
-                            background: ci().color,
-                          }}
-                        />
-                      }
-                    >
-                      <span
-                        class="inline-spinner"
-                        style={{ width: '10px', height: '10px', color: ci().color }}
-                      />
-                    </Show>
-                  </span>
-                )}
-              </Show>
-              <span class="task-pr-label" style={{ color: theme.fgMuted, 'font-weight': '600' }}>
-                <span class="task-pr-prefix">PR </span>
-                <span class="task-pr-number">#{prNumber()}</span>
-              </span>
-              <Show when={reviewStatus()}>
-                {(review) => (
-                  <span
-                    class="task-pr-review-status"
-                    style={
-                      review().kind === 'merged' ? mergedBadgeStyle : { color: review().color }
-                    }
-                  >
-                    <span class="task-pr-review-label">{review().label}</span>
-                    <span class={`task-pr-review-icon task-pr-review-icon--${review().kind}`}>
-                      <ReviewStatusIcon kind={review().kind} />
-                    </span>
-                  </span>
-                )}
-              </Show>
-              <Show when={hasConflicts()}>
-                <span class="task-pr-conflicts" style={{ color: theme.error }}>
-                  Conflicts
-                </span>
-              </Show>
-            </button>
-          );
           const ciFailed = () => pr()?.overall === 'failure' && !pr()?.merged;
           // Hide Merge when the PR state already rules a merge out; the finish dialog
           // still decides the route (GitHub or local) and any remaining protection.
@@ -423,7 +226,12 @@ export function TaskBranchInfoBar(props: TaskBranchInfoBarProps) {
           };
           return (
             <>
-              {prButton}
+              <PrChip
+                url={url()}
+                checks={pr()}
+                style={prChipStyle}
+                onOpenPullRequest={props.onOpenPullRequest}
+              />
               <Show when={ciFailed() && prNumber()}>
                 {(number) => (
                   <FixCiButton taskId={props.task.id} prUrl={url()} prNumber={Number(number())} />
@@ -446,6 +254,30 @@ export function TaskBranchInfoBar(props: TaskBranchInfoBarProps) {
           );
         }}
       </Show>
+      <For each={getTaskExtraPrs(props.task.id)}>
+        {(extra) => {
+          // The in-app PR panel and Merge belong to the task's own PR, so an
+          // additional PR opens on GitHub and only offers Fix CI.
+          const checks = () => getPrChecks(extraPrWatchId(props.task.id, extra.url));
+          const prNumber = () => parseGitHubUrl(extra.url)?.number;
+          const ciFailed = () => checks()?.overall === 'failure' && !checks()?.merged;
+          return (
+            <>
+              <PrChip url={extra.url} repo={extra.repo} checks={checks()} style={prChipStyle} />
+              <Show when={ciFailed() && prNumber()}>
+                {(number) => (
+                  <FixCiButton
+                    taskId={props.task.id}
+                    prUrl={extra.url}
+                    prNumber={Number(number())}
+                    repo={extra.repo}
+                  />
+                )}
+              </Show>
+            </>
+          );
+        }}
+      </For>
       <Show when={sourceLinkUrl()}>
         {(url) => (
           <button

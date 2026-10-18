@@ -65,10 +65,12 @@ import {
   initPrChecks,
   startPrChecksWatcher,
   stopPrChecksWatcher,
-  detectPrUrlForBranch,
   refreshPrChecksWatcher,
+  isGhAuthError,
+  isGhMissingError,
   isPrUrl,
 } from './pr-checks.js';
+import { detectTaskPrs } from './task-prs.js';
 import { readCoverageSummary } from './coverage.js';
 import { loadEslintQualityFindings } from './eslint-quality-findings.js';
 import { buildVerifyEnv, validateVerifyCommand, verificationRunner } from './verify.js';
@@ -237,13 +239,6 @@ export function buildCoordinatorMCPConfig(opts: CoordinatorMCPConfigOpts): {
       },
     },
   };
-}
-
-function isMissingCommandError(err: unknown, command: string): boolean {
-  const e = err as { path?: unknown; syscall?: unknown };
-  return (
-    e.path === command || (typeof e.syscall === 'string' && e.syscall.includes(`spawn ${command}`))
-  );
 }
 
 /** The file is absent in Docker mode or after a prior cleanup; any other failure is logged. */
@@ -1306,35 +1301,34 @@ export function registerAllHandlers(win: BrowserWindow): void {
     assertString(args.taskId, 'taskId');
     assertString(args.prUrl, 'prUrl');
     assertString(args.taskName, 'taskName');
+    assertString(args.watchId, 'watchId');
     if (!isPrUrl(args.prUrl)) return; // defense in depth — also re-checked downstream
     startPrChecksWatcher({
       taskId: args.taskId,
       prUrl: args.prUrl,
       taskName: args.taskName,
+      watchId: args.watchId,
     });
   });
   ipcMain.handle(IPC.StopPrChecksWatcher, (_e, args) => {
-    assertString(args.taskId, 'taskId');
-    stopPrChecksWatcher(args.taskId);
+    assertString(args.watchId, 'watchId');
+    stopPrChecksWatcher(args.watchId);
   });
   ipcMain.handle(IPC.DetectPrForBranch, (_e, args) => {
     validatePath(args.worktreePath, 'worktreePath');
     validateBranchName(args.branchName, 'branchName');
-    return detectPrUrlForBranch(args.worktreePath, args.branchName)
-      .then((url) => ({ url }))
-      .catch((err: unknown) => {
-        const code = (err as NodeJS.ErrnoException)?.code;
-        const stderr = (err as { stderr?: string })?.stderr ?? '';
-        if (code === 'ENOENT' && isMissingCommandError(err, 'gh')) {
-          return { url: null, unavailable: 'missing' };
-        }
-        if (code === 'ENOENT') return { url: null };
-        if (/not logged into|authentication required/i.test(stderr)) {
-          return { url: null, unavailable: 'auth' };
-        }
-        console.warn('[pr-checks] branch PR detection failed:', (err as Error)?.message ?? err);
-        return { url: null };
-      });
+    return detectTaskPrs(args.worktreePath, args.branchName).catch((err: unknown) => {
+      const code = (err as NodeJS.ErrnoException)?.code;
+      if (isGhMissingError(err)) {
+        return { url: null, unavailable: 'missing' };
+      }
+      if (code === 'ENOENT') return { url: null };
+      if (isGhAuthError(err)) {
+        return { url: null, unavailable: 'auth' };
+      }
+      console.warn('[pr-checks] branch PR detection failed:', (err as Error)?.message ?? err);
+      return { url: null };
+    });
   });
   ipcMain.handle(IPC.RefreshPrChecksWatcher, (_e, args) => {
     assertString(args.taskId, 'taskId');

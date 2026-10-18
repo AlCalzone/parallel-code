@@ -30,6 +30,8 @@ const GH_TIMEOUT_MS = 15_000;
 const GH_MAX_BUFFER = 4 * 1024 * 1024;
 
 interface TaskEntry {
+  /** Map key: the task ID for a task's primary PR, distinct per additional PR. */
+  watchId: string;
   taskId: string;
   taskName: string;
   prUrl: string;
@@ -91,16 +93,20 @@ export function initPrChecks(mainWindow: BrowserWindow): void {
   });
 }
 
-/** Public: renderer-driven start. Registers a task; triggers an immediate refresh. */
+/** Public: renderer-driven start. Registers a PR of a task; triggers an immediate refresh.
+ *  `watchId` is the task ID for the task's primary PR; a task's additional PRs
+ *  pass their own IDs so they are watched side by side. */
 export function startPrChecksWatcher(args: {
   taskId: string;
   prUrl: string;
   taskName: string;
+  watchId: string;
 }): void {
   if (disabled) return;
   if (!isPrUrl(args.prUrl)) return;
 
-  const existing = tasks.get(args.taskId);
+  const { watchId } = args;
+  const existing = tasks.get(watchId);
   // If the URL changed we treat this as a brand-new subscription: counts,
   // headRefOid, and notification-dedupe all belong to the old PR and must
   // not leak into the new one. A rename-only update (same URL) just updates
@@ -108,6 +114,7 @@ export function startPrChecksWatcher(args: {
   const isFreshSubscription = !existing || existing.prUrl !== args.prUrl;
   const next: TaskEntry = isFreshSubscription
     ? {
+        watchId,
         taskId: args.taskId,
         taskName: args.taskName,
         prUrl: args.prUrl,
@@ -127,22 +134,35 @@ export function startPrChecksWatcher(args: {
         postPushRefreshUntil: null,
       }
     : { ...existing, taskName: args.taskName };
-  tasks.set(args.taskId, next);
+  tasks.set(watchId, next);
   ensureInterval();
   if (isFreshSubscription) {
-    void refreshOne(next.taskId);
+    void refreshOne(watchId);
   }
 }
 
-export function stopPrChecksWatcher(taskId: string): void {
-  tasks.delete(taskId);
+export function stopPrChecksWatcher(watchId: string): void {
+  tasks.delete(watchId);
   if (tasks.size === 0) clearTickInterval();
 }
 
+/** Marks the PRs of a task's pushed branch as freshly pushed: its primary PR
+ *  and further PRs sharing that head. Nested repositories' PRs keep their state. */
 export function refreshPrChecksWatcher(taskId: string): void {
   if (disabled) return;
-  const entry = tasks.get(taskId);
-  if (!entry) return;
+  const primary = tasks.get(taskId);
+  if (!primary) return;
+  for (const entry of tasks.values()) {
+    const sharesHead =
+      entry.taskId === taskId &&
+      primary.headRefOid !== null &&
+      entry.headRefOid === primary.headRefOid;
+    if (entry === primary || sharesHead) markPushed(entry);
+  }
+  ensureInterval();
+}
+
+function markPushed(entry: TaskEntry): void {
   // Deliberately leave entry.headRefOid in place: refreshOne uses it as the
   // pre-push SHA to detect when GitHub has caught up. Clearing it here would
   // make every fetch within the grace window look like a SHA change and let
@@ -155,7 +175,6 @@ export function refreshPrChecksWatcher(taskId: string): void {
   entry.checks = [];
   entry.lastRefreshedAt = Date.now();
   sendUpdate(entry);
-  ensureInterval();
 }
 
 /** True if the window currently exists and is visible. */
@@ -187,9 +206,9 @@ async function runTick(): Promise<void> {
     const due: string[] = [];
     for (const entry of tasks.values()) {
       if (entry.overall === 'pending') {
-        due.push(entry.taskId);
+        due.push(entry.watchId);
       } else if (now - entry.lastRefreshedAt >= SETTLED_REFRESH_MS) {
-        due.push(entry.taskId);
+        due.push(entry.watchId);
       }
     }
     // Refresh due tasks in parallel. `refreshOne` handles its own errors via
@@ -200,8 +219,8 @@ async function runTick(): Promise<void> {
   }
 }
 
-async function refreshOne(taskId: string): Promise<void> {
-  const entry = tasks.get(taskId);
+async function refreshOne(watchId: string): Promise<void> {
+  const entry = tasks.get(watchId);
   if (!entry) return;
 
   let status: Awaited<ReturnType<typeof fetchPrStatus>>;
@@ -230,7 +249,7 @@ async function refreshOne(taskId: string): Promise<void> {
       merged: status.state === 'MERGED',
       mergedAt: status.mergedAt,
     });
-    tasks.delete(taskId);
+    tasks.delete(watchId);
     if (tasks.size === 0) clearTickInterval();
     return;
   }
@@ -334,6 +353,7 @@ function sendUpdate(
   if (!win || win.isDestroyed() || disabled) return;
   const payload: PrChecksUpdatePayload = {
     taskId: entry.taskId,
+    watchId: entry.watchId,
     prUrl: entry.prUrl,
     mergedAt: opts?.mergedAt,
     overall: entry.overall,
@@ -421,17 +441,18 @@ export function isPrUrl(url: string): boolean {
   return parsePrRef(url) !== null;
 }
 
-export async function detectPrUrlForBranch(
+/** URLs of all open PRs whose head is `branchName`, e.g. one per base branch. */
+export async function listOpenPrUrlsForBranch(
   worktreePath: string,
   branchName: string,
-): Promise<string | null> {
-  if (!(await isDirectory(worktreePath))) return null;
-  const { stdout: remotes } = await exec('git', ['remote'], {
+): Promise<string[]> {
+  if (!(await isDirectory(worktreePath))) return [];
+  const { stdout: remotes } = await exec('git', ['remote', '-v'], {
     cwd: worktreePath,
     timeout: GH_TIMEOUT_MS,
     maxBuffer: GH_MAX_BUFFER,
   });
-  if (!remotes.trim()) return null;
+  if (!remotes.trim()) return [];
   const { stdout } = await exec(
     'gh',
     [
@@ -442,22 +463,49 @@ export async function detectPrUrlForBranch(
       '--head',
       branchName,
       '--json',
-      'url,headRefName',
+      'url,headRefName,isCrossRepository,headRepositoryOwner',
       '--limit',
       '20',
     ],
     { cwd: worktreePath, timeout: GH_TIMEOUT_MS, maxBuffer: GH_MAX_BUFFER },
   );
   const parsed: unknown = JSON.parse(stdout);
-  if (!Array.isArray(parsed)) return null;
-  const match = parsed.find((item) => {
-    if (!item || typeof item !== 'object') return false;
+  if (!Array.isArray(parsed)) return [];
+  const owners = remoteOwners(remotes);
+  const urls: string[] = [];
+  for (const item of parsed) {
+    if (!item || typeof item !== 'object') continue;
     const pr = item as Record<string, unknown>;
-    return pr['headRefName'] === branchName;
-  });
-  if (!match || typeof match !== 'object') return null;
-  const url = (match as Record<string, unknown>)['url'];
-  return typeof url === 'string' && isPrUrl(url) ? url : null;
+    const url = pr['url'];
+    if (pr['headRefName'] !== branchName || typeof url !== 'string' || !isPrUrl(url)) continue;
+    // `--head` matches any fork's branch of that name; shared names such as
+    // `develop` would otherwise pick up strangers' PRs.
+    if (pr['isCrossRepository'] === true && !owners.has(headOwnerOf(pr))) continue;
+    urls.push(url);
+  }
+  return urls;
+}
+
+/** Lower-cased owners of the remotes in `git remote -v` output. */
+function remoteOwners(remoteV: string): Set<string> {
+  const owners = new Set<string>();
+  for (const line of remoteV.split('\n')) {
+    const url = line.split(/\s+/)[1];
+    // Both git@host:owner/repo and scheme://host/owner/repo end in owner/repo.
+    const parts =
+      url
+        ?.replace(/\/+$/, '')
+        .replace(/\.git$/, '')
+        .split(/[/:]/) ?? [];
+    const owner = parts[parts.length - 2];
+    if (owner) owners.add(owner.toLowerCase());
+  }
+  return owners;
+}
+
+function headOwnerOf(pr: Record<string, unknown>): string {
+  const owner = pr['headRepositoryOwner'] as { login?: unknown } | null | undefined;
+  return typeof owner?.login === 'string' ? owner.login.toLowerCase() : '';
 }
 
 async function isDirectory(path: string): Promise<boolean> {
@@ -572,6 +620,25 @@ function asString(v: unknown): string | undefined {
   return typeof v === 'string' ? v : undefined;
 }
 
+/** The gh binary itself is not installed, as opposed to a missing working directory. */
+export function isGhMissingError(err: unknown): boolean {
+  const e = err as { code?: unknown; path?: unknown; syscall?: unknown };
+  return (
+    e?.code === 'ENOENT' &&
+    (e.path === 'gh' || (typeof e.syscall === 'string' && e.syscall.includes('spawn gh')))
+  );
+}
+
+/** gh refused because no account is logged in. Not a bare `gh auth login`
+ *  match: gh also suggests that for repositories on unknown hosts. */
+export function isGhAuthError(err: unknown): boolean {
+  const stderr = (err as { stderr?: unknown })?.stderr;
+  return (
+    typeof stderr === 'string' &&
+    /not logged into|authentication required|to get started with github cli/i.test(stderr)
+  );
+}
+
 function handleGhError(err: unknown): void {
   if (disabled) return;
   const code = (err as NodeJS.ErrnoException)?.code;
@@ -582,8 +649,7 @@ function handleGhError(err: unknown): void {
     clearTickInterval();
     return;
   }
-  const stderr = (err as { stderr?: string })?.stderr ?? '';
-  if (typeof stderr === 'string' && /not logged into|authentication required/i.test(stderr)) {
+  if (isGhAuthError(err)) {
     disabled = true;
     disabledReason = 'auth';
     console.warn('[pr-checks] gh not authenticated — PR CI status disabled for this session');

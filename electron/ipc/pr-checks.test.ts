@@ -42,13 +42,14 @@ import {
   rollupBucket,
   isPrUrl,
   fetchPrStatus,
-  detectPrUrlForBranch,
+  listOpenPrUrlsForBranch,
   __resetForTests,
   __getStateForTests,
   __runTickForTests,
   initPrChecks,
   refreshPrChecksWatcher,
   startPrChecksWatcher,
+  stopPrChecksWatcher,
   type PrCheckRun,
 } from './pr-checks.js';
 
@@ -270,7 +271,7 @@ describe('fetchPrStatus', () => {
   });
 });
 
-describe('detectPrUrlForBranch', () => {
+describe('listOpenPrUrlsForBranch', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __resetForTests();
@@ -297,13 +298,13 @@ describe('detectPrUrlForBranch', () => {
     };
     vi.mocked(execFile).mockImplementation(impl as unknown as typeof execFile);
 
-    await expect(detectPrUrlForBranch('/repo/worktree', 'task/my-branch')).resolves.toBe(null);
+    await expect(listOpenPrUrlsForBranch('/repo/worktree', 'task/my-branch')).resolves.toEqual([]);
     expect(commands).toEqual(['git']);
 
     remote = 'origin\n';
-    await expect(detectPrUrlForBranch('/repo/worktree', 'task/my-branch')).resolves.toBe(
+    await expect(listOpenPrUrlsForBranch('/repo/worktree', 'task/my-branch')).resolves.toEqual([
       'https://github.com/a/b/pull/11',
-    );
+    ]);
     expect(commands).toEqual(['git', 'git', 'gh']);
   });
 
@@ -320,9 +321,9 @@ describe('detectPrUrlForBranch', () => {
         '',
       );
     });
-    await expect(detectPrUrlForBranch('/repo/worktree', 'task/my-branch')).resolves.toBe(
+    await expect(listOpenPrUrlsForBranch('/repo/worktree', 'task/my-branch')).resolves.toEqual([
       `https://${host}/a/b/pull/11`,
-    );
+    ]);
     expect(calls).toHaveLength(1);
     expect(calls[0]).toEqual([
       'pr',
@@ -332,7 +333,7 @@ describe('detectPrUrlForBranch', () => {
       '--head',
       'task/my-branch',
       '--json',
-      'url,headRefName',
+      'url,headRefName,isCrossRepository,headRepositoryOwner',
       '--limit',
       '20',
     ]);
@@ -352,25 +353,45 @@ describe('detectPrUrlForBranch', () => {
         '',
       ),
     );
-    await expect(detectPrUrlForBranch('/repo/worktree', 'task/ahead-locally')).resolves.toBe(
+    await expect(listOpenPrUrlsForBranch('/repo/worktree', 'task/ahead-locally')).resolves.toEqual([
       'https://github.com/a/b/pull/12',
-    );
+    ]);
   });
 
-  it('returns null when the branch has no open PR', async () => {
+  it('returns nothing when the branch has no open PR', async () => {
     stubGh((_args, cb) => cb(null, JSON.stringify([]), ''));
-    await expect(detectPrUrlForBranch('/repo/worktree', 'task/no-pr')).resolves.toBe(null);
+    await expect(listOpenPrUrlsForBranch('/repo/worktree', 'task/no-pr')).resolves.toEqual([]);
   });
 
-  it('returns null without invoking gh when the worktree path is gone', async () => {
+  it('returns nothing without invoking gh when the worktree path is gone', async () => {
     const err = new Error('missing worktree') as NodeJS.ErrnoException;
     err.code = 'ENOENT';
     mockStat.mockRejectedValueOnce(err);
     const calls = stubGh((_args, cb) => cb(null, JSON.stringify([]), ''));
 
-    await expect(detectPrUrlForBranch('/repo/missing-worktree', 'task/no-pr')).resolves.toBe(null);
+    await expect(listOpenPrUrlsForBranch('/repo/missing-worktree', 'task/no-pr')).resolves.toEqual(
+      [],
+    );
 
     expect(calls).toHaveLength(0);
+  });
+
+  it('lists every open PR of the branch', async () => {
+    stubGh((_args, cb) =>
+      cb(
+        null,
+        JSON.stringify([
+          { url: 'https://github.com/a/b/pull/11', headRefName: 'task/two-bases' },
+          { url: 'https://github.com/a/b/pull/12', headRefName: 'task/two-bases' },
+          { url: 'https://github.com/a/b/pull/13', headRefName: 'task/other' },
+        ]),
+        '',
+      ),
+    );
+    await expect(listOpenPrUrlsForBranch('/repo/worktree', 'task/two-bases')).resolves.toEqual([
+      'https://github.com/a/b/pull/11',
+      'https://github.com/a/b/pull/12',
+    ]);
   });
 
   it('rejects malformed PR URLs from gh output', async () => {
@@ -386,7 +407,44 @@ describe('detectPrUrlForBranch', () => {
         '',
       ),
     );
-    await expect(detectPrUrlForBranch('/repo/worktree', 'task/issue')).resolves.toBe(null);
+    await expect(listOpenPrUrlsForBranch('/repo/worktree', 'task/issue')).resolves.toEqual([]);
+  });
+
+  it('ignores fork PRs from owners none of the local remotes belong to', async () => {
+    const impl = (cmd: string, _args: string[], _opts: unknown, cb: ExecCb) => {
+      if (cmd === 'git') {
+        cb(
+          null,
+          [
+            'origin\tgit@github.com:Acme/api.git (fetch)',
+            'origin\tgit@github.com:Acme/api.git (push)',
+            'mine\thttps://github.com/me/api/ (fetch)',
+          ].join('\n'),
+          '',
+        );
+        return;
+      }
+      const fork = (login: string) => ({ isCrossRepository: true, headRepositoryOwner: { login } });
+      cb(
+        null,
+        JSON.stringify([
+          { url: 'https://github.com/acme/api/pull/1', headRefName: 'develop' },
+          { url: 'https://github.com/acme/api/pull/2', headRefName: 'develop', ...fork('ME') },
+          {
+            url: 'https://github.com/acme/api/pull/3',
+            headRefName: 'develop',
+            ...fork('stranger'),
+          },
+        ]),
+        '',
+      );
+    };
+    vi.mocked(execFile).mockImplementation(impl as unknown as typeof execFile);
+
+    await expect(listOpenPrUrlsForBranch('/repo/worktree', 'develop')).resolves.toEqual([
+      'https://github.com/acme/api/pull/1',
+      'https://github.com/acme/api/pull/2',
+    ]);
   });
 });
 
@@ -414,6 +472,7 @@ describe('refreshPrChecksWatcher', () => {
       );
       startPrChecksWatcher({
         taskId: 't1',
+        watchId: 't1',
         prUrl: 'https://github.com/a/b/pull/1',
         taskName: 'test',
       });
@@ -458,6 +517,7 @@ describe('refreshPrChecksWatcher', () => {
 
     startPrChecksWatcher({
       taskId: 't1',
+      watchId: 't1',
       prUrl: 'https://github.com/a/b/pull/1',
       taskName: 'test',
     });
@@ -502,6 +562,7 @@ describe('refreshPrChecksWatcher', () => {
 
     startPrChecksWatcher({
       taskId: 't1',
+      watchId: 't1',
       prUrl: 'https://github.com/a/b/pull/1',
       taskName: 'test',
     });
@@ -554,6 +615,7 @@ describe('refreshPrChecksWatcher', () => {
 
       startPrChecksWatcher({
         taskId: 't1',
+        watchId: 't1',
         prUrl: 'https://github.com/a/b/pull/1',
         taskName: 'test',
       });
@@ -599,6 +661,7 @@ describe('refreshPrChecksWatcher', () => {
 
       startPrChecksWatcher({
         taskId: 't1',
+        watchId: 't1',
         prUrl: 'https://github.com/a/b/pull/1',
         taskName: 'test',
       });
@@ -637,6 +700,7 @@ describe('refreshPrChecksWatcher', () => {
 
     startPrChecksWatcher({
       taskId: 't1',
+      watchId: 't1',
       prUrl: 'https://github.com/a/b/pull/1',
       taskName: 'test',
     });
@@ -654,6 +718,93 @@ describe('refreshPrChecksWatcher', () => {
   });
 });
 
+describe('startPrChecksWatcher — several PRs per task', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetForTests();
+  });
+
+  it("watches a task's additional PR beside its primary one", async () => {
+    const send = vi.fn();
+    initPrChecks(fakeWindow(send));
+    stubGh((args, cb) =>
+      cb(
+        null,
+        JSON.stringify({
+          state: 'OPEN',
+          headRefOid: `sha-${args[2]}`,
+          statusCheckRollup: [{ name: 'build', status: 'COMPLETED', conclusion: 'SUCCESS' }],
+        }),
+        '',
+      ),
+    );
+    startPrChecksWatcher({
+      taskId: 't1',
+      watchId: 't1',
+      prUrl: 'https://github.com/a/b/pull/1',
+      taskName: 'T',
+    });
+    startPrChecksWatcher({
+      taskId: 't1',
+      prUrl: 'https://github.com/a/api/pull/2',
+      taskName: 'T · api #2',
+      watchId: 't1:api',
+    });
+    await flushPromises();
+
+    expect(__getStateForTests().taskIds.sort()).toEqual(['t1', 't1:api']);
+    const payloads = send.mock.calls.map(([, payload]) => payload as Record<string, unknown>);
+    expect(payloads).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          taskId: 't1',
+          watchId: 't1',
+          prUrl: 'https://github.com/a/b/pull/1',
+        }),
+        expect.objectContaining({
+          taskId: 't1',
+          watchId: 't1:api',
+          prUrl: 'https://github.com/a/api/pull/2',
+        }),
+      ]),
+    );
+
+    stopPrChecksWatcher('t1:api');
+    expect(__getStateForTests().taskIds).toEqual(['t1']);
+  });
+
+  it('marks the PRs that share the pushed head as freshly pushed', async () => {
+    const send = vi.fn();
+    initPrChecks(fakeWindow(send));
+    stubGh((args, cb) =>
+      cb(
+        null,
+        JSON.stringify({
+          state: 'OPEN',
+          headRefOid: args[2]?.includes('/api/') ? 'sha-api' : 'sha-task',
+          statusCheckRollup: [{ name: 'build', status: 'COMPLETED', conclusion: 'SUCCESS' }],
+        }),
+        '',
+      ),
+    );
+    const watch = (watchId: string, prUrl: string) =>
+      startPrChecksWatcher({ taskId: 't1', watchId, prUrl, taskName: 'T' });
+    watch('t1', 'https://github.com/a/b/pull/1');
+    watch('t1:b', 'https://github.com/a/b/pull/3');
+    watch('t1:api', 'https://github.com/a/api/pull/2');
+    await flushPromises();
+    send.mockClear();
+
+    refreshPrChecksWatcher('t1');
+
+    const refreshed = send.mock.calls.map(([, payload]) => payload as Record<string, unknown>);
+    expect(refreshed.map((p) => [p.watchId, p.overall])).toEqual([
+      ['t1', 'pending'],
+      ['t1:b', 'pending'],
+    ]);
+  });
+});
+
 describe('startPrChecksWatcher — graceful degradation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -663,6 +814,7 @@ describe('startPrChecksWatcher — graceful degradation', () => {
   it('ignores non-PR URLs (no task registered)', () => {
     startPrChecksWatcher({
       taskId: 't1',
+      watchId: 't1',
       prUrl: 'https://github.com/a/b/issues/1',
       taskName: 'test',
     });
@@ -677,6 +829,7 @@ describe('startPrChecksWatcher — graceful degradation', () => {
     });
     startPrChecksWatcher({
       taskId: 't1',
+      watchId: 't1',
       prUrl: 'https://github.com/a/b/pull/1',
       taskName: 'test',
     });
@@ -686,14 +839,19 @@ describe('startPrChecksWatcher — graceful degradation', () => {
     expect(__getStateForTests().disabledReason).toBe('missing');
   });
 
-  it('disables session when gh reports not authenticated', async () => {
+  it.each([
+    'You are not logged into any GitHub hosts.',
+    // gh 2.101 with no account at all.
+    'To get started with GitHub CLI, please run:  gh auth login',
+  ])('disables session when gh reports not authenticated: %s', async (stderr) => {
     stubGh((_args, cb) => {
       const e = new Error('auth') as Error & { stderr?: string };
-      e.stderr = 'You are not logged into any GitHub hosts.';
-      cb(e, '', 'You are not logged into any GitHub hosts.');
+      e.stderr = stderr;
+      cb(e, '', stderr);
     });
     startPrChecksWatcher({
       taskId: 't1',
+      watchId: 't1',
       prUrl: 'https://github.com/a/b/pull/1',
       taskName: 'test',
     });

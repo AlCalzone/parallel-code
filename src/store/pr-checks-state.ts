@@ -1,5 +1,5 @@
 import { createStore, produce, unwrap } from 'solid-js/store';
-import type { PrChecksOverall, PrChecksUpdatePayload, PrCheckRun } from '../ipc/types';
+import type { PrChecksOverall, PrChecksUpdatePayload, PrCheckRun, TaskExtraPr } from '../ipc/types';
 
 export interface PrChecksState {
   overall: PrChecksOverall;
@@ -15,9 +15,66 @@ export interface PrChecksState {
   checkedAt: string;
 }
 
+/** A watcher update as stored state. */
+export function checksFromUpdate(msg: Partial<PrChecksUpdatePayload>): PrChecksState {
+  return {
+    overall: msg.overall as PrChecksOverall,
+    // Explicit: store writes shallow-merge, so an omitted flag would keep a
+    // previous PR's `merged: true`.
+    merged: false,
+    isDraft: msg.isDraft === true,
+    reviewDecision:
+      msg.reviewDecision === 'APPROVED' ||
+      msg.reviewDecision === 'CHANGES_REQUESTED' ||
+      msg.reviewDecision === 'REVIEW_REQUIRED'
+        ? msg.reviewDecision
+        : null,
+    mergeable:
+      msg.mergeable === 'MERGEABLE' || msg.mergeable === 'CONFLICTING' ? msg.mergeable : 'UNKNOWN',
+    passing: typeof msg.passing === 'number' ? msg.passing : 0,
+    pending: typeof msg.pending === 'number' ? msg.pending : 0,
+    failing: typeof msg.failing === 'number' ? msg.failing : 0,
+    checks: Array.isArray(msg.checks) ? (msg.checks as PrCheckRun[]) : [],
+    checkedAt: typeof msg.checkedAt === 'string' ? msg.checkedAt : new Date().toISOString(),
+  };
+}
+
 // createStore gives fine-grained per-key reactivity: updating one task's state
 // only re-runs accessors that read that task's key, not every PR-aware view.
+// Keyed by watcher ID: the task ID for a task's primary PR, `extraPrWatchId`
+// for its additional ones.
 const [prChecks, setPrChecksStore] = createStore<Record<string, PrChecksState>>({});
+// Not persisted: detection finds the open ones again shortly after startup.
+const [extraPrs, setExtraPrsStore] = createStore<Record<string, TaskExtraPr[]>>({});
+
+/** Watcher ID of a task's additional PR; its checks are stored under this key. */
+export function extraPrWatchId(taskId: string, url: string): string {
+  return `${taskId}|${url}`;
+}
+
+/** A task's open PRs besides its primary one, e.g. those of its nested repositories. */
+export function getTaskExtraPrs(taskId: string): TaskExtraPr[] {
+  return extraPrs[taskId] ?? [];
+}
+
+export function setTaskExtraPrs(taskId: string, next: TaskExtraPr[]): void {
+  const current = unwrap(extraPrs)[taskId] ?? [];
+  const unchanged =
+    current.length === next.length &&
+    current.every((pr, i) => pr.url === next[i]?.url && pr.repo === next[i]?.repo);
+  if (unchanged) return;
+  setExtraPrsStore(
+    produce((s) => {
+      if (next.length > 0) s[taskId] = next;
+      else delete s[taskId];
+    }),
+  );
+}
+
+/** Tasks that currently have additional PRs; read untracked. */
+export function taskIdsWithExtraPrs(): string[] {
+  return Object.keys(unwrap(extraPrs));
+}
 
 export function getPrChecks(taskId: string): PrChecksState | undefined {
   return prChecks[taskId];

@@ -27,6 +27,7 @@ vi.mock('../store/store', () => ({
 vi.mock('../store/github', () => ({ stageFailedChecksPrompt: mockStage }));
 
 import { TaskBranchInfoBar } from './TaskBranchInfoBar';
+import { extraPrWatchId, setTaskExtraPrs } from '../store/pr-checks-state';
 
 const task = {
   id: 'task-1',
@@ -82,6 +83,26 @@ describe('TaskBranchInfoBar Fix CI', () => {
     clickFixCi();
 
     await vi.waitFor(() => expect(mockNotify).toHaveBeenCalledWith('No failed checks found.'));
+  });
+
+  it('names the nested repository when fixing an additional PR', () => {
+    const apiUrl = 'https://github.com/acme/api/pull/7';
+    setTaskExtraPrs('task-1', [{ url: apiUrl, repo: 'api' }]);
+    mockPrChecks.mockImplementation((id: string) =>
+      id === extraPrWatchId('task-1', apiUrl) ? failingChecks : undefined,
+    );
+    mockStage.mockResolvedValue(true);
+    try {
+      dispose = render(
+        () => <TaskBranchInfoBar task={task} onEditProject={vi.fn()} />,
+        document.body,
+      );
+      findButton('Fix CI')?.click();
+    } finally {
+      setTaskExtraPrs('task-1', []);
+    }
+
+    expect(mockStage).toHaveBeenCalledWith('task-1', { number: 7, url: apiUrl, repo: 'api' });
   });
 });
 

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { renderToString } from 'solid-js/web';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Task } from '../store/types';
 
 const { mockGetPrChecks } = vi.hoisted(() => ({
@@ -25,6 +25,7 @@ vi.mock('../lib/shell', () => ({
 
 import { TaskBranchInfoBar } from './TaskBranchInfoBar';
 import { getProject } from '../store/store';
+import { extraPrWatchId, setTaskExtraPrs } from '../store/pr-checks-state';
 
 const task: Task = {
   id: 'task-1',
@@ -281,5 +282,41 @@ describe('TaskBranchInfoBar responsive styles', () => {
       );
     }
     expect(css).toMatch(/\.task-pr-link\b[^{}]*{[^}]*flex:\s*0 0 auto/);
+  });
+});
+
+describe('TaskBranchInfoBar additional PRs', () => {
+  const apiUrl = 'https://github.com/acme/api/pull/7';
+
+  beforeEach(() => {
+    mockGetPrChecks.mockImplementation((id: string) =>
+      id === extraPrWatchId(task.id, apiUrl)
+        ? {
+            overall: 'failure',
+            passing: 1,
+            pending: 0,
+            failing: 1,
+            checks: [],
+            checkedAt: '2026-10-22T10:00:00.000Z',
+          }
+        : undefined,
+    );
+    setTaskExtraPrs(task.id, [{ url: apiUrl, repo: 'api' }]);
+  });
+
+  afterEach(() => {
+    setTaskExtraPrs(task.id, []);
+    mockGetPrChecks.mockReset();
+  });
+
+  it('shows a chip per additional PR, labelled with its nested repository', () => {
+    const html = renderToString(() => TaskBranchInfoBar({ task, onEditProject: vi.fn() }));
+
+    expect(html).toContain('aria-label="PR #12"');
+    expect(html).toContain('aria-label="PR api #7, CI failed"');
+    expect(html).toContain('class="task-pr-repo"');
+    // Fix CI for the failing additional PR; Merge stays with the task's own PR.
+    expect(html.match(/class="task-pr-fix-ci"/g)).toHaveLength(1);
+    expect(html).not.toContain('task-pr-merge');
   });
 });

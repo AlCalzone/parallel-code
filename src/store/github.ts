@@ -72,6 +72,7 @@ function refreshPrChecks(taskId: string): void {
 export async function loadFailedChecksPrompt(pr: {
   number: number;
   url: string;
+  repo?: string;
 }): Promise<string | null> {
   const checks = await invoke<PrFailedCheck[]>(IPC.GetPrFailedChecks, { prUrl: pr.url });
   return checks.length === 0 ? null : buildFailedChecksPrompt(pr, checks);
@@ -80,7 +81,7 @@ export async function loadFailedChecksPrompt(pr: {
 /** Stages a "fix CI" prompt in the task's prompt input. Returns false when nothing failed. */
 export async function stageFailedChecksPrompt(
   taskId: string,
-  pr: { number: number; url: string },
+  pr: { number: number; url: string; repo?: string },
 ): Promise<boolean> {
   const prompt = await loadFailedChecksPrompt(pr);
   if (prompt === null) return false;
