@@ -531,6 +531,7 @@ export interface PersistedState {
   featureHintsEnabled?: boolean;
   seenFeatureHints?: FeatureHintId[];
   focusMode?: boolean;
+  boardView?: boolean;
   verboseLogging?: boolean;
   activeCustomThemeId?: string | null;
   appearanceMode?: AppearanceMode;
@@ -697,6 +698,10 @@ export interface AppStore {
   featureHintsEnabled: boolean;
   seenFeatureHints: FeatureHintId[];
   focusMode: boolean;
+  /** The all-tasks board covers the workspace; focusMode is kept for when it closes. */
+  boardView: boolean;
+  /** The board shows the active task in a side panel; never persisted. */
+  boardPeek: boolean;
   /** Per-task flag: true when the task is rendering its focus-mode two-column layout. */
   taskSplitMode: Record<string, boolean>;
   verboseLogging: boolean;

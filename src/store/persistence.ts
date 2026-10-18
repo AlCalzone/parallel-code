@@ -447,6 +447,7 @@ export async function saveState(): Promise<void> {
     featureHintsEnabled: store.featureHintsEnabled,
     seenFeatureHints: store.seenFeatureHints.length > 0 ? [...store.seenFeatureHints] : undefined,
     focusMode: store.focusMode || undefined,
+    boardView: store.boardView || undefined,
     verboseLogging: store.verboseLogging || undefined,
     coordinatorNotificationDelayMs:
       store.coordinatorNotificationDelayMs !== 60_000
@@ -650,6 +651,7 @@ interface LegacyPersistedState {
   featureHintsEnabled?: unknown;
   seenFeatureHints?: unknown;
   focusMode?: unknown;
+  boardView?: unknown;
   verboseLogging?: unknown;
   coordinatorNotificationDelayMs?: unknown;
   shareDockerAgentAuth?: unknown;
@@ -910,6 +912,7 @@ export async function loadState(): Promise<void> {
       s.editorCommand = typeof rawEditorCommand === 'string' ? rawEditorCommand.trim() : '';
 
       s.focusMode = raw.focusMode === true;
+      s.boardView = raw.boardView === true;
 
       s.verboseLogging = typeof raw.verboseLogging === 'boolean' ? raw.verboseLogging : false;
 

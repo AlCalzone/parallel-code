@@ -1,4 +1,5 @@
 import { createProjectFilterTransition } from '../lib/projectFilterTransition';
+import { withViewTransition } from '../lib/viewTransition';
 import { matchesTaskProjectFilter, taskProjectFilter } from '../store/task-project-filter';
 import {
   batch,
@@ -29,6 +30,7 @@ import {
 } from '../store/store';
 import { documentAgentTaskId } from '../documents/task-id';
 import { scrollTaskIntoView } from '../store/focused-panel';
+import { boardSidePanelOpen } from '../store/project-pages';
 import { isTaskBackgrounded } from '../store/background-tasks';
 import { codeProjects } from '../store/projects';
 import { closeTask } from '../store/tasks';
@@ -77,7 +79,10 @@ export function TilingLayout() {
     [...store.taskOrder, ...store.collapsedTaskOrder].some(
       (id) => matchesTaskProjectFilter(id) && isTaskBackgrounded(id),
     );
-  const focusMode = () => store.focusMode && hasPanels() && !store.showNewTaskPanel;
+  // The board's side panel shows one item too, the draft while there is one.
+  const focusMode = () =>
+    boardSidePanelOpen() || (store.focusMode && hasPanels() && !store.showNewTaskPanel);
+  const shownId = () => (store.showNewTaskPanel ? '__new-task' : store.activeTaskId);
   let containerRef: HTMLDivElement | undefined;
   createProjectFilterTransition(taskProjectFilter, () => containerRef);
   let previousProjectFilter = taskProjectFilter();
@@ -474,7 +479,10 @@ export function TilingLayout() {
           initialSize: TASK_TILE_DEFAULT_WIDTH,
           minSize: TASK_TILE_MIN_WIDTH,
           content: () => (
-            <NewTaskPanel open={store.showNewTaskPanel} onClose={() => toggleNewTaskPanel(false)} />
+            <NewTaskPanel
+              open={store.showNewTaskPanel}
+              onClose={() => withViewTransition(() => toggleNewTaskPanel(false))}
+            />
           ),
         };
         panelCache.set('__new-task', draft);
@@ -711,7 +719,7 @@ export function TilingLayout() {
                 if (focusMode()) {
                   if (isPlaceholder) return { display: 'none' };
                   const id = child.id === '__document-workspace' ? documentTaskId() : child.id;
-                  const isActive = id === store.activeTaskId;
+                  const isActive = id === shownId();
                   return {
                     position: 'absolute',
                     inset: store.themePreset.startsWith('islands-') ? '0 4px 0 0' : '0',
@@ -746,7 +754,7 @@ export function TilingLayout() {
                     inert={
                       focusMode() &&
                       (child.id === '__document-workspace' ? documentTaskId() : child.id) !==
-                        store.activeTaskId
+                        shownId()
                     }
                   >
                     {child.content()}

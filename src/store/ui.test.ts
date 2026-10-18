@@ -5,6 +5,11 @@ type MockStore = {
   activeTaskId: string | null;
   activeDocumentProjectId: string | null;
   focusMode: boolean;
+  boardView: boolean;
+  boardPeek: boolean;
+  showNewTaskPanel: boolean;
+  kanbanProjectId: string | null;
+  githubIssuesProjectId: string | null;
   tasks: Record<string, { id: string; projectId: string }>;
   focusedPanel: Record<string, string>;
   panelUserSize: Record<string, number>;
@@ -62,6 +67,9 @@ vi.mock('../../electron/ipc/channels', () => ({
 }));
 
 import {
+  setWorkspaceView,
+  toggleBoardView,
+  workspaceView,
   toggleTaskFocusMode,
   getPanelUserSize,
   setPanelUserSize,
@@ -77,6 +85,11 @@ beforeEach(() => {
     activeDocumentProjectId: null,
     activeTaskId: 'task-1',
     focusMode: false,
+    boardView: false,
+    boardPeek: false,
+    showNewTaskPanel: false,
+    kanbanProjectId: null,
+    githubIssuesProjectId: null,
     tasks: {
       'task-1': { id: 'task-1', projectId: 'project-1' },
       'task-2': { id: 'task-2', projectId: 'project-2' },
@@ -99,6 +112,66 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
+});
+
+describe('workspace views', () => {
+  it('covers focus mode with the board and returns to it when the board closes', () => {
+    mockStore.focusMode = true;
+
+    setWorkspaceView('board');
+    expect(workspaceView()).toBe('board');
+
+    toggleBoardView();
+    expect(workspaceView()).toBe('focus');
+  });
+
+  it('leaves focus mode when tiles are chosen from the board', () => {
+    mockStore.focusMode = true;
+    mockStore.boardView = true;
+
+    setWorkspaceView('tiles');
+
+    expect(workspaceView()).toBe('tiles');
+  });
+
+  it('closes a project page so the chosen view shows', () => {
+    mockStore.kanbanProjectId = 'project-1';
+
+    setWorkspaceView('focus');
+
+    expect(mockStore.kanbanProjectId).toBeNull();
+    expect(workspaceView()).toBe('focus');
+  });
+
+  it('closes the board and its side panel when another view is chosen', () => {
+    mockStore.boardView = true;
+    mockStore.boardPeek = true;
+
+    setWorkspaceView('tiles');
+
+    expect(workspaceView()).toBe('tiles');
+    expect(mockStore.boardPeek).toBe(false);
+  });
+
+  it('expands a task from the side panel into focus mode, even if focus mode was on', () => {
+    mockStore.focusMode = true;
+    mockStore.boardView = true;
+    mockStore.boardPeek = true;
+
+    toggleTaskFocusMode('task-1');
+
+    expect(workspaceView()).toBe('focus');
+    expect(mockStore.boardPeek).toBe(false);
+  });
+
+  it('stays on tiles when focus is chosen without a task to show', () => {
+    mockStore.activeTaskId = null;
+    mockStore.boardView = true;
+
+    setWorkspaceView('focus');
+
+    expect(workspaceView()).toBe('tiles');
+  });
 });
 
 describe('toggleTaskFocusMode', () => {

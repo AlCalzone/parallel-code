@@ -1,5 +1,13 @@
 import { GitHubIssuesPage } from './components/GitHubIssuesPage';
 import { KanbanPage } from './components/KanbanPage';
+import { TaskBoard } from './components/TaskBoard';
+import {
+  BoardSidePanelBar,
+  BoardSidePanelHandle,
+  boardSidePanelBasis,
+  closeSidePanel,
+} from './components/BoardSidePanel';
+import { boardSidePanelOpen, closeBoard } from './store/project-pages';
 import '@xterm/xterm/css/xterm.css';
 import '@fontsource/inter/400.css';
 import '@fontsource/inter/500.css';
@@ -74,7 +82,9 @@ import {
   validateProjectPaths,
   setPlanContent,
   setDockerAvailable,
-  toggleTaskFocusMode,
+  setWorkspaceView,
+  toggleBoardView,
+  workspaceView,
   toggleFocusMode,
   initMCPListeners,
   markTaskMcpPending,
@@ -101,6 +111,7 @@ import { applyAppearanceMode, markCustomThemesReady, loadCustomThemes } from './
 import { isMac } from './lib/platform';
 import { createCtrlWheelZoomHandler } from './lib/wheelZoom';
 import { redrawAllTerminals } from './lib/terminalFitManager';
+import { withViewTransition } from './lib/viewTransition';
 import { isDocumentAgentTaskId } from './documents/agent-task';
 import { isHiddenAgentTaskId } from './documents/task-id';
 import {
@@ -733,9 +744,11 @@ function App() {
       createTerminal: (e) => {
         if (!e.repeat) createTerminal();
       },
-      newTask: () => toggleNewTaskPanel(true),
+      newTask: () => withViewTransition(() => toggleNewTaskPanel(true)),
       toggleSidebar: () => toggleSidebar(),
-      toggleFocusMode: () => toggleTaskFocusMode(),
+      toggleFocusMode: () =>
+        withViewTransition(() => setWorkspaceView(workspaceView() === 'focus' ? 'tiles' : 'focus')),
+      toggleBoardView: () => withViewTransition(toggleBoardView),
       switchDocument: () => {
         if (store.activeDocumentProjectId && isDocumentAgentTaskId(store.activeTaskId))
           setFilesOpen(true);
@@ -770,6 +783,16 @@ function App() {
         }
         if (store.showSettingsDialog) {
           toggleSettingsDialog(false);
+          return;
+        }
+        // The board covers focus mode, so it closes first, its side panel
+        // before it. A draft in the side panel handles Escape itself.
+        if (store.boardView && !projectPageOpen()) {
+          if (store.showNewTaskPanel) return;
+          if (store.boardPeek) closeSidePanel();
+          // closeBoard, not a toggle: the update runs a frame later, so a
+          // repeated Escape would otherwise reopen the board.
+          else withViewTransition(closeBoard);
           return;
         }
         // Not global, so an Escape typed into the agent terminal still
@@ -956,13 +979,26 @@ function App() {
           <Show when={store.sidebarVisible}>
             <Sidebar />
           </Show>
-          {/* Keep terminals mounted while the issue page occupies the workspace. */}
+          <Show when={store.boardView && !projectPageOpen()}>
+            <TaskBoard />
+          </Show>
+          {/* Keep terminals mounted while a page or the board occupies the
+              workspace; the board shows it as its side panel. */}
           <div
             class="task-workspace"
+            classList={{ 'board-side-panel': boardSidePanelOpen() }}
             style={{
-              display: projectPageOpen() ? 'none' : undefined,
+              display:
+                projectPageOpen() || (store.boardView && !boardSidePanelOpen())
+                  ? 'none'
+                  : undefined,
+              'flex-basis': boardSidePanelOpen() ? boardSidePanelBasis() : undefined,
             }}
           >
+            <Show when={boardSidePanelOpen()}>
+              <BoardSidePanelHandle />
+              <BoardSidePanelBar />
+            </Show>
             <TilingLayout />
           </div>
           <GitHubIssuesPage />

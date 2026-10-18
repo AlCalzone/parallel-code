@@ -143,6 +143,9 @@ export {
   setDocumentWorkspacesEnabled,
   toggleFocusMode,
   toggleTaskFocusMode,
+  workspaceView,
+  setWorkspaceView,
+  toggleBoardView,
   setTaskSplitMode,
   setTerminalFont,
   setTerminalScreenReaderMode,
@@ -210,6 +213,7 @@ export {
   rescheduleTaskStatusPolling,
 } from './taskStatus';
 export type { TaskAttentionState, TaskDotStatus } from './taskStatus';
+export type { WorkspaceView } from './ui';
 export { getTaskAgentHookStatus, isTaskUnread, noteAgentTerminalInput } from './agentHookStatus';
 export type { TaskAgentHookStatus } from './agentHookStatus';
 export { showNotification, clearNotification } from './notification';

@@ -3,6 +3,7 @@ import { toggleNewTaskPanel, createTerminal, unfocusPlaceholder } from '../store
 import { registerFocusFn, unregisterFocusFn } from '../store/focus';
 import { theme } from '../lib/theme';
 import { mod } from '../lib/platform';
+import { withViewTransition } from '../lib/viewTransition';
 
 /** Quiet ghost surface: a faint fill instead of a dashed wireframe border, so
  *  the add column reads as part of the strip rather than a placeholder. The
@@ -52,11 +53,11 @@ export function NewTaskPlaceholder() {
         role="button"
         tabIndex={0}
         aria-label="New task"
-        onClick={() => toggleNewTaskPanel(true)}
+        onClick={() => withViewTransition(() => toggleNewTaskPanel(true))}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            toggleNewTaskPanel(true);
+            withViewTransition(() => toggleNewTaskPanel(true));
           }
         }}
         style={{ ...ghostStyle, flex: '1' }}

@@ -146,7 +146,8 @@ export function toggleNewTaskPanel(show?: boolean): void {
     return;
   }
   if (shouldShow) {
-    closeProjectPages();
+    // On the board the draft opens in its side panel.
+    closeProjectPages({ keepBoard: true });
     setStore('sidebarFocused', false);
     setStore('placeholderFocused', false);
   } else {

@@ -62,6 +62,7 @@ import { invoke } from '../lib/ipc';
 import { IPC } from '../../electron/ipc/channels';
 import type { ImportableWorktree } from '../ipc/types';
 import { shouldAnimateTaskAppearance } from '../lib/reducedMotion';
+import { withViewTransition } from '../lib/viewTransition';
 import { isTaskBackgrounded } from '../store/background-tasks';
 
 const DRAG_THRESHOLD = 5;
@@ -92,6 +93,9 @@ interface OffscreenAttentionInfo {
 }
 
 function getOffscreenAttentionInfo(taskId: string): OffscreenAttentionInfo | null {
+  // The badge points along the tile strip, which the board covers; a hidden
+  // strip measures every tile as off to the left.
+  if (store.boardView) return null;
   const visibility = getTaskViewportVisibility(taskId);
   if (!visibility || visibility === 'visible') return null;
   const attention = getTaskAttentionState(taskId);
@@ -887,7 +891,7 @@ export function Sidebar() {
         >
           <button
             class="icon-btn sidebar-create-btn"
-            onClick={() => toggleNewTaskPanel(true)}
+            onClick={() => withViewTransition(() => toggleNewTaskPanel(true))}
             style={{
               background: 'transparent',
               border: `1px solid ${theme.border}`,

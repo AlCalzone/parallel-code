@@ -29,6 +29,7 @@ import {
   UndoIcon,
 } from './icons';
 import { theme } from '../lib/theme';
+import { withViewTransition } from '../lib/viewTransition';
 import { badgeStyle } from '../lib/badgeStyle';
 import { taskCheckSignal } from '../lib/task-check-signal';
 import { handleDragReorder } from '../lib/dragReorder';
@@ -60,6 +61,8 @@ interface TaskTitleBarProps {
 }
 
 export function TaskTitleBar(props: TaskTitleBarProps) {
+  // The board covers focus mode; from its side panel the button enters it.
+  const focusShown = () => store.focusMode && !store.boardView;
   const canStopAgents = () =>
     !props.task.coordinatorMode && !props.task.delegationParent && !props.task.coordinatedBy;
   const snoozePreset = (hours: number, keepRunning: boolean) => ({
@@ -405,10 +408,11 @@ export function TaskTitleBar(props: TaskTitleBarProps) {
               </svg>
             }
             onClick={() => {
-              toggleTaskFocusMode(props.task.id);
+              const taskId = props.task.id;
+              withViewTransition(() => toggleTaskFocusMode(taskId));
             }}
-            title={store.focusMode ? 'Exit focus mode' : 'Focus on this task'}
-            pressed={store.focusMode}
+            title={focusShown() ? 'Exit focus mode' : 'Focus on this task'}
+            pressed={focusShown()}
           />
         </div>
         <div class="task-action-group" role="group" aria-label="Close task">

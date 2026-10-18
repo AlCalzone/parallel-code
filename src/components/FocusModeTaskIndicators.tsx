@@ -24,7 +24,8 @@ export function FocusModeTaskIndicators() {
       <div class="focus-mode-task-indicators">
         <For each={items()}>
           {(item) => {
-            const isActive = () => item.id === store.activeTaskId;
+            // The board covers the active task, so no pill is current there.
+            const isActive = () => item.id === store.activeTaskId && !store.boardView;
             return (
               <button
                 type="button"

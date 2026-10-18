@@ -29,6 +29,8 @@ import type { Task } from '../store/types';
 export type CardTaskState = 'needs_input' | 'error' | 'review' | 'active' | 'ready' | 'idle';
 
 const [now, setNow] = createSignal(Date.now());
+/** The minute clock's reading; ticks only while `useKanbanClock` has users. */
+export const kanbanNow = now;
 let clockUsers = 0;
 let clock: ReturnType<typeof setInterval> | undefined;
 
@@ -78,7 +80,7 @@ export function cardState(projectId: string, card: KanbanCard): CardTaskState | 
   return best;
 }
 
-function stateLabel(task: Task, state: CardTaskState): string {
+export function stateLabel(task: Task, state: CardTaskState): string {
   switch (state) {
     case 'needs_input':
       return 'Needs input';
@@ -105,7 +107,7 @@ function firstLine(text: string | undefined): string {
 }
 
 /** One line about what the task's agent is doing or last said. */
-function activityLine(task: Task): { text: string; since?: number } {
+export function activityLine(task: Task): { text: string; since?: number } {
   const hook = task.agentIds.map(getAgentHookStatus).find((status) => status !== null);
   if (hook?.state === 'working' && hook.toolName) {
     return {
@@ -121,7 +123,8 @@ function activityLine(task: Task): { text: string; since?: number } {
   return { text: agent ?? '', since: hook?.since };
 }
 
-function openTask(task: Task): void {
+/** Opens the task on the panel that is asking, if one is. */
+export function openTask(task: Task): void {
   const question = computeAttentionEntries().find(
     (entry) => entry.taskId === task.id && entry.kind === 'question',
   );

@@ -1,0 +1,508 @@
+/* The all-tasks board. One surface per element: lanes have no box, cards a
+   soft fill and no border, and colour is kept for urgent text and dots. */
+.task-board {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  color: var(--fg);
+  font-size: 13px;
+}
+
+.task-board-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px 10px;
+}
+/* Titles and the button keep one line; the search gives way on a narrow board. */
+.task-board-header h2,
+.task-board-new {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.task-board-header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.task-board-total,
+.task-board-count {
+  color: var(--fg-subtle, var(--fg-muted));
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.task-board-search {
+  margin-left: auto;
+  width: min(260px, 40%);
+  min-width: 0;
+  height: 30px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+  color: var(--fg);
+  font: inherit;
+  outline: none;
+}
+.task-board-search:focus {
+  border-color: var(--border-focus);
+}
+.task-board-new {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+.task-board-new:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+
+.task-board-lanes {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 20px;
+  padding: 4px 20px 16px;
+  overflow: auto;
+}
+/* Beside the side panel the board keeps room for a lane (the panel gives way
+   first), and lanes it cuts off fade out rather than end at a hard edge. */
+.task-board:has(+ .task-workspace.board-side-panel) {
+  min-width: 320px;
+}
+.task-board:has(+ .task-workspace.board-side-panel) .task-board-lanes {
+  mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+}
+.task-board-empty {
+  position: absolute;
+  inset: 40% 0 auto;
+  margin: 0;
+  text-align: center;
+  color: var(--fg-subtle, var(--fg-muted));
+  pointer-events: none;
+}
+.task-board-lane {
+  flex: 1 1 240px;
+  min-width: 212px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.task-board-lane.lane-needs {
+  flex-basis: 300px;
+  max-width: 360px;
+}
+.task-board-lane-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0 2px 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+/* Empty lanes step back so the ones with work read first. */
+.task-board-lane:not(:has(.task-board-card)) .task-board-lane-title {
+  color: var(--fg-muted);
+}
+/* The one lane that is allowed colour: it holds only work blocked on you,
+   and only while something is. */
+.lane-needs .task-board-lane-title::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fg-subtle, var(--fg-muted));
+}
+.lane-needs:has(.task-board-card) .task-board-lane-title::before {
+  background: var(--warning);
+}
+.lane-needs:has(.task-board-card) .task-board-count {
+  color: var(--warning);
+}
+.task-board-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-board-rail {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-subtle, var(--fg-muted));
+  font: inherit;
+  cursor: pointer;
+}
+.task-board-rail:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  color: var(--fg);
+}
+.task-board-rail-title {
+  writing-mode: vertical-rl;
+}
+
+/* Cards: the title button stretches over the card, so a click anywhere opens
+   the task; the PR chip and ask button sit above it. */
+.task-board-card {
+  position: relative;
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--fg) 4.5%, transparent);
+}
+.task-board-card:hover {
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+}
+.task-board-card.shown {
+  background: var(--bg-selected-subtle);
+}
+.task-board-card:has(.task-board-title:focus-visible) {
+  box-shadow: 0 0 0 1px var(--border-focus);
+}
+/* Failure keeps one signal: a faint red surface. */
+.task-board-card.state-error,
+.task-board-card.failed {
+  background: color-mix(in srgb, var(--error) 9%, transparent);
+}
+.task-board-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: left;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  outline: none;
+}
+.task-board-title::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.task-board-name {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+.task-board-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fg-subtle, var(--fg-muted));
+  /* Centred on the first line of the title. */
+  margin-top: 5.5px;
+}
+.state-active .task-board-dot {
+  background: var(--fg-muted);
+  animation: task-board-breathe 1.4s ease-in-out infinite;
+}
+.state-ready .task-board-dot {
+  background: var(--success);
+}
+.state-needs_input .task-board-dot {
+  background: var(--warning);
+}
+.state-error .task-board-dot {
+  background: var(--error);
+}
+.state-review .task-board-dot {
+  background: var(--review, var(--fg-muted));
+}
+@keyframes task-board-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.task-board-meta,
+.task-board-activity,
+.task-board-row,
+.task-board-ask {
+  margin: 0;
+  padding-left: 14px;
+  min-width: 0;
+}
+.task-board-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--fg-subtle, var(--fg-muted));
+  white-space: nowrap;
+}
+.task-board-project {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--fg-muted);
+}
+.task-board-project span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* A bar, not a dot: the dot beside the title is the task's state. */
+.task-board-project i {
+  flex-shrink: 0;
+  width: 3px;
+  height: 11px;
+  border-radius: 1.5px;
+}
+/* The agent gives way first: the project and the age say more. */
+.task-board-agent {
+  flex-shrink: 100;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Narrow cards, such as beside the side panel, drop it instead of cutting
+   it to a letter. The query measures the content box, inside the padding. */
+@container (max-width: 200px) {
+  .task-board-agent {
+    display: none;
+  }
+}
+.task-board-age {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+/* One line tall even when empty, so cards never grow or shrink. */
+.task-board-activity {
+  height: 16px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: 11px/16px var(--font-mono, monospace);
+  color: var(--fg-muted);
+}
+.task-board-activity.branch {
+  color: var(--fg-subtle, var(--fg-muted));
+}
+.task-board-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
+  font-size: 11px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+.task-board-fail {
+  color: var(--error);
+  font-weight: 600;
+}
+
+.task-board-chip,
+.task-board-act {
+  position: relative;
+  z-index: 1;
+  border: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+  color: var(--fg-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.task-board-chip {
+  height: 18px;
+  padding: 0 6px;
+  font-size: 11px;
+}
+.task-board-chip.failure {
+  background: color-mix(in srgb, var(--error) 14%, transparent);
+  color: var(--error);
+}
+.task-board-ask {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 2px;
+  font-size: 12px;
+}
+.task-board-ask-label {
+  font-weight: 500;
+  color: var(--warning);
+}
+.state-error .task-board-ask-label {
+  color: var(--error);
+}
+.state-review .task-board-ask-label {
+  color: var(--fg);
+}
+/* Primary by full-strength text, not colour. */
+.task-board-act {
+  margin-left: auto;
+  height: 24px;
+  padding: 0 9px;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 500;
+}
+.task-board-chip:hover,
+.task-board-act:hover {
+  background: color-mix(in srgb, var(--fg) 11%, transparent);
+  color: var(--fg);
+}
+.task-board-chip.failure:hover {
+  color: var(--error);
+}
+
+/* The workspace, narrowed to one task beside the board. A dragged width
+   arrives as an inline flex-basis; the panel gives way before the board does. */
+.task-workspace.board-side-panel {
+  flex: 0 1 clamp(420px, 40%, 640px);
+  min-width: 360px;
+  flex-direction: column;
+}
+/* Specific enough to beat the looks' `html[data-look…] .resize-handle`
+   (position: relative), which would drop the handle into the column. */
+.task-workspace.board-side-panel > .resize-handle.board-side-panel-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  z-index: 2;
+}
+
+/* View changes run as view transitions (src/lib/viewTransition.ts). The board
+   and the task workspace each get a snapshot; snapshots keep their size and
+   crop rather than stretch, so terminals never look squashed. */
+.task-board {
+  view-transition-name: task-board;
+}
+.task-workspace {
+  view-transition-name: task-workspace;
+}
+::view-transition-group(*),
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation-duration: 220ms;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+::view-transition-old(task-board),
+::view-transition-new(task-board),
+::view-transition-old(task-workspace),
+::view-transition-new(task-workspace) {
+  height: 100%;
+  object-fit: none;
+  object-position: left top;
+}
+/* A view on both sides of the change swaps its contents at once and only its
+   box moves: cross-fading two layouts of it shows every line twice. */
+::view-transition-old(task-board),
+::view-transition-old(task-workspace) {
+  animation: none;
+  opacity: 0;
+}
+::view-transition-new(task-board),
+::view-transition-new(task-workspace) {
+  animation: none;
+}
+/* A view that comes or goes fades; the workspace also slides from the right
+   edge, where the side panel lives. */
+/* The board arrives as the workspace leaves, so it waits until the workspace
+   has mostly faded rather than show both at once; leaving, it goes quickly. */
+::view-transition-new(task-board):only-child {
+  animation: view-fade-in 180ms 60ms cubic-bezier(0.2, 0, 0, 1) backwards;
+}
+::view-transition-old(task-board):only-child {
+  opacity: 1;
+  animation: view-fade-out 90ms cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+::view-transition-new(task-workspace):only-child {
+  animation: board-side-panel-in 220ms cubic-bezier(0.2, 0, 0, 1);
+}
+::view-transition-old(task-workspace):only-child {
+  opacity: 1;
+  animation: board-side-panel-out 140ms cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+@keyframes view-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes view-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes board-side-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(32px);
+  }
+}
+@keyframes board-side-panel-out {
+  to {
+    opacity: 0;
+    transform: translateX(32px);
+  }
+}
+.board-side-panel .tiling-layout-shell {
+  height: auto;
+  min-height: 0;
+}
+.board-side-panel-bar {
+  display: flex;
+  justify-content: flex-end;
+  /* Holds its height without the close button, which a draft doesn't get. */
+  min-height: 48px;
+  padding: 12px 8px 6px;
+}
+.board-side-panel-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.board-side-panel-close:hover {
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+  color: var(--fg);
+}

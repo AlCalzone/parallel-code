@@ -1,4 +1,5 @@
 import { store, setStore } from './core';
+import { boardSidePanelOpen } from './project-pages';
 
 let pendingFocus: { taskId: string; panel: string } | undefined;
 
@@ -239,6 +240,7 @@ export function scrollTaskIntoView(taskId: string, behavior: ScrollBehavior = 's
     if (
       !target ||
       (store.focusMode && !store.showNewTaskPanel) ||
+      boardSidePanelOpen() ||
       store.activeTaskId !== target.taskId ||
       store.placeholderFocused ||
       newTaskDraftHasFocus()

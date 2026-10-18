@@ -41,6 +41,7 @@ import {
 import { setAgentCanvasTools } from '../store/agents';
 import { clearTerminalInputPendingFromQuestion } from '../store/tasks';
 import { isLandedTaskState } from '../store/landing';
+import { boardSidePanelOpen } from '../store/project-pages';
 import { warn as logWarn } from '../lib/log';
 import {
   registerTerminal,
@@ -1092,7 +1093,8 @@ export function TerminalView(props: TerminalViewProps) {
     // context — see terminalPaneVisibility.ts.
     const paneOnScreen = createMemo(() =>
       isTerminalPaneOnScreen({
-        focusMode: store.focusMode,
+        // The board's side panel shows the active task alone, as focus mode does.
+        focusMode: store.focusMode || boardSidePanelOpen(),
         activeTaskId: store.activeTaskId,
         taskId,
         viewportVisibility: store.taskViewportVisibility[taskId],

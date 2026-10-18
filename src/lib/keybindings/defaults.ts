@@ -325,6 +325,17 @@ export const DEFAULT_BINDINGS: KeyBinding[] = [
     global: true,
   },
   {
+    id: 'app.toggle-board-view',
+    layer: 'app',
+    category: 'App',
+    description: 'Toggle the board of all tasks',
+    platform: 'both',
+    key: 'G',
+    modifiers: { cmdOrCtrl: true, shift: true },
+    action: 'toggleBoardView',
+    global: true,
+  },
+  {
     id: 'app.switch-document',
     layer: 'app',
     category: 'App',

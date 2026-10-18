@@ -55,6 +55,7 @@ function structuralSnapshot(): string {
     agentEnvFiles: store.agentEnvFiles,
     askCodeEffort: store.askCodeEffort,
     focusMode: store.focusMode,
+    boardView: store.boardView,
     coordinatorNotificationDelayMs: store.coordinatorNotificationDelayMs,
     mcpOrchestrationEnabled: store.mcpOrchestrationEnabled,
     documentWorkspacesEnabled: store.documentWorkspacesEnabled,

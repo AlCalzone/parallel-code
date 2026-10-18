@@ -68,6 +68,7 @@ import type { Task } from '../store/types';
 import type { CommitInfo } from '../ipc/types';
 import type { TranscriptMarks } from '../investigation/transcript';
 import { isLandedTaskState } from '../store/landing';
+import { boardSidePanelOpen } from '../store/project-pages';
 import { shouldPollTaskCommits } from './task-commit-polling';
 import { ACTIVE_TASK_SETTLE_MS, createSettledFlag } from '../lib/settled-flag';
 import { devQualityFindingProvider } from './dev-quality-finding-fixture';
@@ -113,15 +114,15 @@ export function TaskPanel(props: TaskPanelProps) {
   // Git checks wait until the task stays active; UI and focus react at once.
   const isSettledActive = createSettledFlag(() => props.isActive, ACTIVE_TASK_SETTLE_MS);
   // Alt+Arrow also scrolls tiles past; only one that stays in view polls commits.
-  const shouldPollCommits = createSettledFlag(
-    () =>
-      shouldPollTaskCommits(
-        store.focusMode,
-        props.isActive,
-        store.focusMode ? undefined : store.taskViewportVisibility[props.task.id],
-      ),
-    ACTIVE_TASK_SETTLE_MS,
-  );
+  const shouldPollCommits = createSettledFlag(() => {
+    // The board's side panel shows the active task alone, as focus mode does.
+    const single = store.focusMode || boardSidePanelOpen();
+    return shouldPollTaskCommits(
+      single,
+      props.isActive,
+      single ? undefined : store.taskViewportVisibility[props.task.id],
+    );
+  }, ACTIVE_TASK_SETTLE_MS);
   const [showCloseConfirm, setShowCloseConfirm] = createSignal(false);
   const [planFullscreen, setPlanFullscreen] = createSignal(false);
 

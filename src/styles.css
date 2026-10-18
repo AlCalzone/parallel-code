@@ -3741,13 +3741,14 @@ html[data-look='islands-light'] .window-title-icon {
   z-index: 1;
 }
 
+/* Left padding keeps the centred pills clear of the workspace controls. */
 .window-titlebar > .focus-mode-task-indicators {
-  padding: 0 140px 0 180px;
+  padding: 0 140px 0 270px;
 }
 
 /* Keep clear of the macOS traffic lights. */
 .mac-titlebar-spacer > .focus-mode-task-indicators {
-  padding: 0 24px 0 230px;
+  padding: 0 24px 0 320px;
 }
 
 .focus-mode-task-indicator {
@@ -4384,6 +4385,48 @@ html[data-look='islands-light'] .window-title-icon {
   position: relative;
   z-index: 2;
   -webkit-app-region: no-drag;
+}
+
+/* Same height, border and radius as the neighbouring icon buttons; the
+   pressed segment shows state with a subtle fill only. */
+.workspace-view-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.workspace-view-toggle button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.workspace-view-toggle button + button {
+  border-left: 1px solid var(--border);
+}
+
+.workspace-view-toggle button:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.workspace-view-toggle button[aria-pressed='true'] {
+  background: var(--bg-selected-subtle);
+  color: var(--fg);
+}
+
+.workspace-view-toggle button:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: -2px;
 }
 
 /* Workspace actions lead; activity is a separate, quieter summary. */

@@ -104,6 +104,8 @@ export const [store, setStore] = createStore<AppStore>({
   featureHintsEnabled: true,
   seenFeatureHints: [],
   focusMode: false,
+  boardView: false,
+  boardPeek: false,
   taskSplitMode: {},
   verboseLogging: false,
   mcpOrchestrationEnabled: true,

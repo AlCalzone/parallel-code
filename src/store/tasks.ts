@@ -170,6 +170,8 @@ function initTaskInStore(
           s.taskProjectFilter = null;
         s.activeTaskId = taskId;
         s.activeAgentId = agent.id;
+        // A task created from the board stays beside it.
+        if (s.boardView) s.boardPeek = true;
       }
       s.lastProjectId = task.projectId;
       if (opts.agentDef) s.lastAgentId = opts.agentDef.id;

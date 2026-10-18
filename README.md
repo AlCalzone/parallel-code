@@ -81,6 +81,7 @@ When you're happy with the result, merge the branch back to main from the sideba
 
 - Tiled panel layout with drag-to-reorder
 - **Focus mode** — single-task layout with a clean two-column view on wide screens (`Ctrl+Shift+F`)
+- **Board** — every open task across projects in lanes by what it needs: Needs you, Working, Ready, In pull request, Idle (`Ctrl+Shift+G`). A task you click, or a new one, opens in a side panel beside the board; switch between Focus, Tiles and Board from the title bar
 - Built-in diff viewer with inline review comments and per-commit navigation
 - **Guided change tour** — click **Generate tour of changes** at the bottom right of a task's Changed Files panel to generate in the background while you work. **Automatic** scope includes the whole feature branch against its configured or detected base, including uncommitted work; on `main`, `master`, and `develop`, it includes only uncommitted changes. Choose **Current diff** to explicitly use the commit selector (All, Uncommitted, or a single commit). Uncaptured context stays omitted when reading a captured tour. Hover or focus the button for an explanation and the configured provider/model. The button shows a spinner and progress, then a green checkmark and **Start tour** when ready. Click **Start tour** to open the diff captured for the tour; it never opens automatically. Completed tours remain available when you close and reopen the tour; clicking the loading button cancels generation. Uses your configured code Q&A provider, aiming for 4–6 concise stops in one request with a dedicated 500,000-character prompt budget; inline Q&A keeps its 50,000-character limit. This is an app guard, not an exact token limit—provider context limits still apply. Larger diffs use compact excerpts and a five-minute timeout per part. Claude tour prompts are piped through stdin to avoid command-line size limits. Verbose logs include request sizes, time to first output, and total request duration, without code or response contents. Tours describe the supplied diff and do not verify test execution. Each stop is a card with a role label and a tone that flags risky or uncertain changes; **Ask** and **Go deeper** answer follow-ups under a stop with the diff as context. Jump between stops from the progress strip, or with the arrow keys and Home/End while the tour has focus. The button shows **Resume tour** when you left midway.
 - **All tours** — click a progress segment to jump to that card (a dot marks cards with answered follow-ups), copy the tour with its answers as Markdown, or **Rework** it with your own instructions ("focus on error handling", "for a newcomer"), which regenerates it from the same context. Code references open at their line when your editor command is VS Code, Cursor, VSCodium, Windsurf, Zed or Sublime Text; other editors open the file.
@@ -196,6 +197,7 @@ Notifications show the task name and a request for input; terminal output and co
 | `Cmd+K`                | Switch task by name (macOS)        |
 | `Ctrl+B`               | Toggle sidebar                     |
 | `Ctrl+Shift+F`         | Toggle focus mode                  |
+| `Ctrl+Shift+G`         | Toggle the board of all tasks      |
 | **Terminals**          |                                    |
 | `Ctrl+Shift+T`         | New shell terminal                 |
 | `Ctrl+Shift+D`         | New standalone terminal            |
@@ -205,7 +207,7 @@ Notifications show the task name and a request for input; terminal output and co
 | `Ctrl+=` / `Ctrl+-`    | Zoom in / out                      |
 | `Ctrl+0`               | Reset zoom                         |
 | `Ctrl+Scroll`          | Adjust zoom                        |
-| `Escape`               | Close dialog or leave focus mode   |
+| `Escape`               | Close dialog, board or focus mode  |
 
 </details>
 

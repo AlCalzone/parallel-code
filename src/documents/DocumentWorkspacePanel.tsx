@@ -76,6 +76,7 @@ import { UndoIcon } from '../components/icons';
 import { setDocumentFullWidth, toggleTaskFocusMode } from '../store/ui';
 import { isTerminalPaneOnScreen } from '../lib/terminalPaneVisibility';
 import { errMessage } from '../lib/log';
+import { withViewTransition } from '../lib/viewTransition';
 import { isMarkdownPath } from '../lib/canvas-tabs';
 import { showNotification } from '../store/notification';
 
@@ -1146,7 +1147,10 @@ export function DocumentWorkspacePanel() {
             aria-label={store.focusMode ? 'Exit focus mode' : 'Focus on this document'}
             title={store.focusMode ? 'Exit focus mode' : 'Focus on this document'}
             aria-pressed={store.focusMode && isActive()}
-            onClick={() => toggleTaskFocusMode(taskId())}
+            onClick={() => {
+              const id = taskId();
+              withViewTransition(() => toggleTaskFocusMode(id));
+            }}
           >
             {/* Same glyph as the task title bar: one focus icon everywhere. */}
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">

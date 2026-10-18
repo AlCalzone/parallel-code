@@ -505,3 +505,41 @@ it('re-detects agents and explains how to install one when none is found', async
     expect(host.textContent).toContain('Claude Code was not found on this machine'),
   );
 });
+
+it('cannot submit again while the panel close after creation is pending', async () => {
+  const pending: (() => void)[] = [];
+  Object.defineProperty(document, 'startViewTransition', {
+    value: (update: () => void) => {
+      pending.push(update);
+      return { ready: Promise.resolve() };
+    },
+    configurable: true,
+  });
+  const originalInvoke = vi.mocked(invoke).getMockImplementation();
+  vi.mocked(invoke).mockImplementation((channel, args) =>
+    channel === IPC.CreateTask
+      ? Promise.resolve({
+          id: 'once',
+          branch_name: 'once',
+          worktree_path: '/project/.worktrees/once',
+        })
+      : Promise.resolve(originalInvoke?.(channel, args)),
+  );
+  const form = host.querySelector('form');
+  const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]');
+  try {
+    await vi.waitFor(() => expect(submit?.disabled).toBe(false));
+    form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    // The task exists and the close waits for its view transition.
+    await vi.waitFor(() => expect(pending).toHaveLength(1));
+    form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await Promise.resolve();
+    expect(
+      vi.mocked(invoke).mock.calls.filter(([channel]) => channel === IPC.CreateTask),
+    ).toHaveLength(1);
+    pending.forEach((update) => update());
+    expect(store.showNewTaskPanel).toBe(false);
+  } finally {
+    Reflect.deleteProperty(document, 'startViewTransition');
+  }
+});

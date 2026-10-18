@@ -23,6 +23,7 @@ import { setStore } from '../store/core';
 import { ContainerIcon, FolderIcon, GitBranchIcon, GitHubIcon, PlusIcon, SyncIcon } from './icons';
 import { ConfirmDialog } from './ConfirmDialog';
 import { errMessage } from '../lib/log';
+import { withViewTransition } from '../lib/viewTransition';
 import { invoke } from '../lib/ipc';
 import { IPC } from '../../electron/ipc/channels';
 import { resolveSkipPermissionsArgs } from '../../electron/shared/skip-permissions';
@@ -1080,6 +1081,7 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
 
     setLoading(true);
     setError('');
+    let closing = false;
 
     try {
       const canvasSource = canvasPrefill()?.canvasSource;
@@ -1156,11 +1158,17 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
       const card = kanbanSource();
       if (card) void linkNewTaskToKanbanCard(taskId, card, projectId);
       if (!manualName && p) void nameTaskWithModel(taskId, p);
-      toggleNewTaskPanel(false);
+      // Loading lasts until the deferred close lands, so a second Enter can't
+      // create the task twice.
+      closing = true;
+      withViewTransition(() => {
+        setLoading(false);
+        toggleNewTaskPanel(false);
+      });
     } catch (err) {
       setError(String(err));
     } finally {
-      setLoading(false);
+      if (!closing) setLoading(false);
     }
   }
 

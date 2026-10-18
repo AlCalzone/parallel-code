@@ -1,9 +1,10 @@
 import { documentAgentTaskId } from '../documents/task-id';
 import { batch } from 'solid-js';
-import { produce } from 'solid-js/store';
+import { produce, reconcile } from 'solid-js/store';
 import { store, setStore } from './core';
 import { setActiveTask } from './navigation';
 import { setTaskFocusedPanel } from './focused-panel';
+import { closeBoard, closeProjectPages } from './project-pages';
 import type { LookPreset, AppearanceMode } from '../lib/look';
 import { osIsDark } from '../lib/os-appearance';
 import type { CustomTheme } from '../lib/custom-theme';
@@ -76,7 +77,9 @@ export function getTaskViewportVisibility(taskId: string): TaskViewportVisibilit
 }
 
 export function setTaskViewportVisibility(entries: Record<string, TaskViewportVisibility>): void {
-  setStore('taskViewportVisibility', entries);
+  // reconcile, not a plain set: Solid merges objects, so tiles that left the
+  // strip would keep reporting their last position.
+  setStore('taskViewportVisibility', reconcile(entries));
 }
 
 // --- Sidebar ---
@@ -330,12 +333,42 @@ export function toggleTaskFocusMode(taskId: string | null = store.activeTaskId):
   const isDocument =
     store.activeDocumentProjectId && taskId === documentAgentTaskId(store.activeDocumentProjectId);
   if (!taskId || (!store.tasks[taskId] && !isDocument)) return;
-  const enteringFocusMode = !store.focusMode;
+  // From the board's side panel the button expands the task into focus mode.
+  const enteringFocusMode = !store.focusMode || store.boardView;
   if (store.activeTaskId !== taskId) setActiveTask(taskId);
-  toggleFocusMode();
+  closeBoard();
+  toggleFocusMode(enteringFocusMode);
   if (!enteringFocusMode) return;
   const panel = store.focusedPanel[taskId] ?? 'ai-terminal';
   requestAnimationFrame(() => setTaskFocusedPanel(taskId, panel));
+}
+
+export type WorkspaceView = 'focus' | 'tiles' | 'board';
+
+/** The view the workspace toggle shows as pressed; the board covers the other two. */
+export function workspaceView(): WorkspaceView {
+  if (store.boardView) return 'board';
+  return store.focusMode ? 'focus' : 'tiles';
+}
+
+/** Shows one of the three workspace views, closing any page that covers them. */
+export function setWorkspaceView(view: WorkspaceView): void {
+  batch(() => {
+    closeProjectPages();
+    if (view === 'board') {
+      setStore('boardView', true);
+      return;
+    }
+    closeBoard();
+    // Focus mode needs a task to show; without one this stays on tiles.
+    if ((view === 'focus') !== store.focusMode) toggleTaskFocusMode();
+  });
+}
+
+/** Opens the board, or returns to the focus or tiles view it covered. */
+export function toggleBoardView(): void {
+  if (store.boardView) closeBoard();
+  else setWorkspaceView('board');
 }
 
 export function setTaskSplitMode(taskId: string, active: boolean): void {
