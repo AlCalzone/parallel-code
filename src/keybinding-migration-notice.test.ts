@@ -15,7 +15,7 @@ describe('keybinding migration notice', () => {
     expect(app).toContain('class="keybinding-migration-notice"');
     const notice = app.indexOf('<Show when={!store.keybindingMigrationDismissed}>');
     expect(notice).toBeGreaterThan(-1);
-    expect(notice).toBeLessThan(app.indexOf('<main '));
+    expect(notice).toBeLessThan(app.search(/<main[\s>]/));
   });
 
   it('keeps the notice and dismiss control accessible', () => {
