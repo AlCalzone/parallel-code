@@ -96,13 +96,15 @@ export const DEFAULT_BINDINGS: KeyBinding[] = [
     global: true,
   },
   // The board's lanes run top to bottom: a whole card up or down, past the
-  // side panel's panes. Linux again avoids Ctrl+Alt+Arrow.
+  // side panel's panes. Ctrl+Alt+Up/Down works on Linux desktops that leave it
+  // free (KDE); GNOME takes it for workspaces, so Linux also gets
+  // Alt+PageUp/PageDown.
   {
     id: 'app.nav.board-task-up',
     layer: 'app',
     category: 'Navigation',
     description: 'Switch to task above on board',
-    platform: 'mac',
+    platform: 'both',
     key: 'ArrowUp',
     modifiers: { cmdOrCtrl: true, alt: true },
     action: 'navigateBoardTask:up',
@@ -113,7 +115,7 @@ export const DEFAULT_BINDINGS: KeyBinding[] = [
     layer: 'app',
     category: 'Navigation',
     description: 'Switch to task below on board',
-    platform: 'mac',
+    platform: 'both',
     key: 'ArrowDown',
     modifiers: { cmdOrCtrl: true, alt: true },
     action: 'navigateBoardTask:down',
