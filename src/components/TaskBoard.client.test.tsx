@@ -110,6 +110,13 @@ it('sorts tasks into lanes by what they need', () => {
   expect(lane('In pull request')?.textContent).toContain('PR #42');
 });
 
+it('puts the lanes that need attention next to each other', () => {
+  const titles = [...host.querySelectorAll('.task-board-lane h3')].map((h) =>
+    h.textContent?.replace(/\d+$/, ''),
+  );
+  expect(titles).toEqual(['Needs you', 'Stopped', 'Working', 'In pull request']);
+});
+
 it('keeps a card in Working through a short pause in work', () => {
   vi.useFakeTimers();
   attention.force({ idle: 'active' });

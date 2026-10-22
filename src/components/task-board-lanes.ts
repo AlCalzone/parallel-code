@@ -16,10 +16,12 @@ export interface BoardLane {
   tasks: Task[];
 }
 
+// Left to right. Stopped sits next to Needs you so everything waiting on you
+// is together; Working and In pull request need nothing from you yet.
 const LANE_TITLES: Record<BoardLaneId, string> = {
   needs: 'Needs you',
-  working: 'Working',
   stopped: 'Stopped',
+  working: 'Working',
   pr: 'In pull request',
   snoozed: 'Snoozed & minimized',
 };
@@ -29,7 +31,7 @@ export function boardTaskState(task: Task): CardTaskState {
   return holdWorking(task.id, cardTaskState(task));
 }
 
-/** Where a task sits on the board: the first lane, left to right, that claims it. */
+/** Where a task sits on the board: the first of these checks that claims it. */
 export function boardLaneOf(task: Task): BoardLaneId {
   // Snoozed tasks wake on their own when they need attention.
   if (isTaskBackgrounded(task.id)) return 'snoozed';
