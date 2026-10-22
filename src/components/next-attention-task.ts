@@ -3,14 +3,19 @@ import { boardShown } from '../store/project-pages';
 import type { Task } from '../store/types';
 import { openTask } from './KanbanCard';
 import { openBeside } from './TaskBoardCard';
+import { forgetWorkingHolds } from './task-board-hold';
 import { boardLanes, boardTasks } from './task-board-lanes';
 
 /**
  * Tasks waiting on you, in board order: Needs you, then Stopped. Tasks being
  * closed sit in Stopped but are already on their way out.
  */
-export function attentionQueue(): Task[] {
+function attentionQueue(): Task[] {
   const lanes = boardLanes(boardTasks(''));
+  // Reading lanes records who is working, for the board's hold. With the board
+  // closed nothing would clear that, and a task that stops later would be held
+  // in Working and skipped here.
+  if (!boardShown()) forgetWorkingHolds();
   return ['needs', 'stopped']
     .flatMap((id) => lanes.find((lane) => lane.id === id)?.tasks ?? [])
     .filter((task) => task.closingStatus !== 'closing' && task.closingStatus !== 'removing');
@@ -21,7 +26,7 @@ export function attentionQueue(): Task[] {
  * one is not waiting. An answered task leaves the queue, so the next press
  * starts again from the most urgent.
  */
-export function nextInQueue(queue: Task[], currentId: string | null): Task | undefined {
+function nextInQueue(queue: Task[], currentId: string | null): Task | undefined {
   const at = queue.findIndex((task) => task.id === currentId);
   const next = queue[(at + 1) % queue.length];
   return next?.id === currentId ? undefined : next;

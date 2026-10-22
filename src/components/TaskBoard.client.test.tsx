@@ -653,6 +653,38 @@ describe('next task that needs you', () => {
     expect(store.activeTaskId).toBe('review');
   });
 
+  it('opens the task in the layout, without a side panel, when the board is closed', () => {
+    setStore('boardView', false);
+    setStore('activeTaskId', 'pr');
+    openNextAttentionTask();
+    expect(store.activeTaskId).toBe('review');
+    expect(store.boardPeek).toBe(false);
+  });
+
+  it('closes a project page over the board and shows the task', () => {
+    setStore('kanbanProjectId', 'web');
+    setStore('activeTaskId', 'pr');
+    openNextAttentionTask();
+    expect(store.activeTaskId).toBe('review');
+    expect(store.kanbanProjectId).toBeNull();
+    // With no side panel the board closes too, so the task shows in the layout.
+    expect(store.boardView).toBe(false);
+  });
+
+  it('does not skip a task that stopped while the board was closed', () => {
+    vi.useFakeTimers();
+    // A closed board is not mounted, so nothing else reads lane states.
+    dispose();
+    dispose = () => undefined;
+    setStore('boardView', false);
+    setStore('activeTaskId', 'review');
+    attention.force({ idle: 'active' });
+    openNextAttentionTask();
+    attention.force({});
+    openNextAttentionTask();
+    expect(store.activeTaskId).toBe('idle');
+  });
+
   it('stays put when nothing else is waiting', () => {
     setStore('tasks', 'idle', 'prUrl', 'https://github.com/o/r/pull/7');
     setStore('activeTaskId', 'review');
