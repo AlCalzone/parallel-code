@@ -1,13 +1,14 @@
 import { GitHubIssuesPage } from './components/GitHubIssuesPage';
 import { KanbanPage } from './components/KanbanPage';
 import { TaskBoard } from './components/TaskBoard';
+import { navigateBoard, navigateBoardTask } from './components/task-board-keys';
 import {
   BoardSidePanelBar,
   BoardSidePanelHandle,
   boardSidePanelBasis,
   closeSidePanel,
 } from './components/BoardSidePanel';
-import { boardSidePanelOpen, closeBoard } from './store/project-pages';
+import { boardShown, boardSidePanelOpen, closeBoard, projectPageOpen } from './store/project-pages';
 import '@xterm/xterm/css/xterm.css';
 import '@fontsource/inter/400.css';
 import '@fontsource/inter/500.css';
@@ -147,13 +148,6 @@ const ArenaOverlay = lazy(() =>
 );
 
 const MIN_WINDOW_DIMENSION = 100;
-
-/** Whether a project page (GitHub issues or the Kanban board) covers the task area. */
-function projectPageOpen(): boolean {
-  return store.projects.some(
-    (p) => p.id === store.githubIssuesProjectId || p.id === store.kanbanProjectId,
-  );
-}
 
 function DropOverlay() {
   return (
@@ -691,12 +685,15 @@ function App() {
       !projectPageOpen() && store.tasks[id] !== undefined && !isHiddenAgentTaskId(id);
 
     const actionHandlers: Record<string, (e: KeyboardEvent) => void> = {
-      'navigateRow:up': () => navigateRow('up'),
-      'navigateRow:down': () => navigateRow('down'),
-      'navigateColumn:left': () => navigateColumn('left'),
-      'navigateColumn:right': () => navigateColumn('right'),
-      'navigateTask:left': () => navigateTask('left'),
-      'navigateTask:right': () => navigateTask('right'),
+      // The board takes these first while it, rather than its side panel, has the keyboard.
+      'navigateRow:up': () => navigateBoard('up') || navigateRow('up'),
+      'navigateRow:down': () => navigateBoard('down') || navigateRow('down'),
+      'navigateColumn:left': () => navigateBoard('left') || navigateColumn('left'),
+      'navigateColumn:right': () => navigateBoard('right') || navigateColumn('right'),
+      'navigateTask:left': () => navigateBoardTask('left') || navigateTask('left'),
+      'navigateTask:right': () => navigateBoardTask('right') || navigateTask('right'),
+      'navigateBoardTask:up': () => navigateBoardTask('up'),
+      'navigateBoardTask:down': () => navigateBoardTask('down'),
       'moveActiveTask:left': () => moveActiveTask('left'),
       'moveActiveTask:right': () => moveActiveTask('right'),
       ...Object.fromEntries(
@@ -787,7 +784,7 @@ function App() {
         }
         // The board covers focus mode, so it closes first, its side panel
         // before it. A draft in the side panel handles Escape itself.
-        if (store.boardView && !projectPageOpen()) {
+        if (boardShown()) {
           if (store.showNewTaskPanel) return;
           if (store.boardPeek) closeSidePanel();
           // closeBoard, not a toggle: the update runs a frame later, so a
@@ -817,9 +814,17 @@ function App() {
 
     const cleanupJumpToTaskShortcuts = registerJumpToTaskShortcuts((i) => jumpToTask(i));
 
+    // Shortcuts always swallow their keys, so the board's own ones exist only
+    // while it is shown; Alt+PageUp/PageDown stay with terminals otherwise.
+    const boardOnly = (binding: { action?: string }) =>
+      binding.action?.startsWith('navigateBoardTask:') === true;
     createEffect(() => {
-      const cleanup = registerFromRegistry(resolvedBindings(), actionHandlers);
-      onCleanup(cleanup);
+      const bindings = resolvedBindings().filter((binding) => !boardOnly(binding));
+      onCleanup(registerFromRegistry(bindings, actionHandlers));
+    });
+    createEffect(() => {
+      if (!boardShown()) return;
+      onCleanup(registerFromRegistry(resolvedBindings().filter(boardOnly), actionHandlers));
     });
 
     onCleanup(() => {
@@ -975,18 +980,24 @@ function App() {
             </button>
           </div>
         </Show>
-        <main style={{ flex: '1', display: 'flex', overflow: 'hidden' }}>
+        <main
+          style={{ flex: '1', display: 'flex', overflow: 'hidden' }}
+          classList={{ 'board-panel-left': boardSidePanelOpen() && store.boardSidePanelLeft }}
+        >
           <Show when={store.sidebarVisible}>
             <Sidebar />
           </Show>
-          <Show when={store.boardView && !projectPageOpen()}>
+          <Show when={boardShown()}>
             <TaskBoard />
           </Show>
           {/* Keep terminals mounted while a page or the board occupies the
               workspace; the board shows it as its side panel. */}
           <div
             class="task-workspace"
-            classList={{ 'board-side-panel': boardSidePanelOpen() }}
+            classList={{
+              'board-side-panel': boardSidePanelOpen(),
+              'panel-left': boardSidePanelOpen() && store.boardSidePanelLeft,
+            }}
             style={{
               display:
                 projectPageOpen() || (store.boardView && !boardSidePanelOpen())

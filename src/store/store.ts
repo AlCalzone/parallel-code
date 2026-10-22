@@ -117,6 +117,8 @@ export {
   focusSidebar,
   unfocusSidebar,
   unfocusPlaceholder,
+  focusBoardSidePanel,
+  switchTaskKeepingPanel,
   navigateRow,
   navigateColumn,
   navigateTask,

@@ -1,8 +1,17 @@
+import { Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { reconcile } from 'solid-js/store';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { store, setStore } from '../store/core';
 import { boardSidePanelOpen } from '../store/project-pages';
+import {
+  getTaskFocusedPanel,
+  navigateColumn,
+  registerFocusFn,
+  setTaskFocusedPanel,
+  unregisterFocusFn,
+} from '../store/store';
+import { navigateBoard, navigateBoardTask } from './task-board-keys';
 import type { Task } from '../store/types';
 import { BoardSidePanelBar } from './BoardSidePanel';
 import { FocusModeTaskIndicators } from './FocusModeTaskIndicators';
@@ -11,6 +20,11 @@ import { WorkspaceControls } from './WorkspaceControls';
 
 vi.mock('../lib/ipc', () => ({ invoke: vi.fn(async () => ({})) }));
 vi.mock('../store/tasks', () => ({ uncollapseTask: vi.fn() }));
+const snoozed = vi.hoisted(() => new Set<string>());
+vi.mock('../store/background-tasks', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../store/background-tasks')>()),
+  isTaskBackgrounded: (id: string) => snoozed.has(id),
+}));
 
 function task(id: string, name: string, extra: Partial<Task> = {}): Task {
   return {
@@ -48,6 +62,7 @@ beforeEach(() => {
   );
   setStore('agents', reconcile({}));
   setStore('taskGitStatus', reconcile({}));
+  setStore('focusedPanel', reconcile({}));
   setStore('projects', [{ id: 'web', name: 'Website', path: '/repo', color: '#0af' }]);
   setStore('taskOrder', ['review', 'pr', 'idle']);
   setStore('collapsedTaskOrder', []);
@@ -57,6 +72,8 @@ beforeEach(() => {
   setStore('boardView', true);
   setStore('boardPeek', false);
   setStore('showNewTaskPanel', false);
+  setStore('boardSidePanelLeft', false);
+  setStore('boardShowMinimized', false);
   host = document.createElement('div');
   document.body.append(host);
   dispose = render(() => <TaskBoard />, host);
@@ -150,12 +167,36 @@ it('opens a clicked task beside the board and marks its card', () => {
   expect(store.boardView).toBe(true);
 });
 
+it('leaves minimized tasks out until asked, but keeps snoozed ones in their lane', () => {
+  // Before the store changes: the mocked snooze set is not reactive.
+  snoozed.add('pr');
+  setStore('tasks', 'idle', 'collapsed', true);
+  setStore('tasks', 'pr', 'collapsed', true);
+  setStore('taskOrder', ['review']);
+  setStore('collapsedTaskOrder', ['pr', 'idle']);
+  try {
+    const shown = () =>
+      [...host.querySelectorAll<HTMLElement>('[data-board-task-id]')].map(
+        (el) => el.dataset.boardTaskId,
+      );
+    const toggle = host.querySelector<HTMLButtonElement>('.task-board-minimized');
+    host.querySelector<HTMLButtonElement>('.task-board-rail')?.click();
+    expect(shown()).toEqual(['review', 'pr']);
+    expect(toggle?.textContent).toBe('Minimized 1');
+    toggle?.click();
+    expect(toggle?.getAttribute('aria-pressed')).toBe('true');
+    expect(shown()).toEqual(['review', 'idle', 'pr']);
+  } finally {
+    snoozed.clear();
+  }
+});
+
 it('closes the side panel from its bar and keeps the board', () => {
   host.querySelector<HTMLButtonElement>('.lane-pr .task-board-title')?.click();
   const bar = document.createElement('div');
   document.body.append(bar);
   const disposeBar = render(() => <BoardSidePanelBar />, bar);
-  bar.querySelector<HTMLButtonElement>('button')?.click();
+  bar.querySelector<HTMLButtonElement>('[title^="Close side panel"]')?.click();
   expect(boardSidePanelOpen()).toBe(false);
   expect(store.boardView).toBe(true);
   disposeBar();
@@ -188,4 +229,264 @@ it('switches views from the title-bar toggle in focus, tiles, board order', () =
   expect(store.focusMode).toBe(false);
   expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false']);
   disposeControls();
+});
+
+describe('keyboard', () => {
+  const card = (id: string) =>
+    host.querySelector<HTMLButtonElement>(`[data-board-task-id="${id}"] .task-board-title`);
+  const focusedId = () =>
+    document.activeElement?.closest<HTMLElement>('[data-board-task-id]')?.dataset.boardTaskId;
+  const press = (key: string, target: Element | null = document.activeElement) =>
+    target?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+
+  beforeEach(() => {
+    snoozed.clear();
+    setStore('sidebarVisible', true);
+    setStore('sidebarFocused', false);
+    setStore('newTaskPanelFocused', false);
+  });
+
+  it('puts the keyboard on the active task card when the board opens', () => {
+    expect(focusedId()).toBe('idle');
+  });
+
+  it('moves between cards and lanes with arrows and hjkl', () => {
+    setStore('tasks', 'idle2', task('idle2', 'Tidy styles'));
+    setStore('taskOrder', ['review', 'idle', 'idle2', 'pr']);
+    press('ArrowDown');
+    expect(focusedId()).toBe('idle2');
+    press('h');
+    expect(focusedId()).toBe('review');
+    press('ArrowLeft');
+    expect(focusedId()).toBe('review');
+    press('l');
+    press('l');
+    expect(focusedId()).toBe('pr');
+    press('h');
+    press('End');
+    expect(focusedId()).toBe('idle2');
+    press('Home');
+    expect(focusedId()).toBe('idle');
+  });
+
+  it('goes from the filter to the cards and opens the first match', () => {
+    press('/');
+    const search = host.querySelector<HTMLInputElement>('.task-board-search');
+    expect(document.activeElement).toBe(search);
+    press('ArrowDown');
+    expect(focusedId()).toBe('review');
+    search?.focus();
+    press('ArrowUp', card('review'));
+    expect(document.activeElement).toBe(search);
+    search?.focus();
+    press('Escape');
+    expect(focusedId()).toBe('idle');
+    search?.focus();
+    press('Enter');
+    expect(store.activeTaskId).toBe('review');
+    expect(boardSidePanelOpen()).toBe(true);
+  });
+
+  it('leaves the board with Alt+Arrows: left to the sidebar, right into the side panel', () => {
+    card('review')?.focus();
+    expect(navigateBoard('left')).toBe(true);
+    expect(store.sidebarFocused).toBe(true);
+
+    navigateColumn('right');
+    expect(store.sidebarFocused).toBe(false);
+    expect(focusedId()).toBe('idle');
+
+    setStore('boardPeek', true);
+    expect(navigateBoard('right')).toBe(true);
+    expect(focusedId()).toBe('pr');
+    const panel = vi.fn();
+    registerFocusFn('idle:ai-terminal', panel);
+    expect(navigateBoard('right')).toBe(true);
+    return Promise.resolve().then(() => {
+      expect(panel).toHaveBeenCalled();
+      unregisterFocusFn('idle:ai-terminal', panel);
+    });
+  });
+
+  it("moves through the side panel task's panes, then on to the cards past their edge", () => {
+    setStore('tasks', 'idle2', task('idle2', 'Tidy styles'));
+    setStore('taskOrder', ['review', 'idle', 'idle2', 'pr']);
+    setStore('boardPeek', true);
+    setStore('activeTaskId', 'idle2');
+    setTaskFocusedPanel('idle2', 'notes');
+    (document.activeElement as HTMLElement | null)?.blur();
+    // Focus is deferred, so only the last task's pane is focused.
+    const panel = vi.fn();
+    registerFocusFn('review:title', panel);
+    // Lanes: Needs you [review], Stopped [idle, idle2], In pull request [pr].
+    expect(navigateBoard('right')).toBe(true);
+    expect(getTaskFocusedPanel('idle2')).toBe('changed-files');
+    expect(navigateBoard('up')).toBe(true);
+    expect(store.activeTaskId).toBe('idle2');
+    expect(getTaskFocusedPanel('idle2')).toBe('title');
+    // Past the top pane: the card above, on the same pane.
+    expect(navigateBoard('up')).toBe(true);
+    expect(store.activeTaskId).toBe('idle');
+    expect(getTaskFocusedPanel('idle')).toBe('title');
+    expect(navigateBoard('left')).toBe(true);
+    expect(store.activeTaskId).toBe('review');
+    expect(boardSidePanelOpen()).toBe(true);
+    expect(focusedId()).toBeUndefined();
+    return Promise.resolve().then(() => {
+      expect(panel).toHaveBeenCalled();
+      unregisterFocusFn('review:title', panel);
+    });
+  });
+
+  it("hands the keyboard to the card at the side panel's edge facing the board", () => {
+    setStore('boardPeek', true);
+    setStore('activeTaskId', 'review');
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(navigateBoard('left')).toBe(true);
+    expect(focusedId()).toBe('review');
+
+    // On the board's left, the panel's edge facing it is the right one.
+    setStore('boardSidePanelLeft', true);
+    setStore('activeTaskId', 'pr');
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(navigateBoard('right')).toBe(true);
+    expect(focusedId()).toBe('pr');
+    // And the board's first lane leads into that panel.
+    card('review')?.focus();
+    const panel = vi.fn();
+    registerFocusFn('pr:ai-terminal', panel);
+    expect(navigateBoard('left')).toBe(true);
+    return Promise.resolve().then(() => {
+      expect(panel).toHaveBeenCalled();
+      unregisterFocusFn('pr:ai-terminal', panel);
+    });
+  });
+
+  it('steps through tasks in board order, on the board and in the side panel', () => {
+    card('review')?.focus();
+    navigateBoardTask('right');
+    expect(focusedId()).toBe('idle');
+
+    setStore('boardPeek', true);
+    setStore('activeTaskId', 'idle');
+    (document.activeElement as HTMLElement | null)?.blur();
+    navigateBoardTask('right');
+    expect(store.activeTaskId).toBe('pr');
+    expect(store.boardView).toBe(true);
+  });
+
+  it("jumps a whole card up or down, on the board and past the side panel's panes", () => {
+    setStore('tasks', 'idle2', task('idle2', 'Tidy styles'));
+    setStore('taskOrder', ['review', 'idle', 'idle2', 'pr']);
+    card('idle')?.focus();
+    navigateBoardTask('down');
+    expect(focusedId()).toBe('idle2');
+
+    setStore('boardPeek', true);
+    setStore('activeTaskId', 'idle2');
+    setTaskFocusedPanel('idle2', 'changed-files');
+    (document.activeElement as HTMLElement | null)?.blur();
+    navigateBoardTask('up');
+    expect(store.activeTaskId).toBe('idle');
+    expect(getTaskFocusedPanel('idle')).toBe('changed-files');
+    // At the lane's top there is nowhere to go, not even a pane up.
+    navigateBoardTask('up');
+    expect(store.activeTaskId).toBe('idle');
+    expect(getTaskFocusedPanel('idle')).toBe('changed-files');
+  });
+
+  it('hands the keyboard to the active task when the board closes', async () => {
+    dispose();
+    dispose = render(
+      () => (
+        <Show when={store.boardView}>
+          <TaskBoard />
+        </Show>
+      ),
+      host,
+    );
+    const panel = vi.fn();
+    registerFocusFn('idle:ai-terminal', panel);
+    setStore('boardView', false);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(panel).toHaveBeenCalled();
+    unregisterFocusFn('idle:ai-terminal', panel);
+  });
+});
+
+describe('keyboard edge cases', () => {
+  const focusedId = () =>
+    document.activeElement?.closest<HTMLElement>('[data-board-task-id]')?.dataset.boardTaskId;
+  const press = (key: string, target: Element | null = document.activeElement) =>
+    target?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  const search = () => host.querySelector<HTMLInputElement>('.task-board-search');
+
+  beforeEach(() => {
+    snoozed.clear();
+    setStore('sidebarVisible', true);
+    setStore('sidebarFocused', false);
+    setStore('newTaskPanelFocused', false);
+  });
+
+  it('clears the filter before a second Escape returns to the cards', () => {
+    const input = search();
+    if (!input) throw new Error('missing search');
+    input.focus();
+    input.value = 'dark';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    press('Escape');
+    expect(input.value).toBe('');
+    expect(document.activeElement).toBe(input);
+    press('Escape');
+    expect(focusedId()).toBe('idle');
+  });
+
+  it('lets the board take the keyboard from the sidebar, clearing its flag', () => {
+    // The sidebar, not the board, has DOM focus.
+    (document.activeElement as HTMLElement | null)?.blur();
+    setStore('sidebarFocused', true);
+    expect(navigateBoardTask('right')).toBe(true);
+    expect(store.activeTaskId).toBe('idle');
+    expect(store.boardView).toBe(true);
+    expect(store.sidebarFocused).toBe(false);
+    expect(focusedId()).toBe('idle');
+  });
+
+  it('sends an empty board to its filter and back out to the sidebar', () => {
+    const input = search();
+    if (!input) throw new Error('missing search');
+    input.value = 'zzz';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    setStore('sidebarFocused', true);
+    navigateColumn('right');
+    expect(document.activeElement).toBe(input);
+    expect(store.sidebarFocused).toBe(false);
+    expect(navigateBoard('left')).toBe(true);
+    expect(store.sidebarFocused).toBe(true);
+  });
+
+  it('skips snoozed tasks when switching the side panel', () => {
+    snoozed.add('pr');
+    // The mocked snooze set is not reactive; a new order recomputes the lanes.
+    setStore('taskOrder', ['review', 'pr', 'idle']);
+    host.querySelector<HTMLButtonElement>('.task-board-rail')?.click();
+    expect(focusedId()).toBe('pr');
+    setStore('boardPeek', true);
+    // Board order is review, idle, then the snoozed lane's pr.
+    setStore('activeTaskId', 'idle');
+    (document.activeElement as HTMLElement | null)?.blur();
+    navigateBoardTask('right');
+    expect(store.activeTaskId).toBe('idle');
+  });
+
+  it('leaves a draft beside the board its focus when the board mounts', () => {
+    dispose();
+    setStore('showNewTaskPanel', true);
+    const draft = document.createElement('textarea');
+    document.body.append(draft);
+    draft.focus();
+    dispose = render(() => <TaskBoard />, host);
+    expect(document.activeElement).toBe(draft);
+  });
 });

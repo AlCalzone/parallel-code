@@ -95,6 +95,52 @@ export const DEFAULT_BINDINGS: KeyBinding[] = [
     action: 'navigateTask:right',
     global: true,
   },
+  // The board's lanes run top to bottom: a whole card up or down, past the
+  // side panel's panes. Linux again avoids Ctrl+Alt+Arrow.
+  {
+    id: 'app.nav.board-task-up',
+    layer: 'app',
+    category: 'Navigation',
+    description: 'Switch to task above on board',
+    platform: 'mac',
+    key: 'ArrowUp',
+    modifiers: { cmdOrCtrl: true, alt: true },
+    action: 'navigateBoardTask:up',
+    global: true,
+  },
+  {
+    id: 'app.nav.board-task-down',
+    layer: 'app',
+    category: 'Navigation',
+    description: 'Switch to task below on board',
+    platform: 'mac',
+    key: 'ArrowDown',
+    modifiers: { cmdOrCtrl: true, alt: true },
+    action: 'navigateBoardTask:down',
+    global: true,
+  },
+  {
+    id: 'app.nav.board-task-up-linux',
+    layer: 'app',
+    category: 'Navigation',
+    description: 'Switch to task above on board',
+    platform: 'linux',
+    key: 'PageUp',
+    modifiers: { alt: true },
+    action: 'navigateBoardTask:up',
+    global: true,
+  },
+  {
+    id: 'app.nav.board-task-down-linux',
+    layer: 'app',
+    category: 'Navigation',
+    description: 'Switch to task below on board',
+    platform: 'linux',
+    key: 'PageDown',
+    modifiers: { alt: true },
+    action: 'navigateBoardTask:down',
+    global: true,
+  },
 
   // -------------------------------------------------------------------------
   // App layer — Task reordering

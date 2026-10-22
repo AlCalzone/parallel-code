@@ -45,12 +45,28 @@ function matchesQuery(task: Task, query: string): boolean {
 }
 
 /** Open tasks in sidebar order, honouring the sidebar's project filter. */
-export function boardTasks(query: string): Task[] {
-  const needle = query.trim().toLowerCase();
+function openTasks(): Task[] {
   return [...new Set([...store.taskOrder, ...store.collapsedTaskOrder])]
     .filter((id) => !isHiddenAgentTaskId(id) && matchesTaskProjectFilter(id))
     .map((id) => store.tasks[id])
-    .filter((task): task is Task => task !== undefined && matchesQuery(task, needle));
+    .filter((task): task is Task => task !== undefined);
+}
+
+/** Minimized by the user; a snooze also minimizes, but such a task keeps its lane. */
+function isMinimized(task: Task): boolean {
+  return task.collapsed === true && !isTaskBackgrounded(task.id);
+}
+
+/** The board's tasks; minimized ones only while the board is set to show them. */
+export function boardTasks(query: string): Task[] {
+  const needle = query.trim().toLowerCase();
+  return openTasks().filter(
+    (task) => (store.boardShowMinimized || !isMinimized(task)) && matchesQuery(task, needle),
+  );
+}
+
+export function minimizedTaskCount(): number {
+  return openTasks().filter(isMinimized).length;
 }
 
 /** The longest-waiting question first; failures and reviews follow in sidebar order. */

@@ -1,15 +1,21 @@
 import { Show, createSignal, onCleanup } from 'solid-js';
 import { withViewTransition } from '../lib/viewTransition';
 import { store } from '../store/core';
-import { closeBoardSidePanel } from '../store/project-pages';
+import { closeBoardSidePanel, toggleBoardSidePanelSide } from '../store/project-pages';
 import { deletePanelUserSize, getPanelUserSize, setPanelUserSize } from '../store/ui';
+import { focusBoardCard } from './task-board-keys';
 
 const WIDTH_KEY = 'board:side-panel';
 const MIN_WIDTH = 360;
 /** The board keeps this much room so its first lane stays readable. */
 const BOARD_MIN_WIDTH = 320;
-/** Arrow keys on the handle: left widens the panel, right narrows it. */
+/** Arrow keys on the handle of a panel right of the board; mirrored for one on its left. */
 const KEY_STEPS: Record<string, number> = { ArrowLeft: 24, ArrowRight: -24 };
+
+/** -1 when the panel sits right of the board, so a leftward move widens it. */
+function widenSign(): number {
+  return store.boardSidePanelLeft ? 1 : -1;
+}
 
 /** The side panel's dragged width as a flex basis; unset falls back to the CSS default. */
 export function boardSidePanelBasis(): string | undefined {
@@ -26,10 +32,7 @@ export function closeSidePanel(): void {
     // Read here, not before: a card opened just before may not have applied yet.
     const id = store.activeTaskId;
     closeBoardSidePanel();
-    if (!id) return;
-    document
-      .querySelector<HTMLElement>(`[data-board-task-id="${CSS.escape(id)}"] .task-board-title`)
-      ?.focus();
+    if (id) focusBoardCard(id);
   });
 }
 
@@ -37,15 +40,39 @@ export function closeSidePanel(): void {
 export function BoardSidePanelBar() {
   return (
     <div class="board-side-panel-bar">
+      <button
+        type="button"
+        class="board-side-panel-action"
+        title={`Move panel to the ${store.boardSidePanelLeft ? 'right' : 'left'} of the board`}
+        aria-label={`Move panel to the ${store.boardSidePanelLeft ? 'right' : 'left'} of the board`}
+        onClick={() => withViewTransition(toggleBoardSidePanelSide)}
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" stroke="currentColor" />
+          <path
+            d={store.boardSidePanelLeft ? 'M6 3v10' : 'M10 3v10'}
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+        </svg>
+      </button>
       {/* The bar stays for a draft so the panel's content does not jump. */}
       <Show when={!store.showNewTaskPanel}>
         <button
           type="button"
-          class="board-side-panel-close"
+          class="board-side-panel-action"
           title="Close side panel (Escape)"
           onClick={() => closeSidePanel()}
         >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          {/* Points the way the panel leaves: towards its own edge of the window. */}
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-hidden="true"
+            style={{ transform: store.boardSidePanelLeft ? 'scaleX(-1)' : undefined }}
+          >
             <path
               d="M4 4l4 4-4 4M9 4l4 4-4 4"
               stroke="currentColor"
@@ -69,7 +96,7 @@ function clampWidth(panel: HTMLElement, width: number): number {
   return Math.round(Math.max(MIN_WIDTH, Math.min(panelWidth + room, width)));
 }
 
-/** The side panel's left edge: drag or arrow keys resize, double-click resets. */
+/** The side panel's edge facing the board: drag or arrow keys resize, double-click resets. */
 export function BoardSidePanelHandle() {
   const [dragging, setDragging] = createSignal(false);
   const [range, setRange] = createSignal<{ now: number; max: number }>();
@@ -85,11 +112,11 @@ export function BoardSidePanelHandle() {
     // The bound comes from the layout at drag start; the drag changes it.
     const max = clampWidth(panel, Infinity);
     setDragging(true);
-    // The panel sits on the right, so dragging left widens it.
+    const sign = widenSign();
     const onMove = (ev: MouseEvent) =>
       setPanelUserSize(
         WIDTH_KEY,
-        Math.round(Math.max(MIN_WIDTH, Math.min(max, startWidth - (ev.clientX - startX)))),
+        Math.round(Math.max(MIN_WIDTH, Math.min(max, startWidth + sign * (ev.clientX - startX)))),
       );
     stopDrag = () => {
       measure(panel);
@@ -113,7 +140,7 @@ export function BoardSidePanelHandle() {
   }
 
   function nudge(e: KeyboardEvent) {
-    const step = KEY_STEPS[e.key];
+    const step = (KEY_STEPS[e.key] ?? 0) * -widenSign();
     const panel = (e.currentTarget as HTMLElement).parentElement;
     if (!step || !panel) return;
     e.preventDefault();

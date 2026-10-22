@@ -532,6 +532,8 @@ export interface PersistedState {
   seenFeatureHints?: FeatureHintId[];
   focusMode?: boolean;
   boardView?: boolean;
+  boardSidePanelLeft?: boolean;
+  boardShowMinimized?: boolean;
   verboseLogging?: boolean;
   activeCustomThemeId?: string | null;
   appearanceMode?: AppearanceMode;
@@ -700,6 +702,10 @@ export interface AppStore {
   focusMode: boolean;
   /** The all-tasks board covers the workspace; focusMode is kept for when it closes. */
   boardView: boolean;
+  /** The board's side panel sits left of the board rather than right. */
+  boardSidePanelLeft: boolean;
+  /** The board lists minimized tasks too; by default it leaves them out. */
+  boardShowMinimized: boolean;
   /** The board shows the active task in a side panel; never persisted. */
   boardPeek: boolean;
   /** Per-task flag: true when the task is rendering its focus-mode two-column layout. */

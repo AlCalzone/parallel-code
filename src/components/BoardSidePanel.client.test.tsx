@@ -29,6 +29,7 @@ function drag(fromX: number, toX: number): void {
 
 beforeEach(() => {
   setStore('panelUserSize', {});
+  setStore('boardSidePanelLeft', false);
   const board = withWidth(document.createElement('section'), 800);
   board.className = 'task-board';
   const panel = withWidth(document.createElement('div'), 500);
@@ -47,6 +48,29 @@ it('widens the side panel when its left edge is dragged left', () => {
   drag(1000, 900);
   expect(getPanelUserSize('board:side-panel')).toBe(600);
   expect(boardSidePanelBasis()).toBe('600px');
+});
+
+it("mirrors resizing for a panel on the board's left", () => {
+  setStore('boardSidePanelLeft', true);
+  drag(1000, 1100);
+  expect(getPanelUserSize('board:side-panel')).toBe(600);
+  handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  expect(getPanelUserSize('board:side-panel')).toBe(524);
+});
+
+it("moves the panel to the board's other side from its bar, for a draft too", () => {
+  setStore('boardView', true);
+  setStore('showNewTaskPanel', true);
+  const bar = document.createElement('div');
+  document.body.append(bar);
+  const disposeBar = render(() => <BoardSidePanelBar />, bar);
+  const swap = bar.querySelector<HTMLButtonElement>('[aria-label^="Move panel"]');
+  expect(swap?.getAttribute('aria-label')).toBe('Move panel to the left of the board');
+  swap?.click();
+  expect(store.boardSidePanelLeft).toBe(true);
+  expect(swap?.getAttribute('aria-label')).toBe('Move panel to the right of the board');
+  disposeBar();
+  setStore('showNewTaskPanel', false);
 });
 
 it('keeps both the panel and the board at a usable width', () => {
@@ -82,7 +106,7 @@ it('leaves a draft to its own Cancel, which asks before discarding', () => {
   const bar = document.createElement('div');
   document.body.append(bar);
   const disposeBar = render(() => <BoardSidePanelBar />, bar);
-  expect(bar.querySelector('button')).toBeNull();
+  expect(bar.querySelector('[title^="Close side panel"]')).toBeNull();
   // Escape from the board hides the peeked task but keeps the draft.
   closeSidePanel();
   expect(store.showNewTaskPanel).toBe(true);

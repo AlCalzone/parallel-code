@@ -1,6 +1,18 @@
 import { batch } from 'solid-js';
 import { store, setStore } from './core';
 
+/** Whether a project page (GitHub issues or the Kanban board) covers the task area. */
+export function projectPageOpen(): boolean {
+  return store.projects.some(
+    (p) => p.id === store.githubIssuesProjectId || p.id === store.kanbanProjectId,
+  );
+}
+
+/** Whether the all-tasks board is on screen; a project page covers it while open. */
+export function boardShown(): boolean {
+  return store.boardView && !projectPageOpen();
+}
+
 /** Whether the all-tasks board shows the active task, or a new-task draft, beside it. */
 export function boardSidePanelOpen(): boolean {
   return store.boardView && (store.boardPeek || store.showNewTaskPanel);
@@ -13,6 +25,21 @@ export function openBoardSidePanel(): void {
 
 export function closeBoardSidePanel(): void {
   setStore('boardPeek', false);
+}
+
+/** Moves the side panel to the board's other side; the choice persists. */
+export function toggleBoardSidePanelSide(): void {
+  setStore('boardSidePanelLeft', !store.boardSidePanelLeft);
+}
+
+/** Lists minimized tasks on the board too, or leaves them out again; the choice persists. */
+export function toggleBoardShowMinimized(): void {
+  setStore('boardShowMinimized', !store.boardShowMinimized);
+}
+
+/** The arrow key that leads from the side panel towards the board beside it. */
+export function towardBoard(): 'left' | 'right' {
+  return store.boardSidePanelLeft ? 'right' : 'left';
 }
 
 export function closeBoard(): void {

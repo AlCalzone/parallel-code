@@ -7,6 +7,7 @@ import { computeSidebarTaskOrder } from './sidebar-order';
 import { isTaskBackgrounded } from './background-tasks';
 import { uncollapseTask } from './tasks';
 import { isTaskCanvasVisible } from '../lib/canvas-tabs';
+import { boardShown, boardSidePanelOpen, towardBoard } from './project-pages';
 import {
   AI_TERMINAL_PANEL,
   aiTerminalPanels,
@@ -230,6 +231,25 @@ function focusNewTaskPanel(): void {
   triggerFocus('new-task');
 }
 
+/**
+ * Moves the keyboard onto the all-tasks board, to the active task's card. The
+ * board clears the other focus flags once it has DOM focus, so a board that
+ * cannot take it leaves them, and the keys, where they were.
+ */
+function focusBoard(): void {
+  triggerFocus('task-board');
+}
+
+/** Moves the keyboard from the board into its side panel: the draft, or the task shown there. */
+export function focusBoardSidePanel(): void {
+  if (store.showNewTaskPanel) {
+    focusNewTaskPanel();
+    return;
+  }
+  const id = store.activeTaskId;
+  if (id) setTaskFocusedPanel(id, getTaskFocusedPanel(id));
+}
+
 function navigateAiTerminalColumn(
   taskId: string,
   current: string,
@@ -379,6 +399,11 @@ export function navigateColumn(direction: 'left' | 'right'): void {
 
   // The open draft is a real tile between the last task and the add controls.
   if (store.showNewTaskPanel && store.newTaskPanelFocused) {
+    // Beside the board, the board is its only neighbour.
+    if (boardSidePanelOpen()) {
+      if (direction === towardBoard()) focusBoard();
+      return;
+    }
     if (direction === 'right') {
       // The add-task tile is only rendered beside a visible tile.
       if (travelOrder().length > 0) focusPlaceholder('add-task');
@@ -416,6 +441,12 @@ export function navigateColumn(direction: 'left' | 'right'): void {
   // task is highlighted in the sidebar. The sidebar list is its own axis; → is
   // for crossing into the panel area, not for activating the highlighted item.
   if (store.sidebarFocused) {
+    if (direction === 'right' && boardShown()) {
+      // A side panel on the board's left is the sidebar's neighbour.
+      if (boardSidePanelOpen() && store.boardSidePanelLeft) focusBoardSidePanel();
+      else focusBoard();
+      return;
+    }
     if (direction === 'right') {
       const targetTaskId = travelOrder()[0] ?? store.sidebarFocusedTaskId ?? taskId;
       if (targetTaskId) {
@@ -454,6 +485,9 @@ export function navigateColumn(direction: 'left' | 'right'): void {
     setTaskFocusedPanel(taskId, row[nextCol]);
     return;
   }
+
+  // The side panel holds one task; the board's keys decide where its edges lead.
+  if (boardSidePanelOpen()) return;
 
   // Cross task boundary
   const taskOrder = travelOrder();
@@ -510,13 +544,15 @@ export function navigateColumn(direction: 'left' | 'right'): void {
  * panel name when it exists in the target's grid. Clamps at edges (no sidebar
  * or placeholder fall-through). Collapsed tasks are not in `taskOrder`, and
  * snoozed ones are filtered out, so both are skipped — same semantics as
- * `navigateColumn`'s cross-task path.
+ * `navigateColumn`'s cross-task path. The board passes its own card order.
  */
-export function navigateTask(direction: 'left' | 'right'): void {
+export function navigateTask(
+  direction: 'left' | 'right',
+  taskOrder: string[] = travelOrder(),
+): void {
   if (store.showHelpDialog || store.showSettingsDialog) return;
 
   const { activeTaskId } = store;
-  const taskOrder = travelOrder();
 
   if (store.showNewTaskPanel && store.newTaskPanelFocused) {
     if (direction === 'left') {
@@ -538,8 +574,13 @@ export function navigateTask(direction: 'left' | 'right'): void {
     return;
   }
 
-  const targetId = taskOrder[targetIdx];
-  if (!store.tasks[targetId]) {
+  switchTaskKeepingPanel(taskOrder[targetIdx]);
+}
+
+/** Activates a task with the keyboard on the pane of the same name, where it has one. */
+export function switchTaskKeepingPanel(targetId: string): void {
+  const { activeTaskId } = store;
+  if (!store.tasks[targetId] || !activeTaskId) {
     setActiveTask(targetId);
     return;
   }
