@@ -1,6 +1,8 @@
 /* The all-tasks board. One surface per element: lanes have no box, cards a
    soft fill and no border, and colour is kept for urgent text and dots. */
 .task-board {
+  /* Sized by the window and side panel, so the lanes can fold to one column. */
+  container: task-board / inline-size;
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -170,6 +172,27 @@
 }
 .task-board-rail-title {
   writing-mode: vertical-rl;
+}
+
+/* Too narrow for lanes side by side: stack them in one scrolling column.
+   task-board-keys reads this flex-direction to step arrows across lanes. */
+@container task-board (max-width: 440px) {
+  .task-board-lanes {
+    flex-direction: column;
+    mask-image: none;
+  }
+  .task-board-lane {
+    flex: none;
+    min-width: 0;
+    max-width: none;
+  }
+  .task-board-rail {
+    flex-direction: row;
+    align-self: flex-start;
+  }
+  .task-board-rail-title {
+    writing-mode: horizontal-tb;
+  }
 }
 
 /* Cards: the title button stretches over the card, so a click anywhere opens

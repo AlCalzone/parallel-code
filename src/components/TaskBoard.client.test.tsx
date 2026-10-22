@@ -434,6 +434,25 @@ describe('keyboard', () => {
     expect(focusedId()).toBe('idle');
   });
 
+  it('walks stacked lanes as one column on a narrow board', () => {
+    setStore('tasks', 'idle2', task('idle2', 'Tidy styles'));
+    setStore('taskOrder', ['review', 'idle', 'idle2', 'pr']);
+    // Stands in for the container query, which happy-dom does not evaluate.
+    host
+      .querySelector<HTMLElement>('.task-board-lanes')
+      ?.style.setProperty('flex-direction', 'column');
+    card('review')?.focus();
+    press('ArrowDown');
+    expect(focusedId()).toBe('idle');
+    press('j');
+    press('j');
+    expect(focusedId()).toBe('pr');
+    press('ArrowUp');
+    expect(focusedId()).toBe('idle2');
+    press('l');
+    expect(focusedId()).toBe('idle2');
+  });
+
   it('goes from the filter to the cards and opens the first match', () => {
     press('/');
     const search = host.querySelector<HTMLInputElement>('.task-board-search');

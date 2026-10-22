@@ -55,15 +55,28 @@ function boardElement(): HTMLElement | null {
   return document.querySelector<HTMLElement>('.task-board');
 }
 
+/**
+ * A narrow board stacks its lanes (see task-board.css), so arrows walk them
+ * as one column: down from a lane's last card reaches the next lane.
+ */
+function asShown<T>(board: HTMLElement, columns: T[][]): T[][] {
+  const lanes = board.querySelector('.task-board-lanes');
+  const stacked = lanes && getComputedStyle(lanes).flexDirection === 'column';
+  return stacked ? [columns.flat()] : columns;
+}
+
 /** Card buttons per lane, left to right; the closed snoozed rail is a column of its own. */
 function boardColumns(): HTMLElement[][] {
   const board = boardElement();
   if (!board) return [];
-  return [...board.querySelectorAll<HTMLElement>('.task-board-lane, .task-board-rail')]
-    .map((col) =>
-      col.matches('.task-board-rail') ? [col] : [...col.querySelectorAll<HTMLElement>(CARD)],
-    )
-    .filter((items) => items.length > 0);
+  return asShown(
+    board,
+    [...board.querySelectorAll<HTMLElement>('.task-board-lane, .task-board-rail')]
+      .map((col) =>
+        col.matches('.task-board-rail') ? [col] : [...col.querySelectorAll<HTMLElement>(CARD)],
+      )
+      .filter((items) => items.length > 0),
+  );
 }
 
 /**
@@ -73,13 +86,16 @@ function boardColumns(): HTMLElement[][] {
 function boardTaskColumns(): string[][] {
   const board = boardElement();
   if (!board) return [];
-  return [...board.querySelectorAll<HTMLElement>('.task-board-lane')]
-    .map((lane) =>
-      [...lane.querySelectorAll<HTMLElement>('[data-board-task-id]')]
-        .map((card) => card.dataset.boardTaskId ?? '')
-        .filter((id) => id && !isTaskBackgrounded(id) && !store.tasks[id]?.collapsed),
-    )
-    .filter((ids) => ids.length > 0);
+  return asShown(
+    board,
+    [...board.querySelectorAll<HTMLElement>('.task-board-lane')]
+      .map((lane) =>
+        [...lane.querySelectorAll<HTMLElement>('[data-board-task-id]')]
+          .map((card) => card.dataset.boardTaskId ?? '')
+          .filter((id) => id && !isTaskBackgrounded(id) && !store.tasks[id]?.collapsed),
+      )
+      .filter((ids) => ids.length > 0),
+  );
 }
 
 /** The cards, or the board's filter and actions up in the title bar. */
