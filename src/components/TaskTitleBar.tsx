@@ -4,7 +4,6 @@ import {
   reorderTask,
   activateTaskFromPointer,
   updateTaskName,
-  collapseTask,
   getTaskDotStatus,
   getTaskAttentionState,
   toggleTaskFocusMode,
@@ -19,15 +18,7 @@ import { EditableText, type EditableTextHandle } from './EditableText';
 import { IconButton } from './IconButton';
 import { MoreMenu } from './chat/MoreMenu';
 import { StatusDot, getDotTooltip } from './StatusDot';
-import {
-  ActivityIcon,
-  CheckIcon,
-  ClockIcon,
-  CloseIcon,
-  PlayIcon,
-  StopIcon,
-  UndoIcon,
-} from './icons';
+import { ClockIcon, CloseIcon } from './icons';
 import { theme } from '../lib/theme';
 import { withViewTransition } from '../lib/viewTransition';
 import { badgeStyle } from '../lib/badgeStyle';
@@ -35,19 +26,14 @@ import { taskCheckSignal } from '../lib/task-check-signal';
 import { handleDragReorder } from '../lib/dragReorder';
 import { getTaskDockerBadgeLabel } from '../lib/docker';
 import { displayTaskNameFromPrompt, shouldUsePromptDerivedTaskName } from '../lib/clean-task-name';
-import { hoursUntilTomorrowMorning } from '../lib/date';
 import type { Task } from '../store/types';
 import { isLandedTaskState } from '../store/landing';
 import {
-  bringTaskToFront,
-  canSnoozeTaskUntilCi,
   getTaskSnoozedUntil,
   isTaskBackgrounded,
   isTaskSnoozedUntilCi,
-  sendTaskToBack,
-  snoozeTask,
-  snoozeTaskUntilCi,
 } from '../store/background-tasks';
+import { laterMenuItems } from './task-later-menu';
 
 interface TaskTitleBarProps {
   task: Task;
@@ -63,36 +49,6 @@ interface TaskTitleBarProps {
 export function TaskTitleBar(props: TaskTitleBarProps) {
   // The board covers focus mode; from its side panel the button enters it.
   const focusShown = () => store.focusMode && !store.boardView;
-  const canStopAgents = () =>
-    !props.task.coordinatorMode && !props.task.delegationParent && !props.task.coordinatedBy;
-  const snoozePreset = (hours: number, keepRunning: boolean) => ({
-    label:
-      hours < 1
-        ? `${hours * 60} minutes`
-        : hours === 1
-          ? '1 hour'
-          : hours === 168
-            ? '1 week'
-            : hours >= 24
-              ? `${hours / 24} ${hours === 24 ? 'day' : 'days'}`
-              : `${hours} hours`,
-    icon: <ClockIcon size={14} />,
-    run: () => void snoozeTask(props.task.id, hours, keepRunning),
-  });
-  const tomorrowMorning = (keepRunning: boolean) => ({
-    label: 'Tomorrow morning',
-    title: 'Returns at 9:00 tomorrow.',
-    icon: <ClockIcon size={14} />,
-    // Computed on click, not render, so a menu left open across midnight still means tomorrow.
-    run: () => void snoozeTask(props.task.id, hoursUntilTomorrowMorning(), keepRunning),
-  });
-  const snoozeChoices = (keepRunning: boolean) => {
-    const presets = (hours: number[]) => hours.map((h) => snoozePreset(h, keepRunning));
-    // Placed after the 8-hour preset, before the day-long ones.
-    return keepRunning
-      ? [...presets([0.25, 0.5, 1, 2, 4, 8]), tomorrowMorning(true)]
-      : [...presets([1, 4, 8]), tomorrowMorning(false), ...presets([24, 72, 168])];
-  };
   const snoozedUntil = () => getTaskSnoozedUntil(props.task.id);
   const dockerBadgeLabel = () => getTaskDockerBadgeLabel(props.task.dockerSource);
   const isLandedTask = () => isLandedTaskState(props.task.landingState);
@@ -317,65 +273,7 @@ export function TaskTitleBar(props: TaskTitleBarProps) {
             label="Later"
             icon={<ClockIcon size={14} />}
             class="task-finish-btn"
-            items={[
-              {
-                label: isTaskBackgrounded(props.task.id)
-                  ? 'Restore to front'
-                  : 'Snooze until new activity',
-                icon: isTaskBackgrounded(props.task.id) ? (
-                  <UndoIcon size={14} />
-                ) : (
-                  <ActivityIcon size={14} />
-                ),
-                run: () =>
-                  isTaskBackgrounded(props.task.id)
-                    ? bringTaskToFront(props.task.id)
-                    : sendTaskToBack(props.task.id),
-              },
-              ...(canSnoozeTaskUntilCi(props.task.id)
-                ? [
-                    {
-                      label: 'Snooze until CI finishes',
-                      icon: <CheckIcon size={14} />,
-                      title: 'Returns when the pull request checks pass or fail.',
-                      run: () => snoozeTaskUntilCi(props.task.id),
-                    },
-                  ]
-                : []),
-              {
-                label: 'Snooze · keep running',
-                icon: <PlayIcon size={14} />,
-                children: snoozeChoices(true),
-              },
-              {
-                label: 'Snooze · stop agents',
-                icon: <StopIcon size={14} />,
-                children: snoozeChoices(false),
-                disabled: !canStopAgents(),
-                title: canStopAgents()
-                  ? undefined
-                  : 'Coordinated tasks need to keep their agents running.',
-              },
-              ...(canStopAgents()
-                ? [
-                    {
-                      label: 'Minimize (stop agents)',
-                      icon: (
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 16 16"
-                          fill="currentColor"
-                          aria-hidden="true"
-                        >
-                          <path d="M2 8a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 8Z" />
-                        </svg>
-                      ),
-                      run: () => void collapseTask(props.task.id),
-                    },
-                  ]
-                : []),
-            ]}
+            items={laterMenuItems(props.task)}
           />
         </div>
         <div class="task-action-group" role="group" aria-label="View actions">

@@ -1,4 +1,4 @@
-import { Show, batch, createMemo } from 'solid-js';
+import { Show, batch, createMemo, createSignal } from 'solid-js';
 import { invoke } from '../lib/ipc';
 import { IPC } from '../../electron/ipc/channels';
 import { formatRelativeAge } from '../lib/relativeAge';
@@ -9,11 +9,14 @@ import { getPrChecks } from '../store/pr-checks-state';
 import { openBoardSidePanel } from '../store/project-pages';
 import { getProject } from '../store/projects';
 import { getTaskAttentionState, getTaskDotStatus, getTaskOpenQuestion } from '../store/taskStatus';
-import { retryCloseTask } from '../store/tasks';
+import { retryCloseTask, uncollapseTask } from '../store/tasks';
 import type { Task } from '../store/types';
 import { activityLine, kanbanNow, openTask, stateLabel, type CardTaskState } from './KanbanCard';
+import { ContextMenu, type MoreMenuItem } from './chat/MoreMenu';
 import { StatusDot } from './StatusDot';
 import { boardTaskState, type BoardLaneId } from './task-board-lanes';
+import { laterMenuItems } from './task-later-menu';
+import { UndoIcon } from './icons';
 
 const ASK_ACTION: Partial<Record<CardTaskState, string>> = {
   needs_input: 'Answer',
@@ -50,6 +53,30 @@ function openBeside(task: Task): void {
       openTask(task);
     }),
   );
+}
+
+function cardMenuItems(task: Task): MoreMenuItem[] {
+  const open = { label: 'Open', run: () => openBeside(task) };
+  // A closing task is on its way out; setting it aside would race the teardown.
+  if (task.closingStatus) return [open];
+  // Snoozing a minimized task means nothing: its agents are already stopped.
+  if (task.collapsed)
+    return [
+      open,
+      {
+        label: 'Restore (start agents)',
+        icon: <UndoIcon size={14} />,
+        run: () => uncollapseTask(task.id, { activate: false }),
+      },
+    ];
+  return [open, ...laterMenuItems(task)];
+}
+
+/** Where a right-click opened the menu; a keyboard-opened one reports 0,0, so use the card. */
+function menuPoint(event: MouseEvent): { x: number; y: number } {
+  if (event.clientX || event.clientY) return { x: event.clientX, y: event.clientY };
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  return { x: rect.left, y: rect.bottom };
 }
 
 /** Offers another try at a close whose teardown failed; the error is the label's tooltip. */
@@ -139,6 +166,7 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
   const question = () => getTaskOpenQuestion(props.task.id);
   const ask = () =>
     props.lane === 'needs' && !props.task.closingStatus ? ASK_ACTION[state()] : undefined;
+  const [menuAt, setMenuAt] = createSignal<{ x: number; y: number }>();
   return (
     <li
       class={`task-board-card state-${state()}`}
@@ -148,6 +176,10 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
         'close-failed': props.task.closingStatus === 'error',
         shown: shown(),
         closing: closing(),
+      }}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        setMenuAt(menuPoint(event));
       }}
     >
       <button
@@ -196,6 +228,16 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
               {action()}
             </button>
           </div>
+        )}
+      </Show>
+      <Show when={menuAt()}>
+        {(at) => (
+          <ContextMenu
+            items={cardMenuItems(props.task)}
+            at={at()}
+            label={`Task ${props.task.name}`}
+            onClose={() => setMenuAt(undefined)}
+          />
         )}
       </Show>
     </li>

@@ -15,7 +15,7 @@ interface MenuEntry {
   group?: string;
 }
 
-type MenuAction = MenuEntry & { run: () => void; children?: never };
+export type MenuAction = MenuEntry & { run: () => void; children?: never };
 type Submenu = MenuEntry & { children: MenuAction[]; run?: never };
 export type MoreMenuItem = MenuAction | Submenu;
 
@@ -227,6 +227,30 @@ function MenuList(props: {
         </Show>
       </div>
     </Portal>
+  );
+}
+
+/** A menu opened at a point, such as a right-click; its top-left corner sits there. */
+export function ContextMenu(props: {
+  items: MoreMenuItem[];
+  at: { x: number; y: number };
+  label: string;
+  onClose: () => void;
+}) {
+  const position = () => {
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    const height = props.items.length * ITEM_HEIGHT + MENU_PADDING;
+    // placeBelow right-aligns with its anchor, so the anchor spans one menu width from the point.
+    const anchor = { top: props.at.y, bottom: props.at.y, right: props.at.x + MENU_WIDTH };
+    return placeBelow(anchor, MENU_WIDTH, viewport, 12, height);
+  };
+  return (
+    <MenuList
+      items={props.items}
+      position={position()}
+      label={props.label}
+      onClose={props.onClose}
+    />
   );
 }
 
