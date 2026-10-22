@@ -206,6 +206,36 @@ it('filters cards by name or project', () => {
   expect(host.querySelectorAll('.task-board-name')).toHaveLength(3);
 });
 
+it('narrows the cards to one project from the title bar', async () => {
+  setStore('projects', [
+    { id: 'web', name: 'Website', path: '/repo', color: '#0af' },
+    { id: 'api', name: 'Backend', path: '/api', color: '#fa0' },
+  ]);
+  setStore('tasks', 'api-task', task('api-task', 'Rate limit', { projectId: 'api' }));
+  setStore('taskOrder', ['review', 'pr', 'idle', 'api-task']);
+  expect(host.querySelectorAll('.task-board-name')).toHaveLength(4);
+  host.querySelector<HTMLButtonElement>('.task-board-controls [aria-haspopup="menu"]')?.click();
+  const backend = await vi.waitFor(() => {
+    const item = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find(
+      (el) => el.textContent?.includes('Backend'),
+    );
+    if (!item) throw new Error('missing project choice');
+    return item;
+  });
+  backend.click();
+  expect([...host.querySelectorAll('.task-board-name')].map((el) => el.textContent)).toEqual([
+    'Rate limit',
+  ]);
+  // The keyboard lands on a card, where the board's keys work.
+  expect(document.activeElement?.closest('[data-board-task-id]')?.textContent).toContain(
+    'Rate limit',
+  );
+  // Filtering the active task away must not close the board.
+  expect(store.boardView).toBe(true);
+  host.querySelector<HTMLButtonElement>('.task-board-controls .task-project-filter-clear')?.click();
+  expect(host.querySelectorAll('.task-board-name')).toHaveLength(4);
+});
+
 it('puts its filter and actions in the title bar only while it shows', () => {
   const controls = host.querySelector('.task-board-controls');
   expect(controls?.querySelector('.task-board-search')).not.toBeNull();

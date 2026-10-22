@@ -3,6 +3,7 @@ import { withViewTransition } from '../lib/viewTransition';
 import { store } from '../store/core';
 import { boardShown } from '../store/project-pages';
 import { toggleNewTaskPanel } from '../store/store';
+import { TaskProjectFilter } from './TaskProjectFilter';
 import { claimBoardFocus, focusBoardCard } from './task-board-keys';
 import './task-board.css';
 
@@ -11,7 +12,7 @@ const [boardQuery, setBoardQuery] = createSignal('');
 export { boardQuery, setBoardQuery };
 
 /**
- * The board's filter and new-task action, in the title bar's middle slot that the
+ * The board's project and text filters and new-task action, in the title bar's middle slot that the
  * task pills leave empty while the board shows.
  */
 export function TaskBoardControls() {
@@ -24,6 +25,8 @@ export function TaskBoardControls() {
         onFocusIn={claimBoardFocus}
         onDblClick={(event) => event.stopPropagation()}
       >
+        {/* Board keys only work from a card, so hand the keyboard back after a pick. */}
+        <TaskProjectFilter hideLabel onPick={() => focusBoardCard(store.activeTaskId)} />
         <input
           type="search"
           class="task-board-search"

@@ -9,7 +9,11 @@ import { taskProjectFilter } from '../store/task-project-filter';
 import { ProjectSwatch } from './ProjectSwatch';
 import './TaskProjectFilter.css';
 
-export function TaskProjectFilter() {
+/**
+ * Pass `hideLabel` where the surrounding controls already say what is filtered,
+ * and `onPick` to move the keyboard on once a project is chosen.
+ */
+export function TaskProjectFilter(props: { hideLabel?: boolean; onPick?: () => void }) {
   const [open, setOpen] = createSignal(false);
   const [position, setPosition] = createSignal({ top: 0, right: 0, maxHeight: 320 });
   let trigger: HTMLButtonElement | undefined;
@@ -49,7 +53,9 @@ export function TaskProjectFilter() {
 
   return (
     <div class="task-project-filter">
-      <span class="task-project-filter-label">Tasks</span>
+      <Show when={!props.hideLabel}>
+        <span class="task-project-filter-label">Tasks</span>
+      </Show>
       <button
         ref={trigger}
         type="button"
@@ -131,6 +137,7 @@ export function TaskProjectFilter() {
                     onClick={() => {
                       close();
                       setTaskProjectFilter(project.id || null);
+                      props.onPick?.();
                     }}
                   >
                     <Show

@@ -54,7 +54,8 @@ export function openItemName(id: string): string {
   );
 }
 
-export function setActiveTask(id: string): void {
+/** `keepBoard` keeps the all-tasks board showing; see `closeProjectPages`. */
+export function setActiveTask(id: string, opts: { keepBoard?: boolean } = {}): void {
   // Its panel lives on the GitHub page or the board, which an active task would close.
   if (isProjectPageAgentTaskId(id)) return;
   const task = store.tasks[id];
@@ -70,7 +71,7 @@ export function setActiveTask(id: string): void {
     });
   }
   if (!isDocument && !matchesTaskProjectFilter(id)) setStore('taskProjectFilter', null);
-  closeProjectPages();
+  closeProjectPages(opts);
   setStore('newTaskPanelFocused', false);
   setStore('placeholderFocused', false);
   let activeAgentId: string | null = null;
@@ -167,7 +168,8 @@ export function setTaskProjectFilter(projectId: string | null): void {
     setStore('sidebarFocusedTaskId', null);
     if (!store.activeTaskId || !openPanelOrder().includes(store.activeTaskId)) {
       const nextId = openPanelOrder()[0];
-      if (nextId) setActiveTask(nextId);
+      // Narrowing the board's cards must not close the board.
+      if (nextId) setActiveTask(nextId, { keepBoard: true });
       else {
         setStore('activeTaskId', null);
         setStore('activeAgentId', null);

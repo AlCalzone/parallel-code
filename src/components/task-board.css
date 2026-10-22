@@ -80,6 +80,26 @@
 .task-board-new:hover {
   background: color-mix(in srgb, var(--fg) 6%, transparent);
 }
+/* The sidebar's project filter, sized to the title-bar controls beside it. A
+   fixed width holds the clear button's slot, so picking a project does not
+   shift the centred controls; it shrinks with the search in a narrow window. */
+.task-board-controls .task-project-filter {
+  width: 170px;
+  min-width: 90px;
+  flex-shrink: 1;
+  gap: 2px;
+}
+.task-board-controls .task-project-filter-trigger {
+  flex: 1;
+  justify-content: flex-start;
+  max-width: none;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 8px;
+}
+.task-board-controls .task-project-filter-trigger svg {
+  margin-left: auto;
+}
 
 .task-board-lanes {
   position: relative;
