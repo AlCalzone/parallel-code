@@ -182,7 +182,9 @@
 .task-board-card.shown {
   background: var(--bg-selected-subtle);
 }
-.task-board-card:has(.task-board-title:focus-visible) {
+/* :focus, not :focus-visible: the board hands cards the keyboard itself, also
+   after a click or an Alt+Arrow, which :focus-visible would leave unmarked. */
+.task-board-card:has(.task-board-title:focus) {
   box-shadow: 0 0 0 1px var(--border-focus);
 }
 /* Failure keeps one signal: a faint red surface. */
