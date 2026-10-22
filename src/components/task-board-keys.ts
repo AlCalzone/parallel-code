@@ -82,8 +82,13 @@ function boardTaskColumns(): string[][] {
     .filter((ids) => ids.length > 0);
 }
 
+/** The cards, or the board's filter and actions up in the title bar. */
 export function boardHasFocus(): boolean {
-  return !!boardElement()?.contains(document.activeElement);
+  const active = document.activeElement;
+  return (
+    !!boardElement()?.contains(active) ||
+    !!document.querySelector('.task-board-controls')?.contains(active)
+  );
 }
 
 /** The card (or snoozed rail) holding the keyboard; a card's inner buttons count as the card. */
@@ -105,7 +110,7 @@ export function claimBoardFocus(): void {
 }
 
 export function focusBoardFilter(): void {
-  boardElement()?.querySelector<HTMLElement>('.task-board-search')?.focus();
+  document.querySelector<HTMLElement>('.task-board-controls .task-board-search')?.focus();
 }
 
 /** Focuses a task's card, or the first card when that task has none on the board. */

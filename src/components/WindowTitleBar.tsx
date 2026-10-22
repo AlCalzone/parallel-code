@@ -2,6 +2,7 @@ import { createSignal, onCleanup, onMount } from 'solid-js';
 import { WorkspaceControls } from './WorkspaceControls';
 import { appWindow } from '../lib/window';
 import { FocusModeTaskIndicators } from './FocusModeTaskIndicators';
+import { TaskBoardControls } from './TaskBoardControls';
 
 export function WindowTitleBar() {
   const [isFocused, setIsFocused] = createSignal(true);
@@ -104,6 +105,7 @@ export function WindowTitleBar() {
         <WorkspaceControls />
       </div>
       <FocusModeTaskIndicators />
+      <TaskBoardControls />
       <div class="window-controls">
         <button
           class="window-control-btn"

@@ -51,6 +51,7 @@ import { TaskSwitcher } from './components/TaskSwitcher';
 import { SettingsDialog } from './components/SettingsDialog';
 import { WorkspaceControls } from './components/WorkspaceControls';
 import { WindowTitleBar } from './components/WindowTitleBar';
+import { TaskBoardControls } from './components/TaskBoardControls';
 import { FocusModeTaskIndicators } from './components/FocusModeTaskIndicators';
 import { UsageStatusBar } from './components/UsageStatusBar';
 import { theme } from './lib/theme';
@@ -946,6 +947,7 @@ function App() {
           <div class="mac-titlebar-spacer" data-tauri-drag-region>
             <WorkspaceControls />
             <FocusModeTaskIndicators />
+            <TaskBoardControls />
           </div>
         </Show>
         <Show when={!store.keybindingMigrationDismissed}>

@@ -18,6 +18,7 @@ import { BoardSidePanelBar } from './BoardSidePanel';
 import { FocusModeTaskIndicators } from './FocusModeTaskIndicators';
 import { TaskBoard } from './TaskBoard';
 import { WORKING_HOLD_MS } from './task-board-hold';
+import { TaskBoardControls } from './TaskBoardControls';
 import { WorkspaceControls } from './WorkspaceControls';
 
 vi.mock('../lib/ipc', () => ({ invoke: vi.fn(async () => ({})) }));
@@ -62,6 +63,16 @@ function task(id: string, name: string, extra: Partial<Task> = {}): Task {
   };
 }
 
+/** The board with its controls in the title bar above it, as the app lays them out. */
+function Board() {
+  return (
+    <>
+      <TaskBoardControls />
+      <TaskBoard />
+    </>
+  );
+}
+
 let host: HTMLDivElement;
 let dispose: () => void;
 const lane = (title: string) =>
@@ -95,7 +106,7 @@ beforeEach(() => {
   setStore('boardSidePanelLeft', false);
   host = document.createElement('div');
   document.body.append(host);
-  dispose = render(() => <TaskBoard />, host);
+  dispose = render(() => <Board />, host);
 });
 afterEach(() => {
   dispose();
@@ -191,6 +202,36 @@ it('filters cards by name or project', () => {
   ]);
   search.value = 'website';
   search.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(host.querySelectorAll('.task-board-name')).toHaveLength(3);
+});
+
+it('puts its filter and actions in the title bar only while it shows', () => {
+  const controls = host.querySelector('.task-board-controls');
+  expect(controls?.querySelector('.task-board-search')).not.toBeNull();
+  expect(host.querySelector('.task-board')?.contains(controls ?? null)).toBe(false);
+  setStore('boardView', false);
+  expect(host.querySelector('.task-board-controls')).toBeNull();
+});
+
+it('starts a reopened board unfiltered', () => {
+  dispose();
+  dispose = render(
+    () => (
+      <Show when={store.boardView}>
+        <Board />
+      </Show>
+    ),
+    host,
+  );
+  const input = () => host.querySelector<HTMLInputElement>('.task-board-search');
+  const typed = input();
+  if (!typed) throw new Error('missing search');
+  typed.value = 'dark';
+  typed.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(host.querySelectorAll('.task-board-name')).toHaveLength(1);
+  setStore('boardView', false);
+  setStore('boardView', true);
+  expect(input()?.value).toBe('');
   expect(host.querySelectorAll('.task-board-name')).toHaveLength(3);
 });
 
@@ -500,7 +541,7 @@ describe('keyboard', () => {
     dispose = render(
       () => (
         <Show when={store.boardView}>
-          <TaskBoard />
+          <Board />
         </Show>
       ),
       host,
@@ -586,7 +627,7 @@ describe('keyboard edge cases', () => {
     const draft = document.createElement('textarea');
     document.body.append(draft);
     draft.focus();
-    dispose = render(() => <TaskBoard />, host);
+    dispose = render(() => <Board />, host);
     expect(document.activeElement).toBe(draft);
   });
 });

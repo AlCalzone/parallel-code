@@ -10,35 +10,49 @@
   font-size: 13px;
 }
 
-.task-board-header {
+/* The filter and actions overlay the title bar's middle like the task pills
+   they replace, so the lanes get the header row's height back. */
+.task-board-controls {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 20px 10px;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 1;
+  font-size: 12px;
 }
-/* Titles and the button keep one line; the search gives way on a narrow board. */
-.task-board-header h2,
+/* Same clearances as the pills: workspace and window controls on Linux,
+   the traffic lights on macOS. */
+.window-titlebar > .task-board-controls {
+  padding: 0 150px 0 280px;
+}
+.mac-titlebar-spacer > .task-board-controls {
+  padding: 0 24px 0 320px;
+}
+/* A sibling overlay, not a child, of the drag region: carve each control out
+   so the drag region does not swallow its clicks. */
+.task-board-controls > * {
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+}
+/* The buttons keep one line; the search gives way in a narrow window. */
 .task-board-new {
   flex-shrink: 0;
   white-space: nowrap;
 }
-.task-board-header h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-.task-board-total,
+
 .task-board-count {
   color: var(--fg-subtle, var(--fg-muted));
   font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
 .task-board-search {
-  margin-left: auto;
-  width: min(260px, 40%);
-  min-width: 0;
-  height: 30px;
+  width: 260px;
+  min-width: 80px;
+  flex-shrink: 1;
+  height: 24px;
   box-sizing: border-box;
   padding: 0 10px;
   border: 1px solid transparent;
@@ -52,8 +66,8 @@
   border-color: var(--border-focus);
 }
 .task-board-new {
-  height: 30px;
-  padding: 0 12px;
+  height: 24px;
+  padding: 0 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: transparent;
@@ -71,7 +85,7 @@
   min-height: 0;
   display: flex;
   gap: 20px;
-  padding: 4px 20px 16px;
+  padding: 12px 20px 16px;
   overflow: auto;
 }
 /* Beside the side panel the board keeps room for a lane (the panel gives way

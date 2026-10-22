@@ -1,18 +1,17 @@
 import { For, Index, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { isTypingTarget } from '../lib/tour-keys';
-import { withViewTransition } from '../lib/viewTransition';
 import { store } from '../store/core';
 import { boardSidePanelOpen } from '../store/project-pages';
 import {
   getTaskFocusedPanel,
   registerFocusFn,
   setTaskFocusedPanel,
-  toggleNewTaskPanel,
   unregisterFocusFn,
 } from '../store/store';
 import { useKanbanClock } from './KanbanCard';
 import { TaskBoardCard } from './TaskBoardCard';
 import { forgetWorkingHolds } from './task-board-hold';
+import { boardQuery, setBoardQuery } from './TaskBoardControls';
 import { useCardMotion } from './task-board-motion';
 import { boardLanes, boardTasks, type BoardLane } from './task-board-lanes';
 import {
@@ -114,8 +113,7 @@ function useBoardFocus(): void {
 
 /** The workspace's board view: every open task, in lanes by what it needs. */
 export function TaskBoard() {
-  const [query, setQuery] = createSignal('');
-  const tasks = createMemo(() => boardTasks(query()));
+  const tasks = createMemo(() => boardTasks(boardQuery()));
   const lanes = createMemo(() => boardLanes(tasks()));
   let lanesEl: HTMLDivElement | undefined;
   useCardMotion(
@@ -124,6 +122,8 @@ export function TaskBoard() {
   );
   onCleanup(useKanbanClock());
   onCleanup(forgetWorkingHolds);
+  // A reopened board starts unfiltered, as when the filter lived inside it.
+  onCleanup(() => setBoardQuery(''));
   useBoardFocus();
   return (
     <section
@@ -132,48 +132,14 @@ export function TaskBoard() {
       onKeyDown={onBoardKeyDown}
       onFocusIn={claimBoardFocus}
     >
-      <header class="task-board-header">
-        <h2 id="task-board-title">All tasks</h2>
-        <span class="task-board-total">{tasks().length}</span>
-        <input
-          type="search"
-          class="task-board-search"
-          placeholder="Filter tasks"
-          aria-label="Filter tasks"
-          aria-keyshortcuts="/"
-          title="Filter tasks (/). Down goes to the cards, Enter opens the first."
-          value={query()}
-          onInput={(e) => setQuery(e.currentTarget.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              // A second Escape returns to the cards rather than closing the board.
-              e.stopPropagation();
-              if (query()) setQuery('');
-              else focusBoardCard(store.activeTaskId);
-            } else if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              focusBoardCard(null);
-            } else if (e.key === 'Enter') {
-              e.preventDefault();
-              e.currentTarget
-                .closest('.task-board')
-                ?.querySelector<HTMLElement>('.task-board-lane .task-board-title')
-                ?.click();
-            }
-          }}
-        />
-        <button
-          type="button"
-          class="task-board-new"
-          onClick={() => withViewTransition(() => toggleNewTaskPanel(true))}
-        >
-          + New task
-        </button>
-      </header>
+      {/* The filter and actions sit in the title bar; see TaskBoardControls. */}
+      <h2 id="task-board-title" class="dialog-sr-only">
+        All tasks
+      </h2>
       <div class="task-board-lanes" ref={lanesEl}>
         <Show when={tasks().length === 0}>
           <p class="task-board-empty">
-            {query().trim() ? `No tasks match “${query().trim()}”` : 'No open tasks'}
+            {boardQuery().trim() ? `No tasks match “${boardQuery().trim()}”` : 'No open tasks'}
           </p>
         </Show>
         {/* Index, not For: lanes are rebuilt on every change but keep their place,
