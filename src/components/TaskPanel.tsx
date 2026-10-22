@@ -422,17 +422,18 @@ export function TaskPanel(props: TaskPanelProps) {
     }
   });
 
-  // Two-column focus-mode layout kicks in once the main column is wide enough.
+  // Two-column layout kicks in once the main column is wide enough, whether
+  // the task fills the window in focus mode or is a widened tile.
   // Hysteresis: enter at >=1080, leave at <1030. A single threshold flickers
   // when the user drags the window edge across it, repeatedly reparenting the
-  // terminal inside the left column. With a graph tab primary the main
-  // column is about a third of the tile, so the split stays off by design.
+  // terminal inside the left column. In focus mode with a graph tab primary
+  // the main column is about a third of the tile, so the split stays off by design.
   const SPLIT_ENTER_WIDTH = 1080;
   const SPLIT_EXIT_WIDTH = 1030;
   const [panelWidth, setPanelWidth] = createSignal(0);
   const [useSplit, setUseSplit] = createSignal(false);
   createEffect(() => {
-    const canSplit = store.focusMode && !supportCollapsed();
+    const canSplit = !supportCollapsed();
     const w = panelWidth();
     const focused = document.activeElement;
     const ownsFocus = focused instanceof HTMLElement && mainRef?.contains(focused);

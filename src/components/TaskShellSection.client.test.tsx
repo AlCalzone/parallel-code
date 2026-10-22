@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Task } from '../store/types';
 import { TaskShellSection } from './TaskShellSection';
 import { editAsDocument } from '../documents/store';
+import { store } from '../store/store';
 
 const { terminalProps } = vi.hoisted(() => ({ terminalProps: [] as Record<string, unknown>[] }));
 
@@ -40,6 +41,7 @@ vi.mock('../documents/store', () => ({ editAsDocument: vi.fn() }));
 const disposers: Array<() => void> = [];
 
 afterEach(() => {
+  store.taskSplitMode = {};
   while (disposers.length > 0) disposers.pop()?.();
   document.body.replaceChildren();
   terminalProps.length = 0;
@@ -83,5 +85,17 @@ describe('TaskShellSection', () => {
     expect(toolbar?.style.overflowX).toBe('auto');
     expect(toolbar?.style.overflowY).toBe('hidden');
     expect(Array.from(buttons, (button) => button.style.flexShrink)).toEqual(['0', '0', '0']);
+  });
+
+  it('lets a split-column shell fill its wrapper outside focus mode', () => {
+    store.focusMode = false;
+    store.taskSplitMode = { 'task-1': true };
+    const container = document.createElement('div');
+    document.body.append(container);
+    disposers.push(
+      render(() => <TaskShellSection task={makeTask(['shell-1'])} isActive />, container),
+    );
+
+    expect((container.firstElementChild as HTMLElement).style.minHeight).toBe('0');
   });
 });

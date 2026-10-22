@@ -97,7 +97,7 @@ export function TaskShellSection(props: TaskShellSectionProps) {
   // back to 0 in that case and let the wrapper's allocated size drive xterm.
   const intrinsicHeight = () => {
     if (!hasShell()) return '35px';
-    if (store.focusMode && store.taskSplitMode[props.task.id]) return '0';
+    if (store.taskSplitMode[props.task.id]) return '0';
     if (store.focusMode) return 'max(200px, 33vh)';
     return '140px';
   };
