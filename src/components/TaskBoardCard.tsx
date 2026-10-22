@@ -6,7 +6,7 @@ import { withViewTransition } from '../lib/viewTransition';
 import { isTaskBackgrounded } from '../store/background-tasks';
 import { store } from '../store/core';
 import { getPrChecks } from '../store/pr-checks-state';
-import { openBoardSidePanel } from '../store/project-pages';
+import { boardSidePanelOpen, openBoardSidePanel } from '../store/project-pages';
 import { getProject } from '../store/projects';
 import { getTaskAttentionState, getTaskDotStatus, getTaskOpenQuestion } from '../store/taskStatus';
 import { retryCloseTask, uncollapseTask } from '../store/tasks';
@@ -47,11 +47,15 @@ function setAsideLabel(task: Task): string {
 }
 
 export function openBeside(task: Task): void {
-  withViewTransition(() =>
-    batch(() => {
-      openBoardSidePanel();
-      openTask(task);
-    }),
+  // Only a panel that stays open swaps its task; opening it has its own motion.
+  const switching = boardSidePanelOpen() && store.activeTaskId !== task.id;
+  withViewTransition(
+    () =>
+      batch(() => {
+        openBoardSidePanel();
+        openTask(task);
+      }),
+    switching ? ['task-switch'] : [],
   );
 }
 

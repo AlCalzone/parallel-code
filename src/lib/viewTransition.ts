@@ -8,19 +8,22 @@ import { shouldAnimateTaskAppearance } from './reducedMotion';
  *
  * With animation the update runs a frame later, after the old layout is
  * captured: callers must not rely on the change having happened on return.
+ * `types` name the kind of change so CSS can style it with
+ * `:active-view-transition-type()`.
  */
-export function withViewTransition(update: () => void): void {
+export function withViewTransition(update: () => void, types: string[] = []): void {
   if (!shouldAnimateTaskAppearance() || !('startViewTransition' in document)) {
     update();
     return;
   }
-  const transition = document.startViewTransition(() => {
+  const run = () => {
     try {
       update();
     } catch (err) {
       error('view-transition', 'View change failed', err);
     }
-  });
+  };
+  const transition = document.startViewTransition(types.length ? { update: run, types } : run);
   // Rejects when a newer view change skips this animation; the update still ran.
   transition.ready.catch((err: unknown) =>
     debug('view-transition', 'Animation skipped', { reason: String(err) }),

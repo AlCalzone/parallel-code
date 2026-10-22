@@ -312,6 +312,29 @@ it('opens a clicked task beside the board and marks its card', () => {
   expect(store.boardView).toBe(true);
 });
 
+it('marks a click that swaps the open side panel to another task as a task switch', () => {
+  const start = vi.fn((arg: (() => void) | { update: () => void }) => {
+    (typeof arg === 'function' ? arg : arg.update)();
+    return { ready: Promise.resolve(), finished: Promise.resolve() };
+  });
+  Object.defineProperty(document, 'startViewTransition', { value: start, configurable: true });
+  const click = (lane: string) =>
+    host.querySelector<HTMLButtonElement>(`.lane-${lane} .task-board-title`)?.click();
+  const types = () => (start.mock.lastCall?.[0] as { types?: string[] }).types;
+  try {
+    click('pr');
+    // Opening the panel has its own motion.
+    expect(types()).toBeUndefined();
+    click('pr');
+    expect(types()).toBeUndefined();
+    click('stopped');
+    expect(types()).toEqual(['task-switch']);
+    expect(store.activeTaskId).toBe('idle');
+  } finally {
+    Reflect.deleteProperty(document, 'startViewTransition');
+  }
+});
+
 it('folds minimized and snoozed tasks into one lane unless they need you', () => {
   // Before the store changes: the mocked snooze set is not reactive.
   snoozed.add('pr');

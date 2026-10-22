@@ -482,6 +482,29 @@ main.board-panel-left > .task-board {
 ::view-transition-old(task-workspace.panel-left):only-child {
   animation-name: board-side-panel-push-out-left;
 }
+/* Switching the side panel to another task: only the task beneath the bar
+   changes, so it alone gets a snapshot. The old task vanishes at once, since a
+   cross-fade shows two tasks' lines on top of each other, and the new one
+   rises in quickly. */
+:root:active-view-transition-type(task-switch) .board-side-panel .tiling-layout-shell {
+  view-transition-name: board-side-panel-task;
+}
+::view-transition-old(board-side-panel-task) {
+  animation: none;
+  opacity: 0;
+}
+::view-transition-new(board-side-panel-task) {
+  height: 100%;
+  object-fit: none;
+  object-position: left top;
+  animation: board-task-switch-in 140ms cubic-bezier(0.2, 0, 0, 1);
+}
+@keyframes board-task-switch-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
 @keyframes view-fade-in {
   from {
     opacity: 0;
