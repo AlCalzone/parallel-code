@@ -183,9 +183,14 @@
 .task-board-card:has(.task-board-title:focus) {
   box-shadow: 0 0 0 1px var(--border-focus);
 }
+/* A closing task fades while its teardown runs; the card stays put. */
+.task-board-card.closing {
+  opacity: 0.55;
+}
 /* Failure keeps one signal: a faint red surface. */
 .task-board-card.state-error,
-.task-board-card.failed {
+.task-board-card.failed,
+.task-board-card.close-failed {
   background: color-mix(in srgb, var(--error) 9%, transparent);
 }
 .task-board-title {
@@ -336,7 +341,8 @@
   font-weight: 500;
   color: var(--warning);
 }
-.state-error .task-board-ask-label {
+.state-error .task-board-ask-label,
+.close-failed .task-board-ask-label {
   color: var(--error);
 }
 .state-review .task-board-ask-label {

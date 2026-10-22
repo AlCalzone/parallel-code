@@ -12,6 +12,7 @@ import {
   unregisterFocusFn,
 } from '../store/store';
 import { navigateBoard, navigateBoardTask } from './task-board-keys';
+import { retryCloseTask } from '../store/tasks';
 import type { Task } from '../store/types';
 import { BoardSidePanelBar } from './BoardSidePanel';
 import { FocusModeTaskIndicators } from './FocusModeTaskIndicators';
@@ -20,7 +21,7 @@ import { WORKING_HOLD_MS } from './task-board-hold';
 import { WorkspaceControls } from './WorkspaceControls';
 
 vi.mock('../lib/ipc', () => ({ invoke: vi.fn(async () => ({})) }));
-vi.mock('../store/tasks', () => ({ uncollapseTask: vi.fn() }));
+vi.mock('../store/tasks', () => ({ uncollapseTask: vi.fn(), retryCloseTask: vi.fn() }));
 const snoozed = vi.hoisted(() => new Set<string>());
 vi.mock('../store/background-tasks', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../store/background-tasks')>()),
@@ -200,6 +201,51 @@ it('shows the branch when a card has no agent activity', () => {
   const line = host.querySelector('.lane-stopped .task-board-activity');
   expect(line?.textContent).toBe('idle');
   expect(line?.classList.contains('branch')).toBe(true);
+});
+
+it('marks a closing task and offers nothing to answer while it closes', () => {
+  setStore('tasks', 'review', 'closingStatus', 'closing');
+  const card = host.querySelector('[data-board-task-id="review"]');
+  expect(card?.classList).toContain('closing');
+  expect(card?.querySelector('.task-board-activity')?.textContent).toBe('Closing…');
+  expect(card?.querySelector('.task-board-ask')).toBeNull();
+});
+
+it('does not read agents killed by a close as a failure', () => {
+  setStore('tasks', 'idle', { agentIds: ['a1'], closingStatus: 'closing' });
+  setStore('agents', 'a1', {
+    id: 'a1',
+    taskId: 'idle',
+    def: {
+      id: 'claude-code',
+      name: 'Claude Code',
+      command: 'claude',
+      args: [],
+      resume_args: [],
+      skip_permissions_args: [],
+      description: '',
+    },
+    resumed: false,
+    status: 'exited',
+    exitCode: null,
+    signal: 'SIGTERM',
+    lastOutput: [],
+    generation: 0,
+  });
+  expect(cardNames('Stopped')).toContain('Update docs');
+  expect(host.querySelector('[data-board-task-id="idle"]')?.classList).not.toContain('state-error');
+});
+
+it('moves a task whose close failed to Needs you, with a retry', () => {
+  setStore('tasks', 'pr', { closingStatus: 'error', closingError: 'worktree is locked' });
+  expect(cardNames('Needs you')).toContain('Add dark mode');
+  const ask = host.querySelector('[data-board-task-id="pr"] .task-board-ask');
+  expect(ask?.querySelector('.task-board-ask-label')?.textContent).toBe('Close failed');
+  expect(ask?.querySelector('.task-board-ask-label')?.getAttribute('title')).toBe(
+    'worktree is locked',
+  );
+  ask?.querySelector<HTMLButtonElement>('.task-board-act')?.click();
+  expect(retryCloseTask).toHaveBeenCalledWith('pr');
 });
 
 it('opens a clicked task beside the board and marks its card', () => {

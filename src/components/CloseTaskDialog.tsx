@@ -2,6 +2,9 @@ import { Show, createResource } from 'solid-js';
 import { invoke } from '../lib/ipc';
 import { IPC } from '../../electron/ipc/channels';
 import { armSpCompletion, closeTask, getProject, getCoordinatorCloseWarning } from '../store/store';
+import { store } from '../store/core';
+import { boardSidePanelOpen } from '../store/project-pages';
+import { closeSidePanel } from './BoardSidePanel';
 import { ConfirmDialog } from './ConfirmDialog';
 import { theme, bannerStyle } from '../lib/theme';
 import type { Task } from '../store/types';
@@ -156,6 +159,8 @@ export function CloseTaskDialog(props: CloseTaskDialogProps) {
       danger={props.task.gitIsolation === 'worktree' && !props.task.externalWorktree}
       onConfirm={() => {
         props.onDone();
+        // The board's side panel goes at once; the card shows the teardown.
+        if (boardSidePanelOpen() && store.activeTaskId === props.task.id) closeSidePanel();
         armSpCompletion(props.task.id, { kind: 'closed' });
         closeTask(props.task.id);
       }}

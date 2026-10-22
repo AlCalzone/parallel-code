@@ -26,13 +26,17 @@ const LANE_TITLES: Record<BoardLaneId, string> = {
   snoozed: 'Snoozed & minimized',
 };
 
-/** A task's state as the board shows it, with short pauses in work smoothed over. */
+/** A task's state as the board shows it, with short pauses in work smoothed over.
+ *  A closing task's agents are stopped on purpose, so their exit is no failure. */
 export function boardTaskState(task: Task): CardTaskState {
+  if (task.closingStatus) return 'idle';
   return holdWorking(task.id, cardTaskState(task));
 }
 
 /** Where a task sits on the board: the first of these checks that claims it. */
 export function boardLaneOf(task: Task): BoardLaneId {
+  // A close that failed leaves a worktree behind until someone retries.
+  if (task.closingStatus === 'error') return 'needs';
   // Snoozed tasks wake on their own when they need attention.
   if (isTaskBackgrounded(task.id)) return 'snoozed';
   const state = boardTaskState(task);

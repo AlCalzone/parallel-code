@@ -9,6 +9,7 @@ import { getPrChecks } from '../store/pr-checks-state';
 import { openBoardSidePanel } from '../store/project-pages';
 import { getProject } from '../store/projects';
 import { getTaskAttentionState, getTaskDotStatus, getTaskOpenQuestion } from '../store/taskStatus';
+import { retryCloseTask } from '../store/tasks';
 import type { Task } from '../store/types';
 import { activityLine, kanbanNow, openTask, stateLabel, type CardTaskState } from './KanbanCard';
 import { StatusDot } from './StatusDot';
@@ -48,6 +49,24 @@ function openBeside(task: Task): void {
       openBoardSidePanel();
       openTask(task);
     }),
+  );
+}
+
+/** Offers another try at a close whose teardown failed; the error is the label's tooltip. */
+function CloseFailed(props: { task: Task }) {
+  return (
+    <div class="task-board-ask">
+      <span class="task-board-ask-label" title={props.task.closingError}>
+        Close failed
+      </span>
+      <button
+        type="button"
+        class="task-board-act"
+        onClick={() => void retryCloseTask(props.task.id)}
+      >
+        Retry
+      </button>
+    </div>
   );
 }
 
@@ -102,15 +121,26 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
   // activityLine falls back to the agent's name, which the meta row already
   // shows; the branch says more and keeps the line from standing empty.
   const fromAgent = () => !activity().text || activity().text === agentName(props.task);
-  const activityText = () => (fromAgent() ? props.task.branchName : activity().text);
+  const closing = () =>
+    props.task.closingStatus === 'closing' || props.task.closingStatus === 'removing';
+  const activityText = () => {
+    if (closing()) return 'Closing…';
+    return fromAgent() ? props.task.branchName : activity().text;
+  };
   const shown = () => store.boardPeek && store.activeTaskId === props.task.id;
   const question = () => getTaskOpenQuestion(props.task.id);
-  const ask = () => (props.lane === 'needs' ? ASK_ACTION[state()] : undefined);
+  const ask = () =>
+    props.lane === 'needs' && !props.task.closingStatus ? ASK_ACTION[state()] : undefined;
   return (
     <li
       class={`task-board-card state-${state()}`}
       data-board-task-id={props.task.id}
-      classList={{ failed: getPrChecks(props.task.id)?.overall === 'failure', shown: shown() }}
+      classList={{
+        failed: getPrChecks(props.task.id)?.overall === 'failure',
+        'close-failed': props.task.closingStatus === 'error',
+        shown: shown(),
+        closing: closing(),
+      }}
     >
       <button
         type="button"
@@ -136,12 +166,19 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
         waiting={question() !== null}
       />
       {/* Always rendered so a task starting or stopping never changes the card's height. */}
-      <p class="task-board-activity" classList={{ branch: fromAgent() }} title={activityText()}>
+      <p
+        class="task-board-activity"
+        classList={{ branch: fromAgent() && !closing() }}
+        title={activityText()}
+      >
         {activityText() || ' '}
       </p>
       <Show when={props.task.prUrl}>{(url) => <CardPr taskId={props.task.id} url={url()} />}</Show>
       <Show when={props.lane === 'snoozed' && setAsideLabel(props.task)}>
         {(label) => <p class="task-board-row">{label()}</p>}
+      </Show>
+      <Show when={props.task.closingStatus === 'error'}>
+        <CloseFailed task={props.task} />
       </Show>
       <Show when={ask()}>
         {(action) => (
