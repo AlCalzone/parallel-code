@@ -139,6 +139,15 @@ it('does not hold work that stopped while the board was closed', () => {
   expect(cardNames('Stopped')).toEqual(['Update docs']);
 });
 
+it('says why a stopped card spins when only its terminal is busy', () => {
+  const meta = () => lane('Stopped')?.querySelector('.task-board-meta')?.textContent ?? '';
+  expect(meta()).not.toContain('Terminal busy');
+  attention.force({ idle: 'shell_busy' });
+  expect(cardNames('Stopped')).toEqual(['Update docs']);
+  expect(lane('Stopped')?.querySelector('.task-board-glyph .status-glyph')).not.toBeNull();
+  expect(meta()).toContain('Terminal busy');
+});
+
 it('marks each card with the status glyph the title-bar pills use', () => {
   const glyph = lane('Needs you')?.querySelector<HTMLElement>('.task-board-title .status-glyph');
   expect(glyph?.title).toContain('Ready for review');

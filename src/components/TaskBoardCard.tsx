@@ -82,7 +82,15 @@ function CardMeta(props: { task: Task; since: number | undefined; waiting: boole
           </span>
         )}
       </Show>
-      <span class="task-board-agent">{agentName(props.task)}</span>
+      {/* Names the cause of a stopped card's spinner in the agent's slot, so the row never reflows. */}
+      <Show
+        when={getTaskAttentionState(props.task.id) === 'shell_busy'}
+        fallback={<span class="task-board-agent">{agentName(props.task)}</span>}
+      >
+        <span class="task-board-agent" title={agentName(props.task)}>
+          Terminal busy
+        </span>
+      </Show>
       <Show when={props.since}>
         {(since) => (
           // The card's "Needs input" row already says it waits; the age says how long.
