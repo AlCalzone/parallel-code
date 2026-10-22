@@ -12,6 +12,7 @@ import {
 } from '../store/store';
 import { useKanbanClock } from './KanbanCard';
 import { TaskBoardCard } from './TaskBoardCard';
+import { forgetWorkingHolds } from './task-board-hold';
 import { useCardMotion } from './task-board-motion';
 import { boardLanes, boardTasks, minimizedTaskCount, type BoardLane } from './task-board-lanes';
 import {
@@ -122,6 +123,7 @@ export function TaskBoard() {
     () => lanes(),
   );
   onCleanup(useKanbanClock());
+  onCleanup(forgetWorkingHolds);
   useBoardFocus();
   return (
     <section

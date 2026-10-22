@@ -16,6 +16,7 @@ import type { Task } from '../store/types';
 import { BoardSidePanelBar } from './BoardSidePanel';
 import { FocusModeTaskIndicators } from './FocusModeTaskIndicators';
 import { TaskBoard } from './TaskBoard';
+import { WORKING_HOLD_MS } from './task-board-hold';
 import { WorkspaceControls } from './WorkspaceControls';
 
 vi.mock('../lib/ipc', () => ({ invoke: vi.fn(async () => ({})) }));
@@ -25,6 +26,24 @@ vi.mock('../store/background-tasks', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../store/background-tasks')>()),
   isTaskBackgrounded: (id: string) => snoozed.has(id),
 }));
+
+// Lets a test force a task's attention state; agent activity is otherwise
+// too far removed from the board to drive.
+const attention = vi.hoisted(() => ({
+  force: (_states: Record<string, string>): void => undefined,
+}));
+vi.mock('../store/taskStatus', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../store/taskStatus')>();
+  const { createSignal } = await import('solid-js');
+  const [forced, setForced] = createSignal<Record<string, string>>({});
+  attention.force = setForced;
+  return {
+    ...original,
+    getTaskAttentionState: (id: string) =>
+      (forced()[id] as ReturnType<typeof original.getTaskAttentionState> | undefined) ??
+      original.getTaskAttentionState(id),
+  };
+});
 
 function task(id: string, name: string, extra: Partial<Task> = {}): Task {
   return {
@@ -81,6 +100,8 @@ beforeEach(() => {
 afterEach(() => {
   dispose();
   document.body.replaceChildren();
+  attention.force({});
+  vi.useRealTimers();
 });
 
 it('sorts tasks into lanes by what they need', () => {
@@ -88,6 +109,27 @@ it('sorts tasks into lanes by what they need', () => {
   expect(cardNames('In pull request')).toEqual(['Add dark mode']);
   expect(cardNames('Stopped')).toEqual(['Update docs']);
   expect(lane('In pull request')?.textContent).toContain('PR #42');
+});
+
+it('keeps a card in Working through a short pause in work', () => {
+  vi.useFakeTimers();
+  attention.force({ idle: 'active' });
+  expect(cardNames('Working')).toEqual(['Update docs']);
+  attention.force({});
+  expect(cardNames('Working')).toEqual(['Update docs']);
+  expect(lane('Working')?.querySelector('.task-board-card')?.classList).toContain('state-active');
+  vi.advanceTimersByTime(WORKING_HOLD_MS);
+  expect(cardNames('Stopped')).toEqual(['Update docs']);
+});
+
+it('does not hold work that stopped while the board was closed', () => {
+  vi.useFakeTimers();
+  attention.force({ idle: 'active' });
+  expect(cardNames('Working')).toEqual(['Update docs']);
+  dispose();
+  attention.force({});
+  dispose = render(() => <TaskBoard />, host);
+  expect(cardNames('Stopped')).toEqual(['Update docs']);
 });
 
 it('marks each card with the status glyph the title-bar pills use', () => {

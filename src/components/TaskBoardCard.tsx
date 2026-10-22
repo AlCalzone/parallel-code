@@ -9,16 +9,9 @@ import { openBoardSidePanel } from '../store/project-pages';
 import { getProject } from '../store/projects';
 import { getTaskAttentionState, getTaskDotStatus, getTaskOpenQuestion } from '../store/taskStatus';
 import type { Task } from '../store/types';
-import {
-  activityLine,
-  cardTaskState,
-  kanbanNow,
-  openTask,
-  stateLabel,
-  type CardTaskState,
-} from './KanbanCard';
+import { activityLine, kanbanNow, openTask, stateLabel, type CardTaskState } from './KanbanCard';
 import { StatusDot } from './StatusDot';
-import type { BoardLaneId } from './task-board-lanes';
+import { boardTaskState, type BoardLaneId } from './task-board-lanes';
 
 const ASK_ACTION: Partial<Record<CardTaskState, string>> = {
   needs_input: 'Answer',
@@ -101,7 +94,7 @@ function CardPr(props: { taskId: string; url: string }) {
 
 /** One task on the all-tasks board; clicking anywhere opens it beside the board. */
 export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
-  const state = createMemo(() => cardTaskState(props.task));
+  const state = createMemo(() => boardTaskState(props.task));
   const activity = createMemo(() => activityLine(props.task));
   // activityLine falls back to the agent's name, which the meta row already
   // shows; the branch says more and keeps the line from standing empty.

@@ -5,7 +5,8 @@ import { getProject } from '../store/projects';
 import { matchesTaskProjectFilter } from '../store/task-project-filter';
 import { getTaskOpenQuestion } from '../store/taskStatus';
 import type { Task } from '../store/types';
-import { cardTaskState } from './KanbanCard';
+import { cardTaskState, type CardTaskState } from './KanbanCard';
+import { holdWorking } from './task-board-hold';
 
 export type BoardLaneId = 'needs' | 'working' | 'stopped' | 'pr' | 'snoozed';
 
@@ -23,11 +24,16 @@ const LANE_TITLES: Record<BoardLaneId, string> = {
   snoozed: 'Snoozed',
 };
 
+/** A task's state as the board shows it, with short pauses in work smoothed over. */
+export function boardTaskState(task: Task): CardTaskState {
+  return holdWorking(task.id, cardTaskState(task));
+}
+
 /** Where a task sits on the board: the first lane, left to right, that claims it. */
 export function boardLaneOf(task: Task): BoardLaneId {
   // Snoozed tasks wake on their own when they need attention.
   if (isTaskBackgrounded(task.id)) return 'snoozed';
-  const state = cardTaskState(task);
+  const state = boardTaskState(task);
   if (state === 'needs_input' || state === 'error' || state === 'review') return 'needs';
   if (state === 'active') return 'working';
   if (task.prUrl) return 'pr';
@@ -77,7 +83,7 @@ function byLongestWait(tasks: Task[]): Task[] {
 
 /** Committed, clean work first; the rest keeps sidebar order. */
 function readyFirst(tasks: Task[]): Task[] {
-  const rank = (task: Task) => (cardTaskState(task) === 'ready' ? 0 : 1);
+  const rank = (task: Task) => (boardTaskState(task) === 'ready' ? 0 : 1);
   return [...tasks].sort((a, b) => rank(a) - rank(b));
 }
 
