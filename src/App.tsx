@@ -8,7 +8,13 @@ import {
   boardSidePanelBasis,
   closeSidePanel,
 } from './components/BoardSidePanel';
-import { boardShown, boardSidePanelOpen, closeBoard, projectPageOpen } from './store/project-pages';
+import {
+  boardCoversWorkspace,
+  boardShown,
+  boardSidePanelOpen,
+  closeBoard,
+  projectPageOpen,
+} from './store/project-pages';
 import '@xterm/xterm/css/xterm.css';
 import '@fontsource/inter/400.css';
 import '@fontsource/inter/500.css';
@@ -999,10 +1005,7 @@ function App() {
               'panel-left': boardSidePanelOpen() && store.boardSidePanelLeft,
             }}
             style={{
-              display:
-                projectPageOpen() || (store.boardView && !boardSidePanelOpen())
-                  ? 'none'
-                  : undefined,
+              display: projectPageOpen() || boardCoversWorkspace() ? 'none' : undefined,
               'flex-basis': boardSidePanelOpen() ? boardSidePanelBasis() : undefined,
             }}
           >

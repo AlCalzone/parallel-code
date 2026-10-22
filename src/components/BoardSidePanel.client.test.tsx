@@ -135,7 +135,7 @@ function deferViewTransitions(): (() => void)[] {
   const pending: (() => void)[] = [];
   const start = vi.fn((update: () => void) => {
     pending.push(update);
-    return { ready: Promise.resolve() };
+    return { ready: Promise.resolve(), finished: Promise.resolve() };
   });
   Object.defineProperty(document, 'startViewTransition', { value: start, configurable: true });
   return pending;

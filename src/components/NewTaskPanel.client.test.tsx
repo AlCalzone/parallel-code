@@ -511,7 +511,7 @@ it('cannot submit again while the panel close after creation is pending', async 
   Object.defineProperty(document, 'startViewTransition', {
     value: (update: () => void) => {
       pending.push(update);
-      return { ready: Promise.resolve() };
+      return { ready: Promise.resolve(), finished: Promise.resolve() };
     },
     configurable: true,
   });

@@ -41,7 +41,7 @@ import {
 import { setAgentCanvasTools } from '../store/agents';
 import { clearTerminalInputPendingFromQuestion } from '../store/tasks';
 import { isLandedTaskState } from '../store/landing';
-import { boardSidePanelOpen } from '../store/project-pages';
+import { boardCoversWorkspace, boardSidePanelOpen } from '../store/project-pages';
 import { warn as logWarn } from '../lib/log';
 import {
   registerTerminal,
@@ -56,6 +56,7 @@ import { isEditableDocumentPath } from '../lib/document-path';
 import { computeWrappedPathLinks, createTerminalHttpLinkHandler } from '../lib/terminalLinks';
 import { recordSharedWebglContextLoss, WEBGL_REATTACH_DELAY_MS } from '../lib/webglContextLoss';
 import { isTerminalPaneOnScreen, WEBGL_DETACH_DELAY_MS } from '../lib/terminalPaneVisibility';
+import { viewTransitionSettled } from '../lib/viewTransition';
 import type { PtyOutput } from '../ipc/types';
 import { SyncIcon, SendIcon } from './icons';
 import { TerminalSelectionMenu } from './TerminalSelectionMenu';
@@ -1095,6 +1096,7 @@ export function TerminalView(props: TerminalViewProps) {
       isTerminalPaneOnScreen({
         // The board's side panel shows the active task alone, as focus mode does.
         focusMode: store.focusMode || boardSidePanelOpen(),
+        workspaceCovered: boardCoversWorkspace(),
         activeTaskId: store.activeTaskId,
         taskId,
         viewportVisibility: store.taskViewportVisibility[taskId],
@@ -1112,6 +1114,7 @@ export function TerminalView(props: TerminalViewProps) {
     // hop lands on a different pane.
     let webglReattachTimer: number | undefined;
     let webglDetachTimer: number | undefined;
+    let cancelWebglAttach: (() => void) | undefined;
 
     function attachWebgl() {
       if (!term || webglAddon) return;
@@ -1143,6 +1146,31 @@ export function TerminalView(props: TerminalViewProps) {
       } catch {
         // WebGL2 not supported — DOM renderer used automatically
       }
+    }
+
+    // A context and its glyph atlas take tens of ms per pane, and panes come on
+    // screen in a view change (opening a task beside the board, switching the
+    // focused task) that should paint at once and animate smoothly. The pane
+    // shows on the DOM renderer until both are done, then moves to WebGL.
+    function scheduleWebglAttach() {
+      if (cancelWebglAttach) return;
+      let cancelled = false;
+      let timer: number | undefined;
+      const frame = requestAnimationFrame(() => {
+        void viewTransitionSettled().then(() => {
+          if (cancelled) return;
+          timer = window.setTimeout(() => {
+            cancelWebglAttach = undefined;
+            attachWebgl();
+          }, 0);
+        });
+      });
+      cancelWebglAttach = () => {
+        cancelled = true;
+        cancelAnimationFrame(frame);
+        if (timer !== undefined) clearTimeout(timer);
+        cancelWebglAttach = undefined;
+      };
     }
 
     function detachWebgl() {
@@ -1187,11 +1215,12 @@ export function TerminalView(props: TerminalViewProps) {
         }
         if (!webglAddon && webglReattachTimer === undefined) {
           // loadAddon → setRenderer already repaints this pane in full.
-          attachWebgl();
+          scheduleWebglAttach();
         } else if (isMac && prevOnScreen === false) {
           redrawAllTerminals();
         }
       } else if (webglDetachTimer === undefined) {
+        cancelWebglAttach?.();
         webglDetachTimer = window.setTimeout(() => {
           webglDetachTimer = undefined;
           detachWebgl();
@@ -1302,6 +1331,7 @@ export function TerminalView(props: TerminalViewProps) {
       if (resizeFlushTimer !== undefined) clearTimeout(resizeFlushTimer);
       if (webglReattachTimer !== undefined) clearTimeout(webglReattachTimer);
       if (webglDetachTimer !== undefined) clearTimeout(webglDetachTimer);
+      cancelWebglAttach?.();
       cancelScheduledOutputFlush();
       onOutput.cleanup?.();
       webglAddon?.dispose();

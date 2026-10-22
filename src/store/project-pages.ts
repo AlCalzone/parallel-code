@@ -18,6 +18,11 @@ export function boardSidePanelOpen(): boolean {
   return store.boardView && (store.boardPeek || store.showNewTaskPanel);
 }
 
+/** Whether the all-tasks board hides the task workspace: open, without its side panel. */
+export function boardCoversWorkspace(): boolean {
+  return store.boardView && !boardSidePanelOpen();
+}
+
 /** Opens the board's side panel; the task to show is whichever becomes active. */
 export function openBoardSidePanel(): void {
   setStore('boardPeek', true);
