@@ -1056,6 +1056,8 @@ export function getReadyLabel(taskId: string): string {
 function hasTaskAgentError(taskId: string): boolean {
   const task = store.tasks[taskId];
   if (!task) return false;
+  // Closing kills the agents on purpose; their signal exit is not a failure.
+  if (task.closingStatus === 'closing' || task.closingStatus === 'removing') return false;
   return task.agentIds.some((id) => {
     const agent = store.agents[id];
     if (agent && isAgentChat(task, id)) return !!agent.chatState?.error;

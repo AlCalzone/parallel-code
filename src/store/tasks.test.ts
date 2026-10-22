@@ -1897,6 +1897,20 @@ describe('Super Productivity completion wiring', () => {
     expect(fireSpCompletion).toHaveBeenCalledWith('task-1');
   });
 
+  it('marks a merged task as closing before killing its agents', async () => {
+    mockTasks['task-1'] = { ...worktreeTask(), agentIds: ['agent-1'] };
+    const statusAtKill: unknown[] = [];
+    mockInvoke.mockImplementation((channel: string) => {
+      if (channel === IPC.KillAgent) statusAtKill.push(mockTasks['task-1']?.closingStatus);
+      return Promise.resolve(
+        channel === IPC.MergeTask ? { lines_added: 1, lines_removed: 0 } : undefined,
+      );
+    });
+    await mergeTask('task-1', { cleanup: true });
+    // Otherwise the killed agents' signal exits show the card as failed.
+    expect(statusAtKill).toEqual(['closing']);
+  });
+
   it('does not complete anything for a merge that keeps the task', async () => {
     mockTasks['task-1'] = worktreeTask();
     await mergeTask('task-1', { cleanup: false });

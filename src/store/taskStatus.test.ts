@@ -1417,6 +1417,19 @@ describe('task attention state', () => {
     expect(taskNeedsAttention('task-1')).toBe(true);
   });
 
+  it('does not report the agents killed by closing a task as an error', () => {
+    setMockAgent('agent-1', { status: 'exited', exitCode: null, signal: 'SIGHUP' });
+    for (const closingStatus of ['closing', 'removing'] as const) {
+      setMockTask('task-1', { agentIds: ['agent-1'], closingStatus });
+      expect(getTaskAttentionState('task-1')).toBe('idle');
+    }
+    // A close that failed, or no close at all, still shows the dead agent.
+    for (const closingStatus of ['error', undefined] as const) {
+      setMockTask('task-1', { agentIds: ['agent-1'], closingStatus });
+      expect(getTaskAttentionState('task-1')).toBe('error');
+    }
+  });
+
   it('marks coordinator review tasks as review attention', () => {
     setMockTask('task-1', { needsReview: true });
 

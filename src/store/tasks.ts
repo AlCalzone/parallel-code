@@ -639,6 +639,9 @@ export async function mergeTask(
       linesAdded: mergeResult.lines_added,
       linesRemoved: mergeResult.lines_removed,
     });
+    // From here the task always leaves the store; marking it closing keeps the
+    // agents' kill exits from reading as failures in the meantime.
+    setStore('tasks', taskId, 'closingStatus', 'closing');
     await Promise.allSettled(
       [...agentIds, ...shellAgentIds].map((id) => invoke(IPC.KillAgent, { agentId: id })),
     );
