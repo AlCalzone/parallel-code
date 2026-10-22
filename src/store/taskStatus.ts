@@ -358,6 +358,12 @@ function findLastNonEmptyScreenClear(raw: string): number {
   return -1;
 }
 
+/** A bare ❯/› line: the agent is back at its main prompt. Splits on a lone \r
+ *  too, because Claude redraws its prompt after a \r on the status line. */
+function hasBarePromptLine(visible: string): boolean {
+  return visible.split(/\r\n?|\n/).some((l) => /^\s*[❯›]\s*$/.test(l));
+}
+
 /** True when recent output contains a question or confirmation prompt.
  *  Checks ALL recent lines because TUI dialogs render the question above
  *  selection options — the question text may not be the last line.
@@ -401,8 +407,7 @@ export function looksLikeQuestion(tail: string): boolean {
   const rawLower = analysisTail.toLowerCase();
   if (rawLower.includes('confirm folder trust') || rawLower.includes('do you trust')) {
     // Bare ❯ on its own line means the dialog was already answered.
-    const hasBarePromptLineRaw = lines.some((l) => /^\s*[❯›]\s*$/.test(l.trimEnd()));
-    if (!hasBarePromptLineRaw) {
+    if (!hasBarePromptLine(visible)) {
       return true;
     }
   }
@@ -424,8 +429,7 @@ export function looksLikeQuestion(tail: string): boolean {
   if (hasTrustContent) {
     // A bare ❯ on its own line means the agent returned to its prompt after
     // the trust dialog was already handled (old text lingers in the tail buffer).
-    const hasBarePromptLine = lines.some((l) => /^\s*[❯›]\s*$/.test(l.trimEnd()));
-    if (!hasBarePromptLine) {
+    if (!hasBarePromptLine(visible)) {
       return true;
     }
   }
@@ -450,8 +454,6 @@ export function looksLikeQuestion(tail: string): boolean {
   const afterQuestion = visible.slice(visible.lastIndexOf(questionLine));
   const scope = SELECTION_CURSOR_LINE.test(afterQuestion) ? afterQuestion : visible;
   if (scope === afterQuestion && PROMPT_AFTER_MENU.test(afterQuestion)) return false;
-  // A question in Claude's reply is prose once its input box is drawn below it.
-  if (CLAUDE_INPUT_BOX.test(afterQuestion)) return false;
   const scopeLines = scope.split(/\r?\n/).filter((l) => l.trim().length > 0);
   const lastLine = lines[lines.length - 1].trimEnd();
   const recentLines = scopeLines.slice(-8);
@@ -486,9 +488,6 @@ export function looksLikeQuestion(tail: string): boolean {
 const SELECTION_CURSOR_LINE = /^\s*[❯›]\s*\d+\./m;
 /** The input box back below a menu, even holding typed text: it was answered. */
 const PROMPT_AFTER_MENU = /^\s*[❯›]\s*\d+\.[^]*^\s*[❯›](?!\s*\d+\.)/m;
-/** Claude's input box under its top rule, holding a draft or the dimmed
- *  suggestion it shows after a turn. Its dialogs number their `❯` options. */
-const CLAUDE_INPUT_BOX = /─{3,}\s*❯(?!\s*\d+\.)/;
 
 function isQuestionLine(line: string): boolean {
   const trimmed = line.trimEnd();

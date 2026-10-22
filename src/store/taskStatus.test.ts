@@ -617,18 +617,33 @@ describe('looksLikeQuestion', () => {
     expect(looksLikeQuestion(answered)).toBe(false);
   });
 
-  it('ignores a question in Claude’s reply once its input box shows a suggested prompt', () => {
-    // After a turn Claude fills the empty input with a dimmed suggestion; once
-    // ANSI is stripped it reads like typed text, but Claude is at its prompt.
-    const idle = [
-      '⏺ Done. Would you like me to update the docs too?',
-      '',
-      '─'.repeat(60),
-      '❯ yes, update the docs',
-      '─'.repeat(60),
-      '  ⏵⏵ auto mode on (shift+tab to cycle)',
-    ].join('\r\n');
+  it('ignores trust words in a Claude reply once its prompt is redrawn', () => {
+    // Recorded from Claude Code 2.1.308 with the reply words swapped: spaces
+    // are cursor moves, and the prompt follows a lone \r on the status line.
+    const idle =
+      '\x1b[2C\x1b[10AI\x1b[3Gchecked\x1b[11Gthe\x1b[15Gtrust\x1b[21Gsettings' +
+      '\x1b[30Gfor\x1b[34Gthis\x1b[39Gworktree\x1b[48Gfolder.\r\r\n' +
+      '\r\n'.repeat(9) +
+      '\x1b[2C\x1b[5A\x1b[?25h\x1b[?25l\x1b[2D\x1b[5B\r\x1b[8A' +
+      '\x1b[38;2;153;153;153m✻\x1b[3GChurned for 1s · done 8:56 PM\r\x1b[3B\x1b[39m❯\xa0\r\r\n' +
+      '\r\n'.repeat(4) +
+      '\x1b[2C\x1b[5A\x1b[?25h\x1b[?25l\x1b[2D\x1b[5B\r\x1b[2C\x1b[2A80% 134k · Haiku 5.5 med\r\r\n';
     expect(looksLikeQuestion(idle)).toBe(false);
+  });
+
+  it('ignores an answered startup trust dialog once Claude idles after a turn', () => {
+    const idle =
+      '❯\x1b[4GNo,\x1b[8Gexit\r\r\n\x1b[4GYes,\x1b[9GI\x1b[11Gtrust\x1b[17Gthis\x1b[22Gfolder\r\r\n' +
+      '\x1b[2C\x1b[10ADone.\r\r\n' +
+      '\x1b[8A✻\x1b[3GChurned for 1s · done 8:56 PM\r\x1b[3B❯\xa0\r\r\n';
+    expect(looksLikeQuestion(idle)).toBe(false);
+  });
+
+  it('still detects a permission dialog drawn after an idle Claude prompt', () => {
+    const asking =
+      '✻\x1b[3GChurned for 1s · done 8:56 PM\r\x1b[3B❯\xa0\r\r\n' +
+      ' Do you want to allow this edit?\r\n ❯ 1. Yes\r\n   2. No\r\n';
+    expect(looksLikeQuestion(asking)).toBe(true);
   });
 
   it('keeps an idle agent quiet when its reply lands after the prompt was drawn', () => {
