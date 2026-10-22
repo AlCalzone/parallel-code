@@ -248,6 +248,19 @@ it('says why the board is empty', () => {
   expect(host.querySelector('.task-board-empty')?.textContent).toBe('No open tasks');
 });
 
+it("marks a card's project with its icon when it has one, else a color bar", () => {
+  const project = () => host.querySelector('.lane-stopped .task-board-project');
+  expect(project()?.querySelector('i')).not.toBeNull();
+  expect(project()?.querySelector('svg')).toBeNull();
+
+  setStore('projects', 0, 'icon', 'terminal');
+
+  const icon = project()?.querySelector<HTMLElement>('.project-swatch-icon');
+  expect(icon?.querySelector('svg')).not.toBeNull();
+  expect(icon?.style.color).toBe('#0af');
+  expect(project()?.querySelector('i')).toBeNull();
+});
+
 it('shows the branch when a card has no agent activity', () => {
   const line = host.querySelector('.lane-stopped .task-board-activity');
   expect(line?.textContent).toBe('idle');

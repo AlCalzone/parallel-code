@@ -16,10 +16,11 @@ import {
 } from './ProjectDialogParts';
 import { ProjectBookmarksField } from './ProjectBookmarksField';
 import { ProjectColorPicker } from './ProjectColorPicker';
+import { ProjectIconField } from './ProjectIconField';
 import { ProjectFolderField } from './ProjectFolderField';
 import { ProjectTaskSection } from './ProjectTaskSection';
 import { ProjectVerificationSection } from './ProjectVerificationSection';
-import { createProjectSettingsForm } from './project-settings-form';
+import { colorFromHue, createProjectSettingsForm } from './project-settings-form';
 import { DialogTabs, dialogTabId, dialogTabPanelId, type DialogTab } from './DialogTabs';
 
 interface EditProjectDialogProps {
@@ -198,6 +199,11 @@ export function EditProjectDialog(props: EditProjectDialogProps) {
               </ProjectField>
 
               <ProjectColorPicker hue={form.hue()} onChange={form.setHue} />
+              <ProjectIconField
+                icon={form.icon()}
+                color={colorFromHue(form.hue())}
+                onChange={form.setIcon}
+              />
 
               <ProjectFolderField
                 projectId={project().id}

@@ -8,6 +8,7 @@ import { store } from '../store/core';
 import { getPrChecks } from '../store/pr-checks-state';
 import { boardSidePanelOpen, openBoardSidePanel } from '../store/project-pages';
 import { getProject } from '../store/projects';
+import { ProjectSwatch } from './ProjectSwatch';
 import { getTaskAttentionState, getTaskDotStatus, getTaskOpenQuestion } from '../store/taskStatus';
 import { retryCloseTask, uncollapseTask } from '../store/tasks';
 import type { Task } from '../store/types';
@@ -108,7 +109,12 @@ function CardMeta(props: { task: Task; since: number | undefined; waiting: boole
       <Show when={project()}>
         {(p) => (
           <span class="task-board-project">
-            <i style={{ background: p().color }} aria-hidden="true" />
+            <Show
+              when={p().icon}
+              fallback={<i style={{ background: p().color }} aria-hidden="true" />}
+            >
+              {(icon) => <ProjectSwatch color={p().color} icon={icon()} size={8} />}
+            </Show>
             <span>{p().name}</span>
           </span>
         )}

@@ -131,3 +131,31 @@ it('switches tabs with the arrow keys and moves focus along', () => {
   );
   expect(selectedTab()).toBe('General');
 });
+
+it('saves the chosen icon and clears it with "No icon"', async () => {
+  setStore('projects', [{ id: 'project', name: 'App', path: '/repo', color: 'hsl(0, 70%, 75%)' }]);
+  vi.mocked(invoke).mockResolvedValue(undefined);
+  const onClose = vi.fn();
+  const host = document.createElement('div');
+  document.body.append(host);
+  dispose = render(() => <EditProjectDialog project={store.projects[0]} onClose={onClose} />, host);
+  const button = (label: string) => {
+    const found = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.getAttribute('aria-label') === label || b.textContent?.trim() === label,
+    );
+    if (!found) throw new Error(`Missing ${label} button`);
+    return found;
+  };
+
+  const terminal = button('terminal icon');
+  terminal.click();
+  expect(terminal.getAttribute('aria-pressed')).toBe('true');
+  button('Save').click();
+  await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
+  expect(store.projects[0].icon).toBe('terminal');
+
+  button('No icon').click();
+  expect(terminal.getAttribute('aria-pressed')).toBe('false');
+  button('Save').click();
+  await vi.waitFor(() => expect(store.projects[0].icon).toBeUndefined());
+});

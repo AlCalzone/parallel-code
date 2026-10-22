@@ -86,7 +86,7 @@ function AttentionRow(props: { entry: AttentionEntry; nowMs: number; onOpen: () 
             <Show when={project()}>
               {(p) => (
                 <>
-                  <ProjectSwatch color={p().color} size={6} />
+                  <ProjectSwatch color={p().color} icon={p().icon} size={6} />
                   <span
                     style={{
                       overflow: 'hidden',

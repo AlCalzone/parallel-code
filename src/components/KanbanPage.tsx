@@ -21,6 +21,7 @@ import {
   useKanbanClock,
   type EditorDraft,
 } from './KanbanCard';
+import { ProjectSwatch } from './ProjectSwatch';
 import { ResizablePanel, type PanelChild } from './ResizablePanel';
 import {
   ArrowLeftIcon,
@@ -1034,7 +1035,18 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
       <header class="kanban-heading">
         <div class="kanban-heading-title">
           <h2 id="kanban-title" title={`${board()?.title || 'Kanban'} · ${props.project.name}`}>
-            {board()?.title || 'Kanban'} <span>· {props.project.name}</span>
+            {board()?.title || 'Kanban'}{' '}
+            <span>
+              ·{' '}
+              <Show when={props.project.icon}>
+                {(icon) => (
+                  <>
+                    <ProjectSwatch color={props.project.color} icon={icon()} size={10} />{' '}
+                  </>
+                )}
+              </Show>
+              {props.project.name}
+            </span>
           </h2>
           <small>
             <code>KANBAN.md</code>

@@ -265,6 +265,16 @@ describe('updateProject', () => {
 
     expect(store.projects[0]?.defaultBaseBranch).toBeUndefined();
   });
+
+  it('sets an icon and clears it when undefined is provided', () => {
+    setStore('projects', [{ id: 'p1', name: 'Project', path: '/repo', color: 'hsl(0, 70%, 75%)' }]);
+
+    updateProject('p1', { icon: 'terminal' });
+    expect(store.projects[0]?.icon).toBe('terminal');
+
+    updateProject('p1', { icon: undefined });
+    expect(store.projects[0]?.icon).toBeUndefined();
+  });
 });
 
 describe('updateProject verify command', () => {

@@ -32,7 +32,7 @@ export function ProjectSelect(props: ProjectSelectProps) {
       <For each={codeProjects().sort((a, b) => a.name.localeCompare(b.name))}>
         {(project) => (
           <option value={project.id}>
-            <ProjectSwatch color={project.color} />
+            <ProjectSwatch color={project.color} icon={project.icon} />
             <span>
               {project.name}
               <Show when={props.showPath}> — {project.path}</Show>

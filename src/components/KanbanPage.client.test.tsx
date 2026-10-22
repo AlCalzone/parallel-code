@@ -196,6 +196,15 @@ describe('KanbanPage', () => {
     expect(jumpToWaitingTask).toHaveBeenCalledWith('t1', null);
   });
 
+  it('shows the project icon beside the project name in the heading', async () => {
+    setStore('projects', 0, 'icon', 'terminal');
+    await mount();
+
+    const heading = host.querySelector('#kanban-title');
+    expect(heading?.querySelector('.project-swatch-icon svg')).not.toBeNull();
+    expect(heading?.textContent).toContain('Repo');
+  });
+
   it('offers to create the board when the project has none', async () => {
     disk.text = null;
     await mount();

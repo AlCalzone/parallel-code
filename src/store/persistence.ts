@@ -11,6 +11,7 @@ import { restoreCanvasTaskLinks } from '../lib/canvas-task-links';
 import { restoreMindMap } from '../graph/model';
 import { produce } from 'solid-js/store';
 import { invoke } from '../lib/ipc';
+import { sanitizeProjectIcon } from '../lib/project-icon';
 import { IPC } from '../../electron/ipc/channels';
 import { isChatPermissionMode, restoreChatSessions } from '../../electron/shared/agent-chat-types';
 import { reopenClaudeChatInTerminal } from './agent-chat';
@@ -715,6 +716,7 @@ export async function loadState(): Promise<void> {
   // Also migrate defaultDirectMode -> defaultGitIsolation
   for (const p of projects) {
     if (!p.color) p.color = randomPastelColor();
+    p.icon = sanitizeProjectIcon(p.icon);
     p.allowPeerAccess = p.allowPeerAccess === true;
     if (typeof p.coverageReportPath === 'string') {
       const trimmed = p.coverageReportPath.trim();

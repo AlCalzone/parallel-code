@@ -1,3 +1,4 @@
+import type { ProjectIconId } from '../lib/project-icon';
 import type {
   CompletionRecord,
   SubtaskVerification,
@@ -92,6 +93,8 @@ export interface Project {
   name: string;
   path: string;
   color: string;
+  /** Optional glyph shown instead of the color square, tinted with `color`. */
+  icon?: ProjectIconId;
   branchPrefix?: string; // default "task" if unset
   deleteBranchOnClose?: boolean; // default true if unset
   defaultGitIsolation?: GitIsolationMode;

@@ -5,6 +5,7 @@ import { IPC } from '../../electron/ipc/channels';
 import { store, setStore } from './core';
 import type { Project, Task } from './types';
 import { sanitizeBranchPrefix } from '../lib/branch-name';
+import { sanitizeProjectIcon } from '../lib/project-icon';
 import { projectHiddenAgentTaskIds } from '../documents/task-id';
 import { closeProjectPages } from './project-pages';
 import { forgetBlockEdits } from '../documents/block-edit-state';
@@ -148,6 +149,7 @@ export function updateProject(
       | 'allowPeerAccess'
       | 'name'
       | 'color'
+      | 'icon'
       | 'branchPrefix'
       | 'deleteBranchOnClose'
       | 'defaultGitIsolation'
@@ -179,6 +181,8 @@ export function updateProject(
         s.projects[idx].allowPeerAccess = updates.allowPeerAccess;
       if (updates.name !== undefined) s.projects[idx].name = updates.name;
       if (updates.color !== undefined) s.projects[idx].color = updates.color;
+      if (Object.prototype.hasOwnProperty.call(updates, 'icon'))
+        s.projects[idx].icon = sanitizeProjectIcon(updates.icon);
       if (updates.branchPrefix !== undefined)
         s.projects[idx].branchPrefix = sanitizeBranchPrefix(updates.branchPrefix);
       if (updates.deleteBranchOnClose !== undefined)

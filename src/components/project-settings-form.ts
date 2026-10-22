@@ -4,6 +4,7 @@ import {
   parseEvidenceModelSettings,
 } from '../../electron/shared/evidence-settings';
 import { sanitizeBranchPrefix } from '../lib/branch-name';
+import type { ProjectIconId } from '../lib/project-icon';
 import type { GitIsolationMode, Project, TerminalBookmark } from '../store/types';
 import { finalizeChecks, type CheckDraft } from './EvidenceSettingsFields';
 
@@ -20,6 +21,7 @@ export function colorFromHue(hue: number): string {
 export function createProjectSettingsForm() {
   const [name, setName] = createSignal('');
   const [hue, setHue] = createSignal(0);
+  const [icon, setIcon] = createSignal<ProjectIconId | undefined>();
   const [allowPeerAccess, setAllowPeerAccess] = createSignal(false);
   const [branchPrefix, setBranchPrefix] = createSignal('task');
   const [deleteBranchOnClose, setDeleteBranchOnClose] = createSignal(true);
@@ -35,6 +37,7 @@ export function createProjectSettingsForm() {
   function load(p: Project) {
     setName(p.name);
     setHue(hueFromColor(p.color));
+    setIcon(p.icon);
     setAllowPeerAccess(p.allowPeerAccess === true);
     setBranchPrefix(sanitizeBranchPrefix(p.branchPrefix ?? 'task'));
     setDeleteBranchOnClose(p.deleteBranchOnClose ?? true);
@@ -53,6 +56,7 @@ export function createProjectSettingsForm() {
     return {
       name: name().trim(),
       color: colorFromHue(hue()),
+      icon: icon(),
       branchPrefix: sanitizeBranchPrefix(branchPrefix()),
       deleteBranchOnClose: deleteBranchOnClose(),
       defaultGitIsolation: defaultGitIsolation(),
@@ -71,6 +75,8 @@ export function createProjectSettingsForm() {
     setName,
     hue,
     setHue,
+    icon,
+    setIcon,
     allowPeerAccess,
     setAllowPeerAccess,
     branchPrefix,

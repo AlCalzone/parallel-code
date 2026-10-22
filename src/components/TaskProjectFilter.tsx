@@ -15,7 +15,10 @@ export function TaskProjectFilter() {
   let trigger: HTMLButtonElement | undefined;
   let menu: HTMLDivElement | undefined;
   const selected = () => store.projects.find((project) => project.id === taskProjectFilter());
-  const choices = () => [{ id: '', name: 'All projects', color: undefined }, ...codeProjects()];
+  const choices = () => [
+    { id: '', name: 'All projects', color: undefined, icon: undefined },
+    ...codeProjects(),
+  ];
   const items = () => Array.from(menu?.querySelectorAll<HTMLButtonElement>('button') ?? []);
   const close = () => {
     setOpen(false);
@@ -59,7 +62,7 @@ export function TaskProjectFilter() {
         onClick={() => setOpen(!open())}
       >
         <Show when={selected()}>
-          {(project) => <ProjectSwatch color={project().color} size={7} />}
+          {(project) => <ProjectSwatch color={project().color} icon={project().icon} size={7} />}
         </Show>
         <span>{selected()?.name ?? 'All projects'}</span>
         <CaretDownIcon size={12} />
@@ -134,7 +137,7 @@ export function TaskProjectFilter() {
                       when={project.color}
                       fallback={<span class="task-project-filter-all">▦</span>}
                     >
-                      {(color) => <ProjectSwatch color={color()} size={8} />}
+                      {(color) => <ProjectSwatch color={color()} icon={project.icon} size={8} />}
                     </Show>
                     <span class="task-project-filter-name">{project.name}</span>
                     <span aria-hidden="true">
