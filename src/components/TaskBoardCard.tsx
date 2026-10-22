@@ -7,7 +7,7 @@ import { store } from '../store/core';
 import { getPrChecks } from '../store/pr-checks-state';
 import { openBoardSidePanel } from '../store/project-pages';
 import { getProject } from '../store/projects';
-import { getTaskOpenQuestion } from '../store/taskStatus';
+import { getTaskAttentionState, getTaskDotStatus, getTaskOpenQuestion } from '../store/taskStatus';
 import type { Task } from '../store/types';
 import {
   activityLine,
@@ -17,6 +17,7 @@ import {
   stateLabel,
   type CardTaskState,
 } from './KanbanCard';
+import { StatusDot } from './StatusDot';
 import type { BoardLaneId } from './task-board-lanes';
 
 const ASK_ACTION: Partial<Record<CardTaskState, string>> = {
@@ -122,7 +123,15 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
         title={props.task.name}
         onClick={() => openBeside(props.task)}
       >
-        <span class="task-board-dot" aria-hidden="true" />
+        {/* Same glyph as the title-bar pills, which the board hides. */}
+        <span class="task-board-glyph" aria-hidden="true">
+          <StatusDot
+            status={getTaskDotStatus(props.task.id)}
+            taskId={props.task.id}
+            size="sm"
+            attention={getTaskAttentionState(props.task.id)}
+          />
+        </span>
         <span class="task-board-name">{props.task.name}</span>
       </button>
       <CardMeta

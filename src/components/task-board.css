@@ -189,7 +189,7 @@
 .task-board-title {
   display: flex;
   align-items: flex-start;
-  gap: 7px;
+  gap: 5px;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -217,39 +217,11 @@
   -webkit-line-clamp: 2;
   overflow-wrap: anywhere;
 }
-.task-board-dot {
+.task-board-glyph {
+  display: flex;
   flex-shrink: 0;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--fg-subtle, var(--fg-muted));
-  /* Centred on the first line of the title. */
-  margin-top: 5.5px;
-}
-.state-active .task-board-dot {
-  background: var(--fg-muted);
-  animation: task-board-breathe 1.4s ease-in-out infinite;
-}
-.state-ready .task-board-dot {
-  background: var(--success);
-}
-.state-needs_input .task-board-dot {
-  background: var(--warning);
-}
-.state-error .task-board-dot {
-  background: var(--error);
-}
-.state-review .task-board-dot {
-  background: var(--review, var(--fg-muted));
-}
-@keyframes task-board-breathe {
-  0%,
-  100% {
-    opacity: 0.35;
-  }
-  50% {
-    opacity: 1;
-  }
+  /* Centres the 12px glyph lane on the title's first 18px line. */
+  margin-top: 3px;
 }
 
 .task-board-meta,

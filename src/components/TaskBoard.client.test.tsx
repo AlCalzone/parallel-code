@@ -5,6 +5,7 @@ import { store, setStore } from '../store/core';
 import { boardSidePanelOpen } from '../store/project-pages';
 import type { Task } from '../store/types';
 import { BoardSidePanelBar } from './BoardSidePanel';
+import { FocusModeTaskIndicators } from './FocusModeTaskIndicators';
 import { TaskBoard } from './TaskBoard';
 import { WorkspaceControls } from './WorkspaceControls';
 
@@ -70,6 +71,25 @@ it('sorts tasks into lanes by what they need', () => {
   expect(cardNames('In pull request')).toEqual(['Add dark mode']);
   expect(cardNames('Stopped')).toEqual(['Update docs']);
   expect(lane('In pull request')?.textContent).toContain('PR #42');
+});
+
+it('marks each card with the status glyph the title-bar pills use', () => {
+  const glyph = lane('Needs you')?.querySelector<HTMLElement>('.task-board-title .status-glyph');
+  expect(glyph?.title).toContain('Ready for review');
+  // The glyph stays out of the card's accessible name.
+  expect(host.querySelector('.task-board-title')?.getAttribute('title')).toBe('Fix login redirect');
+  expect(glyph?.closest('[aria-hidden="true"]')).not.toBeNull();
+});
+
+it('hides the title-bar task pills while the board shows', () => {
+  const bar = document.createElement('div');
+  document.body.append(bar);
+  const disposeBar = render(() => <FocusModeTaskIndicators />, bar);
+  expect(bar.querySelector('.focus-mode-task-indicator')).toBeNull();
+
+  setStore('boardView', false);
+  expect(bar.querySelectorAll('.focus-mode-task-indicator')).toHaveLength(3);
+  disposeBar();
 });
 
 it('lists finished work above idle tasks in the stopped lane', () => {

@@ -19,13 +19,13 @@ export function FocusModeTaskIndicators() {
       name: openItemName(id),
     }));
 
+  // The board's cards carry the same glyphs, so the pills would only repeat them.
   return (
-    <Show when={items().length > 0}>
+    <Show when={items().length > 0 && !store.boardView}>
       <div class="focus-mode-task-indicators">
         <For each={items()}>
           {(item) => {
-            // The board covers the active task, so no pill is current there.
-            const isActive = () => item.id === store.activeTaskId && !store.boardView;
+            const isActive = () => item.id === store.activeTaskId;
             return (
               <button
                 type="button"
