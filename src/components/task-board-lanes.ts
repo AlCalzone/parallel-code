@@ -7,7 +7,7 @@ import { getTaskOpenQuestion } from '../store/taskStatus';
 import type { Task } from '../store/types';
 import { cardTaskState } from './KanbanCard';
 
-export type BoardLaneId = 'needs' | 'working' | 'ready' | 'pr' | 'idle' | 'snoozed';
+export type BoardLaneId = 'needs' | 'working' | 'stopped' | 'pr' | 'snoozed';
 
 export interface BoardLane {
   id: BoardLaneId;
@@ -18,9 +18,8 @@ export interface BoardLane {
 const LANE_TITLES: Record<BoardLaneId, string> = {
   needs: 'Needs you',
   working: 'Working',
-  ready: 'Ready',
+  stopped: 'Stopped',
   pr: 'In pull request',
-  idle: 'Idle',
   snoozed: 'Snoozed',
 };
 
@@ -32,7 +31,9 @@ export function boardLaneOf(task: Task): BoardLaneId {
   if (state === 'needs_input' || state === 'error' || state === 'review') return 'needs';
   if (state === 'active') return 'working';
   if (task.prUrl) return 'pr';
-  return state === 'ready' ? 'ready' : 'idle';
+  // Ready vs idle hinges on whether the agent committed, not on what you do
+  // next, so they share a lane and the card's label tells them apart.
+  return 'stopped';
 }
 
 function matchesQuery(task: Task, query: string): boolean {
@@ -58,6 +59,12 @@ function byLongestWait(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => since(a) - since(b));
 }
 
+/** Committed, clean work first; the rest keeps sidebar order. */
+function readyFirst(tasks: Task[]): Task[] {
+  const rank = (task: Task) => (cardTaskState(task) === 'ready' ? 0 : 1);
+  return [...tasks].sort((a, b) => rank(a) - rank(b));
+}
+
 export function boardLanes(tasks: Task[]): BoardLane[] {
   const lanes = (Object.keys(LANE_TITLES) as BoardLaneId[]).map((id) => ({
     id,
@@ -67,5 +74,7 @@ export function boardLanes(tasks: Task[]): BoardLane[] {
   for (const task of tasks) lanes.find((lane) => lane.id === boardLaneOf(task))?.tasks.push(task);
   const needs = lanes[0];
   if (needs) needs.tasks = byLongestWait(needs.tasks);
+  const stopped = lanes.find((lane) => lane.id === 'stopped');
+  if (stopped) stopped.tasks = readyFirst(stopped.tasks);
   return lanes;
 }

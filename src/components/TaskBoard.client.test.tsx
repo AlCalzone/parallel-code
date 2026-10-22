@@ -46,6 +46,7 @@ beforeEach(() => {
     }),
   );
   setStore('agents', reconcile({}));
+  setStore('taskGitStatus', reconcile({}));
   setStore('projects', [{ id: 'web', name: 'Website', path: '/repo', color: '#0af' }]);
   setStore('taskOrder', ['review', 'pr', 'idle']);
   setStore('collapsedTaskOrder', []);
@@ -67,8 +68,22 @@ afterEach(() => {
 it('sorts tasks into lanes by what they need', () => {
   expect(cardNames('Needs you')).toEqual(['Fix login redirect']);
   expect(cardNames('In pull request')).toEqual(['Add dark mode']);
-  expect(cardNames('Idle')).toEqual(['Update docs']);
+  expect(cardNames('Stopped')).toEqual(['Update docs']);
   expect(lane('In pull request')?.textContent).toContain('PR #42');
+});
+
+it('lists finished work above idle tasks in the stopped lane', () => {
+  setStore('tasks', 'done', task('done', 'Add search'));
+  setStore('taskGitStatus', 'done', {
+    has_committed_changes: true,
+    has_uncommitted_changes: false,
+    current_branch: 'done',
+    base_branch: 'main',
+    refreshedAt: Date.now(),
+  });
+  setStore('taskOrder', ['review', 'pr', 'idle', 'done']);
+  expect(cardNames('Stopped')).toEqual(['Add search', 'Update docs']);
+  expect(lane('Stopped')?.querySelector('.task-board-card')?.classList).toContain('state-ready');
 });
 
 it('filters cards by name or project', () => {
@@ -97,7 +112,7 @@ it('says why the board is empty', () => {
 });
 
 it('shows the branch when a card has no agent activity', () => {
-  const line = host.querySelector('.lane-idle .task-board-activity');
+  const line = host.querySelector('.lane-stopped .task-board-activity');
   expect(line?.textContent).toBe('idle');
   expect(line?.classList.contains('branch')).toBe(true);
 });
@@ -110,7 +125,7 @@ it('opens a clicked task beside the board and marks its card', () => {
     'true',
   );
 
-  host.querySelector<HTMLButtonElement>('.lane-idle .task-board-title')?.click();
+  host.querySelector<HTMLButtonElement>('.lane-stopped .task-board-title')?.click();
   expect(store.activeTaskId).toBe('idle');
   expect(store.boardView).toBe(true);
 });
