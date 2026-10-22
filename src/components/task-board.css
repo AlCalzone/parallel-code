@@ -105,15 +105,13 @@
   pointer-events: none;
 }
 .task-board-lane {
+  /* Equal widths, capped so lanes on wide screens stay scannable. */
   flex: 1 1 240px;
   min-width: 212px;
+  max-width: 360px;
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-.task-board-lane.lane-needs {
-  flex-basis: 300px;
-  max-width: 360px;
 }
 .task-board-lane-title {
   display: flex;
