@@ -90,6 +90,16 @@
   padding: 12px 20px 16px;
   overflow: auto;
 }
+/* Islands looks float every panel on the tinted frame; the board is one too,
+   with the sidebar's gutters, so it does not sit on the bare frame. */
+html[data-look^='islands-'] .task-board {
+  margin: 0 6px 6px 3px;
+  border: 1px solid var(--island-border);
+  border-radius: var(--island-radius);
+  background: var(--island-bg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
 /* Beside the side panel the board keeps room for a lane (the panel gives way
    first), and lanes it cuts off fade out rather than end at a hard edge. */
 .task-board:has(+ .task-workspace.board-side-panel) {
@@ -210,13 +220,25 @@
 .task-board-card:hover {
   background: color-mix(in srgb, var(--fg) 7%, transparent);
 }
+/* The task beside the board. An accent tint, as state may use: several looks'
+   --bg-selected-subtle is no lighter than the card's own fill. */
 .task-board-card.shown {
-  background: var(--bg-selected-subtle);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.task-board-card.shown:hover {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 /* :focus, not :focus-visible: the board hands cards the keyboard itself, also
    after a click or an Alt+Arrow, which :focus-visible would leave unmarked. */
 .task-board-card:has(.task-board-title:focus) {
   box-shadow: 0 0 0 1px var(--border-focus);
+}
+/* The card's ring and the filter's border mark focus. The global
+   `:where(…):focus-visible` ring ties with their `outline: none` on
+   specificity and loads later, so it would draw a second ring inside. */
+.task-board-title:focus-visible,
+.task-board-search:focus-visible {
+  outline: none;
 }
 /* A closing task fades while its teardown runs; the card stays put. */
 .task-board-card.closing {
@@ -271,7 +293,8 @@
 .task-board-row,
 .task-board-ask {
   margin: 0;
-  padding-left: 14px;
+  /* The glyph's 12px and the title's 5px gap: rows start under the name. */
+  padding-left: 17px;
   min-width: 0;
 }
 .task-board-meta {
