@@ -2482,25 +2482,20 @@ describe('board layout persistence', () => {
     });
   }
 
-  it('round-trips the side panel side and the minimized-tasks toggle', async () => {
-    mockInvoke.mockResolvedValueOnce(
-      stateWith({ boardSidePanelLeft: true, boardShowMinimized: true }),
-    );
+  it('round-trips the side panel side', async () => {
+    mockInvoke.mockResolvedValueOnce(stateWith({ boardSidePanelLeft: true }));
     await loadState();
     expect(store.boardSidePanelLeft).toBe(true);
-    expect(store.boardShowMinimized).toBe(true);
 
     mockInvoke.mockResolvedValueOnce(undefined);
     await saveState();
     const saved = JSON.parse(mockInvoke.mock.calls.at(-1)?.[1].json);
     expect(saved.boardSidePanelLeft).toBe(true);
-    expect(saved.boardShowMinimized).toBe(true);
   });
 
-  it('defaults both off for older state and hand-edited values', async () => {
-    mockInvoke.mockResolvedValueOnce(stateWith({ boardShowMinimized: 'yes' }));
+  it('defaults the side panel side for older state', async () => {
+    mockInvoke.mockResolvedValueOnce(stateWith({}));
     await loadState();
     expect(store.boardSidePanelLeft).toBe(false);
-    expect(store.boardShowMinimized).toBe(false);
   });
 });

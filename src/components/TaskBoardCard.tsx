@@ -3,6 +3,7 @@ import { invoke } from '../lib/ipc';
 import { IPC } from '../../electron/ipc/channels';
 import { formatRelativeAge } from '../lib/relativeAge';
 import { withViewTransition } from '../lib/viewTransition';
+import { isTaskBackgrounded } from '../store/background-tasks';
 import { store } from '../store/core';
 import { getPrChecks } from '../store/pr-checks-state';
 import { openBoardSidePanel } from '../store/project-pages';
@@ -33,7 +34,9 @@ function prNumber(url: string): string {
   return url.match(/\/pull\/(\d+)/)?.[1] ?? '';
 }
 
-function snoozeLabel(task: Task): string {
+/** Why the card is set aside: when its snooze ends, or that it is minimized. */
+function setAsideLabel(task: Task): string {
+  if (!isTaskBackgrounded(task.id)) return 'Minimized';
   if (task.snoozedUntil === undefined) return task.snoozedUntilCi ? 'Until CI finishes' : '';
   const until = new Date(task.snoozedUntil);
   return `Until ${until.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`;
@@ -137,7 +140,7 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
         {activityText() || ' '}
       </p>
       <Show when={props.task.prUrl}>{(url) => <CardPr taskId={props.task.id} url={url()} />}</Show>
-      <Show when={props.lane === 'snoozed' && snoozeLabel(props.task)}>
+      <Show when={props.lane === 'snoozed' && setAsideLabel(props.task)}>
         {(label) => <p class="task-board-row">{label()}</p>}
       </Show>
       <Show when={ask()}>

@@ -21,7 +21,7 @@ const LANE_TITLES: Record<BoardLaneId, string> = {
   working: 'Working',
   stopped: 'Stopped',
   pr: 'In pull request',
-  snoozed: 'Snoozed',
+  snoozed: 'Snoozed & minimized',
 };
 
 /** A task's state as the board shows it, with short pauses in work smoothed over. */
@@ -35,6 +35,9 @@ export function boardLaneOf(task: Task): BoardLaneId {
   if (isTaskBackgrounded(task.id)) return 'snoozed';
   const state = boardTaskState(task);
   if (state === 'needs_input' || state === 'error' || state === 'review') return 'needs';
+  // Minimized tasks never wake, so they join the snoozed ones only while
+  // nothing needs you; otherwise a question would wait unseen in the rail.
+  if (task.collapsed) return 'snoozed';
   if (state === 'active') return 'working';
   if (task.prUrl) return 'pr';
   // Ready vs idle hinges on whether the agent committed, not on what you do
@@ -58,21 +61,10 @@ function openTasks(): Task[] {
     .filter((task): task is Task => task !== undefined);
 }
 
-/** Minimized by the user; a snooze also minimizes, but such a task keeps its lane. */
-function isMinimized(task: Task): boolean {
-  return task.collapsed === true && !isTaskBackgrounded(task.id);
-}
-
-/** The board's tasks; minimized ones only while the board is set to show them. */
+/** The board's tasks, minimized ones included, matching the filter. */
 export function boardTasks(query: string): Task[] {
   const needle = query.trim().toLowerCase();
-  return openTasks().filter(
-    (task) => (store.boardShowMinimized || !isMinimized(task)) && matchesQuery(task, needle),
-  );
-}
-
-export function minimizedTaskCount(): number {
-  return openTasks().filter(isMinimized).length;
+  return openTasks().filter((task) => matchesQuery(task, needle));
 }
 
 /** The longest-waiting question first; failures and reviews follow in sidebar order. */

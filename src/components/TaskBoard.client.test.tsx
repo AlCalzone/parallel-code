@@ -92,7 +92,6 @@ beforeEach(() => {
   setStore('boardPeek', false);
   setStore('showNewTaskPanel', false);
   setStore('boardSidePanelLeft', false);
-  setStore('boardShowMinimized', false);
   host = document.createElement('div');
   document.body.append(host);
   dispose = render(() => <TaskBoard />, host);
@@ -209,25 +208,22 @@ it('opens a clicked task beside the board and marks its card', () => {
   expect(store.boardView).toBe(true);
 });
 
-it('leaves minimized tasks out until asked, but keeps snoozed ones in their lane', () => {
+it('folds minimized and snoozed tasks into one lane unless they need you', () => {
   // Before the store changes: the mocked snooze set is not reactive.
   snoozed.add('pr');
   setStore('tasks', 'idle', 'collapsed', true);
   setStore('tasks', 'pr', 'collapsed', true);
-  setStore('taskOrder', ['review']);
-  setStore('collapsedTaskOrder', ['pr', 'idle']);
+  setStore('tasks', 'review', 'collapsed', true);
+  setStore('taskOrder', []);
+  setStore('collapsedTaskOrder', ['review', 'pr', 'idle']);
   try {
-    const shown = () =>
-      [...host.querySelectorAll<HTMLElement>('[data-board-task-id]')].map(
-        (el) => el.dataset.boardTaskId,
-      );
-    const toggle = host.querySelector<HTMLButtonElement>('.task-board-minimized');
-    host.querySelector<HTMLButtonElement>('.task-board-rail')?.click();
-    expect(shown()).toEqual(['review', 'pr']);
-    expect(toggle?.textContent).toBe('Minimized 1');
-    toggle?.click();
-    expect(toggle?.getAttribute('aria-pressed')).toBe('true');
-    expect(shown()).toEqual(['review', 'idle', 'pr']);
+    const rail = host.querySelector<HTMLButtonElement>('.task-board-rail');
+    expect(rail?.textContent).toBe('Snoozed & minimized2');
+    rail?.click();
+    const lane = [...host.querySelectorAll<HTMLElement>('.lane-snoozed [data-board-task-id]')];
+    expect(lane.map((el) => el.dataset.boardTaskId)).toEqual(['pr', 'idle']);
+    expect(lane[1]?.textContent).toContain('Minimized');
+    expect(cardNames('Needs you')).toEqual(['Fix login redirect']);
   } finally {
     snoozed.clear();
   }

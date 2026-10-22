@@ -32,11 +32,6 @@ export function toggleBoardSidePanelSide(): void {
   setStore('boardSidePanelLeft', !store.boardSidePanelLeft);
 }
 
-/** Lists minimized tasks on the board too, or leaves them out again; the choice persists. */
-export function toggleBoardShowMinimized(): void {
-  setStore('boardShowMinimized', !store.boardShowMinimized);
-}
-
 /** The arrow key that leads from the side panel towards the board beside it. */
 export function towardBoard(): 'left' | 'right' {
   return store.boardSidePanelLeft ? 'right' : 'left';

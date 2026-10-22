@@ -449,7 +449,6 @@ export async function saveState(): Promise<void> {
     focusMode: store.focusMode || undefined,
     boardView: store.boardView || undefined,
     boardSidePanelLeft: store.boardSidePanelLeft || undefined,
-    boardShowMinimized: store.boardShowMinimized || undefined,
     verboseLogging: store.verboseLogging || undefined,
     coordinatorNotificationDelayMs:
       store.coordinatorNotificationDelayMs !== 60_000
@@ -655,7 +654,6 @@ interface LegacyPersistedState {
   focusMode?: unknown;
   boardView?: unknown;
   boardSidePanelLeft?: unknown;
-  boardShowMinimized?: unknown;
   verboseLogging?: unknown;
   coordinatorNotificationDelayMs?: unknown;
   shareDockerAgentAuth?: unknown;
@@ -918,7 +916,6 @@ export async function loadState(): Promise<void> {
       s.focusMode = raw.focusMode === true;
       s.boardView = raw.boardView === true;
       s.boardSidePanelLeft = raw.boardSidePanelLeft === true;
-      s.boardShowMinimized = raw.boardShowMinimized === true;
 
       s.verboseLogging = typeof raw.verboseLogging === 'boolean' ? raw.verboseLogging : false;
 

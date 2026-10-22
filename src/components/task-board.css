@@ -64,10 +64,6 @@
 .task-board-new:hover {
   background: color-mix(in srgb, var(--fg) 6%, transparent);
 }
-.task-board-minimized[aria-pressed='true'] {
-  border-color: var(--accent);
-  color: var(--accent);
-}
 
 .task-board-lanes {
   position: relative;

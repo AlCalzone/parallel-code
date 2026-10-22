@@ -201,7 +201,7 @@ export function navigateBoard(direction: Direction): boolean {
  * Previous/next task on the board, or the one above/below in its lane. On the
  * board itself the keyboard steps through cards, sideways in reading order; in
  * the side panel it switches the task shown there in the same order, skipping
- * snoozed ones since showing one ends its snooze. Either way, the keyboard
+ * snoozed and minimized ones since showing one ends its snooze or restores it. Either way, the keyboard
  * stays where it is: the side panel's panes don't come in between.
  */
 export function navigateBoardTask(direction: Direction): boolean {

@@ -2,7 +2,7 @@ import { For, Index, Show, createMemo, createSignal, onCleanup, onMount } from '
 import { isTypingTarget } from '../lib/tour-keys';
 import { withViewTransition } from '../lib/viewTransition';
 import { store } from '../store/core';
-import { boardSidePanelOpen, toggleBoardShowMinimized } from '../store/project-pages';
+import { boardSidePanelOpen } from '../store/project-pages';
 import {
   getTaskFocusedPanel,
   registerFocusFn,
@@ -14,7 +14,7 @@ import { useKanbanClock } from './KanbanCard';
 import { TaskBoardCard } from './TaskBoardCard';
 import { forgetWorkingHolds } from './task-board-hold';
 import { useCardMotion } from './task-board-motion';
-import { boardLanes, boardTasks, minimizedTaskCount, type BoardLane } from './task-board-lanes';
+import { boardLanes, boardTasks, type BoardLane } from './task-board-lanes';
 import {
   BOARD_KEY_MOVES,
   boardHasFocus,
@@ -43,7 +43,7 @@ function Lane(props: { lane: BoardLane }) {
   );
 }
 
-/** Snoozed work stays out of the way: a narrow rail until asked for. */
+/** Snoozed and minimized work stays out of the way: a narrow rail until asked for. */
 function SnoozedLane(props: { lane: BoardLane }) {
   const [open, setOpen] = createSignal(false);
   return (
@@ -53,7 +53,7 @@ function SnoozedLane(props: { lane: BoardLane }) {
         <button
           type="button"
           class="task-board-rail"
-          title="Show snoozed tasks"
+          title="Show snoozed and minimized tasks"
           onClick={(e) => {
             const lanes = e.currentTarget.parentElement;
             setOpen(true);
@@ -162,16 +162,6 @@ export function TaskBoard() {
             }
           }}
         />
-        {/* Always there, even with none minimized, so the header never shifts. */}
-        <button
-          type="button"
-          class="task-board-new task-board-minimized"
-          aria-pressed={store.boardShowMinimized}
-          title={store.boardShowMinimized ? 'Hide minimized tasks' : 'Show minimized tasks too'}
-          onClick={toggleBoardShowMinimized}
-        >
-          Minimized <span class="task-board-count">{minimizedTaskCount()}</span>
-        </button>
         <button
           type="button"
           class="task-board-new"
