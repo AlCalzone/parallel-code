@@ -71,6 +71,12 @@ describe('DEFAULT_BINDINGS', () => {
     }
   });
 
+  it('binds next attention task to one-handed Ctrl+Tab, never Cmd+Tab', () => {
+    const binding = DEFAULT_BINDINGS.find((b) => b.id === 'app.nav.next-attention');
+    expect(binding).toMatchObject({ key: 'Tab', modifiers: { ctrl: true }, global: true });
+    expect(binding?.modifiers).not.toHaveProperty('cmdOrCtrl');
+  });
+
   it('has no duplicate IDs', () => {
     const ids = DEFAULT_BINDINGS.map((b) => b.id);
     const unique = new Set(ids);

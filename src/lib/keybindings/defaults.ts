@@ -389,8 +389,9 @@ export const DEFAULT_BINDINGS: KeyBinding[] = [
     category: 'Navigation',
     description: 'Go to next task that needs you, then stopped ones',
     platform: 'both',
-    key: 'N',
-    modifiers: { cmdOrCtrl: true, shift: true },
+    // One hand, and Ctrl on macOS too: Cmd+Tab is the system app switcher.
+    key: 'Tab',
+    modifiers: { ctrl: true },
     action: 'openNextAttentionTask',
     global: true,
   },
