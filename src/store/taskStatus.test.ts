@@ -617,6 +617,20 @@ describe('looksLikeQuestion', () => {
     expect(looksLikeQuestion(answered)).toBe(false);
   });
 
+  it('ignores a question in Claude’s reply once its input box shows a suggested prompt', () => {
+    // After a turn Claude fills the empty input with a dimmed suggestion; once
+    // ANSI is stripped it reads like typed text, but Claude is at its prompt.
+    const idle = [
+      '⏺ Done. Would you like me to update the docs too?',
+      '',
+      '─'.repeat(60),
+      '❯ yes, update the docs',
+      '─'.repeat(60),
+      '  ⏵⏵ auto mode on (shift+tab to cycle)',
+    ].join('\r\n');
+    expect(looksLikeQuestion(idle)).toBe(false);
+  });
+
   it('keeps an idle agent quiet when its reply lands after the prompt was drawn', () => {
     // Renderers that insert history above an unchanged composer (Codex's
     // scroll-region inserts) emit the reply after the prompt in the stream.

@@ -450,6 +450,8 @@ export function looksLikeQuestion(tail: string): boolean {
   const afterQuestion = visible.slice(visible.lastIndexOf(questionLine));
   const scope = SELECTION_CURSOR_LINE.test(afterQuestion) ? afterQuestion : visible;
   if (scope === afterQuestion && PROMPT_AFTER_MENU.test(afterQuestion)) return false;
+  // A question in Claude's reply is prose once its input box is drawn below it.
+  if (CLAUDE_INPUT_BOX.test(afterQuestion)) return false;
   const scopeLines = scope.split(/\r?\n/).filter((l) => l.trim().length > 0);
   const lastLine = lines[lines.length - 1].trimEnd();
   const recentLines = scopeLines.slice(-8);
@@ -484,6 +486,9 @@ export function looksLikeQuestion(tail: string): boolean {
 const SELECTION_CURSOR_LINE = /^\s*[❯›]\s*\d+\./m;
 /** The input box back below a menu, even holding typed text: it was answered. */
 const PROMPT_AFTER_MENU = /^\s*[❯›]\s*\d+\.[^]*^\s*[❯›](?!\s*\d+\.)/m;
+/** Claude's input box under its top rule, holding a draft or the dimmed
+ *  suggestion it shows after a turn. Its dialogs number their `❯` options. */
+const CLAUDE_INPUT_BOX = /─{3,}\s*❯(?!\s*\d+\.)/;
 
 function isQuestionLine(line: string): boolean {
   const trimmed = line.trimEnd();
