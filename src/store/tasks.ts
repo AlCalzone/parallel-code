@@ -260,8 +260,9 @@ export interface CreateTaskOptions {
   propagateSkipPermissions?: boolean;
   maxConcurrentTasks?: number;
   /** Defaults to true. Pass false when the desktop user did not ask for the task
-   *  (e.g. a phone created it), so it cannot take focus from their current work. */
-  activate?: boolean;
+   *  (e.g. a phone created it), so it cannot take focus from their current work.
+   *  A function decides once the task exists, after a slow creation. */
+  activate?: boolean | (() => boolean);
 }
 
 export async function createTask(opts: CreateTaskOptions): Promise<string> {
@@ -370,7 +371,8 @@ export async function createTask(opts: CreateTaskOptions): Promise<string> {
   });
 
   await registerTaskAuthority(task, agentDef);
-  initTaskInStore(task, agent, { agentDef, activate: opts.activate ?? true });
+  const activate = typeof opts.activate === 'function' ? opts.activate() : opts.activate;
+  initTaskInStore(task, agent, { agentDef, activate: activate ?? true });
 
   saveState(); // fire-and-forget — errors handled internally
   return taskId;

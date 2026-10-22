@@ -298,7 +298,14 @@ export function TilingLayout() {
   // and doesn't unmount/remount panels when taskOrder changes.
   const panelCache = new Map<string, TileChild>();
 
+  // Solid re-inserts a kept panel when every neighbour changes at once (the
+  // first task arriving beside an open draft), and a moved node loses focus.
+  let focusBeforePanelUpdate: HTMLElement | null = null;
+
   const panelChildren = createMemo((): TileChild[] => {
+    const focused = document.activeElement;
+    focusBeforePanelUpdate =
+      focused instanceof HTMLElement && containerRef?.contains(focused) ? focused : null;
     const currentIds = new Set<string>(store.taskOrder);
     if (hasPanels()) currentIds.add('__placeholder');
     if (documentTaskId()) currentIds.add('__document-workspace');
@@ -513,6 +520,15 @@ export function TilingLayout() {
       () => cancelDrag?.(),
     ),
   );
+
+  // Runs after the list update: give focus back so typing is not interrupted.
+  createEffect(() => {
+    panelChildren();
+    const el = focusBeforePanelUpdate;
+    focusBeforePanelUpdate = null;
+    if (el?.isConnected && document.activeElement === document.body)
+      el.focus({ preventScroll: true });
+  });
 
   function handleDragStart(index: number, e: MouseEvent) {
     if (e.button !== 0) return;

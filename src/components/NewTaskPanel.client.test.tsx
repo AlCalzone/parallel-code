@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { IPC } from '../../electron/ipc/channels';
 import { invoke } from '../lib/ipc';
 import { setStore, store } from '../store/core';
+import { toggleNewTaskPanel } from '../store/navigation';
 import { NewTaskPanel } from './NewTaskPanel';
 
 vi.mock('../lib/ipc', () => ({ invoke: vi.fn() }));
@@ -48,45 +49,94 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-it('dims only the form, keeps status clear, and restores editing after creation fails', async () => {
-  const form = host.querySelector('form');
-  const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]');
-  await vi.waitFor(() => expect(submit?.disabled).toBe(false));
-
-  let rejectCreation!: (error: Error) => void;
-  const pending = new Promise((_, reject) => (rejectCreation = reject));
+function deferCreateTask(): {
+  resolve: (id: string) => void;
+  reject: (error: Error) => void;
+} {
+  const deferred = {} as { resolve: (id: string) => void; reject: (error: Error) => void };
+  const pending = new Promise((resolve, reject) => {
+    deferred.resolve = (id) =>
+      resolve({ id, branch_name: `task/${id}`, worktree_path: `/project/.worktrees/${id}` });
+    deferred.reject = reject;
+  });
   const originalInvoke = vi.mocked(invoke).getMockImplementation();
   vi.mocked(invoke).mockImplementation((channel, args) =>
     channel === IPC.CreateTask ? pending : Promise.resolve(originalInvoke?.(channel, args)),
   );
-  const outside = document.createElement('button');
-  const outsideClick = vi.fn();
-  outside.onclick = outsideClick;
-  document.body.append(outside);
+  return deferred;
+}
+
+function typePrompt(text: string): void {
+  const prompt = host.querySelector('textarea');
+  if (!prompt) throw new Error('Missing prompt editor');
+  prompt.value = text;
+  prompt.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+it('keeps the draft of a creation that fails before the panel finishes closing', async () => {
+  const pendingClose: (() => void)[] = [];
+  Object.defineProperty(document, 'startViewTransition', {
+    value: (update: () => void) => {
+      pendingClose.push(update);
+      return { ready: Promise.resolve() };
+    },
+    configurable: true,
+  });
+  try {
+    const form = host.querySelector('form');
+    const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]');
+    await vi.waitFor(() => expect(submit?.disabled).toBe(false));
+    const creation = deferCreateTask();
+    typePrompt('Prepare a lot');
+    form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    creation.reject(new Error('Worktree creation failed'));
+    await vi.waitFor(() => expect(store.notification).toContain('Worktree creation failed'));
+    pendingClose.forEach((update) => update());
+    expect(store.showNewTaskPanel).toBe(false);
+
+    toggleNewTaskPanel(true);
+    expect(store.newTaskPrefillPrompt).toMatchObject({
+      prompt: 'Prepare a lot',
+      projectId: 'project',
+      agentId: 'agent',
+    });
+  } finally {
+    Reflect.deleteProperty(document, 'startViewTransition');
+  }
+});
+
+it('announces a slow task instead of taking focus from where the user went', async () => {
+  const form = host.querySelector('form');
+  const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]');
+  await vi.waitFor(() => expect(submit?.disabled).toBe(false));
+  const creation = deferCreateTask();
+  setStore('activeTaskId', null);
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    expect(store.showNewTaskPanel).toBe(false);
+    vi.advanceTimersByTime(500);
+    expect(store.notification).toContain('Creating');
+
+    creation.resolve('slow');
+    await vi.waitFor(() => expect(store.tasks.slow).toBeDefined());
+    expect(store.activeTaskId).toBeNull();
+    expect(store.notification).toContain('is ready');
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('takes the user to a task that is created quickly', async () => {
+  const form = host.querySelector('form');
+  const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]');
+  await vi.waitFor(() => expect(submit?.disabled).toBe(false));
+  const creation = deferCreateTask();
+  setStore('activeTaskId', null);
 
   form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-  expect(form?.inert).toBe(true);
-  expect(form?.style.opacity).toBe('0.4');
-  expect(form?.getAttribute('aria-busy')).toBe('true');
-  const status = host.querySelector('[role="status"]');
-  expect(status?.textContent).toContain('Creating task...');
-  expect(status?.querySelector('.inline-spinner')).not.toBeNull();
-  expect(form?.contains(status)).toBe(false);
-  expect(document.body.inert).toBe(false);
-  outside.click();
-  expect(outsideClick).toHaveBeenCalledOnce();
-
-  form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-  expect(
-    vi.mocked(invoke).mock.calls.filter(([channel]) => channel === IPC.CreateTask),
-  ).toHaveLength(1);
-  rejectCreation(new Error('Worktree creation failed'));
-  await vi.waitFor(() => expect(form?.inert).toBe(false));
-  expect(form?.style.opacity).toBe('1');
-  expect(host.querySelector('[role="status"]')).toBeNull();
-  expect(host.textContent).toContain('Worktree creation failed');
-  expect(submit?.disabled).toBe(false);
-  expect(store.showNewTaskPanel).toBe(true);
+  creation.resolve('quick');
+  await vi.waitFor(() => expect(store.activeTaskId).toBe('quick'));
 });
 
 it('creates a linked task from the editable canvas assignment with the source branch and selected agent', async () => {
@@ -314,6 +364,64 @@ it('checks out a picked PR while keeping the text the user typed', async () => {
     ),
   );
   expect(vi.mocked(invoke).mock.calls.some(([channel]) => channel === IPC.CreateTask)).toBe(false);
+});
+
+it('offers a picked PR again when its checkout fails', async () => {
+  const pr = {
+    kind: 'pr',
+    number: 7,
+    title: 'Fix login',
+    url: 'https://github.com/o/r/pull/7',
+    author: 'dev',
+    updatedAt: '2026-10-01T00:00:00Z',
+    labels: [],
+    isDraft: false,
+    baseRefName: 'main',
+    isCrossRepository: false,
+  };
+  const originalInvoke = vi.mocked(invoke).getMockImplementation();
+  vi.mocked(invoke).mockImplementation((channel, args) => {
+    if (channel === IPC.ListGitHubWorkItems) return Promise.resolve([pr]);
+    if (channel === IPC.CreatePrTask) return Promise.reject(new Error('PR fetch failed'));
+    return Promise.resolve(originalInvoke?.(channel, args));
+  });
+  const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]');
+  await vi.waitFor(() => expect(submit?.disabled).toBe(false));
+  [...host.querySelectorAll('button')].find((b) => b.textContent === 'From GitHub…')?.click();
+  await vi.waitFor(() => expect(host.querySelector('.github-item-option')).not.toBeNull());
+  host.querySelector<HTMLButtonElement>('.github-item-option')?.click();
+  host
+    .querySelector('form')
+    ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await vi.waitFor(() => expect(store.notification).toContain('PR fetch failed'));
+
+  toggleNewTaskPanel(true);
+  expect(store.newTaskPrefillPrompt?.githubPr).toMatchObject({ number: 7 });
+});
+
+it('shows the busy overlay while a direct task switches branches', async () => {
+  dispose();
+  host.replaceChildren();
+  setStore('projects', 0, 'defaultGitIsolation', 'direct');
+  let switched!: (branch: string) => void;
+  const originalInvoke = vi.mocked(invoke).getMockImplementation();
+  vi.mocked(invoke).mockImplementation((channel, args) =>
+    channel === IPC.GetCurrentBranch
+      ? new Promise((resolve) => (switched = resolve))
+      : Promise.resolve(originalInvoke?.(channel, args)),
+  );
+  dispose = render(() => <NewTaskPanel open={true} onClose={vi.fn()} />, host);
+  const form = host.querySelector('form');
+  const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]');
+  await vi.waitFor(() => expect(submit?.disabled).toBe(false));
+
+  form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await vi.waitFor(() => expect(switched).toBeTypeOf('function'));
+  expect(form?.inert).toBe(true);
+  expect(host.querySelector('[role="status"]')?.textContent).toContain('Creating task...');
+  expect(store.showNewTaskPanel).toBe(true);
+  switched('main');
+  await vi.waitFor(() => expect(store.showNewTaskPanel).toBe(false));
 });
 
 it('preserves the browser issue link when the user rewrites the task prompt', async () => {

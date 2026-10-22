@@ -1,0 +1,78 @@
+import { errMessage } from '../lib/log';
+import { setStore, store } from './core';
+import { NOTIFICATION_ERROR_MS, showNotification } from './notification';
+import type { AppStore } from './types';
+
+/** Past this, the user has moved on: the task gets notices instead of focus. */
+const SLOW_CREATION_MS = 500;
+
+interface FailedDraft {
+  prefill: NonNullable<AppStore['newTaskPrefillPrompt']>;
+  /** Restores a dropped link's prefill-without-sending behavior on retry. */
+  dropUrl: string | null;
+}
+
+// Session-only. Failed drafts wait for the next New Task instead of reopening
+// the panel, which would take focus from whatever the user moved on to.
+const failedDrafts: FailedDraft[] = [];
+
+export interface BackgroundTaskCreation {
+  name: string;
+  /** `quick` turns false once the creation counts as slow; a slow task must
+   *  not take focus from whatever the user is doing by then. */
+  create: (quick: () => boolean) => Promise<string>;
+  /** Follow-up work for the created task. Kept apart from create so its
+   *  failure cannot offer the draft again and invite a duplicate task. */
+  onCreated: (taskId: string) => void;
+  draft: FailedDraft;
+}
+
+/**
+ * Finishes creating a task after the new-task panel has closed, so the user
+ * can start the next draft while a slow worktree setup runs.
+ */
+export async function createTaskInBackground(job: BackgroundTaskCreation): Promise<void> {
+  // shortcut: one transient notice — a sidebar placeholder if users lose track of slow creations
+  let slow = false;
+  const timer = setTimeout(() => {
+    slow = true;
+    showNotification(`Creating "${job.name}"…`);
+  }, SLOW_CREATION_MS);
+  let taskId: string;
+  try {
+    taskId = await job.create(() => !slow);
+  } catch (err) {
+    // An empty draft has nothing worth offering again.
+    const keep = !!(job.draft.prefill.prompt.trim() || job.draft.prefill.name?.trim());
+    if (keep) failedDrafts.push(job.draft);
+    // The hint goes first: git's output can run past what the toast shows.
+    const reason = errMessage(err).replace(
+      /^Error invoking remote method '[^']+': (?:Error: )?/,
+      '',
+    );
+    showNotification(
+      `Could not create "${job.name}"${keep ? ' (open New Task to retry)' : ''}: ${reason}`,
+      { durationMs: NOTIFICATION_ERROR_MS },
+    );
+    return;
+  } finally {
+    clearTimeout(timer);
+  }
+  if (slow) showNotification(`"${job.name}" is ready`);
+  try {
+    job.onCreated(taskId);
+  } catch (err) {
+    showNotification(`Created "${job.name}", but setup failed: ${errMessage(err)}`, {
+      durationMs: NOTIFICATION_ERROR_MS,
+    });
+  }
+}
+
+/** Puts the oldest failed draft into the panel about to open, unless the
+ *  opener brought its own content. */
+export function restoreFailedDraft(): void {
+  if (store.newTaskPrefillPrompt || store.newTaskDropUrl) return;
+  const draft = failedDrafts.shift();
+  if (!draft) return;
+  setStore({ newTaskPrefillPrompt: draft.prefill, newTaskDropUrl: draft.dropUrl });
+}

@@ -430,28 +430,122 @@ describe('inline task creation', () => {
     expect((await openDraft()).value).toBe('');
   });
 
-  it('retains input after a creation failure and closes after a successful retry', async () => {
+  it('keeps a failed draft with its settings for the next New Task and retries it', async () => {
+    const originalInvoke = vi.mocked(invoke).getMockImplementation();
+    vi.mocked(invoke).mockImplementation(async (channel, args) =>
+      channel === IPC.GetBranches ? ['main', 'dev'] : originalInvoke?.(channel, args),
+    );
+    setStore('availableAgents', (agents) => [
+      ...agents,
+      { ...agents[0], id: 'other', name: 'Other' },
+    ]);
+    setStore('projects', 0, 'defaultBaseBranch', 'dev');
     const prompt = await openDraft();
+    Array.from(container.querySelectorAll<HTMLElement>('[role="radio"]'))
+      .find((el) => el.textContent?.includes('Other'))
+      ?.click();
     prompt.value = 'Implement inline tasks';
     prompt.dispatchEvent(new Event('input', { bubbles: true }));
     vi.mocked(createTask).mockRejectedValueOnce(new Error('Cannot create worktree'));
     container
       .querySelector('form')
       ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    await vi.waitFor(() => expect(container.textContent).toContain('Cannot create worktree'));
-    expect(prompt.value).toBe('Implement inline tasks');
+    expect(store.showNewTaskPanel).toBe(false);
+    await vi.waitFor(() => expect(store.notification).toContain('Cannot create worktree'));
+    // The failure must not pull focus into a reopened panel.
+    expect(store.showNewTaskPanel).toBe(false);
+
+    setStore('projects', 0, { defaultBaseBranch: 'main', defaultGitIsolation: 'direct' });
+    expect((await openDraft()).value).toBe('Implement inline tasks');
     vi.mocked(createTask).mockResolvedValueOnce('created-task');
     container
       .querySelector('form')
       ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    await vi.waitFor(() => expect(store.showNewTaskPanel).toBe(false));
+    await vi.waitFor(() => expect(createTask).toHaveBeenCalledTimes(2));
     expect(createTask).toHaveBeenLastCalledWith(
       expect.objectContaining({
         initialPrompt: 'Implement inline tasks',
         projectId: 'project',
-        baseBranch: 'main',
+        baseBranch: 'dev',
+        gitIsolation: 'worktree',
+        agentDef: expect.objectContaining({ id: 'other' }),
       }),
     );
+  });
+
+  it('does not link another repository issue when a draft from another project is retried', async () => {
+    const issue = 'https://github.com/other/repo/issues/7';
+    setStore('projects', (projects) => [
+      ...projects,
+      { id: 'other', name: 'Other', path: '/other', color: '#cba' },
+    ]);
+    setStore('newTaskPrefillPrompt', {
+      prompt: `Fix ${issue}`,
+      projectId: 'other',
+      githubUrl: issue,
+    });
+    await openDraft();
+    const project = container.querySelector('select');
+    assert(project);
+    project.value = 'project';
+    project.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() =>
+      expect(container.querySelector('button[type="submit"]')?.hasAttribute('disabled')).toBe(
+        false,
+      ),
+    );
+    vi.mocked(createTask).mockRejectedValueOnce(new Error('Cannot create worktree'));
+    container
+      .querySelector('form')
+      ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(store.notification).toContain('Cannot create worktree'));
+    expect(createTask).toHaveBeenLastCalledWith(
+      expect.objectContaining({ projectId: 'project', githubUrl: undefined }),
+    );
+
+    await openDraft();
+    vi.mocked(createTask).mockResolvedValueOnce('created-task');
+    container
+      .querySelector('form')
+      ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(createTask).toHaveBeenCalledTimes(2));
+    expect(createTask).toHaveBeenLastCalledWith(
+      expect.objectContaining({ projectId: 'project', githubUrl: undefined }),
+    );
+  });
+
+  it('leaves a newer draft alone when a slow creation fails and offers the failed one next', async () => {
+    const first = await openDraft();
+    first.value = 'First task';
+    first.dispatchEvent(new Event('input', { bubbles: true }));
+    let fail!: (error: Error) => void;
+    vi.mocked(createTask).mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          fail = reject;
+        }),
+    );
+    container
+      .querySelector('form')
+      ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    const next = await openDraft();
+    next.value = 'Second task';
+    next.dispatchEvent(new Event('input', { bubbles: true }));
+
+    fail(new Error('Cannot create worktree'));
+    await vi.waitFor(() => expect(store.notification).toContain('Cannot create worktree'));
+    expect(container.querySelector('textarea')).toBe(next);
+    expect(next.value).toBe('Second task');
+
+    toggleNewTaskPanel(false);
+    const restored = await openDraft();
+    expect(restored.value).toBe('First task');
+    // The queue held the only copy, so leaving it must ask first.
+    restored.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(store.showNewTaskPanel).toBe(true);
+    expect(
+      Array.from(document.querySelectorAll('button')).some((el) => el.textContent === 'Discard'),
+    ).toBe(true);
   });
 
   it('keeps the panel visible in focus mode without changing the preference', async () => {
@@ -574,8 +668,8 @@ describe('inline task creation', () => {
     scrollTo.mockRestore();
   });
 
-  it('prevents duplicate submissions and dismissal while creation is pending', async () => {
-    const prompt = await openDraft();
+  it('lets the next draft start while a slow creation is pending', async () => {
+    await openDraft();
     let finish!: (taskId: string) => void;
     vi.mocked(createTask).mockImplementationOnce(
       () =>
@@ -586,16 +680,34 @@ describe('inline task creation', () => {
     const form = container.querySelector('form');
     assert(form);
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    expect(createTask).toHaveBeenCalledOnce();
-    expect(
-      Array.from(container.querySelectorAll('button')).find((el) => el.textContent === 'Cancel')
-        ?.disabled,
-    ).toBe(true);
-    prompt.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    expect(store.showNewTaskPanel).toBe(true);
+    expect(store.showNewTaskPanel).toBe(false);
+    const next = await openDraft();
+    expect(next.value).toBe('');
     finish('created-task');
-    await vi.waitFor(() => expect(store.showNewTaskPanel).toBe(false));
+    await Promise.resolve();
+    expect(createTask).toHaveBeenCalledOnce();
+    expect(store.showNewTaskPanel).toBe(true);
+  });
+
+  it('keeps typing focus in the draft when the first task arrives beside it', async () => {
+    const prompt = await openDraft();
+    prompt.focus();
+    setStore('tasks', 'first', {
+      id: 'first',
+      name: 'First',
+      projectId: 'project',
+      branchName: 'task/first',
+      worktreePath: '/repo/first',
+      agentIds: [],
+      shellAgentIds: [],
+      notes: '',
+      lastPrompt: '',
+    });
+    setStore('taskOrder', ['first']);
+    await vi.waitFor(() =>
+      expect(container.querySelector('[data-task-id="first"]')).not.toBeNull(),
+    );
+    expect(document.activeElement).toBe(prompt);
   });
 
   it('prefills immediately and does not reclaim focus when agent discovery finishes', async () => {

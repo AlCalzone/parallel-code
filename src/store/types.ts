@@ -680,6 +680,11 @@ export interface AppStore {
     superProductivity?: SpNewTaskSource;
     /** Set when the form was opened from a Kanban card. */
     kanban?: KanbanNewTaskSource;
+    /** Settings of a draft offered again after its creation failed. */
+    agentId?: string;
+    gitIsolation?: GitIsolationMode;
+    dockerMode?: boolean;
+    skipPermissions?: boolean;
   } | null;
   missingProjectIds: Record<string, true>;
   remoteAccess: RemoteAccess;

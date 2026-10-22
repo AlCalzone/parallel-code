@@ -13,6 +13,7 @@ import { showNotification } from './notification';
 import { pickAndAddProject } from './projects';
 import { reorderTask } from './tasks';
 import { closeProjectPages } from './project-pages';
+import { restoreFailedDraft } from './task-creation';
 
 const AI_TERMINAL_PREFIX = 'ai-terminal:';
 
@@ -146,6 +147,7 @@ export function toggleNewTaskPanel(show?: boolean): void {
     return;
   }
   if (shouldShow) {
+    if (!store.showNewTaskPanel) restoreFailedDraft();
     // On the board the draft opens in its side panel.
     closeProjectPages({ keepBoard: true });
     setStore('sidebarFocused', false);
