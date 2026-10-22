@@ -1,4 +1,4 @@
-import { createSignal, untrack } from 'solid-js';
+import { createEffect, createRoot, createSignal, untrack } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { isAgentChat } from './agent-chat';
 import { invoke } from '../lib/ipc';
@@ -1389,14 +1389,14 @@ export async function refreshAllTaskGitStatus(): Promise<void> {
   refreshAllStartedAt = Date.now();
   try {
     const taskIds = store.taskOrder;
-    const active = activeAgents();
     const currentTaskId = store.activeTaskId;
     const toRefresh = taskIds.filter((taskId) => {
       // Active task is covered by the faster refreshActiveTaskGitStatus timer
       if (taskId === currentTaskId) return false;
-      const task = store.tasks[taskId];
-      if (!task) return false;
-      return !hasRunningTaskActivity(taskId, (id) => active.has(id));
+      if (!store.tasks[taskId]) return false;
+      // Only agent work makes a snapshot moot. A busy shell (dev server) or a
+      // prompt redraw must not freeze it until it goes stale and drops `ready`.
+      return !isTaskWorking(taskId);
     });
 
     // Process in batches of 4 to limit concurrent git processes
@@ -1424,7 +1424,24 @@ export function refreshTaskStatus(taskId: string): void {
 
 let allTasksTimer: ReturnType<typeof setInterval> | null = null;
 let activeTaskTimer: ReturnType<typeof setInterval> | null = null;
+let stopTurnEndRefresh: (() => void) | null = null;
 let lastPollingTaskCount = 0;
+
+/** Agents commit at the end of a turn, so refresh then: otherwise a finished
+ *  task shows `idle` until the next background sweep, up to two minutes away. */
+function watchTurnEnds(): () => void {
+  return createRoot((dispose) => {
+    let working = new Set<string>();
+    createEffect(() => {
+      const next = new Set(store.taskOrder.filter((taskId) => isTaskWorking(taskId)));
+      untrack(() => {
+        for (const taskId of working) if (!next.has(taskId)) void refreshTaskGitStatus(taskId);
+      });
+      working = next;
+    });
+    return dispose;
+  });
+}
 
 function computeAllTasksInterval(): number {
   const taskCount = store.taskOrder.length;
@@ -1438,6 +1455,7 @@ export function startTaskStatusPolling(): void {
   // Scale interval: 30s base + 5s per additional task beyond 3
   lastPollingTaskCount = store.taskOrder.length;
   allTasksTimer = setInterval(refreshAllTaskGitStatus, computeAllTasksInterval());
+  stopTurnEndRefresh = watchTurnEnds();
   // Run once immediately
   refreshActiveTaskGitStatus();
   refreshAllTaskGitStatus();
@@ -1462,5 +1480,7 @@ export function stopTaskStatusPolling(): void {
     clearInterval(activeTaskTimer);
     activeTaskTimer = null;
   }
+  stopTurnEndRefresh?.();
+  stopTurnEndRefresh = null;
   lastPollingTaskCount = 0;
 }
