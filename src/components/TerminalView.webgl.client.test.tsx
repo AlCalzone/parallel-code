@@ -3,7 +3,6 @@ import { render } from 'solid-js/web';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { IPC } from '../../electron/ipc/channels';
 import { WEBGL_DETACH_DELAY_MS } from '../lib/terminalPaneVisibility';
-import { withViewTransition } from '../lib/viewTransition';
 import { setStore } from '../store/core';
 import { TerminalView } from './TerminalView';
 
@@ -92,39 +91,16 @@ function renderTerminal(taskId: string): (visible: boolean) => void {
   return setVisible;
 }
 
-/** Runs the next animation frame (16ms under fake timers) and the task it queues. */
+/** Lets a frame pass (16ms under fake timers) so queued effects and timers run. */
 async function paintFrame(): Promise<void> {
   await vi.advanceTimersByTimeAsync(20);
 }
 
-it('attaches WebGL after the frame that shows the pane, not inside it', async () => {
+// A pane first painted on the DOM renderer visibly changes its glyph widths
+// when WebGL takes over, e.g. a task opened beside the board.
+it('attaches WebGL in the update that shows the pane, before it paints', () => {
   renderTerminal('task-1');
-  expect(webglAttached).not.toHaveBeenCalled();
-  await paintFrame();
   expect(webglAttached).toHaveBeenCalledTimes(1);
-});
-
-it('waits for a running view change to finish animating before attaching WebGL', async () => {
-  let finish = () => {};
-  const finished = new Promise<void>((resolve) => (finish = resolve));
-  Object.assign(document, {
-    startViewTransition: (update: () => void) => {
-      update();
-      return { ready: Promise.resolve(), finished };
-    },
-  });
-  try {
-    withViewTransition(() => renderTerminal('task-1'));
-    await paintFrame();
-    await vi.advanceTimersByTimeAsync(300);
-    expect(webglAttached).not.toHaveBeenCalled();
-
-    finish();
-    await vi.advanceTimersByTimeAsync(0);
-    expect(webglAttached).toHaveBeenCalledTimes(1);
-  } finally {
-    Reflect.deleteProperty(document, 'startViewTransition');
-  }
 });
 
 it('keeps panes under the board off WebGL when its side panel closes', async () => {
