@@ -37,7 +37,9 @@ it('saves project fields even when the peer-access update fails', async () => {
   if (!name) throw new Error('Missing project name input');
   name.value = 'New name';
   name.dispatchEvent(new Event('input', { bubbles: true }));
-  const peerAccess = document.querySelector<HTMLInputElement>('fieldset input[type="checkbox"]');
+  const peerAccess = [...document.querySelectorAll('label')]
+    .find((label) => label.textContent?.includes('Allow peer access between tasks'))
+    ?.querySelector<HTMLInputElement>('input[type="checkbox"]');
   if (!peerAccess) throw new Error('Missing peer access checkbox');
   peerAccess.click();
   const save = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
@@ -59,4 +61,73 @@ it('saves project fields even when the peer-access update fails', async () => {
   // The unsaved choice stays so Save can retry it.
   expect(peerAccess.checked).toBe(true);
   expect(onClose).not.toHaveBeenCalled();
+});
+
+function renderDialog(extra: Partial<Project> = {}, focusChecks = false) {
+  const project: Project = {
+    id: 'p',
+    name: 'P',
+    path: '/repo',
+    color: 'hsl(0, 70%, 75%)',
+    ...extra,
+  };
+  const host = document.createElement('div');
+  document.body.append(host);
+  dispose = render(
+    () => <EditProjectDialog project={project} focusChecks={focusChecks} onClose={vi.fn()} />,
+    host,
+  );
+}
+
+const tabLabels = () => [...document.querySelectorAll('[role="tab"]')].map((t) => t.textContent);
+const selectedTab = () => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent;
+const headings = () => [...document.querySelectorAll('h3')].map((h) => h.textContent);
+
+it.each([
+  [
+    {},
+    ['General', 'Tasks', 'Verification'],
+    ['Branches and worktrees', 'Agent collaboration', 'Terminal'],
+  ],
+  [{ isGitRepo: false }, ['General', 'Tasks', 'Verification'], ['Terminal']],
+  [{ kind: 'document', documentPath: 'doc.md' }, [], []],
+] as const)('shows only the tabs and sections a %o project uses', (extra, tabs, sections) => {
+  renderDialog(extra);
+  expect(tabLabels()).toEqual(tabs);
+  expect(headings()).toEqual(sections);
+});
+
+it('opens on General, or on Verification when asked to focus the checks', () => {
+  renderDialog();
+  expect(selectedTab()).toBe('General');
+  dispose?.();
+  document.body.replaceChildren();
+  renderDialog({}, true);
+  expect(selectedTab()).toBe('Verification');
+  const panel = document.getElementById(
+    document.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute('aria-controls') ??
+      '',
+  );
+  expect(panel?.hidden).toBe(false);
+  expect(panel?.textContent).toContain('Verify command');
+});
+
+it('switches tabs with the arrow keys and moves focus along', () => {
+  renderDialog();
+  const general = document.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+  general?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  expect(selectedTab()).toBe('Tasks');
+  expect(document.activeElement?.textContent).toBe('Tasks');
+  document.activeElement?.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }),
+  );
+  expect(selectedTab()).toBe('General');
+  document.activeElement?.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'End', bubbles: true }),
+  );
+  expect(selectedTab()).toBe('Verification');
+  document.activeElement?.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Home', bubbles: true }),
+  );
+  expect(selectedTab()).toBe('General');
 });

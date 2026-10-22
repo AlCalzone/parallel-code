@@ -1,4 +1,4 @@
-import { For, Index, Show } from 'solid-js';
+import { For, Index, Show, type JSX } from 'solid-js';
 import {
   ASK_CODE_CLAUDE_MODELS,
   ASK_CODE_MODELS,
@@ -16,7 +16,7 @@ import {
   parseProjectChecks,
 } from '../../electron/shared/evidence-settings';
 import { sectionLabelStyle, theme } from '../lib/theme';
-import { PlusIcon } from './icons';
+import { CloseIcon, PlusIcon } from './icons';
 
 /** A check being edited; the name follows the kind and new rows get their id when saved. */
 export type CheckDraft = Omit<ProjectCheck, 'id' | 'name'> & { id?: string };
@@ -56,15 +56,20 @@ const WHEN_LABELS: Record<EvidenceModelSettings['when'], string> = {
   handoff: 'On every agent handoff',
   risky: 'On handoffs with flags, untested code or large diffs',
 };
+// Same height and corners as the dialog's text inputs, so a check row lines up with them.
 const fieldStyle = {
   background: theme.bgInput,
   border: `1px solid ${theme.border}`,
-  'border-radius': '6px',
-  padding: '6px 8px',
+  'border-radius': 'var(--radius-md)',
+  padding: '7px 10px',
   color: theme.fg,
   'font-size': '13px',
+  'min-width': '0',
 };
-const hintStyle = { 'font-size': '12px', color: theme.fgSubtle, padding: '2px 2px 0' };
+const hintStyle = { 'font-size': '12px', color: theme.fgSubtle, 'line-height': '1.45' };
+// A floated legend lays out as an ordinary grid item, so it takes the fieldset's
+// gap and none of the default legend padding that indents it past the fields.
+const legendStyle: JSX.CSSProperties = { ...sectionLabelStyle, float: 'left', padding: '0' };
 
 interface EvidenceSettingsFieldsProps {
   checks: CheckDraft[];
@@ -84,11 +89,19 @@ export function EvidenceSettingsFields(props: EvidenceSettingsFieldsProps) {
 
   return (
     <fieldset style={{ border: 'none', padding: '0', margin: '0', display: 'grid', gap: '8px' }}>
-      <legend style={sectionLabelStyle}>Evidence checks</legend>
+      <legend style={legendStyle}>Evidence checks</legend>
       {/* Index keeps each row's inputs while its draft object is replaced on every keystroke. */}
       <Index each={props.checks}>
         {(check, index) => (
-          <div style={{ display: 'flex', gap: '6px', 'align-items': 'center' }}>
+          // The command takes the slack; the grid keeps the row inside the dialog.
+          <div
+            style={{
+              display: 'grid',
+              'grid-template-columns': 'auto minmax(0, 1fr) auto auto',
+              gap: '6px',
+              'align-items': 'center',
+            }}
+          >
             <select
               aria-label="Check kind"
               value={check().kind}
@@ -102,7 +115,7 @@ export function EvidenceSettingsFields(props: EvidenceSettingsFieldsProps) {
               placeholder="npm run test:e2e"
               value={check().command}
               onInput={(e) => edit(index, { command: e.currentTarget.value })}
-              style={{ ...fieldStyle, flex: '1', 'font-family': "'JetBrains Mono', monospace" }}
+              style={{ ...fieldStyle, 'font-family': "'JetBrains Mono', monospace" }}
             />
             <select
               aria-label="When the check runs"
@@ -118,10 +131,18 @@ export function EvidenceSettingsFields(props: EvidenceSettingsFieldsProps) {
             <button
               type="button"
               aria-label={`Remove ${KIND_NAMES[check().kind]}`}
+              title="Remove check"
               onClick={() => props.onChecksChange(props.checks.filter((_, i) => i !== index))}
-              style={fieldStyle}
+              style={{
+                display: 'inline-flex',
+                background: 'transparent',
+                border: 'none',
+                color: theme.fgSubtle,
+                cursor: 'pointer',
+                padding: '6px',
+              }}
             >
-              ×
+              <CloseIcon size={12} />
             </button>
           </div>
         )}
@@ -139,11 +160,22 @@ export function EvidenceSettingsFields(props: EvidenceSettingsFieldsProps) {
           Add check
         </button>
       </Show>
-      <label style={{ display: 'flex', gap: '8px', 'align-items': 'center', 'font-size': '13px' }}>
+      <label
+        style={{
+          display: 'flex',
+          gap: '10px',
+          'align-items': 'flex-start',
+          'margin-top': '6px',
+          cursor: 'pointer',
+          'font-size': '14px',
+          color: theme.fg,
+        }}
+      >
         <input
           type="checkbox"
           checked={props.autoBuild}
           onChange={(e) => props.onAutoBuildChange(e.currentTarget.checked)}
+          style={{ margin: '2px 0 0', cursor: 'pointer', 'accent-color': theme.accent }}
         />
         Build evidence in the background when an agent finishes a turn with new commits
       </label>
@@ -154,7 +186,7 @@ export function EvidenceSettingsFields(props: EvidenceSettingsFieldsProps) {
         call the review model. Checks run on this machine.
       </div>
 
-      <label style={sectionLabelStyle} for="evidence-model-when">
+      <label style={{ ...sectionLabelStyle, 'margin-top': '14px' }} for="evidence-model-when">
         Evidence review model
       </label>
       <div style={{ display: 'flex', gap: '6px', 'flex-wrap': 'wrap' }}>
