@@ -46,7 +46,7 @@ function setAsideLabel(task: Task): string {
   return `Until ${until.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`;
 }
 
-function openBeside(task: Task): void {
+export function openBeside(task: Task): void {
   withViewTransition(() =>
     batch(() => {
       openBoardSidePanel();

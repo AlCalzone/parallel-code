@@ -384,6 +384,17 @@ export const DEFAULT_BINDINGS: KeyBinding[] = [
     global: true,
   },
   {
+    id: 'app.nav.next-attention',
+    layer: 'app',
+    category: 'Navigation',
+    description: 'Go to next task that needs you, then stopped ones',
+    platform: 'both',
+    key: 'N',
+    modifiers: { cmdOrCtrl: true, shift: true },
+    action: 'openNextAttentionTask',
+    global: true,
+  },
+  {
     id: 'app.switch-document',
     layer: 'app',
     category: 'App',

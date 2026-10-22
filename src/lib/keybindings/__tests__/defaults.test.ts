@@ -26,6 +26,7 @@ const APP_LAYER_IDS = [
   'app.toggle-sidebar',
   'app.toggle-focus-mode',
   'app.toggle-board-view',
+  'app.nav.next-attention',
   'app.switch-document',
   'app.toggle-help',
   'app.toggle-help-f1',

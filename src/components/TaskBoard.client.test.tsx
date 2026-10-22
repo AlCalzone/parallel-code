@@ -12,6 +12,7 @@ import {
   unregisterFocusFn,
 } from '../store/store';
 import { navigateBoard, navigateBoardTask } from './task-board-keys';
+import { openNextAttentionTask } from './next-attention-task';
 import { retryCloseTask } from '../store/tasks';
 import type { Task } from '../store/types';
 import { BoardSidePanelBar } from './BoardSidePanel';
@@ -629,5 +630,33 @@ describe('keyboard edge cases', () => {
     draft.focus();
     dispose = render(() => <Board />, host);
     expect(document.activeElement).toBe(draft);
+  });
+});
+
+describe('next task that needs you', () => {
+  it('goes through Needs you, then Stopped, and wraps, beside the board', () => {
+    setStore('tasks', 'idle2', task('idle2', 'Tidy tests'));
+    setStore('taskOrder', ['review', 'pr', 'idle', 'idle2']);
+    setStore('activeTaskId', 'pr');
+    const visited = [1, 2, 3, 4].map(() => {
+      openNextAttentionTask();
+      return store.activeTaskId;
+    });
+    expect(visited).toEqual(['review', 'idle', 'idle2', 'review']);
+    expect(boardSidePanelOpen()).toBe(true);
+  });
+
+  it('starts from the most urgent once the current task stops waiting', () => {
+    setStore('activeTaskId', 'idle');
+    setStore('tasks', 'idle', 'prUrl', 'https://github.com/o/r/pull/7');
+    openNextAttentionTask();
+    expect(store.activeTaskId).toBe('review');
+  });
+
+  it('stays put when nothing else is waiting', () => {
+    setStore('tasks', 'idle', 'prUrl', 'https://github.com/o/r/pull/7');
+    setStore('activeTaskId', 'review');
+    openNextAttentionTask();
+    expect(store.activeTaskId).toBe('review');
   });
 });
