@@ -4,7 +4,7 @@ import { TaskBoard } from './components/TaskBoard';
 import { navigateBoard, navigateBoardTask } from './components/task-board-keys';
 import { openNextAttentionTask } from './components/next-attention-task';
 import {
-  BoardSidePanelBar,
+  BoardSidePanelClose,
   BoardSidePanelHandle,
   boardSidePanelBasis,
   closeSidePanel,
@@ -1015,7 +1015,7 @@ function App() {
           >
             <Show when={boardSidePanelOpen()}>
               <BoardSidePanelHandle />
-              <BoardSidePanelBar />
+              <BoardSidePanelClose />
             </Show>
             <TilingLayout />
           </div>

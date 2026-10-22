@@ -6,7 +6,11 @@ import { withViewTransition } from '../lib/viewTransition';
 import { isTaskBackgrounded } from '../store/background-tasks';
 import { store } from '../store/core';
 import { getPrChecks } from '../store/pr-checks-state';
-import { boardSidePanelOpen, openBoardSidePanel } from '../store/project-pages';
+import {
+  boardSidePanelOpen,
+  openBoardSidePanel,
+  toggleBoardSidePanelSide,
+} from '../store/project-pages';
 import { getProject } from '../store/projects';
 import { ProjectSwatch } from './ProjectSwatch';
 import { getTaskAttentionState, getTaskDotStatus, getTaskOpenQuestion } from '../store/taskStatus';
@@ -47,12 +51,14 @@ function setAsideLabel(task: Task): string {
   return `Until ${until.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`;
 }
 
-export function openBeside(task: Task): void {
-  // Only a panel that stays open swaps its task; opening it has its own motion.
-  const switching = boardSidePanelOpen() && store.activeTaskId !== task.id;
+/** Opens the task in the board's side panel, moving the panel across first when asked. */
+export function openBeside(task: Task, otherSide = false): void {
+  // Only a panel that stays put swaps its task; opening or moving it has its own motion.
+  const switching = !otherSide && boardSidePanelOpen() && store.activeTaskId !== task.id;
   withViewTransition(
     () =>
       batch(() => {
+        if (otherSide) toggleBoardSidePanelSide();
         openBoardSidePanel();
         openTask(task);
       }),
@@ -61,20 +67,27 @@ export function openBeside(task: Task): void {
 }
 
 function cardMenuItems(task: Task): MoreMenuItem[] {
-  const open = { label: 'Open', run: () => openBeside(task) };
+  // Moving the panel lives here rather than on the panel, which rarely needs it.
+  const opens = [
+    { label: 'Open', run: () => openBeside(task) },
+    {
+      label: `Open on the ${store.boardSidePanelLeft ? 'right' : 'left'}`,
+      run: () => openBeside(task, true),
+    },
+  ];
   // A closing task is on its way out; setting it aside would race the teardown.
-  if (task.closingStatus) return [open];
+  if (task.closingStatus) return opens;
   // Snoozing a minimized task means nothing: its agents are already stopped.
   if (task.collapsed)
     return [
-      open,
+      ...opens,
       {
         label: 'Restore (start agents)',
         icon: <UndoIcon size={14} />,
         run: () => uncollapseTask(task.id, { activate: false }),
       },
     ];
-  return [open, ...laterMenuItems(task)];
+  return [...opens, ...laterMenuItems(task)];
 }
 
 /** Where a right-click opened the menu; a keyboard-opened one reports 0,0, so use the card. */

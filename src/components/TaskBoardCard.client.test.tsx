@@ -60,6 +60,7 @@ it('opens a context menu on right-click that snoozes the task', () => {
   expect(document.querySelector('[role="menu"]')?.getAttribute('aria-label')).toBe('Task one');
   expect(labels()).toEqual([
     'Open',
+    'Open on the left',
     'Snooze until new activity',
     'Snooze · keep running',
     'Snooze · stop agents',
@@ -78,7 +79,7 @@ it('offers only restore for a minimized task', () => {
   setStore('tasks', 'one', { collapsed: true });
   setStore('collapsedTaskOrder', ['one']);
   rightClick();
-  expect(labels()).toEqual(['Open', 'Restore (start agents)']);
+  expect(labels()).toEqual(['Open', 'Open on the left', 'Restore (start agents)']);
   menuItem('Restore (start agents)')?.click();
   expect(store.tasks.one.collapsed).toBe(false);
 });
@@ -86,5 +87,18 @@ it('offers only restore for a minimized task', () => {
 it('offers no set-aside actions while the task closes', () => {
   setStore('tasks', 'one', { closingStatus: 'closing' });
   rightClick();
-  expect(labels()).toEqual(['Open']);
+  expect(labels()).toEqual(['Open', 'Open on the left']);
+});
+
+it("opens the task on the board's other side from its menu", () => {
+  setStore('boardView', true);
+  setStore('boardSidePanelLeft', false);
+  setStore('boardPeek', false);
+  rightClick();
+  menuItem('Open on the left')?.click();
+  expect(store.boardSidePanelLeft).toBe(true);
+  expect(store.boardPeek).toBe(true);
+  rightClick();
+  expect(labels()).toContain('Open on the right');
+  setStore({ boardView: false, boardPeek: false, boardSidePanelLeft: false });
 });

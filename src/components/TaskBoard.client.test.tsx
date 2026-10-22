@@ -15,7 +15,7 @@ import { navigateBoard, navigateBoardTask } from './task-board-keys';
 import { openNextAttentionTask } from './next-attention-task';
 import { retryCloseTask } from '../store/tasks';
 import type { Task } from '../store/types';
-import { BoardSidePanelBar } from './BoardSidePanel';
+import { BoardSidePanelClose } from './BoardSidePanel';
 import { FocusModeTaskIndicators } from './FocusModeTaskIndicators';
 import { TaskBoard } from './TaskBoard';
 import { WORKING_HOLD_MS } from './task-board-hold';
@@ -369,12 +369,12 @@ it('folds minimized and snoozed tasks into one lane unless they need you', () =>
   }
 });
 
-it('closes the side panel from its bar and keeps the board', () => {
+it('closes the side panel from its edge and keeps the board', () => {
   host.querySelector<HTMLButtonElement>('.lane-pr .task-board-title')?.click();
   const bar = document.createElement('div');
   document.body.append(bar);
-  const disposeBar = render(() => <BoardSidePanelBar />, bar);
-  bar.querySelector<HTMLButtonElement>('[title^="Close side panel"]')?.click();
+  const disposeBar = render(() => <BoardSidePanelClose />, bar);
+  bar.querySelector<HTMLButtonElement>('[aria-label="Close side panel"]')?.click();
   expect(boardSidePanelOpen()).toBe(false);
   expect(store.boardView).toBe(true);
   disposeBar();

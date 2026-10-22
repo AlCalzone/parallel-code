@@ -574,29 +574,35 @@ main.board-panel-left > .task-board {
   height: auto;
   min-height: 0;
 }
-.board-side-panel-bar {
-  display: flex;
-  justify-content: flex-end;
-  gap: 4px;
-  /* Holds its height without the close button, which a draft doesn't get. */
-  min-height: 48px;
-  padding: 12px 8px 6px;
-}
-.board-side-panel-action {
+/* Straddles the edge facing the board, level with the task header, above the
+   resize handle it overlaps. */
+.board-side-panel-close {
+  position: absolute;
+  top: 12px;
+  left: -10px;
+  z-index: 3;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
+  justify-content: center;
+  width: 20px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elevated);
   color: var(--fg-muted);
-  font: inherit;
-  font-size: 12px;
   cursor: pointer;
 }
-.board-side-panel-action:hover {
-  background: color-mix(in srgb, var(--fg) 7%, transparent);
+.board-side-panel-close:hover {
+  background: var(--bg-hover);
   color: var(--fg);
+}
+/* Ordered after the panel, the board would otherwise paint over the half of
+   the tab that sticks out, and take its clicks. */
+.task-workspace.board-side-panel.panel-left {
+  z-index: 1;
+}
+.task-workspace.board-side-panel.panel-left > .board-side-panel-close {
+  left: auto;
+  right: -10px;
 }

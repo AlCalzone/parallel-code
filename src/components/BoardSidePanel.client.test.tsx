@@ -5,7 +5,7 @@ import { setStore, store } from '../store/core';
 import { boardSidePanelOpen } from '../store/project-pages';
 import { getPanelUserSize } from '../store/ui';
 import {
-  BoardSidePanelBar,
+  BoardSidePanelClose,
   BoardSidePanelHandle,
   boardSidePanelBasis,
   closeSidePanel,
@@ -58,21 +58,6 @@ it("mirrors resizing for a panel on the board's left", () => {
   expect(getPanelUserSize('board:side-panel')).toBe(524);
 });
 
-it("moves the panel to the board's other side from its bar, for a draft too", () => {
-  setStore('boardView', true);
-  setStore('showNewTaskPanel', true);
-  const bar = document.createElement('div');
-  document.body.append(bar);
-  const disposeBar = render(() => <BoardSidePanelBar />, bar);
-  const swap = bar.querySelector<HTMLButtonElement>('[aria-label^="Move panel"]');
-  expect(swap?.getAttribute('aria-label')).toBe('Move panel to the left of the board');
-  swap?.click();
-  expect(store.boardSidePanelLeft).toBe(true);
-  expect(swap?.getAttribute('aria-label')).toBe('Move panel to the right of the board');
-  disposeBar();
-  setStore('showNewTaskPanel', false);
-});
-
 it('keeps both the panel and the board at a usable width', () => {
   drag(1000, 0);
   // 500 + 800 board - 320 the board keeps
@@ -105,8 +90,8 @@ it('leaves a draft to its own Cancel, which asks before discarding', () => {
   setStore('showNewTaskPanel', true);
   const bar = document.createElement('div');
   document.body.append(bar);
-  const disposeBar = render(() => <BoardSidePanelBar />, bar);
-  expect(bar.querySelector('[title^="Close side panel"]')).toBeNull();
+  const disposeBar = render(() => <BoardSidePanelClose />, bar);
+  expect(bar.querySelector('[aria-label="Close side panel"]')).toBeNull();
   // Escape from the board hides the peeked task but keeps the draft.
   closeSidePanel();
   expect(store.showNewTaskPanel).toBe(true);
