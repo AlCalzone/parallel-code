@@ -1267,6 +1267,24 @@ describe('createTask initial agent state', () => {
     }
   });
 
+  it("opens the board, with the task beside it, for a new install's first task", async () => {
+    const harness = expectDefined(core.harness, 'mock store harness');
+    Object.assign(harness.store, { boardOnFirstTask: true, boardView: false, boardPeek: false });
+    await createWith('claude');
+    expect(harness.store).toMatchObject({
+      boardOnFirstTask: false,
+      boardView: true,
+      boardPeek: true,
+    });
+  });
+
+  it('keeps the current view for later tasks', async () => {
+    const harness = expectDefined(core.harness, 'mock store harness');
+    Object.assign(harness.store, { boardOnFirstTask: false, boardView: false, boardPeek: false });
+    await createWith('claude');
+    expect(harness.store).toMatchObject({ boardView: false, boardPeek: false });
+  });
+
   it('gives the first Claude pane an id of its own', async () => {
     const task = await createWith('claude');
     const agentId = expectDefined(task?.agentIds[0], 'first pane id');

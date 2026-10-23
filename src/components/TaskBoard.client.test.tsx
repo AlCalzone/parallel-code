@@ -868,3 +868,46 @@ describe('next task that needs you', () => {
     expect(store.activeTaskId).toBe('review');
   });
 });
+
+describe('board tips', () => {
+  const tip = () => document.querySelector<HTMLElement>('.feature-hint');
+  const showTips = () => {
+    dispose();
+    vi.useFakeTimers();
+    // happy-dom lays nothing out; a tip needs its anchor to have a box.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(0, 0, 200, 24),
+    );
+    setStore('seenFeatureHints', []);
+  };
+  afterEach(() => {
+    // Unmount first: a shown tip follows its anchor every frame, the board keeps a clock.
+    dispose();
+    dispose = () => undefined;
+    // A dismissal's cooldown must not hold back later tips.
+    vi.runAllTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('points tiles users with several tasks at the board, which opens from the tip', () => {
+    showTips();
+    setStore('boardView', false);
+    dispose = render(() => <WorkspaceControls />, host);
+    vi.advanceTimersByTime(650);
+    expect(tip()?.textContent).toContain('See every task by what it needs');
+
+    [...(tip()?.querySelectorAll('button') ?? [])]
+      .find((button) => button.textContent === 'Show board')
+      ?.click();
+    expect(store.boardView).toBe(true);
+    expect(store.seenFeatureHints).toContain('board-view');
+  });
+
+  it('explains the lanes once the board has tasks, and counts the board as found', () => {
+    showTips();
+    dispose = render(() => <Board />, host);
+    expect(store.seenFeatureHints).toContain('board-view');
+    vi.advanceTimersByTime(650);
+    expect(tip()?.textContent).toContain('Tasks sort themselves by what they need');
+  });
+});

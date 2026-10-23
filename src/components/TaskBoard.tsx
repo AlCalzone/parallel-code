@@ -2,6 +2,7 @@ import { For, Index, Show, createMemo, createSignal, onCleanup, onMount } from '
 import { isTypingTarget } from '../lib/tour-keys';
 import { store } from '../store/core';
 import { setTaskProjectFilter } from '../store/navigation';
+import { markFeatureHintSeen } from '../store/onboarding';
 import { boardSidePanelOpen } from '../store/project-pages';
 import { taskProjectFilter } from '../store/task-project-filter';
 import {
@@ -11,6 +12,7 @@ import {
   unregisterFocusFn,
 } from '../store/store';
 import { BoardLane, BoardRail } from './board/BoardLane';
+import { FeatureHint } from './FeatureHint';
 import { useBoardClock } from './board/task-state';
 import { TaskBoardCard } from './TaskBoardCard';
 import { forgetWorkingHolds } from './task-board-hold';
@@ -152,6 +154,8 @@ export function TaskBoard() {
   // A reopened board starts unfiltered, as when the filter lived inside it.
   onCleanup(() => setBoardQuery(''));
   useBoardFocus();
+  // Opening the board is what the tip pointing at it asks for.
+  onMount(() => markFeatureHintSeen('board-view'));
   return (
     <section
       class="task-board"
@@ -179,6 +183,16 @@ export function TaskBoard() {
           )}
         </Index>
       </div>
+      <FeatureHint
+        id="board-lanes"
+        when={tasks().length > 0}
+        anchor={() => lanesEl?.querySelector<HTMLElement>('.task-board-lane-title') ?? undefined}
+        title="Tasks sort themselves by what they need"
+      >
+        A card moves on its own: to Needs you when its agent asks something or fails, to Working
+        while it runs, to Stopped when it is done or idle, and to In pull request once it has one.
+        Click a card to open the task beside the board.
+      </FeatureHint>
     </section>
   );
 }

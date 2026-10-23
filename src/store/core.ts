@@ -106,6 +106,7 @@ export const [store, setStore] = createStore<AppStore>({
   focusMode: false,
   boardView: false,
   boardPeek: false,
+  boardOnFirstTask: false,
   boardSidePanelLeft: false,
   taskSplitMode: {},
   verboseLogging: false,

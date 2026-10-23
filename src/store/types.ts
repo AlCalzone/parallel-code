@@ -713,6 +713,11 @@ export interface AppStore {
   boardSidePanelLeft: boolean;
   /** The board shows the active task in a side panel; never persisted. */
   boardPeek: boolean;
+  /**
+   * A new install that has not picked a view yet: its first task opens the
+   * board. Never persisted. Until then tiles show the first-run steps.
+   */
+  boardOnFirstTask: boolean;
   /** Per-task flag: true when the task is rendering its focus-mode two-column layout. */
   taskSplitMode: Record<string, boolean>;
   verboseLogging: boolean;

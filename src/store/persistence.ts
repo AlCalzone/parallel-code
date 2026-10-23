@@ -683,6 +683,9 @@ export async function loadState(): Promise<void> {
   if (!json) {
     // A new install has no shortcuts to migrate.
     setStore('keybindingMigrationDismissed', true);
+    // shortcut: kept in memory only, so quitting before the first task leaves
+    // tiles — persist it if that first session often ends without a task.
+    setStore('boardOnFirstTask', true);
     await delegationRequest({ action: 'orchestrationSetting', enabled: true });
     stateLoaded = true;
     return;
