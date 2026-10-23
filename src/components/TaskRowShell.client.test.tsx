@@ -76,9 +76,10 @@ const menuItem = (label: string) =>
     (item) => item.textContent?.trim() === label,
   );
 
-it('offers the task menu on a sidebar row, without the board-only open items', () => {
+it('offers the task menu on a sidebar row, without the board-only side switch', () => {
   rightClick();
   expect(labels()).toEqual([
+    'Open',
     'Snooze until new activity',
     'Snooze · keep running',
     'Snooze · stop agents',

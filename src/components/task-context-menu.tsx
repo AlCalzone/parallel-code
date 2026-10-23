@@ -1,6 +1,7 @@
 import { Show, createSignal, type JSX } from 'solid-js';
 import { IPC } from '../../electron/ipc/channels';
 import { invoke } from '../lib/ipc';
+import { store } from '../store/core';
 import { setPendingAction } from '../store/focus';
 import { isLandedTaskState } from '../store/landing';
 import { uncollapseTask } from '../store/tasks';
@@ -13,6 +14,8 @@ import { laterMenuItems } from './task-later-menu';
 interface TaskMenuActions {
   /** Shows the task where it was right-clicked; Finish runs in the task's panel, so it opens it first. */
   open: () => void;
+  /** Where the task opens in the board's side panel, moving that panel across. */
+  openOnOtherSide?: () => void;
   confirmClose: () => void;
 }
 
@@ -40,17 +43,25 @@ function endMenuItems(task: Task, actions: TaskMenuActions): MoreMenuItem[] {
 }
 
 function taskMenuItems(task: Task, actions: TaskMenuActions): MoreMenuItem[] {
-  const pr: MoreMenuItem[] = task.prUrl
-    ? [
-        {
-          label: 'Open PR in browser',
-          icon: <ExternalLinkIcon size={14} />,
-          run: () => void invoke(IPC.ShellOpenExternal, { url: task.prUrl }),
-        },
-      ]
-    : [];
+  const otherSide = actions.openOnOtherSide;
+  const opens: MoreMenuItem[] = [
+    { label: 'Open', run: actions.open },
+    // Moving the panel lives here rather than on the panel, which rarely needs it.
+    ...(otherSide
+      ? [{ label: `Open on the ${store.boardSidePanelLeft ? 'right' : 'left'}`, run: otherSide }]
+      : []),
+    ...(task.prUrl
+      ? [
+          {
+            label: 'Open PR in browser',
+            icon: <ExternalLinkIcon size={14} />,
+            run: () => void invoke(IPC.ShellOpenExternal, { url: task.prUrl }),
+          },
+        ]
+      : []),
+  ];
   // A closing task is on its way out; setting it aside would race the teardown.
-  if (task.closingStatus) return pr;
+  if (task.closingStatus) return opens;
   // Snoozing a minimized task means nothing: its agents are already stopped.
   const setAside: MoreMenuItem[] = task.collapsed
     ? [
@@ -61,7 +72,7 @@ function taskMenuItems(task: Task, actions: TaskMenuActions): MoreMenuItem[] {
         },
       ]
     : laterMenuItems(task);
-  return [...pr, ...setAside, ...endMenuItems(task, actions)];
+  return [...opens, ...setAside, ...endMenuItems(task, actions)];
 }
 
 const stop = (event: Event) => event.stopPropagation();
@@ -74,18 +85,24 @@ function menuPoint(event: MouseEvent): { x: number; y: number } {
 }
 
 /**
- * A task's right-click menu: PR link, set-aside actions, Finish and Close.
- * `leading` adds items above them, such as the board's ways to open the task.
+ * The right-click menu every task row and card shares: open, PR link, set-aside
+ * actions, Finish and Close. `open` shows the task the way a click on the row does.
  */
 export function createTaskContextMenu(options: {
   task: () => Task;
   open: () => void;
-  leading?: () => MoreMenuItem[];
+  openOnOtherSide?: () => void;
 }): { onContextMenu: (event: MouseEvent) => void; Menu: () => JSX.Element } {
   const [at, setAt] = createSignal<{ x: number; y: number }>();
   // Outlives the menu, which closes as soon as Close is picked.
+  // shortcut: the row hosts the dialog, so it vanishes if the row unmounts (a tray entry
+  // resolving, a card changing lane) — an app-level close-dialog host if that bites.
   const [confirmingClose, setConfirmingClose] = createSignal(false);
-  const actions = { open: options.open, confirmClose: () => setConfirmingClose(true) };
+  const actions = {
+    open: options.open,
+    openOnOtherSide: options.openOnOtherSide,
+    confirmClose: () => setConfirmingClose(true),
+  };
   return {
     onContextMenu: (event) => {
       event.preventDefault();
@@ -98,7 +115,7 @@ export function createTaskContextMenu(options: {
         <Show when={at()}>
           {(point) => (
             <ContextMenu
-              items={[...(options.leading?.() ?? []), ...taskMenuItems(options.task(), actions)]}
+              items={taskMenuItems(options.task(), actions)}
               at={point()}
               label={`Task ${options.task().name}`}
               onClose={() => setAt(undefined)}

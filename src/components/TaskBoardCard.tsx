@@ -10,7 +10,6 @@ import { retryCloseTask } from '../store/tasks';
 import type { Task } from '../store/types';
 import { activityLine, agentName, boardNow, stateLabel } from './board/task-state';
 import { ASK_ACTION, AskRow, TaskGlyph, TaskPr, openBeside } from './board/TaskStatus';
-import type { MoreMenuItem } from './chat/MoreMenu';
 import { boardTaskState, type BoardLaneId } from './task-board-lanes';
 import { createTaskContextMenu } from './task-context-menu';
 
@@ -20,17 +19,6 @@ function setAsideLabel(task: Task): string {
   if (task.snoozedUntil === undefined) return task.snoozedUntilCi ? 'Until CI finishes' : '';
   const until = new Date(task.snoozedUntil);
   return `Until ${until.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`;
-}
-
-/** The board's ways to open a task; moving the panel lives here rather than on the panel, which rarely needs it. */
-function boardOpenItems(task: Task): MoreMenuItem[] {
-  return [
-    { label: 'Open', run: () => openBeside(task) },
-    {
-      label: `Open on the ${store.boardSidePanelLeft ? 'right' : 'left'}`,
-      run: () => openBeside(task, true),
-    },
-  ];
 }
 
 /** Offers another try at a close whose teardown failed; the error is the label's tooltip. */
@@ -114,7 +102,7 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
   const menu = createTaskContextMenu({
     task: () => props.task,
     open: () => openBeside(props.task),
-    leading: () => boardOpenItems(props.task),
+    openOnOtherSide: () => openBeside(props.task, true),
   });
   return (
     <li

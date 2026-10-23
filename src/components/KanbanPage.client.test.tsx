@@ -218,6 +218,27 @@ describe('KanbanPage', () => {
     expect(jumpToWaitingTask).toHaveBeenCalledWith('t1', null);
   });
 
+  it('offers the shared task menu on a linked task', async () => {
+    setStore('tasks', 't1', {
+      id: 't1',
+      name: 'Build sync engine',
+      projectId: 'p1',
+      branchName: 'task/sync',
+      gitIsolation: 'worktree',
+      agentIds: [],
+    } as unknown as Task);
+    await mount();
+    cardEl('Sync engine')
+      .querySelector('.plan-task')
+      ?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 9, clientY: 9 }));
+    const labels = [...document.querySelectorAll('[role="menuitem"]')].map((item) =>
+      item.textContent?.trim(),
+    );
+    expect(labels).toEqual(
+      expect.arrayContaining(['Open', 'Open on the left', 'Finish and close', 'Close']),
+    );
+  });
+
   it('shows the project icon beside the project name in the heading', async () => {
     setStore('projects', 0, 'icon', 'terminal');
     await mount();

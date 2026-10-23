@@ -35,6 +35,7 @@ import {
   type CardTaskState,
 } from './board/task-state';
 import { ASK_ACTION, AskRow, TaskGlyph, TaskPr, openBeside } from './board/TaskStatus';
+import { createTaskContextMenu } from './task-context-menu';
 
 /** The open task of this project working on `branch`, if any. */
 export function linkedTask(projectId: string, branch: string): Task | undefined {
@@ -67,8 +68,13 @@ function TaskRow(props: { task: Task }) {
   const fromAgent = () => !activity().text || activity().text === agentName(props.task);
   const activityText = () => (fromAgent() ? props.task.branchName : activity().text);
   const ask = () => ASK_ACTION[state()];
+  const menu = createTaskContextMenu({
+    task: () => props.task,
+    open: () => openBeside(props.task),
+    openOnOtherSide: () => openBeside(props.task, true),
+  });
   return (
-    <li class={`plan-task state-${state()}`}>
+    <li class={`plan-task state-${state()}`} onContextMenu={(event) => menu.onContextMenu(event)}>
       <button
         type="button"
         class="plan-task-open"
@@ -99,6 +105,7 @@ function TaskRow(props: { task: Task }) {
         {activityText() || ' '}
       </p>
       <Show when={props.task.prUrl}>{(url) => <TaskPr taskId={props.task.id} url={url()} />}</Show>
+      <menu.Menu />
     </li>
   );
 }
