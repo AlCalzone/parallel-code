@@ -420,7 +420,7 @@ it('shows the busy overlay while a direct task switches branches', async () => {
   form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   await vi.waitFor(() => expect(switched).toBeTypeOf('function'));
   expect(form?.inert).toBe(true);
-  expect(host.querySelector('[role="status"]')?.textContent).toContain('Creating task...');
+  expect(host.querySelector('[role="status"]')?.textContent).toContain('Creating task…');
   expect(store.showNewTaskPanel).toBe(true);
   switched('main');
   await vi.waitFor(() => expect(store.showNewTaskPanel).toBe(false));
@@ -651,5 +651,141 @@ it('cannot submit again while the panel close after creation is pending', async 
     expect(store.showNewTaskPanel).toBe(false);
   } finally {
     Reflect.deleteProperty(document, 'startViewTransition');
+  }
+});
+
+it('leaves the form undimmed while a worktree task hands off to the background', async () => {
+  const pendingClose: (() => void)[] = [];
+  Object.defineProperty(document, 'startViewTransition', {
+    value: (update: () => void) => {
+      pendingClose.push(update);
+      return { ready: Promise.resolve() };
+    },
+    configurable: true,
+  });
+  try {
+    const form = host.querySelector('form');
+    const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]');
+    await vi.waitFor(() => expect(submit?.disabled).toBe(false));
+    deferCreateTask();
+    form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    // The view transition captures this frame as the old layout.
+    expect(form?.inert).toBe(true);
+    expect(host.querySelector('[role="status"]')).toBeNull();
+    expect(form?.style.opacity).toBe('1');
+    pendingClose.forEach((update) => update());
+  } finally {
+    Reflect.deleteProperty(document, 'startViewTransition');
+  }
+});
+
+it('adds risk warnings below the options that cause them', async () => {
+  setStore('defaultSkipPermissions', false);
+  await vi.waitFor(() =>
+    expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false),
+  );
+  openAdvanced();
+  const skip = checkbox('Dangerously skip all confirms');
+  skip.click();
+  const warning = [...host.querySelectorAll('div')].find((div) =>
+    div.textContent?.startsWith('The agent will run without asking'),
+  );
+  if (!warning) throw new Error('Missing skip-permissions warning');
+  expect(skip.compareDocumentPosition(warning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+it('names the branch a direct task will work on', async () => {
+  dispose();
+  host.replaceChildren();
+  setStore('projects', 0, { defaultGitIsolation: 'direct', defaultBaseBranch: 'develop' });
+  dispose = render(() => <NewTaskPanel open={true} onClose={vi.fn()} />, host);
+  await vi.waitFor(() =>
+    expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false),
+  );
+  openAdvanced();
+  expect(host.textContent).not.toContain('main branch (detected on create)');
+  expect(host.querySelector('[data-direct-target]')?.textContent).toContain('develop');
+});
+
+it('says why Create Task is disabled while branches load', async () => {
+  dispose();
+  host.replaceChildren();
+  let loaded!: (branches: string[]) => void;
+  const originalInvoke = vi.mocked(invoke).getMockImplementation();
+  vi.mocked(invoke).mockImplementation((channel, args) =>
+    channel === IPC.GetBranches
+      ? new Promise((resolve) => (loaded = resolve))
+      : Promise.resolve(originalInvoke?.(channel, args)),
+  );
+  dispose = render(() => <NewTaskPanel open={true} onClose={vi.fn()} />, host);
+  const reason = host.querySelector<HTMLElement>('[data-submit-reason]');
+  await vi.waitFor(() => expect(loaded).toBeTypeOf('function'));
+  expect(reason?.textContent).toBe('Loading branches…');
+  expect(reason?.style.visibility).toBe('visible');
+  loaded(['main']);
+  await vi.waitFor(() => expect(reason?.style.visibility).toBe('hidden'));
+});
+
+it('shows the submit shortcut on the Create Task button', () => {
+  expect(host.querySelector('button[type="submit"] kbd')?.textContent).toMatch(/(Ctrl|⌘)/);
+});
+
+it('announces a submit error', async () => {
+  dispose();
+  host.replaceChildren();
+  setStore('projects', 0, 'defaultGitIsolation', 'direct');
+  const originalInvoke = vi.mocked(invoke).getMockImplementation();
+  vi.mocked(invoke).mockImplementation((channel, args) => {
+    if (channel === IPC.GetCurrentBranch) return Promise.resolve('other');
+    if (channel === IPC.CheckoutBranch) return Promise.reject(new Error('dirty tree'));
+    return Promise.resolve(originalInvoke?.(channel, args));
+  });
+  dispose = render(() => <NewTaskPanel open={true} onClose={vi.fn()} />, host);
+  const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]');
+  await vi.waitFor(() => expect(submit?.disabled).toBe(false));
+  host
+    .querySelector('form')
+    ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await vi.waitFor(() =>
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('dirty tree'),
+  );
+});
+
+it('offers the split tip once, after a pause on a long prompt', async () => {
+  dispose();
+  host.replaceChildren();
+  vi.useFakeTimers();
+  // happy-dom lays nothing out; the tip only shows beside a visible anchor.
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
+    new DOMRect(0, 0, window.innerWidth, window.innerHeight),
+  );
+  setStore({ featureHintsEnabled: true, seenFeatureHints: [], taskOrder: ['other'] });
+  try {
+    dispose = render(() => <NewTaskPanel open={true} onClose={vi.fn()} />, host);
+    await vi.waitFor(() =>
+      expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false),
+    );
+    const tip = () => document.querySelector('[role="note"]');
+    vi.advanceTimersByTime(3000);
+    expect(tip()).toBeNull();
+
+    typePrompt(
+      'Rework the settings dialog: split it into tabs, move the shortcuts, and add search.',
+    );
+    vi.advanceTimersByTime(3000);
+    expect(tip()?.textContent).toContain('Add split request');
+
+    typePrompt(
+      'Rework the settings dialog: split it into tabs, move the shortcuts, and add search!',
+    );
+    vi.advanceTimersByTime(3000);
+    expect(tip()).toBeNull();
+    expect(store.seenFeatureHints).toContain('delegate-subtasks');
+  } finally {
+    dispose();
+    vi.runAllTimers();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    setStore({ featureHintsEnabled: true, seenFeatureHints: [], taskOrder: [] });
   }
 });
