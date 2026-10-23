@@ -53,17 +53,17 @@ export function BoardSidePanelClose() {
       >
         {/* Points the way the panel leaves: towards its own edge of the window. */}
         <svg
-          width="12"
-          height="12"
+          width="10"
+          height="10"
           viewBox="0 0 16 16"
           fill="none"
           aria-hidden="true"
           style={{ transform: store.boardSidePanelLeft ? 'scaleX(-1)' : undefined }}
         >
           <path
-            d="M4 4l4 4-4 4M9 4l4 4-4 4"
+            d="M6 3l5 5-5 5"
             stroke="currentColor"
-            stroke-width="1.5"
+            stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"
           />
