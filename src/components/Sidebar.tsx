@@ -3,7 +3,7 @@ import { TaskProjectFilter } from './TaskProjectFilter';
 import { createProjectFilterTransition } from '../lib/projectFilterTransition';
 import { createSignal, createEffect, createMemo, onMount, onCleanup, For, Show } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { GitHubIcon, PlanIcon } from './icons';
+import { ClockIcon, GitHubIcon, PlanIcon } from './icons';
 import { openGitHubIssues } from '../store/github';
 import { openKanban } from '../store/kanban';
 import { errMessage } from '../lib/log';
@@ -141,18 +141,14 @@ function DirectBranchBadge(props: { branchName: string }) {
     <span
       title={`Works directly on ${props.branchName}`}
       style={{
-        'font-size': sf(11),
-        'font-weight': '600',
-        padding: '1px 5px',
-        'border-radius': 'var(--radius-xs)',
-        background: `color-mix(in srgb, ${theme.warning} 12%, transparent)`,
-        color: theme.warning,
+        // Plain label: working on a branch is routine; the cards flag what needs attention.
+        'font-size': sf(10),
+        color: theme.fgSubtle,
         'flex-shrink': '0',
         'max-width': '45%',
         overflow: 'hidden',
         'text-overflow': 'ellipsis',
         'white-space': 'nowrap',
-        'line-height': '1.5',
       }}
     >
       {props.branchName}
@@ -174,16 +170,12 @@ function TaskName(props: { name: string; unread?: boolean; backgrounded?: boolea
         {props.name}
       </span>
       <Show when={props.backgrounded}>
-        <span
-          title="Sent to back until new activity"
-          style={{
-            'font-size': sf(10),
-            color: theme.fgSubtle,
-            'flex-shrink': '0',
-          }}
-        >
-          Background
-        </span>
+        {/* Same clock as the Later menu's snooze actions. */}
+        <ClockIcon
+          size={11}
+          title="Snoozed"
+          style={{ color: theme.fgSubtle, 'flex-shrink': '0' }}
+        />
       </Show>
     </>
   );
