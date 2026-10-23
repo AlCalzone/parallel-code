@@ -54,7 +54,7 @@ import { TaskSuperProductivityBanner } from './TaskSuperProductivityBanner';
 import { TaskNotesBody, notesMinHeight } from './TaskNotesBody';
 import { TaskChangedFilesSection } from './TaskChangedFilesSection';
 import { isCommitHashSelection, type CommitSelection } from './CommitNavBar';
-import { TaskShellSection } from './TaskShellSection';
+import { TaskShellSection, shellSectionMinHeight } from './TaskShellSection';
 import { TaskCanvasPanel } from './TaskCanvasPanel';
 import { TaskBriefBar } from './TaskBrief';
 import { TaskAITerminal } from './TaskAITerminal';
@@ -741,7 +741,10 @@ export function TaskPanel(props: TaskPanelProps) {
   const shellSectionChild: PanelChild = {
     id: 'shell-section',
     resizeLabel: 'Resize shell panel',
-    minSize: 35,
+    // Never shorter than the section, or the cell clips the shells' bottom edge.
+    get minSize() {
+      return shellSectionMinHeight(props.task);
+    },
     noPin: () => props.task.shellAgentIds.length === 0,
     content: () => shellSectionEl,
   };

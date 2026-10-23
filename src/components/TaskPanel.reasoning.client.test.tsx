@@ -58,6 +58,7 @@ vi.mock('../store/store', () => {
     activeTaskId: 'other-task',
     tasks: { parent: { id: 'parent', name: 'Parent task', collapsed: false } },
     focusMode: false,
+    taskSplitMode: {} as Record<string, unknown>,
     themePreset: 'obsidian',
     showPlans: true,
     focusedPanel: { task: 'prompt' },
@@ -247,7 +248,11 @@ vi.mock('./TaskChangedFilesSection', () => ({
     );
   },
 }));
-vi.mock('./TaskShellSection', () => ({ TaskShellSection: () => null }));
+vi.mock('./TaskShellSection', async (importOriginal) => ({
+  shellSectionMinHeight: (await importOriginal<typeof import('./TaskShellSection')>())
+    .shellSectionMinHeight,
+  TaskShellSection: () => <div class="test-shells" />,
+}));
 vi.mock('./CanvasFilePicker', () => ({ CanvasFilePicker: () => null }));
 vi.mock('./TaskCanvasDocument', () => ({
   TaskCanvasDocument: () => <textarea class="test-canvas" />,
@@ -811,6 +816,15 @@ it('never sizes the notes row below the notes pane, so its bottom edge stays vis
   const payload = { subject: 'notes', gist: card, cards: [card], context: 'Context.' };
   setTask('agentTour', { revision: 1, payload });
   expect(notesRow()?.style.minHeight).toBe('131px');
+});
+
+it('never sizes the shell row below its open terminals, so their bottom edge stays visible', () => {
+  const { container, setTask } = mountEmptyTask();
+  const shellRow = () =>
+    container.querySelector<HTMLElement>('.test-shells')?.closest<HTMLElement>('.rp-cell');
+  expect(shellRow()?.style.minHeight).toBe('35px');
+  setTask('shellAgentIds', ['shell-1']);
+  expect(shellRow()?.style.minHeight).toBe('140px');
 });
 
 it('keeps prompt focus when files arrive in the supporting column', async () => {
