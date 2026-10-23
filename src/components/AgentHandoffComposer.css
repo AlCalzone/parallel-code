@@ -165,15 +165,6 @@
 .dialog-overlay .agent-handoff .handoff-actions {
   padding-top: 4px;
 }
-.terminal-second-opinion {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-}
-.terminal-second-opinion button,
 .terminal-selection-trigger {
   display: inline-flex;
   align-items: center;
@@ -186,7 +177,6 @@
   cursor: pointer;
   font-size: 11px;
 }
-.terminal-second-opinion button:hover,
 .terminal-selection-trigger:hover {
   color: var(--fg);
 }

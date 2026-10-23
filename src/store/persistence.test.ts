@@ -2360,27 +2360,6 @@ describe('daily merge count persistence', () => {
   });
 });
 
-it.each([false, true])(
-  'preserves second-opinion dismissal across restore (collapsed=%s)',
-  async (collapsed) => {
-    const def = agentDef();
-    mockInvoke.mockResolvedValueOnce(
-      JSON.stringify({
-        projects: [{ id: 'project-1', name: 'Repo', path: '/repo', color: 'red' }],
-        taskOrder: collapsed ? [] : ['task-1'],
-        collapsedTaskOrder: collapsed ? ['task-1'] : [],
-        tasks: { 'task-1': { ...persistedTask(def), secondOpinionDismissed: true } },
-      }),
-    );
-    await loadState();
-    expect(store.tasks['task-1'].secondOpinionDismissed).toBe(true);
-    mockInvoke.mockClear();
-    await saveState();
-    const saved = JSON.parse(mockInvoke.mock.calls[0][1].json);
-    expect(saved.tasks['task-1'].secondOpinionDismissed).toBe(true);
-  },
-);
-
 describe('timed snooze persistence', () => {
   function savedSnooze(snoozedUntil: unknown): string {
     return JSON.stringify({
