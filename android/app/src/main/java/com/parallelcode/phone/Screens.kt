@@ -173,6 +173,7 @@ fun ConnectScreen(
     saved: List<SavedComputer> = emptyList(),
     onSelectSaved: (String) -> Unit = {},
     onCancel: (() -> Unit)? = null,
+    onDemo: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     var pasted by rememberSaveable { mutableStateOf("") }
@@ -243,6 +244,11 @@ fun ConnectScreen(
         )
         TextButton(onClick = { accept(pasted) }, enabled = pasted.isNotBlank()) {
             Text("Connect", fontWeight = FontWeight.SemiBold)
+        }
+        onDemo?.let {
+            OutlinedButton(onClick = it, modifier = Modifier.fillMaxWidth()) {
+                Text("Try demo — no computer needed")
+            }
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (saved.isNotEmpty()) {
@@ -654,7 +660,7 @@ internal fun PairBanner(onPair: () -> Unit) {
 }
 
 @Composable
-private fun AgentCard(
+internal fun AgentCard(
     agent: RemoteAgent,
     onOpen: (RemoteAgent) -> Unit,
     modifier: Modifier = Modifier,

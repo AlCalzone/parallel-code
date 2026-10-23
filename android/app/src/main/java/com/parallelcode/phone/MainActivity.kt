@@ -67,6 +67,8 @@ class PhoneViewModel(application: Application) : AndroidViewModel(application) {
     val client = phoneApp.client
     val settingsStore = phoneApp.settings
     val promptHistory = phoneApp.promptHistory
+    // A separate in-memory session: never attached to the real client or saved credentials.
+    internal val demoSession = MutableStateFlow<DemoSession?>(null)
 
     /** An agent to open, from a tapped notification. */
     val openAgentRequest = MutableStateFlow<String?>(null)
@@ -289,6 +291,7 @@ class MainActivity : ComponentActivity() {
         // Android hides the Wi-Fi name from apps in the background, so a name read while only the
         // notification service was running is blank. Read it again now that the app is visible.
         (application as PhoneApplication).networkMonitor.setForeground(true)
+        if (model.demoSession.value != null) return
         model.client.start(HOLDER)
         model.client.resumeViewSize()
         AgentWatchService.sync(this)
@@ -344,12 +347,32 @@ private fun PhoneApp(model: PhoneViewModel) {
     }
 
     val computers by model.client.computers.collectAsState()
+    val demo by model.demoSession.collectAsState()
+    LaunchedEffect(link) {
+        if (link != null && model.demoSession.value != null) {
+            model.demoSession.value = null
+            model.client.start("app")
+        }
+    }
     if (link == null) {
+        val context = LocalContext.current
+        demo?.let { session ->
+            DemoScreen(session, onExit = {
+                model.demoSession.value = null
+                model.client.start("app")
+            })
+            return
+        }
         ConnectScreen(
             expired = state.linkExpired,
             onLink = { model.client.link(it) },
             saved = computers,
             onSelectSaved = { model.client.switchTo(it) },
+            onDemo = {
+                model.client.stop("app")
+                AgentWatchService.sync(context)
+                model.demoSession.value = DemoSession()
+            },
         )
         return
     }

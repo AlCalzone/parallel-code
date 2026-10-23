@@ -95,3 +95,52 @@ background event delivery and disabling. Do not submit an invented video URL.
 Reviewer access must be reusable and exercise the desktop-dependent functionality.
 Never publish a developer's personal desktop tokens or expose a working development
 machine for review. Use an isolated demo environment or a clearly labeled demo mode.
+
+## Reviewer access (App access instructions)
+
+These instructions apply once the installed release includes the demo-mode change;
+the current Play build has not been verified to include it. No login, credentials,
+desktop installation, pairing code, or special network is needed. The demo entry
+is available to everyone, without a reviewer-specific account:
+
+1. On the initial **Connect to your computer** screen, tap **Try demo — no computer needed**.
+2. The **Demo mode** screen always identifies its offline sample data. Open
+   **Review the welcome screen**, then tap **Allow once** or **Decline** on its sample
+   approval. The conversation and task status update locally; no command runs.
+3. Type a message in **Message the demo agent** and tap **Send** to see a simulated reply.
+4. Tap **Back**, then **New sample task**. Enter a description and tap **Create task**.
+   The new sample conversation supports messages too.
+5. Tap **Exit demo** to return to connection setup. Entering the demo again resets
+   all sample tasks, approvals, and replies.
+
+Demo data stays in memory and is separate from saved connections, real agents,
+prompt history, backups, widgets, and notifications. The demo never connects to a
+desktop, starts a notification service, requests permissions, or calls an AI service.
+It demonstrates task cards, built-in chat, replies, approvals, and task creation;
+real terminal streams, desktop Git operations, pairing, and background notification
+delivery still require a desktop connection. Use the real-device notification video
+described above for the foreground-service declaration.
+
+## Handoff status — 2026-10-23
+
+- Before release integration, local `main` was `d164196c` and remote `main` was
+  `c40359d8`, verified through the GitHub API. Integration, push, and the `0.2.0`
+  workflow are now authorized. Verify their resulting commit and run before testing.
+- No device is attached through adb. Installing the exact Play build and real-device
+  smoke checks remain outstanding. Store asset uploads remain permission-blocked;
+  they were not retried.
+- Local Android unit tests (197, including seven demo tests), debug APK assembly,
+  release lint, and AAB build passed. Lint reports 14 warnings and no errors; none
+  concern the demo files. The release manifest omits background location and AD_ID.
+- Play App access completion gates target-audience and location declarations;
+  target audience then gates Data safety submission. The reviewer demo must reach
+  the tested release before its access instructions can be submitted.
+- IARC online-content severity answers remain unresolved. Google's help excludes
+  user-imported material, but the form explicitly includes AI output. Do not guess
+  a severity rating for unrestricted coding-agent content. See the
+  [official content-rating guidance](https://support.google.com/googleplay/android-developer/answer/11070055).
+- The reviewed Data safety preview includes messages, other user content, app
+  interactions, diagnostics, and identifiers, without a universal encryption claim.
+  It remains a draft. The bundled and website privacy-policy sources match.
+
+These are preparation results, not a submitted or published production release.

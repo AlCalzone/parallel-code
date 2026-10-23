@@ -254,7 +254,7 @@ private fun Banner(text: String, error: Boolean = false) {
 }
 
 @Composable
-private fun ChatTranscript(
+internal fun ChatTranscript(
     agentId: String,
     chat: ChatState,
     agentName: String,
