@@ -413,6 +413,10 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
     unregisterFocusFn('task-board', focusPlan);
     dropBoardFocus();
   });
+  // Going inert drops a focused card's focus without a focusout.
+  createEffect(() => {
+    if (props.covered) dropBoardFocus();
+  });
 
   // Follow edits made in an editor or by an agent. An open editor or a drag
   // keeps its card in place until it ends; changes are rebased on save anyway.

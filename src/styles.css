@@ -899,6 +899,7 @@ html[data-look='parallel-code'] .prompt-input-panel[data-panel-focused='true']::
   content: '';
   position: absolute;
   inset: 0;
+  border: none;
   border-radius: 4px 4px calc(var(--island-radius) - 1px) calc(var(--island-radius) - 1px);
   box-shadow: var(--pane-focus-ring);
   pointer-events: none;
