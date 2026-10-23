@@ -8,6 +8,7 @@ import { isTaskBackgrounded } from './background-tasks';
 import { uncollapseTask } from './tasks';
 import { isTaskCanvasVisible } from '../lib/canvas-tabs';
 import { boardShown, boardSidePanelOpen, towardBoard } from './project-pages';
+import type { PendingAction } from './types';
 import {
   AI_TERMINAL_PANEL,
   aiTerminalPanels,
@@ -615,9 +616,7 @@ export function switchTaskKeepingPanel(targetId: string): void {
   });
 }
 
-export function setPendingAction(
-  action: { type: 'close' | 'finish'; taskId: string } | null,
-): void {
+export function setPendingAction(action: PendingAction | null): void {
   if (action?.type === 'finish') {
     const task = store.tasks[action.taskId];
     if (task && task.gitIsolation !== 'worktree') {

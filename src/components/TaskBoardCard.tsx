@@ -1,4 +1,4 @@
-import { Show, createMemo, createSignal } from 'solid-js';
+import { Show, createMemo } from 'solid-js';
 import { formatRelativeAge } from '../lib/relativeAge';
 import { isTaskBackgrounded } from '../store/background-tasks';
 import { store } from '../store/core';
@@ -6,14 +6,12 @@ import { getPrChecks } from '../store/pr-checks-state';
 import { getProject } from '../store/projects';
 import { ProjectSwatch } from './ProjectSwatch';
 import { getTaskAttentionState, getTaskOpenQuestion } from '../store/taskStatus';
-import { retryCloseTask, uncollapseTask } from '../store/tasks';
+import { retryCloseTask } from '../store/tasks';
 import type { Task } from '../store/types';
 import { activityLine, agentName, boardNow, stateLabel } from './board/task-state';
 import { ASK_ACTION, AskRow, TaskGlyph, TaskPr, openBeside } from './board/TaskStatus';
-import { ContextMenu, type MoreMenuItem } from './chat/MoreMenu';
 import { boardTaskState, type BoardLaneId } from './task-board-lanes';
-import { laterMenuItems } from './task-later-menu';
-import { UndoIcon } from './icons';
+import { createTaskContextMenu } from './task-context-menu';
 
 /** Why the card is set aside: when its snooze ends, or that it is minimized. */
 function setAsideLabel(task: Task): string {
@@ -21,37 +19,6 @@ function setAsideLabel(task: Task): string {
   if (task.snoozedUntil === undefined) return task.snoozedUntilCi ? 'Until CI finishes' : '';
   const until = new Date(task.snoozedUntil);
   return `Until ${until.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`;
-}
-
-function cardMenuItems(task: Task): MoreMenuItem[] {
-  // Moving the panel lives here rather than on the panel, which rarely needs it.
-  const opens = [
-    { label: 'Open', run: () => openBeside(task) },
-    {
-      label: `Open on the ${store.boardSidePanelLeft ? 'right' : 'left'}`,
-      run: () => openBeside(task, true),
-    },
-  ];
-  // A closing task is on its way out; setting it aside would race the teardown.
-  if (task.closingStatus) return opens;
-  // Snoozing a minimized task means nothing: its agents are already stopped.
-  if (task.collapsed)
-    return [
-      ...opens,
-      {
-        label: 'Restore (start agents)',
-        icon: <UndoIcon size={14} />,
-        run: () => uncollapseTask(task.id, { activate: false }),
-      },
-    ];
-  return [...opens, ...laterMenuItems(task)];
-}
-
-/** Where a right-click opened the menu; a keyboard-opened one reports 0,0, so use the card. */
-function menuPoint(event: MouseEvent): { x: number; y: number } {
-  if (event.clientX || event.clientY) return { x: event.clientX, y: event.clientY };
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  return { x: rect.left, y: rect.bottom };
 }
 
 /** Offers another try at a close whose teardown failed; the error is the label's tooltip. */
@@ -132,7 +99,11 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
   const question = () => getTaskOpenQuestion(props.task.id);
   const ask = () =>
     props.lane === 'needs' && !props.task.closingStatus ? ASK_ACTION[state()] : undefined;
-  const [menuAt, setMenuAt] = createSignal<{ x: number; y: number }>();
+  const menu = createTaskContextMenu({
+    task: () => props.task,
+    open: () => openBeside(props.task),
+    openOnOtherSide: () => openBeside(props.task, true),
+  });
   return (
     <li
       class={`task-board-card state-${state()}`}
@@ -144,10 +115,7 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
         shown: shown(),
         closing: closing(),
       }}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        setMenuAt(menuPoint(event));
-      }}
+      onContextMenu={(event) => menu.onContextMenu(event)}
     >
       <button
         type="button"
@@ -188,16 +156,7 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
           />
         )}
       </Show>
-      <Show when={menuAt()}>
-        {(at) => (
-          <ContextMenu
-            items={cardMenuItems(props.task)}
-            at={at()}
-            label={`Task ${props.task.name}`}
-            onClose={() => setMenuAt(undefined)}
-          />
-        )}
-      </Show>
+      <menu.Menu />
     </li>
   );
 }

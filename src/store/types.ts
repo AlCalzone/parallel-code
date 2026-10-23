@@ -585,6 +585,8 @@ export type PanelId = string;
 export interface PendingAction {
   type: 'close' | 'finish';
   taskId: string;
+  /** Finish with "delete branch and worktree after merge" pre-checked. */
+  closeAfter?: boolean;
 }
 
 export interface RemoteAccess {

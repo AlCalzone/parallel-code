@@ -4,6 +4,7 @@ import { createProjectFilterTransition } from '../lib/projectFilterTransition';
 import { createSignal, createEffect, createMemo, onMount, onCleanup, For, Show } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { ClockIcon, GitHubIcon, PlanIcon } from './icons';
+import { createTaskContextMenu } from './task-context-menu';
 import { openGitHubIssues } from '../store/github';
 import { openKanban } from '../store/kanban';
 import { errMessage } from '../lib/log';
@@ -292,6 +293,11 @@ export function TaskRowShell(props: {
           .split(/\s+/)
           .filter((className) => className !== 'task-item-appearing')
           .join(' ');
+  // Finish needs the task's panel, so it opens the task the way a click on this row does.
+  const menu = createTaskContextMenu({
+    task: () => store.tasks[props.taskId],
+    open: () => props.onClick(),
+  });
 
   return (
     <div
@@ -308,6 +314,7 @@ export function TaskRowShell(props: {
       title={props.title}
       onClick={() => props.onClick()}
       onKeyDown={(event) => props.onKeyDown?.(event)}
+      onContextMenu={(event) => menu.onContextMenu(event)}
       style={{
         padding: '2px 10px',
         'padding-left': props.paddingLeft ?? '10px',
@@ -328,6 +335,9 @@ export function TaskRowShell(props: {
       }}
     >
       {props.children}
+      <Show when={store.tasks[props.taskId]}>
+        <menu.Menu />
+      </Show>
     </div>
   );
 }
