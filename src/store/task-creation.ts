@@ -12,8 +12,9 @@ interface FailedDraft {
   dropUrl: string | null;
 }
 
-// Session-only. Failed drafts wait for the next New Task instead of reopening
-// the panel, which would take focus from whatever the user moved on to.
+// Session-only. Failed drafts, and drafts set aside for a task, wait for the next
+// New Task instead of reopening the panel, which would take focus from whatever
+// the user moved on to.
 const failedDrafts: FailedDraft[] = [];
 
 /** Names of creations past SLOW_CREATION_MS, oldest first. */
@@ -81,6 +82,24 @@ export async function createTaskInBackground(job: BackgroundTaskCreation): Promi
       durationMs: NOTIFICATION_ERROR_MS,
     });
   }
+}
+
+// Reads the open New Task panel's unsaved draft; null while no panel is mounted.
+let readOpenDraft: (() => FailedDraft | null) | null = null;
+
+/** Lets the mounted New Task panel hand over what was typed; returns the unregister. */
+export function registerOpenDraft(read: () => FailedDraft | null): () => void {
+  readOpenDraft = read;
+  return () => {
+    if (readOpenDraft === read) readOpenDraft = null;
+  };
+}
+
+/** Keeps the open panel's draft for the next New Task, ahead of failed ones:
+ *  it is what the user was working on last. */
+export function setOpenDraftAside(): void {
+  const draft = readOpenDraft?.();
+  if (draft) failedDrafts.unshift(draft);
 }
 
 /** Puts the oldest failed draft into the panel about to open, unless the
