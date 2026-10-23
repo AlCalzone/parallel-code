@@ -15,7 +15,7 @@ export {
   relinkProject,
   isProjectMissing,
   projectIsGitRepo,
-  PASTEL_HUES,
+  PROJECT_COLORS,
 } from './projects';
 export { removeProjectWithTasks } from './project-cleanup';
 export {

@@ -21,7 +21,7 @@ import { ProjectIconField } from './ProjectIconField';
 import { ProjectFolderField } from './ProjectFolderField';
 import { ProjectTaskSection } from './ProjectTaskSection';
 import { ProjectVerificationSection } from './ProjectVerificationSection';
-import { colorFromHue, createProjectSettingsForm } from './project-settings-form';
+import { createProjectSettingsForm } from './project-settings-form';
 import { DialogTabs, dialogTabId, dialogTabPanelId, type DialogTab } from './DialogTabs';
 
 interface EditProjectDialogProps {
@@ -199,12 +199,8 @@ export function EditProjectDialog(props: EditProjectDialogProps) {
                 )}
               </ProjectField>
 
-              <ProjectColorPicker hue={form.hue()} onChange={form.setHue} />
-              <ProjectIconField
-                icon={form.icon()}
-                color={colorFromHue(form.hue())}
-                onChange={form.setIcon}
-              />
+              <ProjectColorPicker color={form.color()} onChange={form.setColor} />
+              <ProjectIconField icon={form.icon()} color={form.color()} onChange={form.setIcon} />
 
               <ProjectFolderField
                 projectId={project().id}

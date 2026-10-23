@@ -15,11 +15,22 @@ import { assignFreshSessionId } from './session-ids';
 import { forgetAgentPrompts } from '../lib/prompt-history';
 import { delegationRequest, registerTaskAuthority } from './delegation';
 
-export const PASTEL_HUES = [0, 30, 60, 120, 180, 210, 260, 300, 330];
+// Pastels, plus one deeper blue so two blue projects stay distinguishable.
+export const PROJECT_COLORS = [
+  'hsl(0, 70%, 75%)',
+  'hsl(30, 70%, 75%)',
+  'hsl(60, 70%, 75%)',
+  'hsl(120, 70%, 75%)',
+  'hsl(180, 70%, 75%)',
+  'hsl(210, 70%, 75%)',
+  'hsl(220, 70%, 62%)',
+  'hsl(260, 70%, 75%)',
+  'hsl(300, 70%, 75%)',
+  'hsl(330, 70%, 75%)',
+];
 
 export function randomPastelColor(): string {
-  const hue = PASTEL_HUES[Math.floor(Math.random() * PASTEL_HUES.length)];
-  return `hsl(${hue}, 70%, 75%)`;
+  return PROJECT_COLORS[Math.floor(Math.random() * PROJECT_COLORS.length)];
 }
 
 const byName = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
