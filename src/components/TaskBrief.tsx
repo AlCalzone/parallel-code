@@ -355,7 +355,7 @@ export function TaskBriefBar(props: TaskBriefBarProps) {
               width: `${Math.min(CARD_WIDTH, window.innerWidth - 24)}px`,
               'max-height': `${place().maxHeight}px`,
               overflow: 'auto',
-              'z-index': '1000',
+              'z-index': 'var(--z-modal)',
               background: theme.bgElevated,
               border: `1px solid ${theme.border}`,
               'border-radius': 'var(--radius-md)',

@@ -172,7 +172,7 @@ function ModelList(
           props.onClose();
         }}
         onContextMenu={() => props.onClose()}
-        style={{ position: 'fixed', inset: '0', 'z-index': '2000' }}
+        style={{ position: 'fixed', inset: '0', 'z-index': 'var(--z-overlay)' }}
       >
         <div
           ref={menu}

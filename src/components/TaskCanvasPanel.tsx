@@ -375,7 +375,7 @@ export function TaskCanvasPanel(props: TaskCanvasPanelProps) {
           <Portal>
             <div
               onPointerDown={() => setContextMenu(null)}
-              style={{ position: 'fixed', inset: '0', 'z-index': '1500' }}
+              style={{ position: 'fixed', inset: '0', 'z-index': 'var(--z-floating)' }}
             />
             <div
               ref={contextMenuRef}
@@ -393,7 +393,7 @@ export function TaskCanvasPanel(props: TaskCanvasPanelProps) {
                 position: 'fixed',
                 left: `${menu().x}px`,
                 top: `${menu().y}px`,
-                'z-index': '1501',
+                'z-index': 'calc(var(--z-floating) + 1)',
                 width: '200px',
                 padding: '4px',
                 background: theme.bgElevated,

@@ -128,7 +128,7 @@
   padding: 20px;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--task-panel-bg);
   box-shadow: var(--shadow-soft);
 }
@@ -217,7 +217,7 @@
   padding: 16px;
   min-width: 230px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--bg-elevated);
   box-shadow: var(--shadow-soft);
 }

@@ -107,7 +107,7 @@ export function Dialog(props: DialogProps) {
             'align-items': 'center',
             'justify-content': 'center',
             background: 'rgba(0,0,0,0.55)',
-            'z-index': String(props.zIndex ?? 1000),
+            'z-index': props.zIndex === undefined ? 'var(--z-modal)' : String(props.zIndex),
             ...props.overlayStyle,
           }}
           // A drag between the panel and the backdrop, either way, clicks the

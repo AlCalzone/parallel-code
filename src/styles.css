@@ -52,12 +52,21 @@
     0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent),
     0 14px 36px color-mix(in srgb, var(--accent) 16%, transparent);
 
-  /* Corner radius scale. Every rounded control picks one of these four so
+  /* Corner radius scale. Every rounded control picks one of these so
      badges, buttons, cards and panels read as one family. */
   --radius-xs: 4px; /* badges, chips, kbd, inline markers */
   --radius-sm: 6px; /* icon buttons, small controls, list rows */
   --radius-md: 8px; /* buttons, inputs, cards */
   --radius-lg: 12px; /* panels, columns, dialogs */
+  --radius-pill: 999px; /* fully rounded: pills, dots, toggles; not overridden by looks */
+
+  /* Stacking layers for anything that floats above the workspace. Pick a
+     layer; use calc(layer + 1) only to lift a menu over its own backdrop. */
+  --z-modal: 1000; /* dialogs and anchored popovers */
+  --z-popover: 1200; /* menus that can open from inside a dialog */
+  --z-floating: 1500; /* menus over fullscreen canvases and side spaces */
+  --z-overlay: 2000; /* full-window takeovers and guided hints */
+  --z-top: 3000; /* lightboxes over everything */
 }
 
 html,
@@ -1935,7 +1944,7 @@ html[data-look^='islands-'] .tiling-strip-handle::before {
 
 ::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--fg-subtle) 50%, transparent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -2396,7 +2405,7 @@ textarea::placeholder {
   justify-content: center;
   min-width: 0;
   padding: 1px 5px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 11px;
   font-weight: 600;
   line-height: 1.4;
@@ -3110,7 +3119,7 @@ html:is(
 
 .prompt-history-popover {
   position: fixed;
-  z-index: 1500;
+  z-index: var(--z-floating);
   box-sizing: border-box;
   width: min(420px, calc(100vw - 24px));
   overflow: auto;
@@ -3345,7 +3354,7 @@ html:is(
 .status-glyph-spinner {
   display: inline-block;
   box-sizing: border-box;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 2px solid color-mix(in srgb, currentColor 28%, transparent);
   border-top-color: currentColor;
   animation: spinnerSpin 0.9s linear infinite;
@@ -3358,7 +3367,7 @@ html:is(
   position: relative;
   display: inline-block;
   box-sizing: border-box;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   /* The padding gap keeps the wedge from merging into the ring as it fills. */
   padding: 2px;
   background: conic-gradient(currentColor var(--ci-sweep), transparent 0) content-box;
@@ -3368,7 +3377,7 @@ html:is(
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px dashed currentColor;
   animation: spinnerSpin 2.4s linear infinite;
 }
@@ -3376,7 +3385,7 @@ html:is(
 .status-glyph-question {
   display: inline-block;
   box-sizing: border-box;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-weight: 700;
   text-align: center;
 }
@@ -3387,7 +3396,7 @@ html:is(
   box-sizing: border-box;
   width: 12px;
   height: 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 2px solid color-mix(in srgb, currentColor 32%, transparent);
   border-top-color: currentColor;
   animation: spinnerSpin 0.75s linear infinite;
@@ -3466,7 +3475,7 @@ html:is(
 .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
   width: 6px !important;
   left: 2px !important;
-  border-radius: 999px !important;
+  border-radius: var(--radius-pill) !important;
   background: color-mix(in srgb, var(--fg-subtle) 50%, transparent) !important;
   transition: background 120ms ease;
 }
@@ -3497,7 +3506,7 @@ html:is(
 .drop-indicator {
   height: 2px;
   background: var(--accent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   margin: 0 2px;
   box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent);
 }
@@ -3506,8 +3515,8 @@ html:is(
   position: fixed;
   width: 2px;
   background: var(--accent);
-  border-radius: 999px;
-  z-index: 1000;
+  border-radius: var(--radius-pill);
+  z-index: var(--z-modal);
   pointer-events: none;
   box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent);
 }
@@ -3833,7 +3842,7 @@ html[data-look='islands-light'] .window-title-icon {
   flex: 0 1 auto;
   padding: 0 8px;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--fg-muted);
   font-family: inherit;
@@ -3951,7 +3960,7 @@ html[data-look='islands-light'] .window-title-icon {
   position: fixed;
   top: 46px;
   left: 50%;
-  z-index: 1900;
+  z-index: calc(var(--z-overlay) - 100);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -4007,7 +4016,7 @@ html[data-look='islands-light'] .window-title-icon {
   position: fixed;
   bottom: 24px;
   left: 50%;
-  z-index: 2100;
+  z-index: calc(var(--z-overlay) + 100);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -4379,7 +4388,7 @@ html[data-look='islands-light'] .window-title-icon {
 .mermaid-lightbox {
   position: fixed;
   inset: 0;
-  z-index: 3000;
+  z-index: var(--z-top);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4411,7 +4420,7 @@ html[data-look='islands-light'] .window-title-icon {
   height: 34px;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--bg-elevated);
   color: var(--fg);
   cursor: pointer;
@@ -5756,7 +5765,7 @@ button.tour-save-state:not(:disabled):hover {
 
 .tour-hint {
   position: fixed;
-  z-index: 2000;
+  z-index: var(--z-overlay);
   box-sizing: border-box;
   max-width: calc(100vw - 24px);
   padding: 10px 12px;

@@ -201,11 +201,11 @@
 .terminal-selection-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1500;
+  z-index: var(--z-floating);
 }
 .terminal-selection-menu {
   position: fixed;
-  z-index: 1501;
+  z-index: calc(var(--z-floating) + 1);
   padding: 4px;
   min-width: 180px;
   max-width: calc(100vw - 8px);

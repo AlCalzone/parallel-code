@@ -61,7 +61,7 @@ export function HelpPopover(props: { content: JSX.Element; children: JSX.Element
               'box-sizing': 'border-box',
               overflow: 'auto',
               'pointer-events': 'none',
-              'z-index': '2000',
+              'z-index': 'var(--z-overlay)',
               padding: '12px 14px',
               background: theme.bgElevated,
               color: theme.fg,
