@@ -241,6 +241,45 @@ describe('KanbanPage', () => {
     );
   });
 
+  it('shows the plan as a mind map and opens a card from it in the board', async () => {
+    setStore('tasks', 't1', {
+      id: 't1',
+      name: 'Build sync engine',
+      projectId: 'p1',
+      branchName: 'task/sync',
+      gitIsolation: 'worktree',
+      agentIds: [],
+    } as unknown as Task);
+    vi.mocked(getTaskAttentionState).mockReturnValue('needs_input');
+    await mount();
+    button('Map').click();
+    await settle();
+    expect(button('Map').getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('.plan-card')).toBeNull();
+    const node = (title: string) => {
+      const found = [...host.querySelectorAll<HTMLElement>('.investigation-node')].find(
+        (n) => n.querySelector('strong')?.textContent === title,
+      );
+      if (!found) throw new Error(`No node ${title}`);
+      return found;
+    };
+    expect(node('Backlog')).toBeTruthy();
+    // The archive starts folded, as on the board.
+    expect(() => node('Old card')).toThrow();
+    const badge = host.querySelector<HTMLElement>('.kanban-map .graph-task-badge');
+    expect(badge?.dataset.state).toBe('needs_input');
+    expect(badge?.textContent).toBe('Needs input · Build sync engine');
+
+    node('Docs').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    await settle();
+    expect(button('Board').getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector<HTMLInputElement>('input[aria-label="Card title"]')?.value).toBe(
+      'Docs',
+    );
+    // Leaving for the map would drop the open edit.
+    expect(button('Map').disabled).toBe(true);
+  });
+
   it('shows the project icon beside the project name in the heading', async () => {
     setStore('projects', 0, 'icon', 'terminal');
     await mount();

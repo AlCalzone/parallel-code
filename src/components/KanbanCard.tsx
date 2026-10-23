@@ -48,16 +48,24 @@ export function linkedTask(projectId: string, branch: string): Task | undefined 
   );
 }
 
-export function cardState(projectId: string, card: KanbanCard): CardTaskState | null {
+/** The card's linked task that most needs the user, and how it is doing. */
+export function urgentTask(
+  projectId: string,
+  card: KanbanCard,
+): { task: Task; state: CardTaskState } | undefined {
   const order: CardTaskState[] = ['needs_input', 'error', 'review', 'active', 'ready', 'idle'];
-  let best: CardTaskState | null = null;
+  let best: { task: Task; state: CardTaskState } | undefined;
   for (const branch of card.branches) {
     const task = linkedTask(projectId, branch);
     if (!task) continue;
     const state = cardTaskState(task);
-    if (best === null || order.indexOf(state) < order.indexOf(best)) best = state;
+    if (!best || order.indexOf(state) < order.indexOf(best.state)) best = { task, state };
   }
   return best;
+}
+
+export function cardState(projectId: string, card: KanbanCard): CardTaskState | null {
+  return urgentTask(projectId, card)?.state ?? null;
 }
 
 /** A linked task: which one, what it is doing, and the way to it when it waits on you. */

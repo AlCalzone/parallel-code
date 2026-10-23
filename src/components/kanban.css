@@ -835,3 +835,40 @@
     transition: none !important;
   }
 }
+
+/* --- Map view --- */
+
+.kanban-view-toggle {
+  display: inline-flex;
+}
+.kanban .kanban-view-toggle button:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.kanban .kanban-view-toggle button:last-child {
+  margin-left: -1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+/* The pressed button's accent border stays whole next to its neighbour. */
+.kanban .kanban-view-toggle button[aria-pressed='true'] {
+  position: relative;
+}
+.kanban .kanban-map {
+  flex: 1;
+  /* Fills the page below the heading instead of the editor's own full height. */
+  height: auto;
+  margin: 8px 20px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+/* Tasks that wait on the user or failed stand out, as on the board's cards. */
+.kanban-map .graph-task-badge[data-state='needs_input'] {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
+}
+.kanban-map .graph-task-badge[data-state='error'] {
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 55%, var(--border));
+}

@@ -15,6 +15,7 @@ import {
 import { createAgentPaneState, GitHubAgentPane, type AgentPaneState } from './GitHubAgentPane';
 import { GitHubItemPicker } from './GitHubItemPicker';
 import { KanbanCardEditor, KanbanCardView, cardState, type EditorDraft } from './KanbanCard';
+import { KanbanMapView } from './KanbanMapView';
 import { BoardLane, BoardRail } from './board/BoardLane';
 import { useBoardClock } from './board/task-state';
 import {
@@ -104,12 +105,23 @@ interface BoardSession {
   /** Only the cards whose task needs input or failed. */
   needsYou: boolean;
   scrollLeft: number;
+  /** Columns or the mind map drawn from them. */
+  view: 'board' | 'map';
+  /** Branches the user folded or unfolded in the map, by node ID. */
+  mapFolds: Record<string, boolean>;
 }
 const sessions = new Map<string, BoardSession>();
 function boardSession(projectId: string): BoardSession {
   let session = sessions.get(projectId);
   if (!session) {
-    session = { collapsed: {}, query: '', needsYou: false, scrollLeft: 0 };
+    session = {
+      collapsed: {},
+      query: '',
+      needsYou: false,
+      scrollLeft: 0,
+      view: 'board',
+      mapFolds: {},
+    };
     sessions.set(projectId, session);
   }
   return session;
@@ -279,6 +291,8 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
   setQuery(session.query);
   const [needsYou, setNeedsYou] = createSignal(session.needsYou);
   const [collapsed, setCollapsed] = createSignal<Record<string, boolean>>({ ...session.collapsed });
+  const [view, setView] = createSignal(session.view);
+  const [mapFolds, setMapFolds] = createSignal(session.mapFolds);
   const [undo, setUndo] = createSignal<UndoOffer | null>(null);
   const [flashed, setFlashed] = createSignal<ReadonlySet<string>>(new Set());
   const [dragging, setDragging] = createSignal<KanbanCardRef | null>(null);
@@ -314,6 +328,8 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
       query: query(),
       needsYou: needsYou(),
       scrollLeft: columnsRef?.scrollLeft ?? session.scrollLeft,
+      view: view(),
+      mapFolds: mapFolds(),
     });
     setQuery('');
   });
@@ -659,6 +675,36 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
     );
   }
 
+  // --- Board or map ---
+
+  function showView(next: 'board' | 'map', restoreScroll = true): void {
+    if (next === view()) return;
+    // The lanes unmount in the map; keep their scroll for the way back.
+    if (next === 'map' && columnsRef) {
+      session.scrollLeft = columnsRef.scrollLeft;
+      columnsRef = undefined;
+    }
+    setView(next);
+    if (next === 'board' && restoreScroll) {
+      queueMicrotask(() => {
+        if (columnsRef) columnsRef.scrollLeft = session.scrollLeft;
+      });
+    }
+  }
+
+  /** The map is read-only: opening a card there edits it on the board. */
+  function openFromMap(ref: KanbanCardRef): void {
+    const hint = hintFor(ref);
+    if (!hint) return;
+    batch(() => {
+      if (isCollapsed(hint.column)) setCollapsed((c) => ({ ...c, [hint.column]: false }));
+      setSelection(hint);
+      // The editor takes focus and scrolls itself into view.
+      showView('board', false);
+      setEditing(hint);
+    });
+  }
+
   // --- Selection and keyboard ---
 
   /** Keyboard actions apply only to a card the user can see. */
@@ -789,6 +835,8 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
       runUndo();
       return;
     }
+    // The map has its own arrow keys, and card keys would act on a card out of sight.
+    if (view() === 'map') return;
     const lower = key.length === 1 ? key.toLowerCase() : key;
     // Arrows move as on the running-tasks board, from a card, a folded column or the board.
     const move = BOARD_KEY_MOVES[lower];
@@ -1064,6 +1112,26 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
         </div>
         <div class="kanban-actions">
           <Show when={board()}>
+            <div class="kanban-view-toggle" role="group" aria-label="Plan view">
+              <button
+                type="button"
+                aria-pressed={view() === 'board'}
+                title="Show the plan as columns"
+                onClick={() => showView('board')}
+              >
+                Board
+              </button>
+              <button
+                type="button"
+                aria-pressed={view() === 'map'}
+                // The lanes unmount in the map, which would drop an unsaved edit.
+                disabled={editing() !== null || adding() !== null || renaming() !== null}
+                title="Show the plan as a mind map"
+                onClick={() => showView('map')}
+              >
+                Map
+              </button>
+            </div>
             {/* Hidden rather than removed while nothing needs you, so the actions never shift. */}
             <button
               type="button"
@@ -1217,7 +1285,19 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
           </div>
         </div>
       </Show>
-      <Show when={board()}>
+      <Show when={view() === 'map' && board()}>
+        {(b) => (
+          <KanbanMapView
+            board={b()}
+            shown={visible()}
+            projectId={projectId}
+            folds={mapFolds()}
+            onFoldsChange={setMapFolds}
+            onOpenCard={openFromMap}
+          />
+        )}
+      </Show>
+      <Show when={view() === 'board' && board()}>
         {(b) => (
           <div
             class="task-board-lanes"
