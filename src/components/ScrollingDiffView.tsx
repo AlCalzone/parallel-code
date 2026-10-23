@@ -11,6 +11,7 @@ import type { FileDiff, Hunk, DiffLine } from '../lib/unified-diff-parser';
 import { debug as logDebug, warn as logWarn } from '../lib/log';
 import type { FileDiffResult } from '../ipc/types';
 import { getDiffSelection } from '../lib/diff-selection';
+import { shouldAnimateTaskAppearance } from '../lib/reducedMotion';
 import { getContextGapLineCount, type ContextGapRange } from '../lib/diff-context-gaps';
 import { countFileSearchMatches, getInitialCollapsedFiles } from '../lib/diff-collapse';
 import { AskCodeCard } from './AskCodeCard';
@@ -502,7 +503,8 @@ function FileSection(props: {
         overflow: 'hidden',
         background: theme.bgElevated,
         opacity: props.dimmed ? '0.25' : '0.9',
-        transition: 'opacity 5s ease-out',
+        // Dims at once; only the return to full strength fades.
+        transition: props.dimmed ? 'none' : 'opacity 400ms ease-out',
       }}
     >
       {/* Sticky file header */}
@@ -884,9 +886,17 @@ export function ScrollingDiffView(props: ScrollingDiffViewProps) {
     const target = props.scrollToPath;
     if (!target) return;
     expandFile(target);
-    setDimOthers(true);
-    // Start fade-in on next frame so the browser registers the dimmed state first
-    requestAnimationFrame(() => setDimOthers(false));
+    if (shouldAnimateTaskAppearance()) {
+      setDimOthers(true);
+      // Undim a frame after the dimmed state is painted, or there is nothing to fade from.
+      let undimFrame = requestAnimationFrame(() => {
+        undimFrame = requestAnimationFrame(() => setDimOthers(false));
+      });
+      onCleanup(() => {
+        cancelAnimationFrame(undimFrame);
+        setDimOthers(false);
+      });
+    }
     // Wait for DOM to settle before scrolling
     requestAnimationFrame(() => {
       const el = sectionRefs.get(target);

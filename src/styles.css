@@ -2838,11 +2838,11 @@ html:is(
 }
 
 .task-appearing {
-  animation: taskAppear 0.24s ease;
+  animation: taskAppear 0.18s cubic-bezier(0.2, 0, 0, 1);
 }
 
 .new-task-appearing {
-  animation: taskAppear 0.16s cubic-bezier(0.2, 0.7, 0.2, 1);
+  animation: taskAppear 0.16s cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* No max-height here: rows whose name wraps to two lines are taller than any
@@ -2859,7 +2859,7 @@ html:is(
 }
 
 .task-item-appearing {
-  animation: taskItemAppear 0.25s ease;
+  animation: taskItemAppear 0.18s cubic-bezier(0.2, 0, 0, 1);
 }
 
 @keyframes taskRemove {
@@ -2874,7 +2874,7 @@ html:is(
 }
 
 .task-removing {
-  animation: taskRemove 0.24s ease forwards;
+  animation: taskRemove 0.16s cubic-bezier(0.2, 0, 0, 1) forwards;
   pointer-events: none;
 }
 
@@ -2893,7 +2893,7 @@ html:is(
 }
 
 .task-item-removing {
-  animation: taskItemRemove 0.24s ease forwards;
+  animation: taskItemRemove 0.16s cubic-bezier(0.2, 0, 0, 1) forwards;
   overflow: hidden;
   pointer-events: none;
 }
@@ -3134,13 +3134,13 @@ html:is(
 }
 
 .dialog-overlay {
-  animation: fadeIn 0.16s ease;
+  animation: fadeIn 0.12s ease-out;
   backdrop-filter: saturate(1.15);
 }
 
 .dialog-overlay > form,
 .dialog-overlay > .dialog-content {
-  animation: slideUp 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+  animation: slideUp 0.16s cubic-bezier(0.2, 0, 0, 1);
 }
 
 .new-task-panel-form {
@@ -5729,6 +5729,13 @@ button.tour-save-state:not(:disabled):hover {
   }
 
   .feature-hint {
+    animation: none;
+  }
+
+  .dialog-overlay,
+  .dialog-overlay > form,
+  .dialog-overlay > .dialog-content,
+  .exit-badge {
     animation: none;
   }
 

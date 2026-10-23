@@ -36,6 +36,7 @@ import {
 import { recordMergedLines, recordTaskMerged } from './completion';
 import { warn as logWarn } from '../lib/log';
 import { cleanTaskName } from '../lib/clean-task-name';
+import { shouldAnimateTaskAppearance } from '../lib/reducedMotion';
 import type {
   AgentDef,
   CreatePrTaskResult,
@@ -541,7 +542,10 @@ export async function retryCloseTask(taskId: string): Promise<void> {
   await closeTask(taskId);
 }
 
-const REMOVE_ANIMATION_MS = 300;
+// Matches the `.task-removing` and `.task-item-removing` animations in styles.css.
+const REMOVE_ANIMATION_MS = 160;
+// Under reduced motion nothing animates, so a closed task need not linger.
+const removeDelayMs = () => (shouldAnimateTaskAppearance() ? REMOVE_ANIMATION_MS : 0);
 const RESTORED_AGENT_SPAWN_STAGGER_MS = 1_000;
 
 function removeTaskFromStore(taskId: string, agentIds: string[]): void {
@@ -581,7 +585,7 @@ function removeTaskFromStore(taskId: string, agentIds: string[]): void {
     );
 
     rescheduleTaskStatusPolling();
-  }, REMOVE_ANIMATION_MS);
+  }, removeDelayMs());
 }
 
 /** Drops a task and its agents from the store at once, with no closing
