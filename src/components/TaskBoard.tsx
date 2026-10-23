@@ -189,9 +189,9 @@ export function TaskBoard() {
         anchor={() => lanesEl?.querySelector<HTMLElement>('.task-board-lane-title') ?? undefined}
         title="Tasks sort themselves by what they need"
       >
-        A card moves on its own: to Needs you when its agent asks something or fails, to Working
-        while it runs, to Stopped when it is done or idle, and to In pull request once it has one.
-        Click a card to open the task beside the board.
+        A card moves on its own: to Needs you when its agent asks something, fails or is ready for
+        review, to Working while it runs, to Stopped when it is idle, and to In pull request once it
+        has one. Click a card to open the task beside the board.
       </FeatureHint>
     </section>
   );
