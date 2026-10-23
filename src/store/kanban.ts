@@ -12,6 +12,7 @@ import {
   findCardByIssue,
   isArchiveColumn,
   parseGitHubIssueUrl,
+  buildKanbanClusterPrompt,
   buildKanbanPlanPrompt,
   buildKanbanTaskPrompt,
   findCard,
@@ -316,11 +317,23 @@ export function startKanbanAutomation(): () => void {
  * and send. An unsent draft in that box is left alone.
  */
 export function prefillKanbanPlanPrompt(project: Project, goal = ''): boolean {
+  return prefillKanbanAgentPrompt(project, buildKanbanPlanPrompt(goal)) !== null;
+}
+
+/**
+ * Puts the prompt that clusters the cards into themes in the board agent's
+ * prompt box: 'kept' when an unsent draft there was left alone instead.
+ */
+export function prefillKanbanClusterPrompt(project: Project): 'set' | 'kept' | null {
+  return prefillKanbanAgentPrompt(project, buildKanbanClusterPrompt());
+}
+
+function prefillKanbanAgentPrompt(project: Project, prompt: string): 'set' | 'kept' | null {
   const task = ensureProjectAgentTask(kanbanAgentTaskId(project.id), project);
-  if (!task) return false;
-  if ((task.prefillPrompt ?? task.promptDraft ?? '').trim()) return true;
-  setPrefillPrompt(task.id, buildKanbanPlanPrompt(goal));
-  return true;
+  if (!task) return null;
+  if ((task.prefillPrompt ?? task.promptDraft ?? '').trim()) return 'kept';
+  setPrefillPrompt(task.id, prompt);
+  return 'set';
 }
 
 /** What adding GitHub items to a board did. */

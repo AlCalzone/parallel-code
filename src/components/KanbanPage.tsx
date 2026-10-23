@@ -16,6 +16,7 @@ import { createAgentPaneState, GitHubAgentPane, type AgentPaneState } from './Gi
 import { GitHubItemPicker } from './GitHubItemPicker';
 import { KanbanCardEditor, KanbanCardView, cardState, type EditorDraft } from './KanbanCard';
 import { KanbanMapView } from './KanbanMapView';
+import type { KanbanMapGrouping } from '../lib/kanban-map';
 import { BoardLane, BoardRail } from './board/BoardLane';
 import { useBoardClock } from './board/task-state';
 import {
@@ -45,6 +46,7 @@ import { store } from '../store/core';
 import { registerFocusFn, triggerFocus, unregisterFocusFn } from '../store/focused-panel';
 import { boardSidePanelOpen, closeBoardSidePanel } from '../store/project-pages';
 import {
+  prefillKanbanClusterPrompt,
   prefillKanbanPlanPrompt,
   readKanbanFile,
   startKanbanCardTask,
@@ -109,6 +111,7 @@ interface BoardSession {
   view: 'board' | 'map';
   /** Branches the user folded or unfolded in the map, by node ID. */
   mapFolds: Record<string, boolean>;
+  mapGrouping: KanbanMapGrouping;
 }
 const sessions = new Map<string, BoardSession>();
 function boardSession(projectId: string): BoardSession {
@@ -121,6 +124,7 @@ function boardSession(projectId: string): BoardSession {
       scrollLeft: 0,
       view: 'board',
       mapFolds: {},
+      mapGrouping: 'column',
     };
     sessions.set(projectId, session);
   }
@@ -222,8 +226,20 @@ interface UndoOffer {
   restore: Intent;
 }
 
+// Leaves out `group:` and `related:`, so the agent clustering the board does not flash every card.
 function cardKey(column: string, card: KanbanCard): string {
   return JSON.stringify([column, card.title, card.body, card.done, card.branches, card.depends]);
+}
+
+/** Each `group:` theme on the board once, in the spelling first used. */
+function boardThemes(board: KanbanBoard): string[] {
+  const themes = new Map<string, string>();
+  for (const column of board.columns)
+    for (const card of column.cards) {
+      const theme = card.group?.trim();
+      if (theme && !themes.has(theme.toLowerCase())) themes.set(theme.toLowerCase(), theme);
+    }
+  return [...themes.values()];
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -293,6 +309,7 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
   const [collapsed, setCollapsed] = createSignal<Record<string, boolean>>({ ...session.collapsed });
   const [view, setView] = createSignal(session.view);
   const [mapFolds, setMapFolds] = createSignal(session.mapFolds);
+  const [mapGrouping, setMapGrouping] = createSignal(session.mapGrouping);
   const [undo, setUndo] = createSignal<UndoOffer | null>(null);
   const [flashed, setFlashed] = createSignal<ReadonlySet<string>>(new Set());
   const [dragging, setDragging] = createSignal<KanbanCardRef | null>(null);
@@ -330,6 +347,7 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
       scrollLeft: columnsRef?.scrollLeft ?? session.scrollLeft,
       view: view(),
       mapFolds: mapFolds(),
+      mapGrouping: mapGrouping(),
     });
     setQuery('');
   });
@@ -986,7 +1004,7 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
     return types.includes(CARD_DRAG_TYPE) || types.includes(COLUMN_DRAG_TYPE);
   }
 
-  function openPlanner(): void {
+  function openPlanner(prefill: (project: Project) => unknown = prefillKanbanPlanPrompt): void {
     // Closing a draft discards what was typed in it, so it keeps its place.
     if (store.boardView && store.showNewTaskPanel) {
       showNotification('Create or close the new task first; the planner opens in its place');
@@ -995,7 +1013,7 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
     batch(() => {
       closeBoardSidePanel();
       props.agentPane.setOpen(true);
-      prefillKanbanPlanPrompt(props.project);
+      prefill(props.project);
     });
     queueMicrotask(() => triggerFocus(`${kanbanAgentTaskId(projectId)}:prompt`));
   }
@@ -1293,6 +1311,17 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
             projectId={projectId}
             folds={mapFolds()}
             onFoldsChange={setMapFolds}
+            grouping={mapGrouping()}
+            onGroupingChange={setMapGrouping}
+            onCluster={() =>
+              openPlanner((project) => {
+                const result = prefillKanbanClusterPrompt(project);
+                // The themes are what the agent writes, so show them once it has.
+                if (result === 'set') setMapGrouping('theme');
+                else if (result === 'kept')
+                  showNotification('Send or clear the draft in the planner to cluster the cards');
+              })
+            }
             onOpenCard={openFromMap}
           />
         )}
@@ -1593,6 +1622,7 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
                                       otherTitles={b()
                                         .columns.flatMap((col) => col.cards.map((x) => x.title))
                                         .filter((t) => t && t !== current().title)}
+                                      themes={boardThemes(b())}
                                       onSave={(next, toColumn) => {
                                         const hint = editing();
                                         setEditing(null);

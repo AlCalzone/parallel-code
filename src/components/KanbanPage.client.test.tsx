@@ -280,6 +280,49 @@ describe('KanbanPage', () => {
     expect(button('Map').disabled).toBe(true);
   });
 
+  it('clusters the map by theme, set in the card editor or by the planning agent', async () => {
+    await mount();
+    button('Map').click();
+    await settle();
+    const node = (title: string) =>
+      [...host.querySelectorAll<HTMLElement>('.investigation-node')].find(
+        (n) => n.querySelector('strong')?.textContent === title,
+      );
+    button('Themes').click();
+    await settle();
+    expect(node('Backlog')).toBeUndefined();
+    expect(node('No theme')).toBeTruthy();
+
+    node('Docs')?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    await settle();
+    const theme = host.querySelector<HTMLInputElement>('input[placeholder^="Cluster in the map"]');
+    if (!theme) throw new Error('no theme field');
+    theme.value = 'Handbook';
+    theme.dispatchEvent(new Event('input', { bubbles: true }));
+    theme.form?.requestSubmit();
+    await settle();
+    expect(disk.text).toContain('- [ ] Docs\n  group: Handbook\n');
+
+    button('Map').click();
+    await settle();
+    expect(button('Themes').getAttribute('aria-pressed')).toBe('true');
+    expect(node('Handbook')).toBeTruthy();
+
+    button('Columns').click();
+    button('Cluster with agent').click();
+    await settle();
+    expect(setPrefillPrompt).toHaveBeenCalledWith(
+      'kanban-agent-p1',
+      expect.stringContaining('group: <theme>'),
+    );
+    expect(button('Themes').getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('aside[aria-label="Planning agent"]')).not.toBeNull();
+    // The view is kept per project across mounts; leave it as the other tests expect.
+    button('Columns').click();
+    button('Board').click();
+    await settle();
+  });
+
   it('shows the project icon beside the project name in the heading', async () => {
     setStore('projects', 0, 'icon', 'terminal');
     await mount();
