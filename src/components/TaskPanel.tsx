@@ -32,7 +32,11 @@ import {
 } from '../store/store';
 import { markFeatureHintSeen } from '../store/onboarding';
 import { useFocusRegistration } from '../lib/focus-registration';
-import { isTaskColumnHighlighted, scheduleTaskFocus } from '../store/focused-panel';
+import {
+  isSoloTaskColumn,
+  isTaskColumnHighlighted,
+  scheduleTaskFocus,
+} from '../store/focused-panel';
 import { ResizablePanel, type PanelChild } from './ResizablePanel';
 import { CANVAS_DEFAULT_WIDTH, CANVAS_MIN_WIDTH } from '../lib/layout-sizes';
 import type { EditableTextHandle } from './EditableText';
@@ -961,7 +965,12 @@ export function TaskPanel(props: TaskPanelProps) {
   return (
     <div
       ref={panelRef}
-      class={`task-column ${isTaskColumnHighlighted(props.task.id) ? 'active' : ''}${store.focusMode ? ' focus-mode' : ''}`}
+      class="task-column"
+      classList={{
+        active: isTaskColumnHighlighted(props.task.id) && !isSoloTaskColumn(),
+        solo: isSoloTaskColumn(),
+        'focus-mode': store.focusMode,
+      }}
       style={{
         display: 'flex',
         'flex-direction': 'column',

@@ -2911,6 +2911,11 @@ html:is(
   opacity: 1;
 }
 
+/* A column shown alone skips the active ring but stays undimmed. */
+.task-column.solo {
+  opacity: 1;
+}
+
 .focusable-panel {
   position: relative;
 }

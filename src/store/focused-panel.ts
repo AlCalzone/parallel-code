@@ -146,6 +146,15 @@ export function isTaskColumnHighlighted(taskId: string | null): boolean {
   return taskId !== null && store.activeTaskId === taskId && !store.newTaskPanelFocused;
 }
 
+/**
+ * Whether the workspace shows a single column (focus mode, the board's side
+ * panel), so the active one needs no ring to stand out. Focus mode lays the
+ * new-task draft beside the task, which brings the ring back.
+ */
+export function isSoloTaskColumn(): boolean {
+  return boardSidePanelOpen() || (store.focusMode && !store.showNewTaskPanel);
+}
+
 export function isPanelFocusedPrefix(taskId: string, prefix: string): boolean {
   if (store.sidebarFocused || store.placeholderFocused || store.newTaskPanelFocused) return false;
   if (store.activeTaskId !== taskId) return false;
