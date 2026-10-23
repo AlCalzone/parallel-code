@@ -408,6 +408,15 @@ html[data-look^='islands-'] .task-board {
   color: #8957e5;
   font-weight: 600;
 }
+/* On a narrow card the status gives way, so the PR and Babysit chips stay whole. */
+.task-board-pr-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.task-board-row > .task-board-chip {
+  flex-shrink: 0;
+}
 .task-board-pr-status.failed {
   color: var(--error);
   font-weight: 600;

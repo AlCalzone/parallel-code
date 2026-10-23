@@ -90,7 +90,9 @@ export function TaskPr(props: { taskId: string; url: string }) {
         </Switch>
         PR #{prNumber(props.url)}
       </button>
-      <span class={`task-board-pr-status ${kind() ?? ''}`}>{status()?.label ?? ''}</span>
+      <span class={`task-board-pr-status ${kind() ?? ''}`} title={status()?.label}>
+        {status()?.label ?? ''}
+      </span>
       <Show when={getPrChecks(props.taskId) && !getPrChecks(props.taskId)?.merged}>
         <BabysitButton taskId={props.taskId} class="task-board-chip" />
       </Show>
