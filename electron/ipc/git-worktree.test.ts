@@ -165,6 +165,18 @@ describe('getSymlinkCandidates', () => {
     ]);
   });
 
+  it('does not offer .agents when only its Antigravity MCP config is ignored', async () => {
+    const root = initRepository();
+    fs.writeFileSync(path.join(root, '.gitignore'), 'dist/\n', 'utf8');
+    fs.appendFileSync(path.join(root, '.git', 'info', 'exclude'), '/.agents/mcp_config.json\n');
+    fs.mkdirSync(path.join(root, '.agents'));
+    fs.writeFileSync(path.join(root, '.agents', 'mcp_config.json'), '{}\n', 'utf8');
+    fs.mkdirSync(path.join(root, 'dist'));
+    fs.writeFileSync(path.join(root, 'dist', 'app.js'), 'built\n', 'utf8');
+
+    await expect(getSymlinkCandidates(root)).resolves.toEqual([{ name: 'dist', isDefault: false }]);
+  });
+
   it('does not show a directory whose contents are ignored by *.log', async () => {
     const root = initRepository();
     fs.writeFileSync(path.join(root, '.gitignore'), '*.log\n', 'utf8');

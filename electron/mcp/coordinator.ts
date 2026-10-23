@@ -14,7 +14,13 @@ import {
   writeSubTaskMcpConfig,
   writeSubTaskMcpConfigSync,
 } from './config.js';
-import { buildMcpLaunchArgs, isCodexCommand, type ParallelCodeMcpConfig } from './agent-args.js';
+import {
+  buildMcpLaunchArgs,
+  isAntigravityCommand,
+  isCodexCommand,
+  type ParallelCodeMcpConfig,
+} from './agent-args.js';
+import { writeAntigravityMcpConfig } from './antigravity-config.js';
 import { validateBranchName } from './validation.js';
 import { atomicWriteFileSync } from './atomic.js';
 import { ReplayCache } from './replay-cache.js';
@@ -933,17 +939,15 @@ export class Coordinator {
     // second coordinator starting up does not overwrite the first's task configs.
     for (const task of this.tasks.values()) {
       if (task.coordinatorTaskId !== coordinatorTaskId) continue;
-      if (!task.mcpConfigPath) continue;
       const mcpConfigPath = task.mcpConfigPath;
       const safeMcpConfigPath = isAllowedSubTaskMcpConfigPath(mcpConfigPath, {
         taskId: task.id,
         serverPath,
         dockerContainerName: state?.dockerContainerName ?? null,
       });
-      if (!safeMcpConfigPath) {
-        task.mcpConfigPath = undefined;
-        continue;
-      }
+      if (!safeMcpConfigPath) task.mcpConfigPath = undefined;
+      // An agy child may have only its worktree file, which needs the new token too.
+      if (!safeMcpConfigPath && !task.antigravityWorkspaceMcp) continue;
       // Preserve existing doneToken; generate a fresh one if not yet set (e.g. older persisted task).
       if (!task.doneToken) task.doneToken = randomBytes(24).toString('base64url');
       const session = this.sessionMcpProvider?.(task);
@@ -955,7 +959,17 @@ export class Coordinator {
         taskId: task.id,
         doneToken: task.doneToken,
       });
-      writeSubTaskMcpConfigSync(mcpConfigPath, mcpConfig);
+      if (safeMcpConfigPath && mcpConfigPath) writeSubTaskMcpConfigSync(mcpConfigPath, mcpConfig);
+      if (!task.antigravityWorkspaceMcp || !existsSync(task.worktreePath)) continue;
+      try {
+        writeAntigravityMcpConfig(task.worktreePath, mcpConfig);
+      } catch (err) {
+        // One child's broken worktree must not leave the others on a stale token.
+        logWarn('coordinator.antigravity_mcp', 'could not refresh Antigravity MCP config', {
+          taskId: task.id,
+          err: String(err),
+        });
+      }
     }
   }
 
@@ -1517,6 +1531,11 @@ export class Coordinator {
         await writeSubTaskMcpConfig(configPath, mcpConfig);
         subTaskMcpConfigPath = configPath;
         task.mcpConfigPath = configPath;
+        // After recording the temp path, so a failure here still cleans up its token.
+        if (isAntigravityCommand(agentCommand)) {
+          writeAntigravityMcpConfig(result.worktree_path, mcpConfig);
+          task.antigravityWorkspaceMcp = true;
+        }
         assertStillPresent();
       }
 
@@ -3045,6 +3064,8 @@ export class Coordinator {
     mcpConfigPath: string | undefined,
     agentCommand: string | undefined,
   ): string[] | undefined {
+    // Set before the early return: a server that starts later must still refresh the file.
+    if (agentCommand) task.antigravityWorkspaceMcp = isAntigravityCommand(agentCommand);
     const serverInfo = this.coordinators.get(coordinatorTaskId)?.mcpServerInfo;
     if (!serverInfo) return undefined;
     const { serverUrl, subtaskToken, serverPath } = serverInfo;
@@ -3068,6 +3089,18 @@ export class Coordinator {
     }
     if (mcpConfigPath) {
       writeSubTaskMcpConfigSync(mcpConfigPath, mcpConfig);
+    }
+    // A restored child whose worktree is gone has no session to configure.
+    if (task.antigravityWorkspaceMcp && existsSync(task.worktreePath)) {
+      try {
+        writeAntigravityMcpConfig(task.worktreePath, mcpConfig);
+      } catch (err) {
+        // Losing the restored task would be worse than one session without coordinator tools.
+        logWarn('coordinator.antigravity_mcp', 'could not write Antigravity MCP config', {
+          taskId: task.id,
+          err: String(err),
+        });
+      }
     }
     return this.buildTaskMcpLaunchArgs(agentCommand ?? 'claude', mcpConfigPath, mcpConfig);
   }

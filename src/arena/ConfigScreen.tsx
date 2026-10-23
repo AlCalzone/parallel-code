@@ -27,7 +27,6 @@ import type { BattleCompetitor } from './types';
 const TOOL_PRESETS: Array<{ name: string; command: string }> = [
   { name: 'Claude', command: 'claude -p "{prompt}" --dangerously-skip-permissions' },
   { name: 'Codex', command: 'codex exec --dangerously-bypass-approvals-and-sandbox "{prompt}"' },
-  { name: 'Gemini', command: 'gemini -p "{prompt}" --yolo' },
   { name: 'Copilot', command: 'copilot -p "{prompt}" --yolo' },
   { name: 'Aider', command: 'aider -m "{prompt}" --yes' },
   { name: 'OpenCode', command: 'opencode -p "{prompt}"' },
@@ -173,7 +172,7 @@ export function ConfigScreen() {
               <input
                 class="arena-competitor-input"
                 type="text"
-                placeholder="Name (e.g. Claude, Codex, Gemini)"
+                placeholder="Name (e.g. Claude, Codex, Copilot)"
                 value={competitor.name}
                 onInput={(e) => updateCompetitor(competitor.id, { name: e.currentTarget.value })}
               />

@@ -34,7 +34,7 @@ Parallel Code is a local interface for third-party AI coding CLIs and agent comm
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (Anthropic)
 - [Codex CLI](https://github.com/openai/codex) (OpenAI)
-- [Gemini CLI](https://github.com/google-gemini/gemini-cli) (Google)
+- [Antigravity CLI](https://antigravity.google/) (Google)
 - [Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli) (GitHub)
 - [OpenCode](https://opencode.ai/) (a multi-provider AI coding agent)
 - Arena presets such as Aider and any custom agent commands you add yourself
