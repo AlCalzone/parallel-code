@@ -522,6 +522,7 @@ function prDetails(overrides: Partial<PullRequestDetails> = {}): PullRequestDeta
     headRefName: 'task/parent',
     headRefOid: 'local',
     mergeMethods: ['squash', 'merge'],
+    authoredByViewer: true,
     ...overrides,
   };
 }

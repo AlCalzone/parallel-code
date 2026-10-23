@@ -488,6 +488,18 @@ body.font-smoothing {
   color: var(--fg);
 }
 
+/* A pressed toggle may show its state in accent; the label stays put so the bar does not shift. */
+.task-pr-babysit[aria-pressed='true'] {
+  background: var(--bg-selected);
+  border-color: var(--border);
+  color: var(--accent);
+}
+
+.task-pr-babysit:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
 .task-pr-label,
 .task-pr-review-status {
   display: inline-flex;

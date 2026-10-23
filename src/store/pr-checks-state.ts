@@ -12,6 +12,7 @@ export interface PrChecksState {
   pending: number;
   failing: number;
   checks: PrCheckRun[];
+  headSha?: string;
   checkedAt: string;
 }
 
@@ -35,6 +36,7 @@ export function checksFromUpdate(msg: Partial<PrChecksUpdatePayload>): PrChecksS
     pending: typeof msg.pending === 'number' ? msg.pending : 0,
     failing: typeof msg.failing === 'number' ? msg.failing : 0,
     checks: Array.isArray(msg.checks) ? (msg.checks as PrCheckRun[]) : [],
+    headSha: typeof msg.headSha === 'string' && msg.headSha ? msg.headSha : undefined,
     checkedAt: typeof msg.checkedAt === 'string' ? msg.checkedAt : new Date().toISOString(),
   };
 }

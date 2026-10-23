@@ -2,6 +2,7 @@ import { parseCompletionRecord } from '../../electron/shared/completion-report';
 import { persistedEvidence, restoredEvidence } from '../lib/evidence-package';
 import { restoreTaskBriefRecord } from '../lib/task-brief';
 import { restoreTaskConfidence } from '../lib/task-confidence';
+import type { PrBabysit } from '../lib/pr-babysit';
 import {
   parseEvidenceModelSettings,
   parseProjectChecks,
@@ -281,6 +282,16 @@ function validBranch(value: unknown, exclude?: string): string | undefined {
   return typeof value === 'string' && value.length > 0 && value !== exclude ? value : undefined;
 }
 
+function restoredPrBabysit(value: unknown): PrBabysit | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const { attempts, lastSentSha } = value as Record<string, unknown>;
+  return {
+    attempts:
+      typeof attempts === 'number' && Number.isInteger(attempts) && attempts > 0 ? attempts : 0,
+    ...(typeof lastSentSha === 'string' && lastSentSha ? { lastSentSha } : {}),
+  };
+}
+
 function restoredSnoozedUntil(value: unknown): number | undefined {
   return typeof value === 'number' &&
     Number.isFinite(value) &&
@@ -349,6 +360,7 @@ function toPersistedTask(task: Task, agentDefs: AgentDef[], collapsed?: boolean)
     branchOfferDismissed: task.branchOfferDismissed,
     snoozedUntil: task.snoozedUntil,
     snoozedUntilCi: task.snoozedUntilCi,
+    prBabysit: task.prBabysit,
     ...(collapsed ? { collapsed: true } : {}),
     delegationParent: task.delegationParent,
     delegationPaused: task.delegationPaused,
@@ -1095,6 +1107,7 @@ export async function loadState(): Promise<void> {
           shellAgentIds,
           snoozedUntil: restoredSnoozedUntil(pt.snoozedUntil),
           snoozedUntilCi: pt.snoozedUntilCi === true ? true : undefined,
+          prBabysit: restoredPrBabysit(pt.prBabysit),
           notes: pt.notes,
           promptDraft: typeof pt.promptDraft === 'string' ? pt.promptDraft : undefined,
           browserUrl: typeof pt.browserUrl === 'string' ? pt.browserUrl : undefined,

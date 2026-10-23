@@ -1,0 +1,48 @@
+import { createSignal } from 'solid-js';
+import { errMessage } from '../lib/log';
+import { MAX_BABYSIT_ATTEMPTS } from '../lib/pr-babysit';
+import { showNotification } from '../store/store';
+import { getPrBabysit, startPrBabysit, stopPrBabysit } from '../store/pr-babysit';
+import { EyeIcon } from './icons';
+
+/** Toggles automatic hand-off of the PR's CI failures to the task's agent. */
+export function BabysitButton(props: { taskId: string }) {
+  const [busy, setBusy] = createSignal(false);
+  const on = () => getPrBabysit(props.taskId) !== undefined;
+  const title = () => {
+    const attempts = getPrBabysit(props.taskId)?.attempts ?? 0;
+    return on()
+      ? `Babysitting: CI failures go to the agent automatically (${attempts}/${MAX_BABYSIT_ATTEMPTS} fix attempts used). Click to stop.`
+      : 'Send CI failures to the agent automatically until the checks pass';
+  };
+  const toggle = async () => {
+    if (on()) {
+      stopPrBabysit(props.taskId);
+      return;
+    }
+    setBusy(true);
+    try {
+      if (await startPrBabysit(props.taskId)) {
+        showNotification('Babysitting: CI failures will go to the agent automatically.');
+      }
+    } catch (err) {
+      showNotification(`Could not start babysitting: ${errMessage(err)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      class="task-pr-merge task-pr-babysit"
+      aria-pressed={on()}
+      aria-busy={busy()}
+      disabled={busy()}
+      onClick={() => void toggle()}
+      title={title()}
+    >
+      <EyeIcon size={12} />
+      Babysit
+    </button>
+  );
+}

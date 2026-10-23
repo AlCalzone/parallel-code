@@ -1,3 +1,4 @@
+import type { PrBabysit } from '../lib/pr-babysit';
 import type { ProjectIconId } from '../lib/project-icon';
 import type {
   CompletionRecord,
@@ -277,6 +278,8 @@ export interface Task {
   snoozedUntil?: number;
   /** Backgrounded until the PR checks stop pending, retained across app restarts. */
   snoozedUntilCi?: boolean;
+  /** Auto-sends the PR's CI failures to the agent while set. */
+  prBabysit?: PrBabysit;
   collapsed?: boolean;
   savedAgentDef?: AgentDef;
   savedAgentDefs?: AgentDef[];
@@ -417,6 +420,8 @@ export interface PersistedTask {
   snoozedUntil?: number;
   /** Backgrounded until the PR checks stop pending, retained across app restarts. */
   snoozedUntilCi?: boolean;
+  /** Auto-sends the PR's CI failures to the agent while set. */
+  prBabysit?: PrBabysit;
   collapsed?: boolean;
   savedAgentSessionIds?: (string | null)[];
   savedSelectedAgentIndex?: number;

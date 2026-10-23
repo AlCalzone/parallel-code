@@ -46,6 +46,7 @@ const openPr: PullRequestDetails = {
   headRefName: 'feature/x',
   headRefOid: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
   mergeMethods: ['rebase', 'squash'],
+  authoredByViewer: true,
 };
 
 let dispose: (() => void) | undefined;

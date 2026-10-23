@@ -38,7 +38,7 @@ function parsePrUrl(url: string | undefined): string | null {
   return url;
 }
 
-function taskPrUrl(task: Task): string | null {
+export function taskPrUrl(task: Task): string | null {
   return parsePrUrl(task.prUrl) ?? parsePrUrl(task.githubUrl);
 }
 

@@ -20,6 +20,7 @@ import { projectInitials } from '../lib/project-initials';
 import type { Task } from '../store/types';
 import { GitMergeIcon, ToolsIcon } from './icons';
 import { PrChip } from './PrChip';
+import { BabysitButton } from './BabysitButton';
 import { extraPrWatchId, getTaskExtraPrs, isPrReadyToMerge } from '../store/pr-checks-state';
 
 const infoBarBtnStyle: JSX.CSSProperties = {
@@ -224,6 +225,9 @@ export function TaskBranchInfoBar(props: TaskBranchInfoBarProps) {
                 {(number) => (
                   <FixCiButton taskId={props.task.id} prUrl={url()} prNumber={Number(number())} />
                 )}
+              </Show>
+              <Show when={pr() && !pr()?.merged}>
+                <BabysitButton taskId={props.task.id} />
               </Show>
               <Show when={readyToMerge() && props.onFinish}>
                 {(finish) => (

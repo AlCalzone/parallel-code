@@ -141,6 +141,7 @@ import { startBackgroundTaskWatcher } from './store/background-tasks';
 import { startTaskBriefWatcher } from './store/task-brief';
 import { showPlanTasks, startKanbanAutomation } from './store/kanban';
 import { startPrChecksSubscription } from './store/pr-checks';
+import { startPrBabysitWatcher } from './store/pr-babysit';
 import { startUpdateSubscription } from './store/updates';
 import { startRemoteTaskHandlers } from './store/remoteTaskHandler';
 import { startRemoteStatusSync } from './store/remoteStatusSync';
@@ -627,6 +628,7 @@ function App() {
     const stopTaskBriefWatcher = startTaskBriefWatcher();
     const stopKanbanAutomation = startKanbanAutomation();
     const stopPrChecksSubscription = startPrChecksSubscription();
+    const stopPrBabysitWatcher = startPrBabysitWatcher();
     const stopUpdateSubscription = startUpdateSubscription();
     const stopRemoteTaskHandlers = startRemoteTaskHandlers();
     const stopRemoteStatusSync = startRemoteStatusSync();
@@ -885,6 +887,7 @@ function App() {
       stopTaskBriefWatcher();
       stopKanbanAutomation();
       stopPrChecksSubscription();
+      stopPrBabysitWatcher();
       stopUpdateSubscription();
       stopRemoteTaskHandlers();
       stopRemoteStatusSync();

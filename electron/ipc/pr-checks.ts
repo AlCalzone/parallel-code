@@ -364,6 +364,7 @@ function sendUpdate(
     pending: entry.pending,
     failing: entry.failing,
     checks: entry.checks,
+    headSha: entry.headRefOid ?? undefined,
     checkedAt: new Date(entry.lastRefreshedAt).toISOString(),
     cleared: opts?.cleared ?? false,
     merged: opts?.merged ?? false,

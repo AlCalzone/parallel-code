@@ -185,6 +185,16 @@ describe('TaskBranchInfoBar GitHub actions', () => {
 
     expect(html).not.toContain('task-pr-fix-ci');
   });
+
+  it('offers Babysit while the PR is open, but not once it merged', () => {
+    mockGetPrChecks.mockReturnValue(checks('pending'));
+    const open = renderToString(() => TaskBranchInfoBar({ task, onEditProject: vi.fn() }));
+    expect(open).toMatch(/class="task-pr-merge task-pr-babysit"[^>]*aria-pressed="false"/);
+
+    mockGetPrChecks.mockReturnValue(checks('success', { merged: true }));
+    const merged = renderToString(() => TaskBranchInfoBar({ task, onEditProject: vi.fn() }));
+    expect(merged).not.toContain('task-pr-babysit');
+  });
 });
 
 describe('TaskBranchInfoBar source link', () => {
