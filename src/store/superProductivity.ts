@@ -421,7 +421,7 @@ function prUrlOf(task: { prUrl?: string; githubUrl?: string }): string | undefin
 /** Completions waiting for their task to leave the store (see armSpCompletion). */
 const armedCompletions = new Map<string, () => void>();
 
-function completeSpTask(spTaskId: string, note: string, name: string): void {
+function completeSpTask(spTaskId: string, note: string | undefined, name: string): void {
   void callSp<null>(IPC.SuperProductivityCompleteTask, { taskId: spTaskId, note }).then((res) => {
     // Gone over there, or never set up here: nothing to report.
     if (res.ok || res.reason === 'not_found' || res.reason === 'not_configured') return;

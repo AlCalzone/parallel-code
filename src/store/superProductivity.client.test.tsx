@@ -91,7 +91,7 @@ function fakeSp(channel: string, args: Record<string, unknown> = {}): unknown {
       const task = sp.tasks.get(id);
       if (!task) return missing;
       task.isDone = true;
-      task.notes = args.note as string;
+      if (args.note !== undefined) task.notes = args.note as string;
       return ok(null);
     }
     default:
@@ -397,8 +397,17 @@ describe('Super Productivity sync', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(sp.tasks.get('sp-a')).toMatchObject({
       isDone: true,
-      notes: 'Closed in Parallel Code (branch `task/a`). PR: https://github.com/o/r/pull/9',
+      notes: 'PR: https://github.com/o/r/pull/9',
     });
+  });
+
+  it('completes a closed task without a PR and leaves its notes alone', async () => {
+    addTask('a', { superProductivity: { taskId: 'sp-a', syncedTitle: 'Task a' } });
+    spTask('sp-a', { notes: 'Mine' });
+    armSpCompletion('a', { kind: 'closed' });
+    fireSpCompletion('a');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sp.tasks.get('sp-a')).toMatchObject({ isDone: true, notes: 'Mine' });
   });
 
   it('tells the user when completing fails because the app is unreachable', async () => {
