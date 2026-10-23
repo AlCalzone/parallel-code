@@ -36,7 +36,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -150,7 +149,7 @@ private fun DiffFileRow(file: DiffFile) {
             Text(
                 file.path,
                 Modifier.weight(1f),
-                fontFamily = FontFamily.Monospace,
+                fontFamily = AppFonts.mono,
                 fontSize = 12.sp,
                 maxLines = 2,
                 overflow = TextOverflow.StartEllipsis,
@@ -193,7 +192,7 @@ private fun DiffLines(file: DiffFile) {
                     line.ifEmpty { " " },
                     Modifier.background(bg),
                     color = fg,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppFonts.mono,
                     fontSize = 11.sp,
                     lineHeight = 14.sp,
                     softWrap = false,

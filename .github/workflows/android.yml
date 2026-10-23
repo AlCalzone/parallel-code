@@ -11,8 +11,10 @@ on:
     paths:
       - 'android/**'
       - '.github/workflows/android.yml'
-      # LookPresetsGeneratedTest checks the generated looks against these desktop sources.
+      # LookPresetsGeneratedTest checks the generated looks and icons against these desktop sources.
       - 'scripts/generate-android-looks.mjs'
+      - 'scripts/generate-android-project-icons.mjs'
+      - 'src/lib/project-icon-paths.ts'
       - 'src/styles.css'
       - 'src/lib/look.ts'
       - 'src/lib/theme.ts'
@@ -21,6 +23,8 @@ on:
       - 'android/**'
       - '.github/workflows/android.yml'
       - 'scripts/generate-android-looks.mjs'
+      - 'scripts/generate-android-project-icons.mjs'
+      - 'src/lib/project-icon-paths.ts'
       - 'src/styles.css'
       - 'src/lib/look.ts'
       - 'src/lib/theme.ts'

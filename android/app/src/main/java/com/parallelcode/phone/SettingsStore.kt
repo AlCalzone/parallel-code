@@ -27,7 +27,7 @@ class SettingsStore(private val prefs: SharedPreferences) {
             prefs.edit { putString(KEY_THEME_MODE, value) }
         }
 
-    /** Preset drawn while in dark mode; unknown or wrong-tone ids read back as Obsidian. */
+    /** Preset drawn while in dark mode; unknown or wrong-tone ids read back as Parallel Code. */
     var darkThemePreset: String
         get() = LookPresets.forTone(dark = true, id = prefs.getString(KEY_DARK_THEME_PRESET, null)).id
         set(value) {
