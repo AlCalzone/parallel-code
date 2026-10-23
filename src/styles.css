@@ -21,7 +21,7 @@
 
   --fg: #d7e4f0;
   --fg-muted: #9bb0c3;
-  --fg-subtle: #678197;
+  --fg-subtle: #7990a4;
 
   --accent: #2ec8ff;
   --accent-hover: #59d7ff;
@@ -1204,8 +1204,8 @@ html[data-look='classic'] {
   --border-subtle: #2d2e32;
   --border-focus: #4267ff;
   --fg: #cccdd2;
-  --fg-muted: #8b8d93;
-  --fg-subtle: #767980;
+  --fg-muted: #a6a8ad;
+  --fg-subtle: #94979c;
   --accent: #4267ff;
   --accent-hover: #3a5bff;
   --accent-text: #ffffff;
@@ -1245,7 +1245,7 @@ html[data-look='midnight'] {
   --border-focus: #2ec8ff;
   --fg: #d7e4f0;
   --fg-muted: #9bb0c3;
-  --fg-subtle: #678197;
+  --fg-subtle: #7990a4;
   --accent: #2ec8ff;
   --accent-hover: #59d7ff;
   --accent-text: #031018;
@@ -1299,7 +1299,7 @@ html[data-look='ember'] {
   --border-focus: #ff944d;
   --fg: #f2ddd1;
   --fg-muted: #d5ab94;
-  --fg-subtle: #9f7561;
+  --fg-subtle: #a47c69;
   --accent: #ff944d;
   --accent-hover: #ffac73;
   --accent-text: #201006;
@@ -1388,7 +1388,7 @@ html[data-look='zenburnesque'] {
   --border-focus: #cc9393;
   --fg: #dcdccc;
   --fg-muted: #a0a090;
-  --fg-subtle: #7f8f7f;
+  --fg-subtle: #8b9a8b;
   --accent: #cc9393;
   --accent-hover: #d8a8a8;
   --accent-text: #1a0e0e;
@@ -1418,7 +1418,7 @@ html[data-look='catppuccin-mocha'] {
   --border-focus: #cba6f7;
   --fg: #cdd6f4;
   --fg-muted: #a6adc8;
-  --fg-subtle: #7f849c;
+  --fg-subtle: #82879e;
   --accent: #cba6f7;
   --accent-hover: #d6b8fa;
   --accent-text: #1e1e2e;
@@ -1461,7 +1461,7 @@ html[data-look='islands-dark'] {
   --border-focus: #286cf5;
   --fg: #bcbec4;
   --fg-muted: #9a9da4;
-  --fg-subtle: #7a7e85;
+  --fg-subtle: #81848b;
   --accent: #286cf5;
   --accent-hover: #6d9df8;
   --accent-hover-bg: #2468f2;
@@ -1492,7 +1492,7 @@ html[data-look='islands-light'] {
   --border-focus: #2c6def;
   --fg: #1f2329;
   --fg-muted: #5e6066;
-  --fg-subtle: #8d9199;
+  --fg-subtle: #70757e;
   --accent: #2c6def;
   --accent-hover: #5a8dff;
   --accent-text: #ffffff;
@@ -1787,7 +1787,7 @@ html[data-look='workbench'] {
   --border-focus: #0078d4;
   --fg: #cccccc;
   --fg-muted: #969696;
-  --fg-subtle: #6c6c6c;
+  --fg-subtle: #8d8d8d;
   --accent: #0078d4;
   --accent-hover: #1e90e0;
   --accent-text: #ffffff;
