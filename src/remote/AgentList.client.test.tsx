@@ -202,5 +202,7 @@ it('groups tasks under the desktop board lanes and names a ready task by its che
   expect(group('Stopped')?.textContent).toContain('Ready to merge');
   // Without a lane from the desktop, the phone still files a question under Needs you.
   expect(group('Needs you')?.textContent).toContain('Question');
-  expect(host.textContent).toContain('1 task needs your attention');
+  // Failed CI keeps its lane but still counts, and shows, as needing you.
+  expect(host.textContent).toContain('2 tasks need your attention');
+  expect(group('In pull request')?.querySelector('.agent-card.attention')).not.toBeNull();
 });

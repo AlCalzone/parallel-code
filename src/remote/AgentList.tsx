@@ -1,6 +1,6 @@
 import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { agents, status, canControl } from './ws';
-import { agentStatusDisplay, needsYou as agentNeedsYou } from './attention';
+import { agentStatusDisplay, isCiFailed } from './attention';
 import { ConnectionBanner } from './ConnectionBanner';
 import { NotificationSettings } from './NotificationSettings';
 import { readLocal, writeLocal } from './storage';
@@ -28,10 +28,13 @@ const lanes: { id: RemoteBoardLane; name: string }[] = [
 /** The desktop sends each task's lane; this only covers a task it has not described yet. */
 function laneOf(agent: RemoteAgent): RemoteBoardLane {
   if (agent.lane) return agent.lane;
-  if (agentNeedsYou(agent) || agent.attention === 'review') return 'needs';
+  if (['needs_input', 'error', 'review'].includes(agent.attention)) return 'needs';
   if (agent.collapsed) return 'snoozed';
   return agent.attention === 'active' ? 'working' : 'stopped';
 }
+
+/** Failed CI stays in its PR lane like on the board, but still needs the user. */
+const needsAttention = (agent: RemoteAgent) => laneOf(agent) === 'needs' || isCiFailed(agent);
 
 export function AgentList(props: AgentListProps) {
   let searchInput: HTMLInputElement | undefined;
@@ -42,7 +45,7 @@ export function AgentList(props: AgentListProps) {
   );
   createEffect(() => writeLocal('task-search', search()));
   createEffect(() => writeLocal('task-filter', filter()));
-  const needsYou = createMemo(() => agents().filter((a) => laneOf(a) === 'needs').length);
+  const needsYou = createMemo(() => agents().filter(needsAttention).length);
   const matchingSearch = createMemo(() => {
     const query = search().trim().toLocaleLowerCase();
     return agents().filter((a) =>
@@ -51,7 +54,8 @@ export function AgentList(props: AgentListProps) {
         .includes(query),
     );
   });
-  const matchesFilter = (agent: RemoteAgent, id: string) => id === 'all' || laneOf(agent) === id;
+  const matchesFilter = (agent: RemoteAgent, id: string) =>
+    id === 'all' || (id === 'needs' ? needsAttention(agent) : laneOf(agent) === id);
   const filtered = createMemo(() => matchingSearch().filter((a) => matchesFilter(a, filter())));
   function clearFilters() {
     setSearch('');
@@ -188,7 +192,7 @@ export function AgentList(props: AgentListProps) {
                       return (
                         <button
                           class="agent-card"
-                          classList={{ attention: group.id === 'needs' }}
+                          classList={{ attention: needsAttention(agent) }}
                           onClick={() => props.onSelect(agent.taskId)}
                         >
                           <div class="agent-card-top">
