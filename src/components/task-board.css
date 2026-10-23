@@ -206,7 +206,7 @@ html[data-look^='islands-'] .task-board {
 
 /* Too narrow for lanes side by side: stack them in one scrolling column.
    task-board-keys reads this flex-direction to step arrows across lanes. */
-@container task-board (max-width: 440px) {
+@container task-board (max-width: 550px) {
   .task-board-lanes {
     flex-direction: column;
     mask-image: none;
