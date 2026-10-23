@@ -286,7 +286,7 @@ export function TaskBranchInfoBar(props: TaskBranchInfoBarProps) {
             onClick={() => window.open(url(), '_blank')}
             title={url()}
             aria-label={`Source: ${githubLabel(url())}`}
-            style={{ ...infoBarBtnStyle, 'margin-right': '8px', color: theme.accent }}
+            style={{ ...infoBarBtnStyle, 'margin-right': '8px' }}
           >
             <span
               class="task-branch-source-prefix"

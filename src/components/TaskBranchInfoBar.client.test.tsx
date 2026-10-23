@@ -144,3 +144,21 @@ describe('TaskBranchInfoBar Merge', () => {
     expect(findButton('Merge')).toBeUndefined();
   });
 });
+
+describe('TaskBranchInfoBar Source link', () => {
+  it('stays neutral instead of using the accent colour', () => {
+    mockPrChecks.mockReturnValue(null);
+    dispose = render(
+      () => (
+        <TaskBranchInfoBar
+          task={{ ...task, githubUrl: 'https://github.com/acme/app/issues/3' }}
+          onEditProject={vi.fn()}
+        />
+      ),
+      document.body,
+    );
+    const source = document.querySelector<HTMLButtonElement>('button.task-branch-source');
+    expect(source).not.toBeNull();
+    expect(source?.getAttribute('style')).not.toContain('--accent');
+  });
+});

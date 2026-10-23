@@ -8,6 +8,7 @@ import {
   bringTaskToFront,
   getTaskSnoozedUntil,
   isTaskBackgrounded,
+  sendTaskToBack,
 } from '../store/background-tasks';
 import { invoke } from '../lib/ipc';
 import type { Task } from '../store/types';
@@ -338,4 +339,67 @@ it.each([
     expect(store.tasks.one.snoozedUntil).toBeGreaterThanOrEqual(now + hours * 3_600_000),
   );
   expect(store.tasks.one.collapsed === true).toBe(mode === 'Snooze · stop agents');
+});
+
+const badge = (label: string) =>
+  [
+    ...container.querySelectorAll<HTMLElement>(
+      '.task-title-details span, .task-title-details button',
+    ),
+  ].find((el) => el.textContent === label);
+// happy-dom drops color-mix() values, so the status text colour marks a tint.
+const isTinted = (el: HTMLElement | undefined) =>
+  /var\(--(warning|error|success|accent)\)/.test(el?.style.color ?? '');
+
+it('keeps routine badges neutral and tints only those that need attention', () => {
+  setStore('tasks', 'one', {
+    gitIsolation: 'none',
+    dockerMode: true,
+    externalWorktree: true,
+    needsReview: true,
+    landingState: 'landing_failed',
+  });
+  for (const label of ['no git', 'Docker', 'Imported']) {
+    expect(isTinted(badge(label)), label).toBe(false);
+  }
+  for (const label of ['Review', 'Landing failed']) {
+    expect(isTinted(badge(label)), label).toBe(true);
+  }
+
+  setStore('tasks', 'one', { gitIsolation: 'direct', branchName: 'main' });
+  expect(isTinted(badge('main'))).toBe(true);
+});
+
+it('shows the snooze badge as neutral', () => {
+  sendTaskToBack('one');
+  const snoozed = [...container.querySelectorAll<HTMLElement>('.task-title-details span')].find(
+    (el) => el.textContent?.startsWith('Snoozed until'),
+  );
+  expect(snoozed).toBeDefined();
+  expect(isTinted(snoozed)).toBe(false);
+});
+
+it.each([
+  ['landed_cleanup_failed', 'Cleanup failed'],
+  ['landing_escalated', 'Landing blocked'],
+  ['landing_failed', 'Landing failed'],
+] as const)('renders %s as a tinted, non-interactive badge', (landingState, label) => {
+  setStore('tasks', 'one', 'landingState', landingState);
+  const el = badge(label);
+  expect(el?.tagName).toBe('SPAN');
+  expect(isTinted(el)).toBe(true);
+});
+
+it('marks a landed task reviewed from its neutral badge', () => {
+  setStore('tasks', 'one', { landingState: 'landed_pending_review', needsReview: false });
+  const landed = badge('Landed');
+  expect(landed?.tagName).toBe('BUTTON');
+  expect(landed?.getAttribute('type')).toBe('button');
+  expect(isTinted(landed)).toBe(false);
+
+  landed?.click();
+  expect(store.tasks.one.landingState).toBe('reviewed');
+  const reviewed = badge('Reviewed');
+  expect(reviewed?.tagName).toBe('SPAN');
+  expect(isTinted(reviewed)).toBe(false);
 });
