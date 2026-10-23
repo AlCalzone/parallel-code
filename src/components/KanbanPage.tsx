@@ -21,6 +21,8 @@ import { useBoardClock } from './board/task-state';
 import {
   BOARD_KEY_MOVES,
   claimBoardFocus,
+  releaseBoardFocus,
+  dropBoardFocus,
   focusBoardCard,
   focusBoardFilter,
   focusedBoardItem,
@@ -407,7 +409,10 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
     if (!focusBoardCard(store.activeTaskId)) section?.focus({ preventScroll: true });
   };
   registerFocusFn('task-board', focusPlan);
-  onCleanup(() => unregisterFocusFn('task-board', focusPlan));
+  onCleanup(() => {
+    unregisterFocusFn('task-board', focusPlan);
+    dropBoardFocus();
+  });
 
   // Follow edits made in an editor or by an agent. An open editor or a drag
   // keeps its card in place until it ends; changes are rebased on save anyway.
@@ -1075,6 +1080,7 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
       inert={props.covered || undefined}
       onKeyDown={onBoardKeyDown}
       onFocusIn={claimBoardFocus}
+      onFocusOut={releaseBoardFocus}
     >
       <header class="kanban-heading">
         <div class="kanban-heading-title">

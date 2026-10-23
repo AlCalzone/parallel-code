@@ -631,6 +631,8 @@ export interface AppStore {
   sidebarFocusedProjectId: string | null;
   sidebarFocusedTaskId: string | null;
   placeholderFocused: boolean;
+  /** DOM focus is on the task board or kanban page, so no task pane has the keyboard. */
+  boardFocused: boolean;
   placeholderFocusedButton: 'add-task' | 'add-terminal';
   showHelpDialog: boolean;
   showSettingsDialog: boolean;

@@ -123,7 +123,14 @@ export function isPanelFocused(taskId: string, panel: string): boolean {
 
 /** Whether focus is inside this task at all, rather than the sidebar or another task. */
 function taskOwnsFocus(taskId: string): boolean {
-  if (store.sidebarFocused || store.placeholderFocused || store.newTaskPanelFocused) return false;
+  if (
+    store.sidebarFocused ||
+    store.placeholderFocused ||
+    store.newTaskPanelFocused ||
+    store.boardFocused
+  ) {
+    return false;
+  }
   return store.activeTaskId === taskId;
 }
 
@@ -156,8 +163,7 @@ export function isSoloTaskColumn(): boolean {
 }
 
 export function isPanelFocusedPrefix(taskId: string, prefix: string): boolean {
-  if (store.sidebarFocused || store.placeholderFocused || store.newTaskPanelFocused) return false;
-  if (store.activeTaskId !== taskId) return false;
+  if (!taskOwnsFocus(taskId)) return false;
   return store.focusedPanel[taskId]?.startsWith(prefix) ?? false;
 }
 
@@ -172,6 +178,7 @@ export function setTaskFocusedPanel(taskId: string, panel: string): void {
   setStore('sidebarFocused', false);
   setStore('placeholderFocused', false);
   setStore('newTaskPanelFocused', false);
+  setStore('boardFocused', false);
   scheduleTaskFocus(taskId, normalizedPanel);
   scrollTaskIntoView(taskId);
 }

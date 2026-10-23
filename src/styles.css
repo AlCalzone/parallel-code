@@ -783,9 +783,10 @@ html[data-look='parallel-code'] .task-branch-info-bar {
   border-color: var(--border-subtle);
 }
 
+/* The focused pane's ring already marks the active task; a column ring too
+   would double the signal. */
 html[data-look='parallel-code'] .task-column.active {
   box-shadow: none;
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--border)) !important;
 }
 
 html[data-look='parallel-code'] .task-notes-body textarea {
@@ -806,6 +807,12 @@ html[data-look='parallel-code']
     .changed-files-list-panel
   ) {
   background: transparent !important;
+}
+
+/* Tasks keep the same 6px gutter above the status bar as at the strip's edge,
+   so their bottom border doesn't sit on the bar's rule. */
+html[data-look='parallel-code'] .tiling-layout-strip {
+  padding-bottom: 6px;
 }
 
 /* Without pane fills, a centred rule on every divider gives each stacked pane an
@@ -892,10 +899,38 @@ html[data-look='parallel-code'] .prompt-input-panel[data-panel-focused='true']::
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 0 0 calc(var(--island-radius) - 1px) calc(var(--island-radius) - 1px);
-  border: 2px solid var(--border-focus);
+  border-radius: 4px 4px calc(var(--island-radius) - 1px) calc(var(--island-radius) - 1px);
+  box-shadow: var(--pane-focus-ring);
   pointer-events: none;
   z-index: 10;
+}
+
+/* A thin line with a soft inner glow marks focus without the weight of a 2px
+   frame. Both are inset shadows, so the pane's own clip never cuts them, and
+   the small radius keeps the corners from reading as a box drawn on top. */
+html[data-look='parallel-code'] {
+  --pane-focus-ring:
+    inset 0 0 0 1.5px var(--border-focus),
+    inset 0 0 14px -6px color-mix(in srgb, var(--border-focus) 55%, transparent);
+}
+
+/* The title editor and board cards share the panes' focus ring. */
+html[data-look='parallel-code'] .task-title-bar .editable-text-input {
+  border-color: transparent !important;
+  border-radius: 4px !important;
+  box-shadow: var(--pane-focus-ring);
+}
+
+html[data-look='parallel-code'] .task-board-card:has(.task-board-title:focus) {
+  box-shadow: var(--pane-focus-ring);
+}
+
+html[data-look='parallel-code']
+  .task-column
+  .focusable-panel:not(.prompt-input-panel):is(:focus-within, [data-panel-focused='true'])::after {
+  border: none;
+  border-radius: 4px;
+  box-shadow: var(--pane-focus-ring);
 }
 
 html[data-look='parallel-code'] .prompt-send-btn {

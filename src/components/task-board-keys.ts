@@ -123,6 +123,20 @@ export function claimBoardFocus(): void {
   if (store.sidebarFocused) unfocusSidebar();
   if (store.placeholderFocused) unfocusPlaceholder();
   if (store.newTaskPanelFocused) setStore('newTaskPanelFocused', false);
+  // The board's card shows the focus ring, so the task beside it must not.
+  if (!store.boardFocused) setStore('boardFocused', true);
+}
+
+/** Hands the focus mark back to the task; a board unmounting with focus fires no focusout. */
+export function dropBoardFocus(): void {
+  if (store.boardFocused) setStore('boardFocused', false);
+}
+
+/** Drops the focus mark once DOM focus leaves the board and its title-bar controls. */
+export function releaseBoardFocus(e: FocusEvent): void {
+  const next = e.relatedTarget;
+  if (next instanceof Element && next.closest('.task-board, .task-board-controls')) return;
+  dropBoardFocus();
 }
 
 export function focusBoardFilter(): void {

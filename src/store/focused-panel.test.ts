@@ -1,6 +1,11 @@
 import { beforeEach, expect, it } from 'vitest';
 import { setStore } from './core';
-import { isSoloTaskColumn, isTaskColumnHighlighted } from './focused-panel';
+import {
+  isPanelFocused,
+  isPanelFocusedPrefix,
+  isSoloTaskColumn,
+  isTaskColumnHighlighted,
+} from './focused-panel';
 
 beforeEach(() => {
   setStore({
@@ -10,6 +15,8 @@ beforeEach(() => {
     showNewTaskPanel: false,
     boardView: false,
     boardPeek: false,
+    boardFocused: false,
+    focusedPanel: {},
   });
 });
 
@@ -39,4 +46,12 @@ it('treats focus mode and the board side panel as a single column', () => {
 it('keeps focus mode a single column while the draft shows', () => {
   setStore({ focusMode: true, showNewTaskPanel: true });
   expect(isSoloTaskColumn()).toBe(true);
+});
+
+it('marks no task pane focused while a board card has the keyboard', () => {
+  setStore('focusedPanel', { 'task-1': 'shell:0' });
+  expect(isPanelFocused('task-1', 'shell:0')).toBe(true);
+  setStore('boardFocused', true);
+  expect(isPanelFocused('task-1', 'shell:0')).toBe(false);
+  expect(isPanelFocusedPrefix('task-1', 'shell:')).toBe(false);
 });
