@@ -2813,9 +2813,14 @@ html:is(
   color: var(--fg-muted);
   cursor: pointer;
 }
-.dialog-close:hover {
+.dialog-close:hover:not(:disabled) {
   background: var(--bg-hover);
   color: var(--fg);
+}
+
+.dialog-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .github-item-option:hover,

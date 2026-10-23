@@ -168,3 +168,14 @@ it('names the dialog after its title', async () => {
   expect(titleId).toBeTruthy();
   expect(document.getElementById(titleId ?? '')?.textContent).toContain('Pull Request');
 });
+
+it('returns keyboard focus to the merge action after cancelling confirmation', async () => {
+  await renderDialog(openPr);
+  button('Merge on GitHub…').click();
+  await Promise.resolve();
+  expect(document.activeElement).toBe(button('Cancel'));
+  button('Cancel').click();
+  await Promise.resolve();
+  expect(document.activeElement).toBe(button('Merge on GitHub…'));
+  expect(mergePullRequestForTask).not.toHaveBeenCalled();
+});
