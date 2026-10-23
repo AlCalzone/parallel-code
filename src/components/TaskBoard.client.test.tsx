@@ -512,6 +512,15 @@ describe('keyboard', () => {
     expect(focusedId()).toBe('idle');
   });
 
+  it('keeps the keyboard on a card that moves to another lane', async () => {
+    expect(focusedId()).toBe('idle');
+    setStore('tasks', 'idle', { closingStatus: 'error', closingError: 'worktree is locked' });
+    expect(cardNames('Needs you')).toContain('Update docs');
+    await Promise.resolve();
+    expect(focusedId()).toBe('idle');
+    expect(store.boardFocused).toBe(true);
+  });
+
   it('moves between cards and lanes with arrows and hjkl', () => {
     setStore('tasks', 'idle2', task('idle2', 'Tidy styles'));
     setStore('taskOrder', ['review', 'idle', 'idle2', 'pr']);

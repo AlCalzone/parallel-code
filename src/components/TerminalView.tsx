@@ -1393,9 +1393,11 @@ export function TerminalView(props: TerminalViewProps) {
       <div
         ref={containerRef}
         style={{
-          // Subtract the padding: FitAddon sizes rows and columns to this box's
-          // content, so a full-size content box pushes the last row past the
-          // pane's clip whenever the leftover space is under 4px.
+          // FitAddon sizes rows and columns to this box's computed height and
+          // width, which under the global border-box include the padding; the
+          // last row then overflows the clip whenever the leftover space is
+          // under 4px. A content box sized without the padding fits exactly.
+          'box-sizing': 'content-box',
           width: `calc(100% - ${(reserveGutter() ? BOOKMARK_GUTTER_WIDTH : 0) + 4}px)`,
           height: 'calc(100% - 4px)',
           'margin-left': reserveGutter() ? `${BOOKMARK_GUTTER_WIDTH}px` : '0',

@@ -145,6 +145,10 @@ export function prBoardStatus(
   if (!c) return null;
   if (c.merged) return { kind: 'merged', label: 'Merged' };
   if (isPrReadyToMerge(c)) return { kind: 'ready', label: 'Ready to merge' };
+  // The watcher adds a failing check for conflicts, and GitHub runs no CI on a
+  // conflicted branch; a lone failure is then the conflict, not the CI.
+  if (c.overall === 'failure' && c.mergeable === 'CONFLICTING' && c.failing === 1)
+    return { kind: 'blocked', label: 'Conflicts' };
   if (c.overall === 'failure') return { kind: 'failed', label: 'CI failed' };
   if (c.overall === 'pending') return { kind: 'running', label: 'CI running' };
   // Green CI held back by the PR itself: name what still stands in the way.

@@ -54,6 +54,10 @@ const MAX_WAITING_PER_SENDER = 500;
 const MAX_REQUESTS_PER_SENDER = 2000;
 const MAX_TOTAL_MESSAGES = 2000;
 const MAX_TOTAL_REQUESTS = 20000;
+// Independent tasks are neither supervised nor counted against the child limit, so a
+// looping agent could otherwise start worktrees without end.
+// shortcut: lifetime count per creator — count live tasks if creators legitimately need more
+const MAX_INDEPENDENT_PER_CREATOR = 10;
 const ID = /^[a-zA-Z0-9_-]{1,128}$/;
 // Shown on a queued message, so a delivery that cannot happen yet says why.
 const WAITING_FOR_PROMPT: Record<AgentPromptReadinessReason, string | undefined> = {
@@ -497,6 +501,12 @@ export class DelegationService {
         throw new DelegationError('Request ID reused with a different assignment');
       return previous.promise;
     }
+    const prefix = `${creatorTaskId}:`;
+    const started = [...this.independentRequests.keys()].filter((k) => k.startsWith(prefix));
+    if (started.length >= MAX_INDEPENDENT_PER_CREATOR)
+      throw new DelegationError(
+        `Independent task limit reached: this task may request ${MAX_INDEPENDENT_PER_CREATOR}`,
+      );
     // Building the worktree can take a while; a pause or disable meanwhile must still
     // stop the agent from starting, as the child path's launch guard does.
     const epoch = this.orchestrationEpoch;

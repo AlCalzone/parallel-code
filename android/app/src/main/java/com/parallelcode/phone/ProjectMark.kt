@@ -61,6 +61,7 @@ fun parseCssColor(css: String?): Color? {
     }
     val hsl = Regex("""^hsl\(\s*([\d.]+)(?:deg)?[\s,]+([\d.]+)%[\s,]+([\d.]+)%\s*\)$""").find(value)
         ?: return null
-    val (h, s, l) = hsl.destructured
-    return Color.hsl(h.toFloat() % 360f, (s.toFloat() / 100f).coerceIn(0f, 1f), (l.toFloat() / 100f).coerceIn(0f, 1f))
+    // The pattern admits "1.2.3", which is no number; skip it rather than crash.
+    val (h, s, l) = hsl.destructured.toList().map { it.toFloatOrNull() ?: return null }
+    return Color.hsl(h % 360f, (s / 100f).coerceIn(0f, 1f), (l / 100f).coerceIn(0f, 1f))
 }

@@ -158,6 +158,53 @@ describe('startPrChecksSubscription updates', () => {
     expect(getPrChecks('task-1')).toMatchObject({ overall: 'success', merged: false });
     disposeRoot?.();
   });
+
+  it('stops babysitting a PR that closes without merging', () => {
+    const prUrl = 'https://github.com/acme/app/pull/12';
+    setStore('taskOrder', ['task-1']);
+    setStore('tasks', {
+      'task-1': {
+        id: 'task-1',
+        name: 'Task',
+        projectId: 'project-1',
+        branchName: 'task/task-1',
+        worktreePath: '/repo/.worktrees/task-1',
+        agentIds: [],
+        shellAgentIds: [],
+        notes: '',
+        lastPrompt: '',
+        gitIsolation: 'worktree',
+        prUrl,
+        prBabysit: { attempts: 1, lastSentSha: 'abc' },
+      },
+    });
+    let disposeRoot: (() => void) | undefined;
+    createRoot((dispose) => {
+      disposeRoot = dispose;
+      startPrChecksSubscription();
+    });
+    const updateHandler = mockOn.mock.calls.find(
+      ([channel]) => channel === IPC.PrChecksUpdate,
+    )?.[1] as ((data: unknown) => void) | undefined;
+
+    updateHandler?.({
+      taskId: 'task-1',
+      watchId: 'task-1',
+      prUrl,
+      overall: 'none',
+      passing: 0,
+      pending: 0,
+      failing: 0,
+      checks: [],
+      checkedAt: '2026-08-04T10:00:00.000Z',
+      cleared: true,
+      merged: false,
+    });
+
+    // The Babysit button hides with the PR, so nothing else could turn it off.
+    expect(store.tasks['task-1']?.prBabysit).toBeUndefined();
+    disposeRoot?.();
+  });
 });
 
 describe('startPrChecksSubscription branch PR detection', () => {

@@ -1,4 +1,4 @@
-import { Show, createMemo } from 'solid-js';
+import { Show, createMemo, onCleanup } from 'solid-js';
 import { formatRelativeAge } from '../lib/relativeAge';
 import { isTaskBackgrounded } from '../store/background-tasks';
 import { store } from '../store/core';
@@ -10,6 +10,7 @@ import { retryCloseTask } from '../store/tasks';
 import type { Task } from '../store/types';
 import { activityLine, agentName, boardNow, stateLabel } from './board/task-state';
 import { ASK_ACTION, AskRow, TaskGlyph, TaskPr, openBeside } from './board/TaskStatus';
+import { focusBoardCard } from './task-board-keys';
 import { boardTaskState, type BoardLaneId } from './task-board-lanes';
 import { createTaskContextMenu } from './task-context-menu';
 
@@ -104,8 +105,19 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
     open: () => openBeside(props.task),
     openOnOtherSide: () => openBeside(props.task, true),
   });
+  let cardEl: HTMLLIElement | undefined;
+  // A card that changes lane is rebuilt in its new lane, and focus on the old
+  // one falls to the body; hand it to the new card once that is in place.
+  onCleanup(() => {
+    if (!cardEl?.contains(document.activeElement)) return;
+    const taskId = props.task.id;
+    queueMicrotask(() => {
+      if (document.activeElement === document.body) focusBoardCard(taskId);
+    });
+  });
   return (
     <li
+      ref={cardEl}
       class={`task-board-card state-${state()}`}
       data-board-card={props.task.id}
       data-board-task-id={props.task.id}

@@ -280,6 +280,12 @@ export function startPrChecksSubscription(): () => void {
       removePrChecks(watchId);
       if (isPrimary && typeof msg.prUrl === 'string') {
         closedPrimaryByTaskId.set(msg.taskId, msg.prUrl);
+        // Closed unmerged (a merge returned above): the Babysit toggle hides with
+        // the PR, so turn it off here rather than leave it on where nothing shows it.
+        if (store.tasks[msg.taskId]?.prBabysit) {
+          setStore('tasks', msg.taskId, 'prBabysit', undefined);
+          void saveState();
+        }
       } else if (!isPrimary) {
         // A closed additional PR is done; left listed, the next sync would watch it again.
         const taskId = msg.taskId;

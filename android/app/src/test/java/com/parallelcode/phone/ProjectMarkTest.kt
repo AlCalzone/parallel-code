@@ -21,6 +21,7 @@ class ProjectMarkTest {
         assertNull(parseCssColor("#12345"))
         assertNull(parseCssColor("rebeccapurple"))
         assertNull(parseCssColor("var(--accent)"))
+        assertNull(parseCssColor("hsl(1.2.3, 70%, 62%)"))
     }
 
     @Test

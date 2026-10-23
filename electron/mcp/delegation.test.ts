@@ -423,6 +423,23 @@ describe('delegation authority and creation', () => {
     await expect(guard(launch)).rejects.toThrow('canceled');
   });
 
+  it('caps how many independent tasks one creator can start', async () => {
+    await register('parent');
+    const caller = session('parent');
+    const create = (requestId: string) =>
+      service.callTool(caller, 'create_task', {
+        requestId,
+        relation: 'independent',
+        name: 'Task',
+        prompt: 'Do it',
+      });
+    for (let i = 0; i < 10; i++) await create(`r${i}`);
+    await expect(create('one-too-many')).rejects.toThrow('Independent task limit reached');
+    // A replay of an earlier request still answers; it starts nothing new.
+    await expect(create('r0')).resolves.toMatchObject({ relation: 'independent' });
+    expect(createIndependent).toHaveBeenCalledTimes(10);
+  });
+
   it('holds independent tasks to the child byte limit and the launch pause', async () => {
     await register('parent');
     const caller = session('parent');

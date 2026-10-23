@@ -49,4 +49,14 @@ describe('prBoardStatus', () => {
     expect(prBoardStatus({ ...green, overall: 'pending' })?.kind).toBe('running');
     expect(prBoardStatus({ ...green, overall: 'failure' })?.kind).toBe('failed');
   });
+
+  it('calls a conflict a conflict, not failed CI', () => {
+    // The watcher adds a failing "Merge conflicts" check to every conflicted PR.
+    const conflicted = { ...green, overall: 'failure' as const, mergeable: 'CONFLICTING' as const };
+    expect(prBoardStatus({ ...conflicted, failing: 1 })).toEqual({
+      kind: 'blocked',
+      label: 'Conflicts',
+    });
+    expect(prBoardStatus({ ...conflicted, failing: 2 })?.label).toBe('CI failed');
+  });
 });

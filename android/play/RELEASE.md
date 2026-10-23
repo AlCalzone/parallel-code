@@ -121,17 +121,10 @@ real terminal streams, desktop Git operations, pairing, and background notificat
 delivery still require a desktop connection. Use the real-device notification video
 described above for the foreground-service declaration.
 
-## Handoff status — 2026-10-23
+## Open release items
 
-- Before release integration, local `main` was `d164196c` and remote `main` was
-  `c40359d8`, verified through the GitHub API. Integration, push, and the `0.2.0`
-  workflow are now authorized. Verify their resulting commit and run before testing.
-- No device is attached through adb. Installing the exact Play build and real-device
-  smoke checks remain outstanding. Store asset uploads remain permission-blocked;
-  they were not retried.
-- Local Android unit tests (197, including seven demo tests), debug APK assembly,
-  release lint, and AAB build passed. Lint reports 14 warnings and no errors; none
-  concern the demo files. The release manifest omits background location and AD_ID.
+- Install the exact Play build on a real device and run the smoke checks. Upload
+  the store assets.
 - Play App access completion gates target-audience and location declarations;
   target audience then gates Data safety submission. The reviewer demo must reach
   the tested release before its access instructions can be submitted.
@@ -139,8 +132,6 @@ described above for the foreground-service declaration.
   user-imported material, but the form explicitly includes AI output. Do not guess
   a severity rating for unrestricted coding-agent content. See the
   [official content-rating guidance](https://support.google.com/googleplay/android-developer/answer/11070055).
-- The reviewed Data safety preview includes messages, other user content, app
-  interactions, diagnostics, and identifiers, without a universal encryption claim.
-  It remains a draft. The bundled and website privacy-policy sources match.
-
-These are preparation results, not a submitted or published production release.
+- The Data safety draft includes messages, other user content, app interactions,
+  diagnostics, and identifiers, without a universal encryption claim. Keep it in
+  step with the bundled and website privacy policies.
