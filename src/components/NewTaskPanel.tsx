@@ -5,7 +5,7 @@ import { linkNewTaskToSp } from '../store/superProductivityOpen';
 import { linkNewTaskToKanbanCard } from '../store/kanban';
 import { nameTaskWithModel } from '../store/model-task-name';
 import { activeFeatureHint, markFeatureHintSeen } from '../store/onboarding';
-import { createTaskInBackground } from '../store/task-creation';
+import { createTaskInBackground, registerOpenDraft } from '../store/task-creation';
 import type { CreateTaskOptions } from '../store/tasks';
 import {
   createSignal,
@@ -1251,16 +1251,39 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
     }
   }
 
+  function isDirty(): boolean {
+    return prompt().trim() !== initialPrompt().trim() || name().trim() !== initialName().trim();
+  }
+
   // Preserve typed drafts until the user explicitly discards them.
   function requestClose() {
     if (loading()) return;
-    const dirty =
-      prompt().trim() !== initialPrompt().trim() || name().trim() !== initialName().trim();
-    if (dirty) {
+    if (isDirty()) {
       setConfirmDiscard(true);
     } else {
       props.onClose();
     }
+  }
+
+  // Opening a task from the board closes the panel; this is what it keeps.
+  // A creation under way already holds its own draft for a retry.
+  function openDraft() {
+    if (!props.open || loading() || !isDirty()) return null;
+    return {
+      prefill: {
+        ...store.newTaskPrefillPrompt,
+        prompt: prompt(),
+        name: name(),
+        projectId: selectedProjectId(),
+        agentId: selectedAgent()?.id,
+        gitIsolation: gitIsolation(),
+        baseBranch: baseBranch() || undefined,
+        dockerMode: dockerMode(),
+        skipPermissions: skipPermissions(),
+        githubPr: githubPr() ?? undefined,
+      },
+      dropUrl: store.newTaskDropUrl,
+    };
   }
 
   createFocusRestore(() => props.open);
@@ -1268,6 +1291,7 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
     promptRef?.focus();
     registerFocusFn('new-task', () => promptRef?.focus());
     onCleanup(() => unregisterFocusFn('new-task'));
+    onCleanup(registerOpenDraft(openDraft));
   });
   createEffect(() => {
     if (!props.open) return;

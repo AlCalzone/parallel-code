@@ -4,11 +4,13 @@ import { invoke } from '../../lib/ipc';
 import { withViewTransition } from '../../lib/viewTransition';
 import { getPrChecks, prBoardStatus } from '../../store/pr-checks-state';
 import { store } from '../../store/core';
+import { toggleNewTaskPanel } from '../../store/navigation';
 import {
   boardSidePanelOpen,
   openBoardSidePanel,
   toggleBoardSidePanelSide,
 } from '../../store/project-pages';
+import { setOpenDraftAside } from '../../store/task-creation';
 import { getTaskAttentionState, getTaskDotStatus } from '../../store/taskStatus';
 import type { Task } from '../../store/types';
 import { CheckIcon, GitMergeIcon } from '../icons';
@@ -33,6 +35,11 @@ export function openBeside(task: Task, otherSide = false, panel?: string | null)
   withViewTransition(
     () =>
       batch(() => {
+        // The draft holds the side panel, so it steps aside and returns on the next New Task.
+        if (store.showNewTaskPanel) {
+          setOpenDraftAside();
+          toggleNewTaskPanel(false);
+        }
         if (otherSide) toggleBoardSidePanelSide();
         openBoardSidePanel();
         openTask(task, panel);

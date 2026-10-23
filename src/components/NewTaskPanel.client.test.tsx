@@ -6,6 +6,7 @@ import { invoke } from '../lib/ipc';
 import { setStore, store } from '../store/core';
 import { toggleNewTaskPanel } from '../store/navigation';
 import { clearNotification } from '../store/notification';
+import { openBeside } from './board/TaskStatus';
 import { NewTaskPanel } from './NewTaskPanel';
 
 vi.mock('../lib/ipc', () => ({ invoke: vi.fn() }));
@@ -104,6 +105,38 @@ it('keeps the draft of a creation that fails before the panel finishes closing',
     });
   } finally {
     Reflect.deleteProperty(document, 'startViewTransition');
+  }
+});
+
+it('sets the draft aside when a board task is opened in its place', () => {
+  setStore('tasks', 'other', {
+    id: 'other',
+    name: 'Other',
+    projectId: 'project',
+    branchName: 'task/other',
+    worktreePath: '/project/other',
+    gitIsolation: 'worktree',
+    agentIds: [],
+    shellAgentIds: [],
+    notes: '',
+    lastPrompt: '',
+  });
+  setStore('boardView', true);
+  try {
+    typePrompt('Half a thought');
+    openBeside(store.tasks.other);
+    expect(store.showNewTaskPanel).toBe(false);
+    expect(store.activeTaskId).toBe('other');
+
+    toggleNewTaskPanel(true);
+    expect(store.newTaskPrefillPrompt).toMatchObject({
+      prompt: 'Half a thought',
+      projectId: 'project',
+      agentId: 'agent',
+      gitIsolation: 'worktree',
+    });
+  } finally {
+    setStore({ boardView: false, boardPeek: false });
   }
 });
 
