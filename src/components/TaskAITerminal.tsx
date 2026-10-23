@@ -40,15 +40,12 @@ import { isEditableDocumentPath } from '../lib/document-path';
 import { editAsDocument } from '../documents/store';
 import { saveState } from '../store/persistence';
 import { registerAction, unregisterAction } from '../store/focus';
-import { resolvedBindings } from '../store/keybindings';
-import { formatKeyCombo } from '../lib/keybindings';
 import { Dialog } from './Dialog';
 import { ConfirmDialog } from './ConfirmDialog';
 import {
   CheckIcon,
   CloseIcon,
   CommentIcon,
-  EyeIcon,
   CopyIcon,
   PlayIcon,
   SyncIcon,
@@ -104,10 +101,6 @@ export function TaskAITerminal(props: TaskAITerminalProps) {
       );
     });
   const canHandoff = (id: string) => store.mcpOrchestrationEnabled && handoffAgents().includes(id);
-  const secondOpinionTitle = () => {
-    const binding = resolvedBindings().find((item) => item.id === 'app.task.second-opinion');
-    return `Ask for a second opinion${binding ? ` (${formatKeyCombo(binding)})` : ''}`;
-  };
   createEffect(() => {
     const key = `${props.task.id}:second-opinion`;
     const open = () => {
@@ -335,36 +328,6 @@ export function TaskAITerminal(props: TaskAITerminalProps) {
           >
             <PromptHistory task={props.task} emptyLabel={infoBarStatus().text} />
             <div class="agent-header-controls">
-              <Show
-                when={
-                  canHandoff(props.selectedAgentId) &&
-                  !handoff() &&
-                  !props.task.secondOpinionDismissed
-                }
-              >
-                <div class="terminal-second-opinion">
-                  <button
-                    title={secondOpinionTitle()}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setHandoff({ sourceAgentId: props.selectedAgentId });
-                    }}
-                  >
-                    <EyeIcon size={12} /> Second opinion
-                  </button>
-                  <button
-                    aria-label="Dismiss second opinion button for this task"
-                    title="Dismiss for this task; still available on right-click"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setStore('tasks', props.task.id, 'secondOpinionDismissed', true);
-                      void saveState();
-                    }}
-                  >
-                    <CloseIcon size={10} />
-                  </button>
-                </div>
-              </Show>
               <div class="agent-header-tabs">
                 <For each={props.task.agentIds}>
                   {(agentId, i) => {

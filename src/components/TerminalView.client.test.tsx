@@ -207,7 +207,6 @@ it('offers a selection context menu and preserves the captured text for the name
     '[aria-label="Actions for selected text"]',
   );
   expect(trigger).not.toBeNull();
-  expect(document.querySelector('.terminal-second-opinion')).toBeNull();
   trigger?.click();
   term.clearSelection();
   const send = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((b) =>
@@ -217,10 +216,9 @@ it('offers a selection context menu and preserves the captured text for the name
   expect(onSendSelection).toHaveBeenCalledWith('Review this finding', 'other');
 });
 
-it('keeps Second opinion on right-click without an overlay button', () => {
+it('keeps Second opinion on right-click', () => {
   const onSecondOpinion = vi.fn();
   const term = mountTerminal(undefined, undefined, { onSecondOpinion });
-  expect(document.querySelector('.terminal-second-opinion')).toBeNull();
   term.element?.dispatchEvent(
     new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 30, clientY: 40 }),
   );
