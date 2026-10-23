@@ -1,4 +1,6 @@
 import { Show, createMemo, createSignal } from 'solid-js';
+import { IPC } from '../../electron/ipc/channels';
+import { invoke } from '../lib/ipc';
 import { formatRelativeAge } from '../lib/relativeAge';
 import { isTaskBackgrounded } from '../store/background-tasks';
 import { store } from '../store/core';
@@ -16,7 +18,7 @@ import { ContextMenu, type MoreMenuItem } from './chat/MoreMenu';
 import { boardTaskState, type BoardLaneId } from './task-board-lanes';
 import { laterMenuItems } from './task-later-menu';
 import { CloseTaskDialog } from './CloseTaskDialog';
-import { CloseIcon, GitMergeIcon, UndoIcon } from './icons';
+import { CloseIcon, ExternalLinkIcon, GitMergeIcon, UndoIcon } from './icons';
 
 /** Why the card is set aside: when its snooze ends, or that it is minimized. */
 function setAsideLabel(task: Task): string {
@@ -28,15 +30,21 @@ function setAsideLabel(task: Task): string {
 
 /** Ending actions: Finish runs in the task's panel, so it opens the task first; Close confirms in place. */
 function endMenuItems(task: Task, confirmClose: () => void): MoreMenuItem[] {
+  const canFinish = task.gitIsolation === 'worktree' && !isLandedTaskState(task.landingState);
+  // Finishing usually ends the task, so the menu pre-checks closing it. Where the Finish
+  // dialog cannot (imported worktrees, coordinated tasks), it offers a plain Finish.
+  const closeAfter = !task.externalWorktree && !task.delegationParent && !task.coordinatorMode;
   const finish = {
-    label: 'Finish',
+    label: closeAfter ? 'Finish and close' : 'Finish',
+    title: closeAfter
+      ? 'Opens Finish with deleting the branch and worktree after merge checked.'
+      : undefined,
     icon: <GitMergeIcon size={14} />,
     run: () => {
       openBeside(task);
-      setPendingAction({ type: 'finish', taskId: task.id });
+      setPendingAction({ type: 'finish', taskId: task.id, closeAfter });
     },
   };
-  const canFinish = task.gitIsolation === 'worktree' && !isLandedTaskState(task.landingState);
   return [
     ...(canFinish ? [finish] : []),
     { label: 'Close', icon: <CloseIcon size={14} />, run: confirmClose },
@@ -51,6 +59,15 @@ function cardMenuItems(task: Task, confirmClose: () => void): MoreMenuItem[] {
       label: `Open on the ${store.boardSidePanelLeft ? 'right' : 'left'}`,
       run: () => openBeside(task, true),
     },
+    ...(task.prUrl
+      ? [
+          {
+            label: 'Open PR in browser',
+            icon: <ExternalLinkIcon size={14} />,
+            run: () => void invoke(IPC.ShellOpenExternal, { url: task.prUrl }),
+          },
+        ]
+      : []),
   ];
   // A closing task is on its way out; setting it aside would race the teardown.
   if (task.closingStatus) return opens;

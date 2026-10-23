@@ -157,8 +157,13 @@ export function TaskPanel(props: TaskPanelProps) {
   const isLandedTask = () => isLandedTaskState(props.task.landingState);
   const canFinish = () => props.task.gitIsolation === 'worktree' && !isLandedTask();
   // A running push is what the reopened dialog should show, whatever opened it.
-  const openFinish = (action: FinishAction) => {
-    if (canFinish()) setFinishAction(pushing() ? 'push' : action);
+  const [finishCloses, setFinishCloses] = createSignal(false);
+  const openFinish = (action: FinishAction, closeAfter = false) => {
+    if (!canFinish()) return;
+    batch(() => {
+      setFinishCloses(closeAfter);
+      setFinishAction(pushing() ? 'push' : action);
+    });
   };
   let pushSuccessTimer: ReturnType<typeof setTimeout> | undefined;
   onCleanup(() => clearTimeout(pushSuccessTimer));
@@ -528,7 +533,7 @@ export function TaskPanel(props: TaskPanelProps) {
         setShowCloseConfirm(true);
         break;
       case 'finish':
-        openFinish('merge');
+        openFinish('merge', action.closeAfter);
         break;
     }
   });
@@ -1162,7 +1167,7 @@ export function TaskPanel(props: TaskPanelProps) {
           initialCleanup={
             props.task.externalWorktree
               ? false
-              : (getProject(props.task.projectId)?.deleteBranchOnClose ?? true)
+              : finishCloses() || (getProject(props.task.projectId)?.deleteBranchOnClose ?? true)
           }
           tour={tour}
           tourDisabled={changedFileCount() === 0}
