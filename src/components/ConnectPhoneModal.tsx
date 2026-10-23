@@ -1,6 +1,14 @@
 // src/components/ConnectPhoneModal.tsx
 
-import { Show, createSignal, createEffect, onCleanup, createMemo, untrack } from 'solid-js';
+import {
+  Show,
+  createSignal,
+  createEffect,
+  onCleanup,
+  createMemo,
+  untrack,
+  createUniqueId,
+} from 'solid-js';
 import { Dialog } from './Dialog';
 import { store } from '../store/core';
 import {
@@ -47,6 +55,7 @@ export function availableNetworkModeFor(
 }
 
 export function ConnectPhoneModal(props: ConnectPhoneModalProps) {
+  const titleId = createUniqueId();
   const [qrDataUrl, setQrDataUrl] = createSignal<string | null>(null);
   const [qrError, setQrError] = createSignal<string | null>(null);
   const [starting, setStarting] = createSignal(false);
@@ -261,9 +270,13 @@ export function ConnectPhoneModal(props: ConnectPhoneModalProps) {
       onClose={props.onClose}
       width="380px"
       panelStyle={{ 'align-items': 'center', gap: '20px' }}
+      labelledBy={titleId}
     >
       <div style={{ 'text-align': 'center' }}>
-        <h2 style={{ margin: '0', 'font-size': '17px', color: theme.fg, 'font-weight': '600' }}>
+        <h2
+          id={titleId}
+          style={{ margin: '0', 'font-size': '17px', color: theme.fg, 'font-weight': '600' }}
+        >
           Connect Phone
         </h2>
         <span style={{ 'font-size': '12px', color: theme.fgSubtle }}>Experimental</span>

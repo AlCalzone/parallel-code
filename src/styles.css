@@ -2695,6 +2695,61 @@ html:is(
   transform: scale(0.98);
 }
 
+/* One footer for dialog actions (DialogFooter.tsx). Its leading slot is always
+   there, so an error appearing beside the buttons never pushes them. */
+.dialog-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog-footer-lead {
+  flex: 1;
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.dialog-footer-error {
+  color: var(--error);
+  font-size: 13px;
+}
+
+.dialog-footer :is(.btn-primary, .btn-secondary, .btn-danger) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 18px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.dialog-footer .btn-secondary {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+}
+
+.dialog-footer :is(.btn-primary, .btn-danger) {
+  font-weight: 500;
+}
+
+/* Destructive confirmations are the one filled action: they need attention now. */
+.dialog-footer .btn-danger {
+  background: var(--error);
+  border: none;
+  color: #fff;
+}
+
+.dialog-footer :is(.btn-primary, .btn-secondary, .btn-danger):disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .github-item-option:hover,
 .github-item-option:focus-visible {
   background: var(--bg-hover) !important;

@@ -159,3 +159,11 @@ it('reports when there are no failed checks to hand to the agent', async () => {
   await vi.waitFor(() => expect(document.body.textContent).toContain('No failed checks found.'));
   expect(stageFailedChecksPrompt).toHaveBeenCalledWith('task-1', { number: 5, url: prUrl });
 });
+
+it('names the dialog after its title', async () => {
+  await renderDialog(openPr);
+  const dialog = document.querySelector('[role="dialog"]');
+  const titleId = dialog?.getAttribute('aria-labelledby');
+  expect(titleId).toBeTruthy();
+  expect(document.getElementById(titleId ?? '')?.textContent).toContain('Pull Request');
+});

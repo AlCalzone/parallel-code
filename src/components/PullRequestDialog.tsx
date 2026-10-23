@@ -1,5 +1,6 @@
-import { For, Show, createEffect, createSignal, on } from 'solid-js';
+import { For, Show, createEffect, createSignal, createUniqueId, on } from 'solid-js';
 import { Dialog } from './Dialog';
+import { DialogFooter } from './DialogFooter';
 import { errMessage } from '../lib/log';
 import { bannerStyle, dialogButtonStyle, theme } from '../lib/theme';
 import { getPrChecks } from '../store/store';
@@ -29,6 +30,7 @@ export function PullRequestDialog(props: PullRequestDialogProps) {
   const actions = createPrActions(props);
   const { details, busy, error, info } = actions;
   const [confirmingMerge, setConfirmingMerge] = createSignal(false);
+  const titleId = createUniqueId();
   const checks = () => getPrChecks(props.task.id);
   const chosenMethod = actions.method;
   const setMethod = actions.setMethod;
@@ -68,9 +70,17 @@ export function PullRequestDialog(props: PullRequestDialogProps) {
   }
 
   return (
-    <Dialog open={props.open} onClose={() => !busy() && props.onClose()} width="560px">
+    <Dialog
+      open={props.open}
+      onClose={() => !busy() && props.onClose()}
+      width="560px"
+      labelledBy={titleId}
+    >
       <div style={{ display: 'flex', 'flex-direction': 'column', gap: '14px' }}>
-        <h2 style={{ margin: '0', 'font-size': '17px', color: theme.fg, 'font-weight': '600' }}>
+        <h2
+          id={titleId}
+          style={{ margin: '0', 'font-size': '17px', color: theme.fg, 'font-weight': '600' }}
+        >
           Pull Request
           <Show when={actions.pr()}>
             {(d) => (
@@ -300,26 +310,16 @@ export function PullRequestDialog(props: PullRequestDialogProps) {
           )}
         </Show>
 
-        <Show when={info()}>
-          <div style={{ ...bannerStyle(theme.fgMuted), 'font-size': '13px' }}>{info()}</div>
-        </Show>
-        <Show when={error()}>
-          <div role="alert" style={{ ...bannerStyle(theme.error), 'font-size': '13px' }}>
-            {error()}
-          </div>
-        </Show>
-
-        <div style={{ display: 'flex', 'justify-content': 'flex-end' }}>
+        <DialogFooter error={error()} note={info() || undefined}>
           <button
             type="button"
             class="btn-secondary"
             disabled={!!busy()}
             onClick={() => props.onClose()}
-            style={dialogButtonStyle(false, !!busy())}
           >
             Close
           </button>
-        </div>
+        </DialogFooter>
       </div>
     </Dialog>
   );

@@ -67,6 +67,10 @@ export function AgentSettings() {
           onChange={(enabled) => void changeMcpOrchestration(enabled)}
           description="Allow supported agents in top-level worktree tasks to create and manage Parallel Code tasks through MCP by default in new sessions. Peer access between tasks also requires project permission."
         />
+        {/* Reserved under the toggle it reports on, so a failed save doesn't push the rows below. */}
+        <span role="alert" style={{ 'font-size': '12px', color: theme.error, 'min-height': '1lh' }}>
+          {mcpSettingError()}
+        </span>
         <span style={{ 'font-size': '12px', color: theme.fgSubtle }}>
           Child tasks launch additional agent sessions and may incur provider charges. The default
           concurrent child limit is {DEFAULT_COORDINATOR_CONCURRENT_TASKS}; each parent can have a
@@ -78,11 +82,6 @@ export function AgentSettings() {
           sessions if their orchestration tools are not available. Use restart and resume to
           preserve the conversation where supported.
         </span>
-        <Show when={mcpSettingError()}>
-          <span role="alert" style={{ 'font-size': '12px', color: theme.error }}>
-            {mcpSettingError()}
-          </span>
-        </Show>
         {/* Disabled rather than hidden so toggling orchestration doesn't shift the rows below. */}
         <SettingsCheckboxRow
           label="Propagate skip-permissions to sub-tasks"
