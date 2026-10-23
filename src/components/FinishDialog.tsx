@@ -16,7 +16,7 @@ import { ReadinessSection } from './ReadinessSection';
 import { createMergeState } from './merge-state';
 import { PR_MERGE_ACTIONS, createFinishPr, taskPrUrl } from './pr-actions';
 import { createPushRun } from './push-run';
-import { getProject, getTaskChecks } from '../store/store';
+import { backgroundVerifyEnabled, getProject, getTaskChecks } from '../store/store';
 import { markFeatureHintSeen } from '../store/onboarding';
 import { showNotification } from '../store/notification';
 import { dialogButtonStyle, theme } from '../lib/theme';
@@ -208,7 +208,22 @@ export function FinishDialog(props: FinishDialogProps) {
             </Show>
             {/* Opening the section or running a check there is taking the tip. */}
             <div ref={readinessAnchor} onClick={() => markFeatureHintSeen('finish-review')}>
-              <ReadinessSection task={props.task}>
+              <ReadinessSection
+                task={props.task}
+                headSha={merge.worktreeStatus()?.head_sha}
+                // Reading an errored resource throws; the line then omits "N commits ago".
+                branchCommits={
+                  merge.branchCommits.error
+                    ? undefined
+                    : merge.branchCommits()?.map((commit) => commit.hash)
+                }
+                onConfigure={() => props.onConfigureChecks()}
+                onStaged={() => {
+                  showNotification('Fix prompt staged in the task input. Review it, then send.');
+                  props.onClose();
+                }}
+                onReviewFile={(file, line, side) => setReviewLocation({ file, line, side })}
+              >
                 <EvidencePanel
                   task={props.task}
                   agentId={merge.selectedAgentId()}
@@ -233,9 +248,13 @@ export function FinishDialog(props: FinishDialogProps) {
                     [{ label: 'Configure checks', run: props.onConfigureChecks, quiet: true }]
               }
             >
-              Readiness gathers the evidence behind this merge: which checks ran, and what the agent
-              says it did.
-              <Show when={!hasChecks()}> Add a verify command to run your tests from here.</Show>
+              Readiness says whether the verify command passed on this commit; Details holds the
+              full evidence.
+              <Show when={backgroundVerifyEnabled(props.task.id)}>
+                {' '}
+                It runs in the background after agent turns.
+              </Show>
+              <Show when={!hasChecks()}> Add a verify command to have your tests run.</Show>
             </FeatureHint>
             <FinishPrSection
               task={props.task}

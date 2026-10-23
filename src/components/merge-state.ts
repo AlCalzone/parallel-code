@@ -5,12 +5,15 @@ import type { CoverageComparison } from '../lib/coverage-comparison';
 import { invoke } from '../lib/ipc';
 import { errMessage } from '../lib/log';
 import {
+  backgroundVerifyEnabled,
   buildEvidence,
   getEvidenceConfidence,
   getPrChecks,
   getProject,
+  getTaskDotStatus,
   getVerifyCommand,
   mergeTask,
+  runBackgroundVerify,
   store,
 } from '../store/store';
 import type { Task } from '../store/types';
@@ -179,11 +182,17 @@ export function createMergeState(props: MergeStateProps) {
       });
       setSyncDone(kind);
       refetchAll();
-      // New commits outdate the checks; rebuild where the project builds on its own.
+      // New commits outdate the checks; re-run where the project runs them on its own.
       if (getProject(props.task.projectId)?.evidenceAutoBuild)
         buildEvidence(props.task.id, { trigger: 'auto' }).catch((err) => {
           console.error('Evidence build after base sync failed:', err);
         });
+      else if (backgroundVerifyEnabled(props.task.id)) {
+        const taskId = props.task.id;
+        runBackgroundVerify(taskId, () => getTaskDotStatus(taskId) !== 'busy').catch((err) => {
+          console.error('Verify after base sync failed:', err);
+        });
+      }
     } catch (err) {
       setSyncError(errMessage(err));
     } finally {
@@ -230,6 +239,7 @@ export function createMergeState(props: MergeStateProps) {
   return {
     branchLog,
     worktreeStatus,
+    branchCommits,
     mergeStatus,
     refetchAll,
     commitCount,

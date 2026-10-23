@@ -1,5 +1,10 @@
 import { Show, type JSX } from 'solid-js';
-import { getProject, getTaskChecks, updateTaskBranch } from '../store/store';
+import {
+  backgroundVerifyEnabled,
+  getProject,
+  getTaskChecks,
+  updateTaskBranch,
+} from '../store/store';
 import { bannerStyle, theme } from '../lib/theme';
 import type { Task } from '../store/types';
 import type { ChangedFile } from '../ipc/types';
@@ -132,7 +137,9 @@ export function MergeBlockers(props: MergeSectionProps) {
             <Show when={getTaskChecks(props.task.id).length > 0}>
               {getProject(props.task.projectId)?.evidenceAutoBuild
                 ? ' Re-running the checks.'
-                : ' Refresh the checks to cover the new commits.'}
+                : backgroundVerifyEnabled(props.task.id)
+                  ? ' Verify runs again in the background.'
+                  : ' Refresh the checks to cover the new commits.'}
             </Show>
           </div>
         )}
