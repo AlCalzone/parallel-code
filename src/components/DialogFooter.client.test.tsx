@@ -33,14 +33,14 @@ describe('DialogFooter', () => {
     expect(slot?.textContent).toBe('Disk full');
   });
 
-  it('shows a note in place of the error slot', () => {
+  it('shows a note while keeping the error slot ready', () => {
     const host = mount(() => (
       <DialogFooter note="Needs a name">
         <button type="button">Save</button>
       </DialogFooter>
     ));
-    expect(host.querySelector('[role="alert"]')).toBeNull();
     expect(host.textContent).toContain('Needs a name');
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe('');
   });
 
   it('places the start action before the buttons', () => {

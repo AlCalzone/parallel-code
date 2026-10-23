@@ -2714,28 +2714,11 @@ html:is(
   gap: 8px;
 }
 
-/* Neutral until hovered: closing is routine, not urgent. */
-.dialog-close {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--fg-muted);
-  cursor: pointer;
-}
-.dialog-close:hover {
-  background: var(--bg-hover);
-  color: var(--fg);
-}
 .dialog-footer-lead {
   flex: 1;
   min-width: 0;
+  /* Paths and URLs in errors have no break points; wrap rather than run under the buttons. */
+  overflow-wrap: anywhere;
   color: var(--fg-muted);
   font-size: 12px;
 }
@@ -2776,6 +2759,26 @@ html:is(
 .dialog-footer :is(.btn-primary, .btn-secondary, .btn-danger):disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Neutral until hovered: closing is routine, not urgent. */
+.dialog-close {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.dialog-close:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
 }
 
 .github-item-option:hover,
