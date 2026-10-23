@@ -138,6 +138,14 @@ export interface ScrollbackMessage {
   rows?: number;
 }
 
+/** The PTY took a new size; output after this is written for it. */
+export interface TerminalSizeMessage {
+  type: 'terminal-size';
+  agentId: string;
+  cols: number;
+  rows: number;
+}
+
 /** The whole conversation, sent on subscribe and then at most every few hundred ms. */
 export interface ChatStateMessage {
   type: 'chat-state';
@@ -158,6 +166,7 @@ export type ServerMessage =
   | StatusMessage
   | AgentsMessage
   | ScrollbackMessage
+  | TerminalSizeMessage
   | ChatStateMessage
   | InputResultMessage;
 

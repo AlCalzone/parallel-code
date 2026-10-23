@@ -2105,7 +2105,15 @@ export function startRemoteServer(opts: {
         if (snapshot) sendScrollback(snapshot.data, snapshot.cols, snapshot.rows);
         else sendRawScrollback();
       },
-      cb,
+      {
+        onOutput: cb,
+        onResize: (cols, rows) => {
+          if (ws.readyState !== WebSocket.OPEN) return;
+          ws.send(
+            JSON.stringify({ type: 'terminal-size', agentId, cols, rows } satisfies ServerMessage),
+          );
+        },
+      },
     );
     if (subscriber) {
       subs?.set(agentId, subscriber);
