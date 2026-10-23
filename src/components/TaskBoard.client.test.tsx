@@ -288,7 +288,20 @@ it('says why the board is empty', () => {
   setStore('taskOrder', []);
   search.value = '';
   search.dispatchEvent(new Event('input', { bubbles: true }));
-  expect(host.querySelector('.task-board-empty')?.textContent).toBe('No running tasks');
+  expect(host.querySelector('.task-board-empty strong')?.textContent).toBe('Start a task');
+});
+
+it('starts an empty board with the first steps: a new task, or a project first', () => {
+  setStore('taskOrder', []);
+  const empty = () => host.querySelector('.task-board-empty');
+  const action = () => empty()?.querySelector('button');
+  expect(action()?.textContent).toContain('New task');
+  action()?.click();
+  expect(store.showNewTaskPanel).toBe(true);
+
+  setStore('projects', []);
+  expect(empty()?.textContent).toContain('Link a project to get started');
+  expect(action()?.textContent).toBe('Link a project folder…');
 });
 
 it('names the project filter that hid every task, and offers to clear it', () => {
@@ -866,5 +879,48 @@ describe('next task that needs you', () => {
     setStore('activeTaskId', 'review');
     openNextAttentionTask();
     expect(store.activeTaskId).toBe('review');
+  });
+});
+
+describe('board tips', () => {
+  const tip = () => document.querySelector<HTMLElement>('.feature-hint');
+  const showTips = () => {
+    dispose();
+    vi.useFakeTimers();
+    // happy-dom lays nothing out; a tip needs its anchor to have a box.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(0, 0, 200, 24),
+    );
+    setStore('seenFeatureHints', []);
+  };
+  afterEach(() => {
+    // Unmount first: a shown tip follows its anchor every frame, the board keeps a clock.
+    dispose();
+    dispose = () => undefined;
+    // A dismissal's cooldown must not hold back later tips.
+    vi.runAllTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('points tiles users with several tasks at the board, which opens from the tip', () => {
+    showTips();
+    setStore('boardView', false);
+    dispose = render(() => <WorkspaceControls />, host);
+    vi.advanceTimersByTime(650);
+    expect(tip()?.textContent).toContain('See every task by what it needs');
+
+    [...(tip()?.querySelectorAll('button') ?? [])]
+      .find((button) => button.textContent === 'Show board')
+      ?.click();
+    expect(store.boardView).toBe(true);
+    expect(store.seenFeatureHints).toContain('board-view');
+  });
+
+  it('explains the lanes once the board has tasks, and counts the board as found', () => {
+    showTips();
+    dispose = render(() => <Board />, host);
+    expect(store.seenFeatureHints).toContain('board-view');
+    vi.advanceTimersByTime(650);
+    expect(tip()?.textContent).toContain('Tasks sort themselves by what they need');
   });
 });

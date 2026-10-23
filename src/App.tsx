@@ -55,12 +55,14 @@ import { WindowTitleBar } from './components/WindowTitleBar';
 import { TaskBoardControls } from './components/TaskBoardControls';
 import { FocusModeTaskIndicators } from './components/FocusModeTaskIndicators';
 import { UsageStatusBar } from './components/UsageStatusBar';
+import { WelcomeScreen } from './components/WelcomeScreen';
 import { theme } from './lib/theme';
 import * as log from './lib/log';
 import {
   store,
   loadAgents,
   loadState,
+  isStateLoaded,
   saveState,
   toggleNewTaskPanel,
   toggleSidebar,
@@ -206,6 +208,15 @@ function DropOverlay() {
   );
 }
 
+const WELCOME_ACTIONS = new Set([
+  'toggleHelp',
+  'toggleSettings',
+  'closeDialogs',
+  'zoomIn',
+  'zoomOut',
+  'resetZoom',
+]);
+
 function App() {
   let mainRef!: HTMLDivElement;
   const [windowFocused, setWindowFocused] = createSignal(true);
@@ -213,6 +224,13 @@ function App() {
   const [showDropOverlay, setShowDropOverlay] = createSignal(false);
   const [closeHandlerReady, setCloseHandlerReady] = createSignal(false);
   const [taskSwitcherOpen, setTaskSwitcherOpen] = createSignal(false);
+  const [stateLoaded, setStateLoaded] = createSignal(false);
+  const [stateRestored, setStateRestored] = createSignal(false);
+  // A new install sees only the welcome screen, whatever view is selected; and
+  // nothing flashes up before the saved state says whether it is one. An
+  // unreadable state is no first run: its projects would not be saved.
+  const welcome = () => stateRestored() && store.projects.length === 0;
+  const bare = () => !stateLoaded() || welcome();
   let dragCounter = 0;
 
   function closeArena() {
@@ -460,7 +478,12 @@ function App() {
       (available) => setDockerAvailable(available),
       () => setDockerAvailable(false),
     );
-    await loadState();
+    try {
+      await loadState();
+    } finally {
+      setStateRestored(isStateLoaded());
+      setStateLoaded(true);
+    }
     const themesLoaded = await loadCustomThemes();
     // Only unlock slot-ID sanitization when the IPC call succeeded. On failure
     // customThemes remains {} and we must not null out the user's persisted selections.
@@ -792,6 +815,8 @@ function App() {
           toggleSettingsDialog(false);
           return;
         }
+        // The workspace behind the welcome screen stays as it is.
+        if (welcome()) return;
         // The board covers focus mode, so it closes first, its side panel
         // before it. A draft in the side panel handles Escape itself.
         if (boardShown()) {
@@ -831,7 +856,12 @@ function App() {
     const boardOnly = (binding: { action?: string }) =>
       binding.action?.startsWith('navigateBoardTask:') === true;
     createEffect(() => {
-      const bindings = resolvedBindings().filter((binding) => !boardOnly(binding));
+      // The welcome screen hides the workspace; only shortcuts that open their own UI work there.
+      const fitsScreen = (binding: { action?: string }) =>
+        !welcome() || (binding.action !== undefined && WELCOME_ACTIONS.has(binding.action));
+      const bindings = resolvedBindings().filter(
+        (binding) => !boardOnly(binding) && fitsScreen(binding),
+      );
       onCleanup(registerFromRegistry(bindings, actionHandlers));
     });
     createEffect(() => {
@@ -946,16 +976,18 @@ function App() {
         }}
       >
         <Show when={!isMac}>
-          <WindowTitleBar />
+          <WindowTitleBar bare={bare()} />
         </Show>
         <Show when={isMac}>
           <div class="mac-titlebar-spacer" data-tauri-drag-region>
-            <WorkspaceControls />
-            <FocusModeTaskIndicators />
-            <TaskBoardControls />
+            <Show when={!bare()}>
+              <WorkspaceControls />
+              <FocusModeTaskIndicators />
+              <TaskBoardControls />
+            </Show>
           </div>
         </Show>
-        <Show when={!store.keybindingMigrationDismissed}>
+        <Show when={!bare() && !store.keybindingMigrationDismissed}>
           <div
             class="keybinding-migration-notice"
             role="region"
@@ -993,8 +1025,12 @@ function App() {
             </button>
           </div>
         </Show>
+        <Show when={welcome()}>
+          <WelcomeScreen />
+        </Show>
+        {/* Hidden rather than unmounted, so startup sees the workspace it always has. */}
         <main
-          style={{ flex: '1', display: 'flex', overflow: 'hidden' }}
+          style={{ flex: '1', display: bare() ? 'none' : 'flex', overflow: 'hidden' }}
           classList={{ 'board-panel-left': boardSidePanelOpen() && store.boardSidePanelLeft }}
         >
           <Show when={store.sidebarVisible}>
@@ -1026,7 +1062,9 @@ function App() {
           </div>
           <GitHubIssuesPage />
         </main>
-        <UsageStatusBar />
+        <Show when={!bare()}>
+          <UsageStatusBar />
+        </Show>
         <HelpDialog open={store.showHelpDialog} onClose={() => toggleHelpDialog(false)} />
         <TaskSwitcher open={taskSwitcherOpen()} onClose={() => setTaskSwitcherOpen(false)} />
         <SettingsDialog

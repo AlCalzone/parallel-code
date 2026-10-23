@@ -1,10 +1,12 @@
-import { createSignal, onCleanup, onMount } from 'solid-js';
+import { Show, createSignal, onCleanup, onMount } from 'solid-js';
 import { WorkspaceControls } from './WorkspaceControls';
 import { appWindow } from '../lib/window';
 import { FocusModeTaskIndicators } from './FocusModeTaskIndicators';
 import { TaskBoardControls } from './TaskBoardControls';
+import { AppLogo } from './icons';
 
-export function WindowTitleBar() {
+/** `bare` keeps only the window's own controls, for the welcome screen. */
+export function WindowTitleBar(props: { bare?: boolean }) {
   const [isFocused, setIsFocused] = createSignal(true);
   const [isMaximized, setIsMaximized] = createSignal(false);
 
@@ -87,25 +89,15 @@ export function WindowTitleBar() {
         class="window-drag-region"
         onDblClick={() => void handleToggleMaximize()}
       >
-        <svg
-          class="window-title-icon"
-          viewBox="0 0 56 56"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="4"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <line x1="10" y1="6" x2="10" y2="50" />
-          <line x1="22" y1="6" x2="22" y2="50" />
-          <path d="M30 8 H47 V24 H30" />
-          <path d="M49 32 H32 V48 H49" />
-        </svg>
-        <WorkspaceControls />
+        <AppLogo class="window-title-icon" />
+        <Show when={!props.bare}>
+          <WorkspaceControls />
+        </Show>
       </div>
-      <FocusModeTaskIndicators />
-      <TaskBoardControls />
+      <Show when={!props.bare}>
+        <FocusModeTaskIndicators />
+        <TaskBoardControls />
+      </Show>
       <div class="window-controls">
         <button
           class="window-control-btn"

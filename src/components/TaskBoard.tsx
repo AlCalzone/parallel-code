@@ -1,8 +1,11 @@
 import { For, Index, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { mod } from '../lib/platform';
 import { isTypingTarget } from '../lib/tour-keys';
 import { store } from '../store/core';
-import { setTaskProjectFilter } from '../store/navigation';
+import { setTaskProjectFilter, toggleNewTaskPanel } from '../store/navigation';
+import { markFeatureHintSeen } from '../store/onboarding';
 import { boardSidePanelOpen } from '../store/project-pages';
+import { codeProjects, pickAndAddProject } from '../store/projects';
 import { taskProjectFilter } from '../store/task-project-filter';
 import {
   getTaskFocusedPanel,
@@ -11,6 +14,7 @@ import {
   unregisterFocusFn,
 } from '../store/store';
 import { BoardLane, BoardRail } from './board/BoardLane';
+import { FeatureHint } from './FeatureHint';
 import { useBoardClock } from './board/task-state';
 import { TaskBoardCard } from './TaskBoardCard';
 import { forgetWorkingHolds } from './task-board-hold';
@@ -70,30 +74,62 @@ function SnoozedLane(props: { lane: LaneData }) {
   );
 }
 
+/** A board with nothing on it yet: the first steps, over the empty lanes they will fill. */
+function BoardFirstSteps() {
+  return (
+    <div class="task-board-empty task-board-first">
+      <Show
+        when={codeProjects().length > 0}
+        fallback={
+          <>
+            <strong>Link a project to get started</strong>
+            <span>A project is a folder with your code; its tasks show up here.</span>
+            <button type="button" class="task-board-start" onClick={() => void pickAndAddProject()}>
+              Link a project folder…
+            </button>
+          </>
+        }
+      >
+        <strong>Start a task</strong>
+        <span>
+          Describe the work, and an agent takes it on in its own worktree. Its card moves to Needs
+          you whenever the agent wants you.
+        </span>
+        <button type="button" class="task-board-start" onClick={() => toggleNewTaskPanel(true)}>
+          New task <kbd>{mod}+N</kbd>
+        </button>
+      </Show>
+    </div>
+  );
+}
+
 /** Says what hid the tasks, so a project filter left on doesn't read as an empty board. */
 function BoardEmpty() {
   const project = () => store.projects.find((p) => p.id === taskProjectFilter());
   const query = () => boardQuery().trim();
+  const noTasksAtAll = () => !project() && !query();
   const message = () => {
     const where = project() ? ` in ${project()?.name}` : '';
     return query() ? `No tasks${where} match “${query()}”` : `No running tasks${where}`;
   };
   return (
-    <p class="task-board-empty">
-      {message()}
-      <Show when={project()}>
-        <button
-          type="button"
-          class="task-board-act"
-          onClick={() => {
-            setTaskProjectFilter(null);
-            focusBoardFilter();
-          }}
-        >
-          Show all projects
-        </button>
-      </Show>
-    </p>
+    <Show when={!noTasksAtAll()} fallback={<BoardFirstSteps />}>
+      <p class="task-board-empty">
+        {message()}
+        <Show when={project()}>
+          <button
+            type="button"
+            class="task-board-act"
+            onClick={() => {
+              setTaskProjectFilter(null);
+              focusBoardFilter();
+            }}
+          >
+            Show all projects
+          </button>
+        </Show>
+      </p>
+    </Show>
   );
 }
 
@@ -152,6 +188,8 @@ export function TaskBoard() {
   // A reopened board starts unfiltered, as when the filter lived inside it.
   onCleanup(() => setBoardQuery(''));
   useBoardFocus();
+  // Opening the board is what the tip pointing at it asks for.
+  onMount(() => markFeatureHintSeen('board-view'));
   return (
     <section
       class="task-board"
@@ -179,6 +217,16 @@ export function TaskBoard() {
           )}
         </Index>
       </div>
+      <FeatureHint
+        id="board-lanes"
+        when={tasks().length > 0}
+        anchor={() => lanesEl?.querySelector<HTMLElement>('.task-board-lane-title') ?? undefined}
+        title="Tasks sort themselves by what they need"
+      >
+        A card moves on its own: to Needs you when its agent asks something, fails or is ready for
+        review, to Working while it runs, to Stopped when it is idle, and to In pull request once it
+        has one. Click a card to open the task beside the board.
+      </FeatureHint>
     </section>
   );
 }

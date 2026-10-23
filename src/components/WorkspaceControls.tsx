@@ -1,4 +1,5 @@
 import { For, type JSX } from 'solid-js';
+import { isHiddenAgentTaskId } from '../documents/task-id';
 import {
   setWorkspaceView,
   store,
@@ -9,6 +10,7 @@ import {
 } from '../store/store';
 import { mod } from '../lib/platform';
 import { withViewTransition } from '../lib/viewTransition';
+import { FeatureHint } from './FeatureHint';
 import { IconButton } from './IconButton';
 import { UpdateButton } from './UpdateButton';
 
@@ -70,13 +72,24 @@ const VIEWS: { view: WorkspaceView; title: string; icon: () => JSX.Element }[] =
   },
 ];
 
+/** Tiles get crowded from about this many tasks, where the board starts to pay off. */
+const BOARD_HINT_MIN_TASKS = 3;
+
+function visibleTaskCount(): number {
+  return store.taskOrder.filter((id) => !isHiddenAgentTaskId(id)).length;
+}
+
 /** Focus, tiles or board: three views of the same tasks, one pressed at a time. */
 function WorkspaceViewToggle() {
+  let boardButton: HTMLButtonElement | undefined;
   return (
     <div class="workspace-view-toggle" role="group" aria-label="Workspace view">
       <For each={VIEWS}>
         {(item) => (
           <button
+            ref={(el) => {
+              if (item.view === 'board') boardButton = el;
+            }}
             type="button"
             title={item.title}
             aria-label={item.title}
@@ -90,6 +103,18 @@ function WorkspaceViewToggle() {
           </button>
         )}
       </For>
+      <FeatureHint
+        id="board-view"
+        when={workspaceView() !== 'board' && visibleTaskCount() >= BOARD_HINT_MIN_TASKS}
+        anchor={() => boardButton}
+        title="See every task by what it needs"
+        actions={[
+          { label: 'Show board', run: () => withViewTransition(() => setWorkspaceView('board')) },
+        ]}
+      >
+        The board sorts your tasks into lanes: waiting for you, still working, stopped, or in a pull
+        request. Open any task beside it, and switch back here at any time.
+      </FeatureHint>
     </div>
   );
 }

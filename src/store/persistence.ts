@@ -392,6 +392,11 @@ function restoredVerificationRun(
 // Never serialize its initial empty store over a session we have not restored.
 let stateLoaded = false;
 
+/** Whether the saved state was restored, or none existed; false after an unreadable one. */
+export function isStateLoaded(): boolean {
+  return stateLoaded;
+}
+
 export async function saveState(): Promise<void> {
   if (!stateLoaded) return;
 
@@ -682,6 +687,8 @@ export async function loadState(): Promise<void> {
   if (!json) {
     // A new install has no shortcuts to migrate.
     setStore('keybindingMigrationDismissed', true);
+    // New installs start on the board; its empty state shows the first-run steps.
+    setStore('boardView', true);
     await delegationRequest({ action: 'orchestrationSetting', enabled: true });
     stateLoaded = true;
     return;

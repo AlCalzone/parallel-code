@@ -27,6 +27,7 @@ import {
   addQuickEditProject,
   relinkProject,
   removeProject,
+  pickAndAddProject,
   updateProject,
   updateProjectCoordination,
 } from './projects';
@@ -34,6 +35,27 @@ import { openDialog } from '../lib/dialog';
 import type { Task } from './types';
 import { blockEditIn, startBlockEdit } from '../documents/block-edit-state';
 import type { DocumentBlock } from '../documents/markdown-blocks';
+
+describe('pickAndAddProject', () => {
+  afterEach(() => {
+    setStore({ projects: [] });
+    vi.clearAllMocks();
+  });
+
+  it('opens one folder dialog however often it is asked while one is open', async () => {
+    let choose: (path: string | null) => void = () => undefined;
+    vi.mocked(openDialog).mockReturnValueOnce(new Promise((r) => (choose = r)));
+    const first = pickAndAddProject();
+    expect(await pickAndAddProject()).toBeNull();
+    choose(null);
+    expect(await first).toBeNull();
+    expect(openDialog).toHaveBeenCalledTimes(1);
+
+    vi.mocked(openDialog).mockResolvedValueOnce(null);
+    await pickAndAddProject();
+    expect(openDialog).toHaveBeenCalledTimes(2);
+  });
+});
 
 describe('relinkProject document terminals', () => {
   afterEach(() => {

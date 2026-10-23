@@ -271,16 +271,26 @@ export function projectIsGitRepo(projectId: string): boolean {
   return getProject(projectId)?.isGitRepo !== false;
 }
 
+let picking = false;
+
+/** Asks for a folder and links it; null when cancelled, or while the dialog is already open. */
 export async function pickAndAddProject(): Promise<string | null> {
-  const selected = await openDialog({ directory: true, multiple: false });
-  if (!selected) return null;
-  const path = selected as string;
+  // A button, Ctrl+N and a dropped link can all ask at once; one dialog answers them.
+  if (picking) return null;
+  picking = true;
+  try {
+    const selected = await openDialog({ directory: true, multiple: false });
+    if (!selected) return null;
+    const path = selected as string;
 
-  const isGitRepo = await invoke<boolean>(IPC.CheckIsGitRepo, { path });
+    const isGitRepo = await invoke<boolean>(IPC.CheckIsGitRepo, { path });
 
-  const segments = path.split('/');
-  const name = segments[segments.length - 1] || path;
-  return addProject(name, path, isGitRepo);
+    const segments = path.split('/');
+    const name = segments[segments.length - 1] || path;
+    return addProject(name, path, isGitRepo);
+  } finally {
+    picking = false;
+  }
 }
 
 /** Check each project path and record which ones are missing. */
