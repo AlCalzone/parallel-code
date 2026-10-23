@@ -31,9 +31,11 @@ it('stops counting a creation as quick and announces it once a slow one is ready
   await vi.advanceTimersByTimeAsync(500);
   expect(quick()).toBe(false);
   expect(store.notification).toBe('Creating "Slow"…');
+  expect(store.notificationBusy).toBe(true);
   finish('slow');
   await done;
   expect(store.notification).toBe('"Slow" is ready');
+  expect(store.notificationBusy).toBe(false);
 });
 
 function slowJob(name: string): { done: Promise<void>; finish: (taskId: string) => void } {
@@ -77,8 +79,10 @@ it('returns to the creating notice after a failure notice expires', async () => 
     draft: { prefill: { prompt: ' ', projectId: 'project' }, dropUrl: null },
   });
   expect(store.notification).toContain('No worktree');
+  expect(store.notificationBusy).toBe(false);
   await vi.advanceTimersByTimeAsync(10_000);
   expect(store.notification).toBe('Creating "Pending"…');
+  expect(store.notificationBusy).toBe(true);
   pending.finish('pending');
   await pending.done;
 });
@@ -145,10 +149,12 @@ it('brings a dismissed creating notice back with the next queue change', async (
   await vi.advanceTimersByTimeAsync(500);
   clearNotification();
   expect(store.notification).toBeNull();
+  expect(store.notificationBusy).toBe(false);
   first.finish('first');
   await first.done;
   await vi.advanceTimersByTimeAsync(3000);
   expect(store.notification).toBe('Creating "Second"…');
+  expect(store.notificationBusy).toBe(true);
   second.finish('second');
   await second.done;
 });

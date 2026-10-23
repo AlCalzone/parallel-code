@@ -1065,8 +1065,14 @@ function App() {
               'z-index': 'var(--z-overlay)',
               'box-shadow': '0 4px 24px rgba(0,0,0,0.4)',
               cursor: 'pointer',
+              display: 'flex',
+              'align-items': 'center',
+              gap: '8px',
             }}
           >
+            <Show when={store.notificationBusy}>
+              <span class="inline-spinner" aria-hidden="true" />
+            </Show>
             {store.notification}
           </div>
         </Show>

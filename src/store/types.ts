@@ -628,6 +628,8 @@ export interface AppStore {
   showSettingsDialog: boolean;
   pendingAction: PendingAction | null;
   notification: string | null;
+  /** The notice describes ongoing work (see showProgressNotification). */
+  notificationBusy: boolean;
   completedTaskDate: string;
   completedTaskCount: number;
   countedMergedPrs: string[];
