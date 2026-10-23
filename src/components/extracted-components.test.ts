@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { presetsForTone } from '../lib/look';
 import { setStore } from '../store/core';
 import { CheckboxOption, InlineBanner } from './NewTaskPanel';
-import { PresetThemeCard, SettingsCheckboxRow } from './SettingsDialog';
+import { SettingsCheckboxRow } from './settings/settings-ui';
+import { PresetThemeCard } from './settings/ThemeCards';
 import { TaskRowShell } from './Sidebar';
 
 function renderRowShell(taskId: string): string {
