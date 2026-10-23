@@ -258,8 +258,8 @@
   font-size: 11px;
 }
 .github-issues .github-issue-primary {
-  background: var(--accent);
-  color: var(--bg);
+  color: var(--fg);
+  font-weight: 600;
 }
 .github-issue-triage {
   border: 1px solid var(--border);

@@ -12,13 +12,29 @@ import { CountdownScreen } from './CountdownScreen';
 import { BattleScreen } from './BattleScreen';
 import { ResultsScreen } from './ResultsScreen';
 import { HistoryScreen } from './HistoryScreen';
+import { createFocusRestore } from '../lib/focus-restore';
+import { createFocusTrap } from '../lib/focus-trap';
+import { topDialog } from '../lib/dialog-stack';
 
 interface ArenaOverlayProps {
   onClose: () => void;
 }
 
 export function ArenaOverlay(props: ArenaOverlayProps) {
+  let overlayRef: HTMLDivElement | undefined;
+  // Full-screen, so Tab and screen readers must not wander into the app behind.
+  // Dialogs opened over the arena (commit, diff) portal outside it and trap Tab
+  // themselves; two live traps would fight and stall Tab on their first control.
+  createFocusRestore(() => true);
+  createFocusTrap(
+    () => topDialog() === null,
+    () => overlayRef,
+  );
+
   onMount(() => {
+    requestAnimationFrame(() => {
+      if (overlayRef && !overlayRef.contains(document.activeElement)) overlayRef.focus();
+    });
     void loadArenaPresets();
     void loadArenaHistory();
   });
@@ -28,7 +44,14 @@ export function ArenaOverlay(props: ArenaOverlayProps) {
   }
 
   return (
-    <div class="arena-overlay">
+    <div
+      ref={overlayRef}
+      class="arena-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="AI Arena"
+      tabIndex={-1}
+    >
       <div class="arena-header">
         <div class="arena-title">
           <svg
@@ -46,7 +69,7 @@ export function ArenaOverlay(props: ArenaOverlayProps) {
           </svg>
           AI Arena
         </div>
-        <button class="arena-close-btn" onClick={handleClose}>
+        <button type="button" class="arena-close-btn" onClick={handleClose}>
           Close
         </button>
       </div>

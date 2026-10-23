@@ -9,6 +9,7 @@ import { UnderstandButton, tourButtonStyle } from './understanding/UnderstandBut
 import type { UnderstandingTourController } from '../lib/create-understanding-tour';
 import { isTourFilePath } from '../lib/tour-file';
 import { isEditableDocumentPath } from '../lib/document-path';
+import { focusFirstMenuItem, handleMenuKeyDown } from '../lib/menu-keys';
 import { DocumentIcon } from '../documents/DocumentIcon';
 
 interface CanvasTabStripProps {
@@ -58,6 +59,7 @@ const tabLabel = (tab: CanvasTab): string => {
  *  more, and a cross that closes the whole column. */
 export function CanvasTabStrip(props: CanvasTabStripProps) {
   const [menuOpen, setMenuOpen] = createSignal(false);
+  let addButtonRef: HTMLButtonElement | undefined;
   /** The file behind the open tab, when the open tab is a document. */
   const activePath = (): string | undefined => {
     const tab = props.tabs.find((candidate) => canvasTabKey(candidate) === props.active);
@@ -239,8 +241,10 @@ export function CanvasTabStrip(props: CanvasTabStripProps) {
         </Show>
         <IconButton
           icon={<PlusIcon size={16} />}
+          ref={(el) => (addButtonRef = el)}
           onClick={() => setMenuOpen((v) => !v)}
           title="Open another canvas"
+          menuOpen={menuOpen()}
         />
         <IconButton
           icon={<CloseIcon size={14} />}
@@ -254,9 +258,18 @@ export function CanvasTabStrip(props: CanvasTabStripProps) {
             style={{ position: 'fixed', inset: '0', 'z-index': 'var(--z-popover)' }}
           />
           <div
+            ref={focusFirstMenuItem}
             role="menu"
             aria-label="Kinds of canvas"
             class="canvas-kind-menu"
+            // The focused item unmounts with the menu; without this, focus
+            // falls to the page and the keyboard user loses their place.
+            onKeyDown={(e) =>
+              handleMenuKeyDown(e, () => {
+                setMenuOpen(false);
+                addButtonRef?.focus();
+              })
+            }
             style={{
               position: 'absolute',
               top: '100%',

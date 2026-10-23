@@ -23,7 +23,12 @@
   flex-direction: column;
   font-family: var(--font-ui);
   color: var(--fg);
-  animation: arena-overlay-enter 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
+  animation: arena-overlay-enter 0.18s cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Focused as a whole on open (ArenaOverlay.tsx); a container, so no ring. */
+.arena-overlay:focus {
+  outline: none;
 }
 
 @keyframes arena-overlay-enter {
@@ -218,7 +223,7 @@
 }
 
 .arena-merge-error {
-  background: var(--error-bg, rgba(239, 68, 68, 0.1));
+  background: color-mix(in srgb, var(--error) 10%, transparent);
   border: 1px solid var(--error, #ef4444);
   border-radius: var(--radius-md);
   color: var(--error, #ef4444);

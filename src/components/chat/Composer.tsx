@@ -113,10 +113,24 @@ export function Composer(props: ComposerProps) {
   // A terminal shows the `!` as its prompt, so the field holds only the command after it.
   const shellPrefix = () => (c.shellMode() ? props.draft.indexOf('!') + 1 : 0);
   const shown = () => props.draft.slice(shellPrefix());
-  const placeholder = () =>
-    c.shellMode()
-      ? 'Command to run in this worktree… Backspace to leave'
-      : `${working() ? 'Add a follow-up' : `Message ${props.agentName}`}… Shift+Enter for a new line${props.onListFiles ? ', @ for files' : ''}${props.state.commands?.length ? (props.state.commands.some((command) => command.prefix === '$') ? ', $ for skills' : ', / for commands') : ''}${c.canRunShell() ? ', ! for a shell command' : ''}`;
+  // Terse: task columns are narrow, and a cut-off hint reads as a glitch.
+  // Shift+Enter for a new line is the chat convention, so it goes unsaid.
+  const placeholderHints = () =>
+    [
+      props.onListFiles ? '@ files' : '',
+      props.state.commands?.length
+        ? props.state.commands.some((command) => command.prefix === '$')
+          ? '$ skills'
+          : '/ commands'
+        : '',
+      c.canRunShell() ? '! shell' : '',
+    ].filter(Boolean);
+  const placeholder = () => {
+    if (c.shellMode()) return 'Command to run in this worktree… Backspace to leave';
+    const lead = working() ? 'Add a follow-up' : `Message ${props.agentName}`;
+    const hints = placeholderHints();
+    return hints.length ? `${lead}… ${hints.join(' · ')}` : `${lead}…`;
+  };
   const sendLabel = () =>
     c.shellMode()
       ? working()

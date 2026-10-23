@@ -1086,34 +1086,38 @@ function App() {
         <Show when={isMac && closeHandlerReady()}>
           <HoldToQuit />
         </Show>
-        <Show when={store.notification}>
-          <div
-            onClick={() => clearNotification()}
-            style={{
-              position: 'fixed',
-              bottom: '24px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              background: theme.islandBg,
-              border: `1px solid ${theme.border}`,
-              'border-radius': 'var(--radius-md)',
-              padding: '10px 20px',
-              color: theme.fg,
-              'font-size': '14px',
-              'z-index': 'var(--z-overlay)',
-              'box-shadow': '0 4px 24px rgba(0,0,0,0.4)',
-              cursor: 'pointer',
-              display: 'flex',
-              'align-items': 'center',
-              gap: '8px',
-            }}
-          >
-            <Show when={store.notificationBusy}>
-              <span class="inline-spinner" aria-hidden="true" />
-            </Show>
-            {store.notification}
-          </div>
-        </Show>
+        {/* The live region stays mounted: screen readers announce changes to
+            an existing region, not a region that appears with its text. */}
+        <div role="status" aria-live="polite">
+          <Show when={store.notification}>
+            <div
+              onClick={() => clearNotification()}
+              style={{
+                position: 'fixed',
+                bottom: '24px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: theme.islandBg,
+                border: `1px solid ${theme.border}`,
+                'border-radius': 'var(--radius-md)',
+                padding: '10px 20px',
+                color: theme.fg,
+                'font-size': '14px',
+                'z-index': 'var(--z-overlay)',
+                'box-shadow': '0 4px 24px rgba(0,0,0,0.4)',
+                cursor: 'pointer',
+                display: 'flex',
+                'align-items': 'center',
+                gap: '8px',
+              }}
+            >
+              <Show when={store.notificationBusy}>
+                <span class="inline-spinner" aria-hidden="true" />
+              </Show>
+              {store.notification}
+            </div>
+          </Show>
+        </div>
       </div>
     </ErrorBoundary>
   );

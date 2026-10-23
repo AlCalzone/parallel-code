@@ -840,7 +840,7 @@ export function Sidebar() {
 
                 <Show when={store.projects.length === 0}>
                   <span style={{ 'font-size': sf(11), color: theme.fgSubtle, padding: '0 2px' }}>
-                    No projects linked yet.
+                    No projects yet.
                   </span>
                 </Show>
               </div>
@@ -850,7 +850,7 @@ export function Sidebar() {
 
         <div style={{ height: '1px', background: theme.border }} />
 
-        {/* New task / Link project button */}
+        {/* New task / Add project button */}
         <Show
           when={codeProjects().length > 0}
           fallback={
@@ -882,7 +882,7 @@ export function Sidebar() {
               >
                 <path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.22.78 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2A1.75 1.75 0 0 0 5 1H1.75Z" />
               </svg>
-              Link Project
+              Add project
             </button>
           }
         >

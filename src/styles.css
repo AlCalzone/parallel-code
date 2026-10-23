@@ -120,6 +120,12 @@ body.font-smoothing {
   outline-offset: 2px;
 }
 
+/* Dialog.tsx focuses the panel itself on open so keys stop reaching the
+   terminal behind it; the panel is a container, not a control, so no ring. */
+.dialog-panel:focus {
+  outline: none;
+}
+
 /* Visually-hidden utility for accessible dialog titles
    (DiffViewerDialog uses this for its programmatic heading). Clip pattern
    keeps the node in the accessibility tree, unlike display:none. */
@@ -2074,9 +2080,9 @@ button {
   font-size: 14px;
 }
 
+/* Routine step: full-strength text ranks it above Back, without an accent fill. */
 .change-tour-nav > .change-tour-next {
-  background: var(--accent);
-  color: var(--accent-text);
+  color: var(--fg);
   font-weight: 600;
 }
 

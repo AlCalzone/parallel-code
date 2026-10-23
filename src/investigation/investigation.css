@@ -85,9 +85,8 @@
   border-bottom: 1px solid var(--border);
 }
 .investigation .investigation-primary {
-  color: var(--accent-text);
-  background: var(--accent);
-  border-color: var(--accent);
+  color: var(--fg);
+  font-weight: 600;
 }
 .investigation-divider {
   width: 1px;
