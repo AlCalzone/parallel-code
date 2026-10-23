@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import type { CardTaskState } from './KanbanCard';
+import type { CardTaskState } from './board/task-state';
 
 /** How long a card stays in Working after its agent goes quiet. */
 export const WORKING_HOLD_MS = 2_000;

@@ -8,12 +8,13 @@ import {
   setTaskFocusedPanel,
   unregisterFocusFn,
 } from '../store/store';
-import { useKanbanClock } from './KanbanCard';
+import { BoardLane, BoardRail } from './board/BoardLane';
+import { useBoardClock } from './board/task-state';
 import { TaskBoardCard } from './TaskBoardCard';
 import { forgetWorkingHolds } from './task-board-hold';
 import { boardQuery, setBoardQuery } from './TaskBoardControls';
 import { useCardMotion } from './task-board-motion';
-import { boardLanes, boardTasks, type BoardLane } from './task-board-lanes';
+import { boardLanes, boardTasks, type BoardLane as LaneData } from './task-board-lanes';
 import {
   BOARD_KEY_MOVES,
   boardHasFocus,
@@ -25,44 +26,41 @@ import {
 } from './task-board-keys';
 import './task-board.css';
 
-function Lane(props: { lane: BoardLane }) {
+function Lane(props: { lane: LaneData }) {
   const headingId = () => `task-board-lane-${props.lane.id}`;
   return (
-    <section class={`task-board-lane lane-${props.lane.id}`} aria-labelledby={headingId()}>
-      <h3 id={headingId()} class="task-board-lane-title">
-        {props.lane.title}
-        <span class="task-board-count">{props.lane.tasks.length}</span>
-      </h3>
-      <ol class="task-board-cards">
-        <For each={props.lane.tasks}>
-          {(task) => <TaskBoardCard task={task} lane={props.lane.id} />}
-        </For>
-      </ol>
-    </section>
+    <BoardLane
+      class={`lane-${props.lane.id}`}
+      aria-labelledby={headingId()}
+      headingId={headingId()}
+      title={props.lane.title}
+      count={props.lane.tasks.length}
+    >
+      <For each={props.lane.tasks}>
+        {(task) => <TaskBoardCard task={task} lane={props.lane.id} />}
+      </For>
+    </BoardLane>
   );
 }
 
 /** Snoozed and minimized work stays out of the way: a narrow rail until asked for. */
-function SnoozedLane(props: { lane: BoardLane }) {
+function SnoozedLane(props: { lane: LaneData }) {
   const [open, setOpen] = createSignal(false);
   return (
     <Show
       when={open()}
       fallback={
-        <button
-          type="button"
-          class="task-board-rail"
+        <BoardRail
           title="Show snoozed and minimized tasks"
+          label={props.lane.title}
+          count={props.lane.tasks.length}
           onClick={(e) => {
             const lanes = e.currentTarget.parentElement;
             setOpen(true);
             // The rail is gone; keep the keyboard on what it opened.
             lanes?.querySelector<HTMLElement>('.lane-snoozed .task-board-title')?.focus();
           }}
-        >
-          <span class="task-board-rail-title">{props.lane.title}</span>
-          <span class="task-board-count">{props.lane.tasks.length}</span>
-        </button>
+        />
       }
     >
       <Lane lane={props.lane} />
@@ -111,7 +109,7 @@ function useBoardFocus(): void {
   });
 }
 
-/** The workspace's board view: every open task, in lanes by what it needs. */
+/** The workspace's board view: running tasks, not planned work, in lanes by what they need. */
 export function TaskBoard() {
   const tasks = createMemo(() => boardTasks(boardQuery()));
   const lanes = createMemo(() => boardLanes(tasks()));
@@ -120,7 +118,7 @@ export function TaskBoard() {
     () => lanesEl,
     () => lanes(),
   );
-  onCleanup(useKanbanClock());
+  onCleanup(useBoardClock());
   onCleanup(forgetWorkingHolds);
   // A reopened board starts unfiltered, as when the filter lived inside it.
   onCleanup(() => setBoardQuery(''));
@@ -134,12 +132,12 @@ export function TaskBoard() {
     >
       {/* The filter and actions sit in the title bar; see TaskBoardControls. */}
       <h2 id="task-board-title" class="dialog-sr-only">
-        All tasks
+        Running tasks
       </h2>
       <div class="task-board-lanes" ref={lanesEl}>
         <Show when={tasks().length === 0}>
           <p class="task-board-empty">
-            {boardQuery().trim() ? `No tasks match “${boardQuery().trim()}”` : 'No open tasks'}
+            {boardQuery().trim() ? `No tasks match “${boardQuery().trim()}”` : 'No running tasks'}
           </p>
         </Show>
         {/* Index, not For: lanes are rebuilt on every change but keep their place,

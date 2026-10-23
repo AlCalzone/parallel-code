@@ -140,6 +140,9 @@ function removeTaskDraftEntries(
     s.activeTaskId = neighborId;
     const neighborTask = neighborId ? s.tasks[neighborId] : null;
     s.activeAgentId = neighborTask ? activeAgentForTask(neighborTask) : null;
+    // The board's side panel was opened for this task; with it gone, the panel
+    // would show an empty workspace or an unrelated neighbour.
+    s.boardPeek = false;
   }
 
   for (const agentId of agentIds) {

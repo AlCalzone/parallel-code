@@ -5,7 +5,7 @@ import { getProject } from '../store/projects';
 import { matchesTaskProjectFilter } from '../store/task-project-filter';
 import { getTaskOpenQuestion } from '../store/taskStatus';
 import type { Task } from '../store/types';
-import { cardTaskState, type CardTaskState } from './KanbanCard';
+import { cardTaskState, type CardTaskState } from './board/task-state';
 import { holdWorking } from './task-board-hold';
 
 export type BoardLaneId = 'needs' | 'working' | 'stopped' | 'pr' | 'snoozed';

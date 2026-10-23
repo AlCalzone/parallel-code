@@ -10,7 +10,7 @@ export interface CardMotionPlan {
   removed: string[];
 }
 
-/** Compares two layouts of cards, keyed by task id. Sub-pixel shifts don't count as moves. */
+/** Compares two layouts of cards, keyed by card id. Sub-pixel shifts don't count as moves. */
 export function planCardMotion(
   before: ReadonlyMap<string, Point>,
   after: ReadonlyMap<string, Point>,
@@ -38,8 +38,8 @@ type Card = { el: HTMLElement; rect: DOMRect };
 
 function measureCards(container: HTMLElement): Map<string, Card> {
   const cards = new Map<string, Card>();
-  for (const el of container.querySelectorAll<HTMLElement>('[data-board-task-id]')) {
-    const id = el.dataset.boardTaskId;
+  for (const el of container.querySelectorAll<HTMLElement>('[data-board-card]')) {
+    const id = el.dataset.boardCard;
     if (id) cards.set(id, { el, rect: el.getBoundingClientRect() });
   }
   return cards;
@@ -52,7 +52,8 @@ const toPoints = (cards: Map<string, Card>): Map<string, Point> =>
 function fadeOutGhost(container: HTMLElement, card: Card): void {
   const box = container.getBoundingClientRect();
   const ghost = card.el;
-  // No longer the task's card: keyboard and card lookups must not find it.
+  // No longer a card: keyboard and card lookups must not find it.
+  delete ghost.dataset.boardCard;
   delete ghost.dataset.boardTaskId;
   ghost.setAttribute('aria-hidden', 'true');
   ghost.inert = true;
@@ -105,7 +106,7 @@ export function useCardMotion(container: () => HTMLElement | undefined, layout: 
         before = undefined;
         if (!root || !was || typeof root.animate !== 'function') return;
         // A card still gliding from the last change is measured where it will end.
-        for (const el of root.querySelectorAll<HTMLElement>('[data-board-task-id]')) {
+        for (const el of root.querySelectorAll<HTMLElement>('[data-board-card]')) {
           moving.get(el)?.cancel();
         }
         const after = measureCards(root);

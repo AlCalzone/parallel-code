@@ -149,15 +149,27 @@ export function ListIcon(props: IconProps): JSX.Element {
   );
 }
 
-export function KanbanIcon(props: IconProps): JSX.Element {
+/** A project's plan: a checklist, unlike the lanes of the running-tasks board. */
+export function PlanIcon(props: IconProps): JSX.Element {
   return (
     <SvgIcon {...props}>
       <path
-        d="M2.75 2.75h2.5v10.5h-2.5zM6.75 2.75h2.5v6.5h-2.5zM10.75 2.75h2.5v8.5h-2.5z"
+        d="M2.5 4l1.25 1.25L6 3M2.5 8.25l1.25 1.25L6 7.25M8.5 4.25h5M8.5 8.5h5M8.5 12.25h5"
         fill="none"
         stroke="currentColor"
         stroke-width="1.5"
+        stroke-linecap="round"
         stroke-linejoin="round"
+      />
+      <rect
+        x="2.75"
+        y="11"
+        width="2.75"
+        height="2.75"
+        rx="0.5"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.25"
       />
     </SvgIcon>
   );

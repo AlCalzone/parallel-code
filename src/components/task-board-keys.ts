@@ -112,7 +112,7 @@ export function focusedBoardItem(): HTMLElement | undefined {
   const active = document.activeElement;
   if (!(active instanceof HTMLElement) || !boardHasFocus()) return undefined;
   if (active.matches('.task-board-rail')) return active;
-  return active.closest('[data-board-task-id]')?.querySelector<HTMLElement>(CARD) ?? undefined;
+  return active.closest('[data-board-card]')?.querySelector<HTMLElement>(CARD) ?? undefined;
 }
 
 /**
