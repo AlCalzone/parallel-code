@@ -479,10 +479,15 @@ html[data-look^='islands-'] .task-board {
   background: color-mix(in srgb, var(--fg) 11%, transparent);
   color: var(--fg);
 }
-/* Outranks the chip hover, so a babysat PR keeps its pressed look. */
+/* Outranks the chip hover, so a babysat PR keeps its pressed look. An accent tint and
+   inset ring (no layout change) set it apart from the neutral chips beside it. */
 .task-board-chip.task-pr-babysit[aria-pressed='true'] {
-  background: var(--bg-selected);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
   color: var(--accent);
+}
+.task-board-chip.task-pr-babysit[aria-pressed='true']:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 .task-board-chip.failure:hover {
   color: var(--error);
