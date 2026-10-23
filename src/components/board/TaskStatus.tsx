@@ -1,8 +1,8 @@
-import { batch } from 'solid-js';
+import { Match, Switch, batch } from 'solid-js';
 import { IPC } from '../../../electron/ipc/channels';
 import { invoke } from '../../lib/ipc';
 import { withViewTransition } from '../../lib/viewTransition';
-import { getPrChecks } from '../../store/pr-checks-state';
+import { getPrChecks, prBoardStatus } from '../../store/pr-checks-state';
 import { store } from '../../store/core';
 import {
   boardSidePanelOpen,
@@ -11,6 +11,7 @@ import {
 } from '../../store/project-pages';
 import { getTaskAttentionState, getTaskDotStatus } from '../../store/taskStatus';
 import type { Task } from '../../store/types';
+import { CheckIcon, GitMergeIcon } from '../icons';
 import { StatusDot } from '../StatusDot';
 import { openTask, type CardTaskState } from './task-state';
 
@@ -19,12 +20,6 @@ export const ASK_ACTION: Partial<Record<CardTaskState, string>> = {
   needs_input: 'Answer',
   error: 'Show error',
   review: 'Review',
-};
-
-const CHECK_LABELS: Record<string, string> = {
-  success: 'Checks pass',
-  failure: 'Checks fail',
-  pending: 'Checks running',
 };
 
 function prNumber(url: string): string {
@@ -62,20 +57,32 @@ export function TaskGlyph(props: { taskId: string }) {
 
 /** The task's pull request and how its checks are doing. */
 export function TaskPr(props: { taskId: string; url: string }) {
-  const checks = () => getPrChecks(props.taskId)?.overall;
-  const label = () => CHECK_LABELS[checks() ?? ''] ?? '';
+  const status = () => prBoardStatus(getPrChecks(props.taskId));
+  const kind = () => status()?.kind;
   return (
     <div class="task-board-row">
       <button
         type="button"
-        class="task-board-chip"
-        classList={{ failure: checks() === 'failure' }}
+        class="task-board-chip task-board-pr"
+        classList={{
+          failure: kind() === 'failed',
+          ready: kind() === 'ready',
+          merged: kind() === 'merged',
+        }}
         title="Open pull request"
         onClick={() => void invoke(IPC.ShellOpenExternal, { url: props.url })}
       >
+        <Switch>
+          <Match when={kind() === 'ready'}>
+            <CheckIcon size={11} />
+          </Match>
+          <Match when={kind() === 'merged'}>
+            <GitMergeIcon size={11} />
+          </Match>
+        </Switch>
         PR #{prNumber(props.url)}
       </button>
-      <span classList={{ 'task-board-fail': checks() === 'failure' }}>{label()}</span>
+      <span class={`task-board-pr-status ${kind() ?? ''}`}>{status()?.label ?? ''}</span>
     </div>
   );
 }

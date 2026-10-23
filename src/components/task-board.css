@@ -390,7 +390,25 @@ html[data-look^='islands-'] .task-board {
   color: var(--fg-muted);
   white-space: nowrap;
 }
-.task-board-fail {
+/* The PR's merge state sits on its badge. Failure is urgent and keeps its tint;
+   ready and merged are states to read at a glance, so they get colour, no fill. */
+.task-board-pr {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.task-board-pr.ready,
+.task-board-pr.ready:hover {
+  color: var(--success);
+  font-weight: 600;
+}
+.task-board-pr.merged,
+.task-board-pr.merged:hover {
+  /* GitHub's merged purple, as on the task's PR chip. */
+  color: #8957e5;
+  font-weight: 600;
+}
+.task-board-pr-status.failed {
   color: var(--error);
   font-weight: 600;
 }

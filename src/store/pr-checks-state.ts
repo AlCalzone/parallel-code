@@ -119,3 +119,39 @@ export function getCiGlyphState(taskId: string): CiGlyphState | undefined {
     progress: total > 0 ? (done / total) * 100 : 0,
   };
 }
+
+/** CI is green and nothing the PR state knows of blocks a merge. Branch
+ *  protection beyond review and conflicts is left to GitHub at merge time. */
+export function isPrReadyToMerge(c: PrChecksState | undefined): boolean {
+  return (
+    !!c &&
+    c.overall === 'success' &&
+    !c.merged &&
+    !c.isDraft &&
+    c.mergeable !== 'CONFLICTING' &&
+    c.reviewDecision !== 'CHANGES_REQUESTED' &&
+    c.reviewDecision !== 'REVIEW_REQUIRED'
+  );
+}
+
+export type PrBoardStatusKind = 'merged' | 'ready' | 'blocked' | 'running' | 'failed';
+
+/** What a board card says about its task's PR, most decisive state first. */
+export function prBoardStatus(
+  c: PrChecksState | undefined,
+): { kind: PrBoardStatusKind; label: string } | null {
+  if (!c) return null;
+  if (c.merged) return { kind: 'merged', label: 'Merged' };
+  if (isPrReadyToMerge(c)) return { kind: 'ready', label: 'Ready to merge' };
+  if (c.overall === 'failure') return { kind: 'failed', label: 'CI failed' };
+  if (c.overall === 'pending') return { kind: 'running', label: 'CI running' };
+  // Green CI held back by the PR itself: name what still stands in the way.
+  if (c.overall === 'success') {
+    if (c.mergeable === 'CONFLICTING') return { kind: 'blocked', label: 'CI passed · Conflicts' };
+    if (c.isDraft) return { kind: 'blocked', label: 'CI passed · Draft' };
+    if (c.reviewDecision === 'CHANGES_REQUESTED')
+      return { kind: 'blocked', label: 'CI passed · Changes requested' };
+    return { kind: 'blocked', label: 'CI passed · Review needed' };
+  }
+  return null;
+}

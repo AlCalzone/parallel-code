@@ -20,7 +20,7 @@ import { projectInitials } from '../lib/project-initials';
 import type { Task } from '../store/types';
 import { GitMergeIcon, ToolsIcon } from './icons';
 import { PrChip } from './PrChip';
-import { extraPrWatchId, getTaskExtraPrs } from '../store/pr-checks-state';
+import { extraPrWatchId, getTaskExtraPrs, isPrReadyToMerge } from '../store/pr-checks-state';
 
 const infoBarBtnStyle: JSX.CSSProperties = {
   'align-self': 'stretch',
@@ -208,22 +208,10 @@ export function TaskBranchInfoBar(props: TaskBranchInfoBarProps) {
       <Show when={prLinkUrl()}>
         {(url) => {
           const pr = () => getPrChecks(props.task.id);
-          const hasConflicts = () => pr()?.mergeable === 'CONFLICTING';
           const ciFailed = () => pr()?.overall === 'failure' && !pr()?.merged;
           // Hide Merge when the PR state already rules a merge out; the finish dialog
           // still decides the route (GitHub or local) and any remaining protection.
-          const readyToMerge = () => {
-            const c = pr();
-            return (
-              !!c &&
-              c.overall === 'success' &&
-              !c.merged &&
-              !c.isDraft &&
-              !hasConflicts() &&
-              c.reviewDecision !== 'CHANGES_REQUESTED' &&
-              c.reviewDecision !== 'REVIEW_REQUIRED'
-            );
-          };
+          const readyToMerge = () => isPrReadyToMerge(pr());
           return (
             <>
               <PrChip
