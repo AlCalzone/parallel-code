@@ -1,6 +1,7 @@
 import { onMount, onCleanup, createSignal, createEffect, untrack, Show, For } from 'solid-js';
 import { Terminal } from '@xterm/xterm';
 import { TERMINAL_SCROLL_OPTIONS, base64ToUint8Array } from '../lib/terminalConstants';
+import { createFling } from './fling';
 import { createTerminalHttpLinkHandler } from '../lib/terminalLinks';
 import { PARALLEL_CODE_TERMINAL_THEME } from '../lib/parallelCodeTerminalTheme';
 import { fetchNotes, saveNotes, ApiError } from './api';
@@ -17,6 +18,7 @@ import {
   unsubscribeAgent,
   onOutput,
   onScrollback,
+  onTerminalSize,
   scrollAgent,
   sendInput,
   agents,
@@ -216,6 +218,12 @@ export function AgentDetail(props: AgentDetailProps) {
     const cleanupOutput = onOutput(props.agentId, (data) =>
       term?.write(base64ToUint8Array(data), updateOutput),
     );
+    // Follow the PTY's width, or the agent's later lines wrap at the wrong column.
+    // xterm parses queued output before resizing, so earlier lines keep their width.
+    const cleanupSize = onTerminalSize(props.agentId, (cols, rows) => {
+      term?.resize(cols, rows);
+      fitTerminal();
+    });
     subscribeAgent(props.agentId);
     const observer = new ResizeObserver(fitTerminal);
     if (outputArea) observer.observe(outputArea);
@@ -262,8 +270,11 @@ export function AgentDetail(props: AgentDetailProps) {
       }
       updateTerminalBottom();
     };
+    // Coasts over the cell where the swipe left off.
+    const fling = createFling((dx, dy) => scrollTerminal(dx, dy, touchX, touchY));
     const touchStart = (e: TouchEvent) => {
       e.stopPropagation();
+      fling.stop();
       historyPixels = 0;
       touchId = undefined;
       touchAxis = undefined;
@@ -278,6 +289,7 @@ export function AgentDetail(props: AgentDetailProps) {
       // Let the browser handle pinch zoom.
       if (e.touches.length !== 1) {
         touchId = undefined;
+        fling.stop();
         return;
       }
       const touch = e.touches[0];
@@ -291,20 +303,25 @@ export function AgentDetail(props: AgentDetailProps) {
       // Touch-down jitter is not a direction: keep the start point until the swipe has one.
       if (!touchAxis && Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
       touchAxis ??= Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
-      if (touchAxis === 'x') scrollTerminal(dx, 0, touch.clientX, touch.clientY);
-      else scrollTerminal(0, dy, touch.clientX, touch.clientY);
+      const [moveX, moveY] = touchAxis === 'x' ? [dx, 0] : [0, dy];
+      scrollTerminal(moveX, moveY, touch.clientX, touch.clientY);
+      fling.track(moveX, moveY);
       touchX = touch.clientX;
       touchY = touch.clientY;
     };
     const touchEnd = (e: TouchEvent) => {
       e.stopPropagation();
+      const lifted = touchId !== undefined && e.type === 'touchend' && e.touches.length === 0;
       touchId = undefined;
       historyPixels = 0;
+      if (lifted) fling.release();
+      else fling.stop();
     };
     const wheel = (e: WheelEvent) => {
       e.stopPropagation();
       if (e.ctrlKey) return; // Preserve browser pinch-to-zoom.
       e.preventDefault();
+      fling.stop();
       const scale =
         e.deltaMode === WheelEvent.DOM_DELTA_LINE
           ? terminalLineHeight
@@ -320,6 +337,7 @@ export function AgentDetail(props: AgentDetailProps) {
     terminalScroller.addEventListener('wheel', wheel, { passive: false, capture: true });
     onCleanup(() => {
       disposed = true;
+      fling.stop();
       cancelAnimationFrame(renderFrame);
       cancelAnimationFrame(terminalFrame);
       observer.disconnect();
@@ -331,6 +349,7 @@ export function AgentDetail(props: AgentDetailProps) {
       unsubscribeAgent(props.agentId);
       cleanupScrollback();
       cleanupOutput();
+      cleanupSize();
       scrollListener.dispose();
       parsedListener.dispose();
       term?.dispose();

@@ -12,6 +12,7 @@ const terminalMocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   options: { fontSize: 14 },
   scrollback: undefined as ((data: string, cols: number, rows: number) => void) | undefined,
+  terminalSize: undefined as ((cols: number, rows: number) => void) | undefined,
   bufferType: 'normal' as 'normal' | 'alternate',
   element: undefined as HTMLElement | undefined,
 }));
@@ -84,6 +85,10 @@ vi.mock('./ws', () => ({
   onOutput: () => () => {},
   onScrollback: (_id: string, callback: (data: string, cols: number, rows: number) => void) => {
     terminalMocks.scrollback = callback;
+    return () => {};
+  },
+  onTerminalSize: (_id: string, callback: (cols: number, rows: number) => void) => {
+    terminalMocks.terminalSize = callback;
     return () => {};
   },
 }));
@@ -438,6 +443,19 @@ describe('phone terminal viewport', () => {
     await vi.waitFor(() => expect(terminalMocks.refresh).toHaveBeenCalledWith(0, 39));
   });
 
+  it('takes the PTY size when the desktop resizes, so later lines wrap like the desktop', async () => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(360);
+    mount();
+    terminalMocks.scrollback?.('', 120, 40);
+    await vi.waitFor(() => expect(terminalMocks.refresh).toHaveBeenCalledWith(0, 39));
+    const wideFontSize = terminalMocks.options.fontSize;
+    terminalMocks.refresh.mockClear();
+    terminalMocks.terminalSize?.(60, 30);
+    await vi.waitFor(() => expect(terminalMocks.refresh).toHaveBeenCalledWith(0, 29));
+    // Half the columns fit the same width at a larger font.
+    expect(terminalMocks.options.fontSize).toBeGreaterThan(wideFontSize);
+  });
+
   it('fits a tall grid to the pane height so vertical swipes go straight to history', async () => {
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(360);
     vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600);
@@ -775,6 +793,49 @@ describe('phone terminal viewport', () => {
     touch(scroller, 'touchmove', 95, 160);
     expect(scroller.scrollLeft).toBe(0);
     expect(terminalMocks.scrollLines).toHaveBeenCalled();
+  });
+
+  it('coasts after a flick, like native scrolling, until the next touch', () => {
+    vi.useFakeTimers();
+    try {
+      mount();
+      const { scroller } = viewport(300);
+      touch(scroller, 'touchstart', 100, 300);
+      vi.advanceTimersByTime(16);
+      touch(scroller, 'touchmove', 100, 240);
+      vi.advanceTimersByTime(16);
+      touch(scroller, 'touchmove', 100, 180);
+      touch(scroller, 'touchend', 0, 0, 0);
+      terminalMocks.scrollLines.mockClear();
+      vi.advanceTimersByTime(100);
+      // The finger moved up, so history keeps moving toward the latest lines.
+      expect(terminalMocks.scrollLines).toHaveBeenCalled();
+      expect(terminalMocks.scrollLines.mock.calls.every(([lines]) => lines > 0)).toBe(true);
+      touch(scroller, 'touchstart', 100, 100);
+      terminalMocks.scrollLines.mockClear();
+      vi.advanceTimersByTime(500);
+      expect(terminalMocks.scrollLines).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops where the finger rested before lifting', () => {
+    vi.useFakeTimers();
+    try {
+      mount();
+      const { scroller } = viewport(300);
+      touch(scroller, 'touchstart', 100, 300);
+      vi.advanceTimersByTime(16);
+      touch(scroller, 'touchmove', 100, 180);
+      vi.advanceTimersByTime(300);
+      touch(scroller, 'touchend', 0, 0, 0);
+      terminalMocks.scrollLines.mockClear();
+      vi.advanceTimersByTime(500);
+      expect(terminalMocks.scrollLines).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('scrolls history from the empty pane below a fitted terminal without typing into the agent', () => {

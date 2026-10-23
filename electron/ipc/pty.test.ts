@@ -2285,7 +2285,7 @@ describe('subscribeToAgentRendered', () => {
     const subscriber = subscribeToAgentRendered(
       'agent-rendered',
       (snapshot) => events.push(`snapshot:${decode(snapshot?.data ?? '')}`),
-      (encoded) => events.push(`output:${decode(encoded)}`),
+      { onOutput: (encoded) => events.push(`output:${decode(encoded)}`), onResize: vi.fn() },
     );
     expect(subscriber).not.toBeNull();
     proc.emitData('\r\nlater');
@@ -2298,18 +2298,54 @@ describe('subscribeToAgentRendered', () => {
     expect(events[1]).toBe('output:\r\nlater');
   });
 
+  it('reports a resize after the output written at the old size', async () => {
+    const proc = await launch('agent-rendered-resize');
+    const events: string[] = [];
+    subscribeToAgentRendered(
+      'agent-rendered-resize',
+      (snapshot) => events.push(`snapshot:${snapshot?.cols}x${snapshot?.rows}`),
+      {
+        onOutput: (encoded) => events.push(`output:${decode(encoded)}`),
+        onResize: (cols, rows) => events.push(`resize:${cols}x${rows}`),
+      },
+    );
+    await vi.waitFor(() => expect(events).toEqual(['snapshot:120x40']));
+    // Still batched when the resize lands: it must reach the phone first.
+    proc.emitData('wide');
+    resizeAgent('agent-rendered-resize', 60, 20);
+    expect(events).toEqual(['snapshot:120x40', 'output:wide', 'resize:60x20']);
+  });
+
+  it('labels the snapshot with the size it was rendered at, then reports a resize', async () => {
+    const proc = await launch('agent-rendered-early-resize');
+    proc.emitData('x'.repeat(100));
+    const events: string[] = [];
+    subscribeToAgentRendered(
+      'agent-rendered-early-resize',
+      (snapshot) => events.push(`snapshot:${snapshot?.cols}x${snapshot?.rows}`),
+      {
+        onOutput: vi.fn(),
+        onResize: (cols, rows) => events.push(`resize:${cols}x${rows}`),
+      },
+    );
+    // Lands while the snapshot is serializing: the snapshot still renders at the old size.
+    resizeAgent('agent-rendered-early-resize', 60, 20);
+    await vi.waitFor(() => expect(events).toEqual(['snapshot:120x40', 'resize:60x20']));
+  });
+
   it('returns null for an unknown agent', () => {
-    expect(subscribeToAgentRendered('missing', vi.fn(), vi.fn())).toBeNull();
+    expect(
+      subscribeToAgentRendered('missing', vi.fn(), { onOutput: vi.fn(), onResize: vi.fn() }),
+    ).toBeNull();
   });
 
   it('keeps long history in running mirrors only while phones can connect', async () => {
     const snapshotOf = async (agentId: string) => {
       let data: string | null = null;
-      subscribeToAgentRendered(
-        agentId,
-        (snapshot) => (data = decode(snapshot?.data ?? '')),
-        vi.fn(),
-      );
+      subscribeToAgentRendered(agentId, (snapshot) => (data = decode(snapshot?.data ?? '')), {
+        onOutput: vi.fn(),
+        onResize: vi.fn(),
+      });
       await vi.waitFor(() => expect(data).not.toBeNull());
       return data ?? '';
     };
