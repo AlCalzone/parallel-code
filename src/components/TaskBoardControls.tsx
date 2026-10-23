@@ -8,7 +8,7 @@ import { toggleNewTaskPanel } from '../store/store';
 import { taskProjectFilter } from '../store/task-project-filter';
 import { PlanIcon } from './icons';
 import { TaskProjectFilter } from './TaskProjectFilter';
-import { claimBoardFocus, focusBoardCard } from './task-board-keys';
+import { claimBoardFocus, focusBoardCard, releaseBoardFocus } from './task-board-keys';
 import './task-board.css';
 
 // Shared with the board below: the controls live in the title bar, the cards don't.
@@ -55,6 +55,7 @@ export function TaskBoardControls() {
         role="group"
         aria-label="Board controls"
         onFocusIn={claimBoardFocus}
+        onFocusOut={releaseBoardFocus}
         onDblClick={(event) => event.stopPropagation()}
       >
         <Show

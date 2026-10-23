@@ -40,6 +40,7 @@ export const [store, setStore] = createStore<AppStore>({
   sidebarFocusedProjectId: null,
   sidebarFocusedTaskId: null,
   placeholderFocused: false,
+  boardFocused: false,
   placeholderFocusedButton: 'add-task',
   showHelpDialog: false,
   showSettingsDialog: false,

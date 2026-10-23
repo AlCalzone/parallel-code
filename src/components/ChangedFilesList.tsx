@@ -54,6 +54,10 @@ interface ChangedFilesListProps {
   onCoverageComparisonChange?: (comparison: CoverageComparison | null) => void;
   /** Reports the number of listed files whenever the list refreshes. */
   onFileCountChange?: (count: number) => void;
+  /** Reports added/removed line totals whenever the list refreshes. */
+  onTotalsChange?: (totals: { added: number; removed: number }) => void;
+  /** Drop the +/- totals from the footer when the owner shows them elsewhere. */
+  hideTotals?: boolean;
   /**
    * Selection mode for the file list:
    * - undefined/null: all changes (committed + uncommitted)
@@ -1013,6 +1017,7 @@ export function ChangedFilesList(props: ChangedFilesListProps) {
 
   const totalAdded = createMemo(() => files().reduce((s, f) => s + f.lines_added, 0));
   const totalRemoved = createMemo(() => files().reduce((s, f) => s + f.lines_removed, 0));
+  createEffect(() => props.onTotalsChange?.({ added: totalAdded(), removed: totalRemoved() }));
 
   return (
     <div
@@ -1051,7 +1056,7 @@ export function ChangedFilesList(props: ChangedFilesListProps) {
                 opacity:
                   !isCommitHashSelection(props.selectedCommit) &&
                   (row().isDir || row().node.file?.committed)
-                    ? '0.45'
+                    ? '0.8'
                     : '1',
                 background:
                   selectedIndex() === i
@@ -1216,7 +1221,13 @@ export function ChangedFilesList(props: ChangedFilesListProps) {
           )}
         </Index>
       </div>
-      <Show when={files().length > 0}>
+      {/* Without totals, a bare "no report" glyph would fill a whole row. */}
+      <Show
+        when={
+          files().length > 0 &&
+          (!props.hideTotals || hasCoverageArtifact() || hasBaseCoverageArtifact())
+        }
+      >
         <div
           style={{
             padding: '4px 8px',
@@ -1325,14 +1336,16 @@ export function ChangedFilesList(props: ChangedFilesListProps) {
                 </Show>
               </div>
             </Show>
-            <div style={{ display: 'flex', 'align-items': 'center', gap: '6px' }}>
-              <span title={`${totalAdded()} added lines`} style={{ color: theme.success }}>
-                +{totalAdded()}
-              </span>
-              <span title={`${totalRemoved()} removed lines`} style={{ color: theme.error }}>
-                -{totalRemoved()}
-              </span>
-            </div>
+            <Show when={!props.hideTotals}>
+              <div style={{ display: 'flex', 'align-items': 'center', gap: '6px' }}>
+                <span title={`${totalAdded()} added lines`} style={{ color: theme.success }}>
+                  +{totalAdded()}
+                </span>
+                <span title={`${totalRemoved()} removed lines`} style={{ color: theme.error }}>
+                  -{totalRemoved()}
+                </span>
+              </div>
+            </Show>
           </div>
         </div>
       </Show>

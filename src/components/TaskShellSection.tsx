@@ -51,6 +51,14 @@ interface TaskShellSectionProps {
   isActive: boolean;
 }
 
+/** Smallest height the shell section can show without clipping its open
+ *  terminals; its cell must never be sized below this. Focus mode's floor is
+ *  `max(200px, 33vh)`, so 200 is the part a pixel floor can promise. */
+export function shellSectionMinHeight(task: Task): number {
+  if (task.shellAgentIds.length === 0 || store.taskSplitMode[task.id]) return 35;
+  return store.focusMode ? 200 : 140;
+}
+
 export function TaskShellSection(props: TaskShellSectionProps) {
   const [shellToolbarIdx, setShellToolbarIdx] = createSignal(0);
   const [shellToolbarFocused, setShellToolbarFocused] = createSignal(false);
@@ -251,7 +259,7 @@ export function TaskShellSection(props: TaskShellSectionProps) {
                     position: 'relative',
                     background: theme.taskPanelBg,
                   }}
-                  onClick={() => setTaskFocusedPanel(props.task.id, shellPanelId(i()))}
+                  onPointerDown={() => setTaskFocusedPanel(props.task.id, shellPanelId(i()))}
                 >
                   <button
                     class="shell-terminal-close"

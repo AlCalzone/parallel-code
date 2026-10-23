@@ -25,6 +25,8 @@ import {
   BOARD_KEY_MOVES,
   boardHasFocus,
   claimBoardFocus,
+  releaseBoardFocus,
+  dropBoardFocus,
   focusBoardCard,
   focusBoardFilter,
   focusedBoardItem,
@@ -163,6 +165,7 @@ function useBoardFocus(): void {
   });
   onCleanup(() => {
     unregisterFocusFn('task-board', focusBoard);
+    dropBoardFocus();
     // Only when the board closed while it had the keyboard (focus falls to
     // body as its DOM goes). Hidden behind a project page, it stays open; a
     // sidebar click or a focus-mode expand has already placed focus.
@@ -196,6 +199,7 @@ export function TaskBoard() {
       aria-labelledby="task-board-title"
       onKeyDown={onBoardKeyDown}
       onFocusIn={claimBoardFocus}
+      onFocusOut={releaseBoardFocus}
     >
       {/* The filter and actions sit in the title bar; see TaskBoardControls. */}
       <h2 id="task-board-title" class="dialog-sr-only">
