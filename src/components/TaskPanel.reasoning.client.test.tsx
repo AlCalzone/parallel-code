@@ -192,7 +192,8 @@ vi.mock('./TaskTitleBar', () => ({
 vi.mock('./TaskBranchInfoBar', () => ({ TaskBranchInfoBar: () => null }));
 vi.mock('./TaskBranchAdoptionBanner', () => ({ TaskBranchAdoptionBanner: () => null }));
 vi.mock('./TaskSuperProductivityBanner', () => ({ TaskSuperProductivityBanner: () => null }));
-vi.mock('./TaskNotesBody', () => ({
+vi.mock('./TaskNotesBody', async (importOriginal) => ({
+  notesMinHeight: (await importOriginal<typeof import('./TaskNotesBody')>()).notesMinHeight,
   TaskNotesBody: (props: ComponentProps<typeof TaskNotesBody>) => (
     <div>
       <textarea class="test-notes" />
@@ -372,7 +373,7 @@ it.each(['reasoning', 'mindmap'] as const)(
       projectId: 'project',
       agentIds: ['agent'],
       shellAgentIds: [],
-      // Saved notes keep the support panel open; empty ones would collapse it.
+      // Exercise the pane with an existing note.
       notes: 'Saved notes',
       gitIsolation: 'none',
       branchName: '',
@@ -654,7 +655,8 @@ it('sizes the focus support column to content until a shell opens, preserving it
     // Oversized pins must scroll inside the column instead of being clipped.
     expect(column.style.maxHeight).toBe('100%');
     expect(column.style.overflow).toBe('auto');
-    expect(notesCell.style.minHeight).toBe('100px');
+    // Focus-mode notes are 240px tall; a shorter cell would clip their bottom edge.
+    expect(notesCell.style.minHeight).toBe('240px');
     setTask('shellAgentIds', ['shell']);
     expect(column.style.height).toBe('100%');
     expect(container.querySelector('.test-notes')).toBe(notes);
@@ -764,65 +766,54 @@ it('starts commit polling only once a tile stays scrolled into view', async () =
   viewport.set('task', 'visible');
 });
 
-it('collapses empty support panels without disposing file watching or terminal state', () => {
+it('keeps empty notes and files mounted as content arrives without replacing the terminal', () => {
   const mounts = fileInventory.mounts;
   const disposals = fileInventory.disposals;
-  const { container } = mountEmptyTask();
+  const { container, setTask } = mountEmptyTask();
   const terminal = expectDefined(container.querySelector('.test-terminal'));
   const prompt = expectDefined(container.querySelector<HTMLTextAreaElement>('.test-prompt'));
-  prompt.value = 'Unsent prompt';
-  const toggle = () =>
-    expectDefined(container.querySelector<HTMLButtonElement>('.task-support-toggle'));
-  expect(toggle().getAttribute('aria-expanded')).toBe('false');
-  expect(container.querySelector('.test-notes')).toBeNull();
-  expect(fileInventory.mounts).toBe(mounts + 1);
-  expect(fileInventory.disposals).toBe(disposals);
-  toggle().click();
   const notes = expectDefined(container.querySelector('.test-notes'));
-  expect(toggle().getAttribute('aria-expanded')).toBe('true');
-  toggle().click();
-  expect(container.querySelector('.test-notes')).toBeNull();
-  fileInventory.report(2);
-  expect(container.querySelector('.test-notes')).toBe(notes);
-  expect(container.querySelector('.test-files')).not.toBeNull();
-  expect(container.querySelector('.task-support-toggle')).toBeNull();
-  expect(container.querySelector('.test-terminal')).toBe(terminal);
-  expect(container.querySelector('.test-prompt')).toBe(prompt);
-  expect(prompt.value).toBe('Unsent prompt');
+  const files = expectDefined(container.querySelector('.test-files'));
+  prompt.value = 'Unsent prompt';
+  for (const text of ['Keep the wording consistent.', '']) {
+    setTask('notes', text);
+    fileInventory.report(text ? 2 : 0);
+    expect(container.querySelector('.test-notes')).toBe(notes);
+    expect(container.querySelector('.test-files')).toBe(files);
+    expect(container.querySelector('.test-terminal')).toBe(terminal);
+    expect(container.querySelector('.test-prompt')).toBe(prompt);
+    expect(prompt.value).toBe('Unsent prompt');
+  }
   expect(fileInventory.mounts).toBe(mounts + 1);
   expect(fileInventory.disposals).toBe(disposals);
 });
 
 it.each(['notes', 'changed-files'])(
-  'reveals compact support when keyboard navigation targets %s',
+  'keeps support panes mounted when keyboard navigation targets %s',
   (panel) => {
     const { container } = mountEmptyTask();
-    expect(container.querySelector('.test-notes')).toBeNull();
+    const notes = expectDefined(container.querySelector('.test-notes'));
+    const files = expectDefined(container.querySelector('.test-files'));
     setTaskFocusedPanel('task', panel);
-    expect(container.querySelector('.test-notes')).not.toBeNull();
-    expect(container.querySelector('.task-support-toggle')?.getAttribute('aria-expanded')).toBe(
-      'true',
-    );
+    expect(container.querySelector('.test-notes')).toBe(notes);
+    expect(container.querySelector('.test-files')).toBe(files);
   },
 );
 
-it('keeps plans and shells visible even with no notes or files', () => {
+it('never sizes the notes row below the notes pane, so its bottom edge stays visible', () => {
   const { container, setTask } = mountEmptyTask();
-  const isCollapsed = () =>
-    container.querySelector('.task-support-toggle')?.getAttribute('aria-expanded') === 'false';
-  expect(isCollapsed()).toBe(true);
-  setTask('planContent', '# Plan');
-  expect(isCollapsed()).toBe(false);
-  expect(container.querySelector('.test-notes')).not.toBeNull();
-  setTask('planContent', undefined);
-  expect(isCollapsed()).toBe(true);
-  setTask('shellAgentIds', ['shell']);
-  expect(isCollapsed()).toBe(false);
-  setTask('shellAgentIds', []);
-  expect(isCollapsed()).toBe(true);
+  const notesRow = () =>
+    expectDefined(
+      container.querySelector<HTMLElement>('.test-notes')?.closest('.rp-cell'),
+    ).parentElement?.closest<HTMLElement>('.rp-cell');
+  expect(notesRow()?.style.minHeight).toBe('100px');
+  const card = { label: 'KEY DECISION', title: 'One idea', body: 'Body text.' };
+  const payload = { subject: 'notes', gist: card, cards: [card], context: 'Context.' };
+  setTask('agentTour', { revision: 1, payload });
+  expect(notesRow()?.style.minHeight).toBe('131px');
 });
 
-it('keeps prompt focus when incoming files reopen the supporting column', async () => {
+it('keeps prompt focus when files arrive in the supporting column', async () => {
   const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1200);
   try {
     toggleFocusMode(true);

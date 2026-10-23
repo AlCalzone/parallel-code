@@ -304,7 +304,9 @@ export function TaskAITerminal(props: TaskAITerminalProps) {
           display: 'flex',
           'flex-direction': 'column',
         }}
-        onClick={() => setTaskFocusedPanel(props.task.id, aiTerminalPanelId(props.selectedAgentId))}
+        onPointerDown={() =>
+          setTaskFocusedPanel(props.task.id, aiTerminalPanelId(props.selectedAgentId))
+        }
       >
         <InfoBar
           allowOverflow
@@ -795,7 +797,7 @@ function AgentTerminalPane(props: {
         'flex-direction': 'column',
         background: theme.taskPanelBg,
       }}
-      onClick={(e) => {
+      onPointerDown={(e) => {
         e.stopPropagation();
         props.onSelect();
       }}

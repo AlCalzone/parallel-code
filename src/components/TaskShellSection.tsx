@@ -251,7 +251,7 @@ export function TaskShellSection(props: TaskShellSectionProps) {
                     position: 'relative',
                     background: theme.taskPanelBg,
                   }}
-                  onClick={() => setTaskFocusedPanel(props.task.id, shellPanelId(i()))}
+                  onPointerDown={() => setTaskFocusedPanel(props.task.id, shellPanelId(i()))}
                 >
                   <button
                     class="shell-terminal-close"

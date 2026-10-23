@@ -51,7 +51,7 @@ import { TaskTitleBar } from './TaskTitleBar';
 import { TaskBranchInfoBar } from './TaskBranchInfoBar';
 import { TaskBranchAdoptionBanner } from './TaskBranchAdoptionBanner';
 import { TaskSuperProductivityBanner } from './TaskSuperProductivityBanner';
-import { TaskNotesBody } from './TaskNotesBody';
+import { TaskNotesBody, notesMinHeight } from './TaskNotesBody';
 import { TaskChangedFilesSection } from './TaskChangedFilesSection';
 import { isCommitHashSelection, type CommitSelection } from './CommitNavBar';
 import { TaskShellSection } from './TaskShellSection';
@@ -399,38 +399,6 @@ export function TaskPanel(props: TaskPanelProps) {
 
   const isGitUnavailable = () => props.task.gitIsolation === 'none' || isLandedTask();
   const [changedFileCount, setChangedFileCount] = createSignal(0);
-  // An empty notes box next to an empty file list still claimed half the
-  // column. Until either has content the strip stays thin and the AI terminal
-  // takes the space; a user drag on the divider pins a size as usual.
-  const topStripEmpty = createMemo(
-    () => !props.task.notes?.trim() && (isGitUnavailable() || changedFileCount() === 0),
-  );
-
-  const [emptySupportExpanded, setEmptySupportExpanded] = createSignal(false);
-  // Hide only genuinely empty support panels. Plans, tours, commit navigation,
-  // and shells are useful content even when the file/notes counts are zero.
-  const canCollapseSupport = createMemo(
-    () =>
-      topStripEmpty() &&
-      !(store.showPlans && props.task.planContent) &&
-      !props.task.agentTour &&
-      props.task.shellAgentIds.length === 0 &&
-      commitList().length === 0 &&
-      selectedCommit() === null &&
-      !tour.loading() &&
-      !tour.error() &&
-      tour.stops().length === 0,
-  );
-  const supportCollapsed = () => canCollapseSupport() && !emptySupportExpanded();
-  createEffect(() => {
-    const panel = store.focusedPanel[props.task.id];
-    if (props.isActive && (panel === 'notes' || panel === 'changed-files')) {
-      // Focus is scheduled after this effect, so shortcuts can still enter a
-      // panel whose DOM was temporarily detached from the compact layout.
-      setEmptySupportExpanded(true);
-    }
-  });
-
   // Two-column layout kicks in once the main column is wide enough, whether
   // the task fills the window in focus mode or is a widened tile.
   // Hysteresis: enter at >=1080, leave at <1030. A single threshold flickers
@@ -442,17 +410,16 @@ export function TaskPanel(props: TaskPanelProps) {
   const [panelWidth, setPanelWidth] = createSignal(0);
   const [useSplit, setUseSplit] = createSignal(false);
   createEffect(() => {
-    const canSplit = !supportCollapsed();
     const w = panelWidth();
     const focused = document.activeElement;
     const ownsFocus = focused instanceof HTMLElement && mainRef?.contains(focused);
     let changed = false;
     setUseSplit((prev) => {
-      const next = canSplit && (prev ? w >= SPLIT_EXIT_WIDTH : w >= SPLIT_ENTER_WIDTH);
+      const next = prev ? w >= SPLIT_EXIT_WIDTH : w >= SPLIT_ENTER_WIDTH;
       changed = next !== prev;
       return next;
     });
-    // New files can reopen the supporting column while a prompt is being typed.
+    // Window resizing can move the supporting column while a prompt is being typed.
     // Reparenting preserves the element but Chromium drops its native focus.
     if (changed && ownsFocus) {
       queueMicrotask(() =>
@@ -728,7 +695,6 @@ export function TaskPanel(props: TaskPanelProps) {
       tour={tour}
       onTourClick={openOrGenerateTour}
       tourDisabled={changedFileCount() === 0}
-      compact={topStripEmpty()}
       onFileCountChange={setChangedFileCount}
       onUnderstandClick={(file) => openFileTour(file.path)}
       understanding={understanding}
@@ -799,7 +765,10 @@ export function TaskPanel(props: TaskPanelProps) {
   const notesChild: PanelChild = {
     id: 'notes',
     resizeLabel: 'Resize notes panel',
-    minSize: 100,
+    // Never shorter than the pane itself, or the cell clips its bottom edge.
+    get minSize() {
+      return notesMinHeight(props.task);
+    },
     maxAutoSize: NOTES_PANEL_AUTO_MAX,
     content: () => notesBodyEl,
   };
@@ -813,15 +782,16 @@ export function TaskPanel(props: TaskPanelProps) {
   };
 
   // Stack-mode row containing notes (absorbs horizontally) and changed files.
-  // The inline floor prevents the nested horizontal panel from collapsing when
-  // the outer flex-first tree asks for content-size; while both halves are
-  // empty it is also the strip's whole height.
+  // Keep the same floor and flex share while typing or receiving files so the
+  // supporting panes stay visible without resizing the terminal underneath.
   const notesAndFilesChild: PanelChild = {
     id: 'notes-files',
-    minSize: 60,
+    get minSize() {
+      return notesMinHeight(props.task);
+    },
     absorberWeight: 0.35,
     content: () => (
-      <div style={{ height: '100%', 'min-height': topStripEmpty() ? '64px' : '140px' }}>
+      <div style={{ height: '100%', 'min-height': `${notesMinHeight(props.task)}px` }}>
         {isGitUnavailable() ? (
           notesBodyEl
         ) : (
@@ -842,37 +812,7 @@ export function TaskPanel(props: TaskPanelProps) {
     <div
       ref={mainRef}
       style={{ height: '100%', 'min-height': '0', display: 'flex', 'flex-direction': 'column' }}
-      onFocusIn={(event) => {
-        if (event.target.closest('.task-notes-body, .task-changed-files-section')) {
-          setEmptySupportExpanded(true);
-        }
-      }}
     >
-      <Show when={canCollapseSupport()}>
-        <button
-          type="button"
-          class="task-support-toggle"
-          aria-expanded={!supportCollapsed()}
-          onClick={() => {
-            if (supportCollapsed()) {
-              setEmptySupportExpanded(true);
-              setTaskFocusedPanel(props.task.id, 'notes');
-            } else {
-              batch(() => {
-                setTaskFocusedPanel(props.task.id, 'ai-terminal');
-                setEmptySupportExpanded(false);
-              });
-            }
-          }}
-        >
-          <span aria-hidden="true">{supportCollapsed() ? '›' : '⌄'}</span>
-          {supportCollapsed()
-            ? isGitUnavailable()
-              ? 'Notes'
-              : 'Notes & files'
-            : 'Hide empty panels'}
-        </button>
-      </Show>
       <div style={{ flex: '1', 'min-height': '0' }}>
         {/* Layout flips swap containers; the terminal, composer, notes, and canvas stay mounted. */}
         <Show
@@ -881,9 +821,9 @@ export function TaskPanel(props: TaskPanelProps) {
             <ResizablePanel
               direction="vertical"
               persistKey={`task:${props.task.id}`}
-              absorberIds={topStripEmpty() ? ['ai-terminal'] : ['notes-files', 'ai-terminal']}
+              absorberIds={['notes-files', 'ai-terminal']}
               children={[
-                ...(supportCollapsed() ? [] : [notesAndFilesChild]),
+                notesAndFilesChild,
                 shellSectionChild,
                 aiTerminalChild,
                 ...(!isAgentChat(props.task, firstAgentId()) &&

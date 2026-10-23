@@ -127,6 +127,45 @@ describe('ChangedFilesList markdown canvas button', () => {
     expect(container.querySelector('.changed-files-open-canvas-btn')).toBeNull();
     expect(container.querySelector('.changed-files-open-editor-btn')).not.toBeNull();
   });
+
+  it('reports line totals and leaves them out of the footer when the owner shows them', async () => {
+    const files: ChangedFile[] = [
+      { path: 'docs/a.md', status: 'M', lines_added: 2, lines_removed: 1, committed: false },
+      { path: 'docs/b.md', status: 'A', lines_added: 3, lines_removed: 0, committed: false },
+    ];
+    vi.mocked(invoke).mockImplementation(((channel: string) => {
+      if (channel === IPC.GetUncommittedChangedFiles) return Promise.resolve(files);
+      return Promise.reject(new Error(`Unexpected IPC call: ${channel}`));
+    }) as typeof invoke);
+    const onTotalsChange = vi.fn();
+    const mount = (hideTotals: boolean) => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      disposers.push(
+        render(
+          () => (
+            <ChangedFilesList
+              worktreePath="/task"
+              isActive
+              selectedCommit={UNCOMMITTED_SELECTION}
+              onTotalsChange={onTotalsChange}
+              hideTotals={hideTotals}
+            />
+          ),
+          container,
+        ),
+      );
+      return container;
+    };
+
+    const plain = mount(false);
+    const owned = mount(true);
+    await waitFor(() => owned.querySelector('.file-row') !== null);
+    await waitFor(() => plain.querySelector('.file-row') !== null);
+    expect(onTotalsChange).toHaveBeenLastCalledWith({ added: 5, removed: 1 });
+    expect(plain.querySelector('[title="5 added lines"]')).not.toBeNull();
+    expect(owned.querySelector('[title="5 added lines"]')).toBeNull();
+  });
 });
 
 describe('ChangedFilesList understand button', () => {
