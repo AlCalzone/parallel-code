@@ -5,7 +5,7 @@ import { AgentSelector } from './AgentSelector';
 import { invoke } from '../lib/ipc';
 import { IPC } from '../../electron/ipc/channels';
 import { createImportedTask, getProjectPath, loadAgents, store } from '../store/store';
-import { theme } from '../lib/theme';
+import { dialogButtonStyle, theme } from '../lib/theme';
 import type { Project } from '../store/types';
 import type { AgentDef, ImportableWorktree } from '../ipc/types';
 import { DownloadIcon } from './icons';
@@ -99,6 +99,9 @@ export function ImportWorktreesDialog(props: ImportWorktreesDialogProps) {
     else next.add(path);
     setSelectedPaths(next);
   }
+
+  const selectedCount = () =>
+    visibleCandidates().filter((candidate) => selectedPaths().has(candidate.path)).length;
 
   const canImport = () =>
     !loading() &&
@@ -197,6 +200,33 @@ export function ImportWorktreesDialog(props: ImportWorktreesDialogProps) {
             Worktrees
           </label>
 
+          <Show when={!loading() && visibleCandidates().length > 0}>
+            <div style={{ display: 'flex', gap: '8px', 'align-items': 'center' }}>
+              <span style={{ flex: '1', color: theme.fgMuted, 'font-size': '12px' }}>
+                {selectedCount()} of {visibleCandidates().length} selected
+              </span>
+              <button
+                type="button"
+                class="btn-secondary"
+                disabled={importing()}
+                style={dialogButtonStyle(false, importing())}
+                onClick={() =>
+                  setSelectedPaths(new Set(visibleCandidates().map((candidate) => candidate.path)))
+                }
+              >
+                Select all
+              </button>
+              <button
+                type="button"
+                class="btn-secondary"
+                disabled={importing()}
+                style={dialogButtonStyle(false, importing())}
+                onClick={() => setSelectedPaths(new Set())}
+              >
+                Clear
+              </button>
+            </div>
+          </Show>
           <Show when={loading()}>
             <div
               style={{
@@ -256,6 +286,7 @@ export function ImportWorktreesDialog(props: ImportWorktreesDialogProps) {
                     >
                       <input
                         type="checkbox"
+                        disabled={importing()}
                         checked={selected()}
                         onChange={() => togglePath(candidate.path)}
                         style={{ 'margin-top': '2px', cursor: 'pointer' }}
@@ -288,7 +319,9 @@ export function ImportWorktreesDialog(props: ImportWorktreesDialogProps) {
                             {candidate.branch_name}
                           </span>
                           <StatusBadge
-                            label={candidate.has_uncommitted_changes ? 'Dirty' : 'Clean'}
+                            label={
+                              candidate.has_uncommitted_changes ? 'Uncommitted changes' : 'Clean'
+                            }
                             tone={candidate.has_uncommitted_changes ? 'warning' : 'muted'}
                           />
                           <Show when={candidate.has_committed_changes}>
@@ -314,7 +347,7 @@ export function ImportWorktreesDialog(props: ImportWorktreesDialogProps) {
           </Show>
         </div>
 
-        <DialogFooter error={error()}>
+        <DialogFooter error={error()} note={importBlockedReason()}>
           <button
             type="button"
             class="btn-secondary"
@@ -326,12 +359,15 @@ export function ImportWorktreesDialog(props: ImportWorktreesDialogProps) {
           <button
             type="button"
             class="btn-primary"
+            style={{ 'min-width': '180px' }}
             disabled={!canImport()}
             title={importBlockedReason()}
             onClick={() => void handleImport()}
           >
             <DownloadIcon size={14} />
-            {importing() ? 'Importing...' : 'Import Selected'}
+            {importing()
+              ? 'Importing...'
+              : `Import ${selectedCount()} worktree${selectedCount() === 1 ? '' : 's'}`}
           </button>
         </DialogFooter>
       </div>

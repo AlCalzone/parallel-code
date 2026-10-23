@@ -37,6 +37,7 @@ function buildCssForEdit(t: CustomTheme): string {
 
 export function CustomThemeDialog(props: CustomThemeDialogProps) {
   const titleId = createUniqueId();
+  const [saving, setSaving] = createSignal(false);
   const [css, setCss] = createSignal('');
   const [error, setError] = createSignal<string | null>(null);
   const [saveError, setSaveError] = createSignal<string | null>(null);
@@ -44,8 +45,7 @@ export function CustomThemeDialog(props: CustomThemeDialogProps) {
   const [copied, setCopied] = createSignal(false);
   const [showPrompt, setShowPrompt] = createSignal(false);
 
-  // Label for the save button: "Save & Apply" only when the detected tone
-  // matches the currently-active slot; otherwise "Save to {tone} slot".
+  // Apply immediately only when the detected tone matches the active appearance.
   const saveLabel = createMemo(() => {
     if (props.editId) return 'Update Theme';
     const result = parsed();
@@ -53,7 +53,7 @@ export function CustomThemeDialog(props: CustomThemeDialogProps) {
     const tone = detectThemeTone(result.vars);
     const currentSlot =
       store.appearanceMode === 'system' ? (osIsDark() ? 'dark' : 'light') : store.appearanceMode;
-    return tone === currentSlot ? 'Save & Apply' : `Save to ${tone} slot`;
+    return tone === currentSlot ? 'Save & Apply' : `Save as ${tone} theme`;
   });
 
   // Reset state when dialog opens/closes or switches edit target
@@ -104,14 +104,17 @@ export function CustomThemeDialog(props: CustomThemeDialogProps) {
   }
 
   async function handleSave() {
+    if (saving()) return;
     const result = parsed();
     if (!result) return;
+    setSaving(true);
     const id = props.editId ?? crypto.randomUUID();
     const newTheme: CustomTheme = { id, ...result };
     setSaveError(null);
     try {
       await saveCustomTheme(newTheme);
     } catch (e) {
+      setSaving(false);
       setSaveError(`Failed to save theme: ${errMessage(e)}`);
       return;
     }
@@ -136,6 +139,7 @@ export function CustomThemeDialog(props: CustomThemeDialogProps) {
         setDarkTheme(store.darkThemePreset, id);
       }
     }
+    setSaving(false);
     props.onClose();
   }
 
@@ -153,7 +157,7 @@ export function CustomThemeDialog(props: CustomThemeDialogProps) {
   return (
     <Dialog
       open={props.open}
-      onClose={props.onClose}
+      onClose={() => !saving() && props.onClose()}
       width="560px"
       zIndex={1200}
       labelledBy={titleId}
@@ -166,7 +170,7 @@ export function CustomThemeDialog(props: CustomThemeDialogProps) {
         >
           {props.editId ? 'Edit Theme' : 'New Custom Theme'}
         </h2>
-        <DialogCloseButton label="Close" onClick={() => props.onClose()} />
+        <DialogCloseButton label="Close" disabled={saving()} onClick={() => props.onClose()} />
       </div>
 
       {/* AI Prompt section */}
@@ -242,6 +246,8 @@ export function CustomThemeDialog(props: CustomThemeDialogProps) {
       <div style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
         <span style={sectionLabelStyle}>Theme CSS</span>
         <textarea
+          disabled={saving()}
+          aria-label="Theme CSS"
           value={css()}
           onInput={(e) => setCss(e.currentTarget.value)}
           placeholder={
@@ -264,8 +270,13 @@ export function CustomThemeDialog(props: CustomThemeDialogProps) {
             transition: 'border-color 0.15s',
           }}
         />
-        {/* One reserved line for the parse result, so it doesn't push the dialog. */}
-        <div style={{ 'min-height': '18px' }}>
+        {/* Reserve validation space so typing never moves the footer. */}
+        <div
+          style={{ height: '100px', overflow: 'auto' }}
+          tabIndex={0}
+          role="region"
+          aria-label="Theme validation"
+        >
           <Show when={error()}>
             <p
               style={{ margin: '0', 'font-size': '12px', color: theme.error, 'line-height': '1.5' }}
@@ -287,37 +298,37 @@ export function CustomThemeDialog(props: CustomThemeDialogProps) {
               </p>
             )}
           </Show>
+          <Show when={warnings().length > 0}>
+            <div
+              style={{
+                display: 'flex',
+                'flex-direction': 'column',
+                gap: '4px',
+                padding: '8px 10px',
+                background: `color-mix(in srgb, ${theme.warning} 8%, transparent)`,
+                border: `1px solid color-mix(in srgb, ${theme.warning} 25%, transparent)`,
+                'border-radius': 'var(--radius-sm)',
+              }}
+            >
+              <span style={{ 'font-size': '11px', 'font-weight': '600', color: theme.warning }}>
+                Contrast warnings (theme will still save)
+              </span>
+              <For each={warnings()}>
+                {(w) => (
+                  <span
+                    style={{
+                      'font-size': '11px',
+                      color: theme.fgMuted,
+                      'font-family': "'JetBrains Mono', monospace",
+                    }}
+                  >
+                    {w.fgVar} on {w.bgVar}: {w.ratio.toFixed(2)}:1 (need {w.required}:1)
+                  </span>
+                )}
+              </For>
+            </div>
+          </Show>
         </div>
-        <Show when={warnings().length > 0}>
-          <div
-            style={{
-              display: 'flex',
-              'flex-direction': 'column',
-              gap: '4px',
-              padding: '8px 10px',
-              background: `color-mix(in srgb, ${theme.warning} 8%, transparent)`,
-              border: `1px solid color-mix(in srgb, ${theme.warning} 25%, transparent)`,
-              'border-radius': 'var(--radius-sm)',
-            }}
-          >
-            <span style={{ 'font-size': '11px', 'font-weight': '600', color: theme.warning }}>
-              Contrast warnings (theme will still save)
-            </span>
-            <For each={warnings()}>
-              {(w) => (
-                <span
-                  style={{
-                    'font-size': '11px',
-                    color: theme.fgMuted,
-                    'font-family': "'JetBrains Mono', monospace",
-                  }}
-                >
-                  {w.fgVar} on {w.bgVar}: {w.ratio.toFixed(2)}:1 (need {w.required}:1)
-                </span>
-              )}
-            </For>
-          </div>
-        </Show>
       </div>
 
       <DialogFooter
@@ -329,6 +340,7 @@ export function CustomThemeDialog(props: CustomThemeDialogProps) {
               <button
                 class="btn-with-icon"
                 type="button"
+                disabled={saving()}
                 onClick={async () => {
                   try {
                     await deleteCustomTheme(editId());
@@ -353,17 +365,23 @@ export function CustomThemeDialog(props: CustomThemeDialogProps) {
           </Show>
         }
       >
-        <button type="button" class="btn-secondary" onClick={() => props.onClose()}>
+        <button
+          type="button"
+          class="btn-secondary"
+          disabled={saving()}
+          onClick={() => props.onClose()}
+        >
           Cancel
         </button>
         <button
           type="button"
           class="btn-primary"
+          style={{ 'min-width': '180px' }}
           onClick={handleSave}
-          disabled={!isValid()}
+          disabled={saving() || !isValid()}
           title={isValid() ? undefined : 'Paste valid theme CSS to save'}
         >
-          {saveLabel()}
+          {saving() ? 'Saving…' : saveLabel()}
         </button>
       </DialogFooter>
     </Dialog>
