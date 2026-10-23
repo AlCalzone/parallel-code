@@ -63,7 +63,7 @@ export function ReadinessSection(props: ReadinessSectionProps) {
   };
 
   return (
-    <section aria-label="Readiness and checks" style={{ margin: '28px 0', 'font-size': '13px' }}>
+    <section aria-label="Readiness and checks" style={{ margin: '20px 0', 'font-size': '13px' }}>
       <div style={{ display: 'flex', 'align-items': 'center', gap: '8px', 'flex-wrap': 'wrap' }}>
         <button
           type="button"
