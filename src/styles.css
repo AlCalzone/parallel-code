@@ -86,6 +86,21 @@ body {
   color: var(--fg);
 }
 
+/* Proportional digits make diff counts and timers jitter as they update. */
+:is(.info-bar, .changed-files-list-panel, .sidebar-footer) {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Native-app feel: dragging or double-clicking sidebar rows must not select
+   their text. Fields stay selectable. */
+.sidebar-panel {
+  user-select: none;
+}
+
+.sidebar-panel :is(input, textarea, [contenteditable='true']) {
+  user-select: text;
+}
+
 body.font-smoothing {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -789,10 +804,6 @@ html[data-look='parallel-code'] :is(.info-bar, .changed-files-list-panel) {
   font-family: var(--font-ui) !important;
 }
 
-html[data-look='parallel-code'] :is(.info-bar, .changed-files-list-panel, .sidebar-footer) {
-  font-variant-numeric: tabular-nums;
-}
-
 html[data-look='parallel-code'] .settings-theme-desc {
   line-height: 1.6;
 }
@@ -940,10 +951,6 @@ html[data-look='noir'] .task-branch-info-bar {
 
 html[data-look='noir'] :is(.info-bar, .changed-files-list-panel, .task-notes-body textarea) {
   font-family: var(--font-ui) !important;
-}
-
-html[data-look='noir'] :is(.info-bar, .changed-files-list-panel, .sidebar-footer) {
-  font-variant-numeric: tabular-nums;
 }
 
 html[data-look='noir'] .info-bar button:not(:hover):not(:focus-visible) {
@@ -1176,11 +1183,6 @@ html[data-look^='obsidian'] .settings-theme-card.active {
 /* Prose and navigation use the UI face; code and terminal output remain mono. */
 html[data-look^='obsidian'] :is(.info-bar, .changed-files-list-panel, .task-notes-body textarea) {
   font-family: var(--font-ui) !important;
-}
-
-/* Inter's proportional digits make diff counts jitter as they update. */
-html[data-look^='obsidian'] :is(.info-bar, .changed-files-list-panel, .sidebar-footer) {
-  font-variant-numeric: tabular-nums;
 }
 
 html[data-look^='obsidian'] .task-notes-body textarea {
