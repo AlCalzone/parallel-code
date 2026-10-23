@@ -140,6 +140,8 @@ export function StatusDot(props: {
   return (
     <span
       class="status-glyph"
+      role="img"
+      aria-label={getDotTooltip(props.status, props.attention, props.taskId)}
       title={[
         getDotTooltip(props.status, props.attention, props.taskId),
         props.taskId ? getTaskActivityTooltip(props.taskId) : undefined,

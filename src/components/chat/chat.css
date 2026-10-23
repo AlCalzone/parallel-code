@@ -1006,16 +1006,18 @@
 .chat-context-meter-ring {
   width: 13px;
   height: 13px;
-  /* The used arc starts at twelve o'clock. */
+  /* The used wedge starts at twelve o'clock. */
   rotate: -90deg;
   fill: none;
-  stroke-width: 2.5;
 }
 .chat-context-meter-ring circle:first-child {
   stroke: var(--chat-border);
+  stroke-width: 1.5;
 }
+/* Stroke as wide as the circle's diameter fills a pie wedge. */
 .chat-context-meter-ring circle:last-child {
   stroke: currentColor;
+  stroke-width: 5.5;
 }
 .chat-context-meter[data-level='high'] {
   color: var(--warning);

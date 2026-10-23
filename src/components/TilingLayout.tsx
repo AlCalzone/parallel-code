@@ -68,6 +68,21 @@ interface TileChild {
   content: () => JSX.Element;
 }
 
+/** The empty workspace's one action: neutral, as routine actions are. */
+const emptyStateButtonStyle = (): JSX.CSSProperties => ({
+  background: theme.bgElevated,
+  border: `1px solid ${theme.border}`,
+  'border-radius': 'var(--radius-md)',
+  padding: '8px 20px',
+  color: theme.fg,
+  cursor: 'pointer',
+  'font-size': '14px',
+  'font-weight': '500',
+  display: 'flex',
+  'align-items': 'center',
+  gap: '6px',
+});
+
 export function TilingLayout() {
   const documentTaskId = () =>
     store.activeDocumentProjectId ? documentAgentTaskId(store.activeDocumentProjectId) : null;
@@ -656,27 +671,16 @@ export function TilingLayout() {
                             'margin-bottom': '6px',
                           }}
                         >
-                          Link your first project to get started
+                          Add your first project to get started
                         </div>
                         <div style={{ 'font-size': '13px', color: theme.fgSubtle }}>
                           A project is a local folder with your code
                         </div>
                       </div>
                       <button
+                        type="button"
                         onClick={() => pickAndAddProject()}
-                        style={{
-                          background: theme.bgElevated,
-                          border: `1px solid ${theme.border}`,
-                          'border-radius': 'var(--radius-md)',
-                          padding: '8px 20px',
-                          color: theme.fg,
-                          cursor: 'pointer',
-                          'font-size': '14px',
-                          'font-weight': '500',
-                          display: 'flex',
-                          'align-items': 'center',
-                          gap: '6px',
-                        }}
+                        style={emptyStateButtonStyle()}
                       >
                         <svg
                           width="14"
@@ -687,7 +691,7 @@ export function TilingLayout() {
                         >
                           <path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.22.78 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2A1.75 1.75 0 0 0 5 1H1.75Z" />
                         </svg>
-                        Link Project
+                        Add project
                       </button>
                     </>
                   }
@@ -703,8 +707,15 @@ export function TilingLayout() {
                     >
                       No tasks yet
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => withViewTransition(() => toggleNewTaskPanel(true))}
+                      style={{ ...emptyStateButtonStyle(), margin: '10px auto' }}
+                    >
+                      New task
+                    </button>
                     <div style={{ 'font-size': '13px', color: theme.fgSubtle }}>
-                      Press{' '}
+                      or press{' '}
                       <kbd
                         style={{
                           background: theme.bgElevated,
@@ -716,8 +727,7 @@ export function TilingLayout() {
                         }}
                       >
                         {mod}+N
-                      </kbd>{' '}
-                      to create a new task
+                      </kbd>
                     </div>
                   </div>
                 </Show>

@@ -268,8 +268,8 @@
   font-size: 11px;
   padding: 1px 6px;
   border-radius: var(--radius-pill);
-  background: var(--accent);
-  color: var(--accent-text);
+  background: var(--bg-hover);
+  color: var(--fg-muted);
 }
 
 .docws-btn {

@@ -43,6 +43,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { CanvasFilePicker } from './CanvasFilePicker';
 import { CanvasTabStrip } from './CanvasTabStrip';
 import { TaskBrowserPanel } from './TaskBrowserPanel';
+import { handleMenuKeyDown } from '../lib/menu-keys';
 
 // Lazy: CodeMirror only loads once a document tab is opened.
 const TaskCanvasDocument = lazy(() =>
@@ -382,13 +383,12 @@ export function TaskCanvasPanel(props: TaskCanvasPanelProps) {
               role="menu"
               class="canvas-kind-menu"
               aria-label={`Actions for ${menu().path}`}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  e.preventDefault();
+              onKeyDown={(e) =>
+                handleMenuKeyDown(e, () => {
                   setContextMenu(null);
                   panelRef?.focus();
-                }
-              }}
+                })
+              }
               style={{
                 position: 'fixed',
                 left: `${menu().x}px`,

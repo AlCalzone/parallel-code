@@ -99,7 +99,8 @@ export function CloseTaskDialog(props: CloseTaskDialogProps) {
                       'font-weight': '600',
                     }}
                   >
-                    Warning: This branch has commits that have not been merged into main.
+                    Warning: This branch has commits that have not been merged into{' '}
+                    {worktreeStatus()?.base_branch ?? 'its base branch'}.
                   </div>
                 </Show>
               </div>
