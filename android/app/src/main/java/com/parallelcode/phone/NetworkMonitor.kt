@@ -84,6 +84,9 @@ class NetworkMonitor(context: Context) {
     /** Unregister network callback when monitoring is no longer needed. */
     fun stop() {
         unregisterWifi()
+        // Never reuse a home-network exception or VPN snapshot after a monitoring pause.
+        _wifiSsid.value = null
+        _isVpnActive.value = false
         if (!registered) return
         try {
             cm?.unregisterNetworkCallback(networkCallback)

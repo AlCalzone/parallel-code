@@ -45,7 +45,11 @@ internal fun Context.openLink(url: String): Boolean = try {
 
 /** The version row and update controls in Settings › About. */
 @Composable
-fun UpdateSettings() {
+fun UpdateSettings(demoSettings: DemoSettings? = null) {
+    if (demoSettings != null) {
+        DemoUpdateSettings(demoSettings)
+        return
+    }
     val context = LocalContext.current
     val updates = remember { context.appUpdates() }
 
@@ -73,6 +77,36 @@ fun UpdateSettings() {
         } else {
             UpdateControls(updates)
         }
+    }
+}
+
+@Composable
+private fun DemoUpdateSettings(demo: DemoSettings) {
+    val context = LocalContext.current
+    val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "unknown" }
+    var enabled by remember { mutableStateOf(demo.checkUpdates) }
+    var checked by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Parallel Code", fontWeight = FontWeight.SemiBold)
+            Text("v$version", color = AppTheme.extra.textMuted, fontFamily = AppFonts.mono)
+        }
+        Text("Mobile companion for monitoring and interacting with parallel AI agents.", style = MaterialTheme.typography.bodySmall, color = AppTheme.extra.textMuted)
+        PrivacyPolicyButton()
+        Text("Offline demo · update checks and downloads are simulated. No network requests or browser opens.", style = MaterialTheme.typography.bodySmall, color = AppTheme.extra.textMuted)
+        SettingSwitchRow(
+            title = "Check for updates",
+            description = "Preview the automatic update setting in this demo session.",
+            checked = enabled,
+            onCheckedChange = { enabled = it; demo.checkUpdates = it },
+        )
+        if (checked) {
+            Text("Sample update available (simulated).", style = MaterialTheme.typography.bodyMedium)
+            OutlinedButton(onClick = { message = "Demo download preview. In a live session this opens the release download in your browser." }) { Text("Download") }
+        }
+        OutlinedButton(onClick = { checked = true; message = "Simulated update check complete." }) { Text("Check now") }
+        message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = AppTheme.extra.textMuted) }
     }
 }
 

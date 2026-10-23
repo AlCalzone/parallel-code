@@ -95,7 +95,7 @@ fun ChatScreen(
     agent: RemoteAgent?,
     agentId: String,
     state: ConnectionState,
-    client: RemoteClient,
+    client: PhoneClient,
     quickReplies: List<String>,
     sendQuickReplies: Boolean = false,
     promptHistory: PromptHistoryStore? = null,

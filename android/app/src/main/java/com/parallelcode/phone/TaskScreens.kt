@@ -60,7 +60,7 @@ private const val MAX_NOTES_BYTES = 100 * 1024
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NewTaskScreen(client: RemoteClient, onDone: () -> Unit, onNeedsPairing: () -> Unit) {
+fun NewTaskScreen(client: PhoneClient, onDone: () -> Unit, onNeedsPairing: () -> Unit) {
     val scope = rememberCoroutineScope()
     var projects by remember { mutableStateOf<List<MobileProject>?>(null) }
     var loadAttempt by remember { mutableIntStateOf(0) }
@@ -339,7 +339,7 @@ private fun <T> SelectField(
 
 /** The task's notes panel from the desktop; editable once the phone is paired. */
 @Composable
-fun NotesPane(taskId: String, canEdit: Boolean, client: RemoteClient, modifier: Modifier) {
+fun NotesPane(taskId: String, canEdit: Boolean, client: PhoneClient, modifier: Modifier) {
     val scope = rememberCoroutineScope()
     var notes by rememberSaveable(taskId) { mutableStateOf("") }
     var dirty by rememberSaveable(taskId) { mutableStateOf(false) }

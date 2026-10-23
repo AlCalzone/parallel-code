@@ -116,6 +116,9 @@ fun SettingsScreen(
     onPair: () -> Unit,
     onForget: () -> Unit,
     onBack: () -> Unit,
+    demoSettings: DemoSettings? = null,
+    onDemoRestore: () -> Unit = {},
+    onDemo: (() -> Unit)? = null,
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -151,6 +154,27 @@ fun SettingsScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
+            onDemo?.let { openDemo ->
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(onClick = openDemo) { Text("Try offline demo") }
+                        Text(
+                            "Explore sample tasks and settings without changing your saved computers or preferences.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AppTheme.extra.textMuted,
+                        )
+                    }
+                }
+            }
+            if (demoSettings != null) {
+                item {
+                    Text(
+                        "Offline demo · Changes stay in this demo session. Screen awake, notifications, VPN, Wi-Fi and home-screen widgets are simulated; no device settings or permissions change.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppTheme.extra.textMuted,
+                    )
+                }
+            }
             // DISPLAY SECTION
             item {
                 SectionHeader("DISPLAY")
@@ -773,7 +797,7 @@ fun SettingsScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(1.dp, AppTheme.extra.border),
                 ) {
-                    Box(Modifier.fillMaxWidth().padding(16.dp)) { BackupSettings() }
+                    Box(Modifier.fillMaxWidth().padding(16.dp)) { BackupSettings(demoSettings, onDemoRestore) }
                 }
             }
 
@@ -787,7 +811,7 @@ fun SettingsScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(1.dp, AppTheme.extra.border),
                 ) {
-                    Box(Modifier.fillMaxWidth().padding(16.dp)) { UpdateSettings() }
+                    Box(Modifier.fillMaxWidth().padding(16.dp)) { UpdateSettings(demoSettings) }
                 }
             }
         }

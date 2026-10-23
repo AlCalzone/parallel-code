@@ -47,7 +47,7 @@ private const val MAX_FILE_LINES = 1500
 /** The task's changes against its base branch, file by file, as the desktop's diff view. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DiffPane(taskId: String, client: RemoteClient, modifier: Modifier) {
+fun DiffPane(taskId: String, client: PhoneClient, modifier: Modifier) {
     var reload by remember { mutableIntStateOf(0) }
     var files by remember(taskId) { mutableStateOf<List<DiffFile>?>(null) }
     var truncated by remember(taskId) { mutableStateOf(false) }

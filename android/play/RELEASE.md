@@ -98,39 +98,75 @@ machine for review. Use an isolated demo environment or a clearly labeled demo m
 
 ## Reviewer access (App access instructions)
 
-These instructions apply once the installed release includes the demo-mode change;
-the current Play build has not been verified to include it. No login, credentials,
-desktop installation, pairing code, or special network is needed. The demo entry
-is available to everyone, without a reviewer-specific account:
+These instructions apply to the broader offline demo. They do
+not describe the current internal Play candidate `0.2.0 (56)` at `c0df1d19`, which
+contains the earlier, limited demo. Build, upload and install the broader demo before
+submitting these instructions or attesting that reviewers can access all features.
+No login, personal token, desktop installation, pairing code from a real computer,
+or special network is needed. Everyone can enter the same demo:
 
-1. On the initial **Connect to your computer** screen, tap **Try demo — no computer needed**.
-2. The **Demo mode** screen always identifies its offline sample data. Open
-   **Review the welcome screen**, then tap **Allow once** or **Decline** on its sample
-   approval. The conversation and task status update locally; no command runs.
-3. Type a message in **Message the demo agent** and tap **Send** to see a simulated reply.
-4. Tap **Back**, then **New sample task**. Enter a description and tap **Create task**.
-   The new sample conversation supports messages too.
-5. Tap **Exit demo** to return to connection setup. Entering the demo again resets
-   all sample tasks, approvals, and replies.
+1. On **Connect to your computer**, tap **Try demo — no computer needed**. If already
+   connected, open **Settings** and tap **Try offline demo**. A persistent
+   **Demo · offline samples** banner offers **Reset** and **Exit demo** on every screen.
+2. Open **Review the welcome screen**. Allow or decline its sample test approval,
+   answer the greeting question and send a chat reply. Quick replies, message history
+   and the microphone button work locally; the microphone inserts sample dictation
+   without recording audio. Open **Interrupt a working chat** to try **Stop**.
+3. Open **Explore terminal, notes and changes**. Read and scroll terminal output,
+   type a reply, try quick keys, expand the terminal and inspect the **Notes** and
+   **Changes** tabs. Edit and save a note. **Merge** opens readiness checks and its
+   squash/cleanup options. **Close** offers a warning before discarding sample changes.
+4. Open **Fix a sample CI failure**, tap **Fix CI**, edit the sample failure prompt
+   and send it. Its sample check changes to passed; no CI workflow runs.
+5. Tap **New task**. Pick a sample project, chat or terminal agent and optional model,
+   enter a prompt and create the task. The new sample supports the same controls.
+   Search, filters, task swiping and the minimized-task setting use the normal UI.
+6. Switch sample computers from the task-list computer menu or **Settings**. Rename
+   or forget a sample computer. **Add computer** opens offline setup; add a sample
+   computer and enter **123456** to try the normal pairing form, or continue viewing
+   only and pair later. No supplied address or token belongs to a real desktop.
+7. In **Settings**, try themes, quick replies and terminal options. Notification,
+   screen-awake, VPN/Wi-Fi and widget settings are explicitly local simulations.
+   Widget color/opacity swatches preview appearance. In **Backups**, create a
+   session-only backup with or without a password, change settings and restore it.
+   The real backup format and encryption operate only on sample credentials,
+   settings and history held in memory. Scheduling and update checks are simulated.
+   **About** opens the bundled privacy policy without a network connection.
+8. **Reset** restores every sample, including settings and saved sample computers.
+   **Exit demo** resumes the user's original settings and computers. Re-entering
+   starts a fresh sample session.
 
-Demo data stays in memory and is separate from saved connections, real agents,
-prompt history, backups, widgets, and notifications. The demo never connects to a
-desktop, starts a notification service, requests permissions, or calls an AI service.
-It demonstrates task cards, built-in chat, replies, approvals, and task creation;
-real terminal streams, desktop Git operations, pairing, and background notification
-delivery still require a desktop connection. Use the real-device notification video
-described above for the foreground-service declaration.
+The demo uses the normal task/chat/terminal/settings screens with an in-memory
+session instead of the desktop transport. Entering it pauses real desktop sockets,
+polls, notification watching and update checks; demo data never reaches real prompt
+history, preferences, backups, widgets or notification services. All terminal input,
+Git actions, agent replies and pairing are simulations: no commands, paid agents or
+AI calls run. The demo requests no device permissions.
+
+Actual QR scanning or external connection links, Android speech recognition,
+home-screen widget placement, external backup-provider selection and scheduling,
+update installation, VPN/Wi-Fi integration and background notification delivery
+require the real device smoke checks above. The demo is not evidence that a
+foreground service actually ran. The foreground-service declaration still needs a
+real-device video. Confirm that this disclosed simulation is sufficient for Play's
+full-access attestation; do not tick it merely because demo instructions can be entered.
 
 ## Open release items
 
-- Install the exact Play build on a real device and run the smoke checks. Upload
-  the store assets.
+- Install the exact Play build on a real device, run the smoke checks and record
+  the foreground-service video. Upload the store assets.
+- Signed `0.2.0 (56)` at `c0df1d19` is in **internal testing only** and contains the
+  earlier, limited demo. The expanded offline demo needs a new signed build that is
+  installed and tested before the reviewer instructions above can be submitted.
+  Play's full-feature-access attestation remains unresolved.
 - Play App access completion gates target-audience and location declarations;
-  target audience then gates Data safety submission. The reviewer demo must reach
-  the tested release before its access instructions can be submitted.
-- IARC online-content severity answers remain unresolved. Google's help excludes
-  user-imported material, but the form explicitly includes AI output. Do not guess
-  a severity rating for unrestricted coding-agent content. See the
+  target audience then gates Data safety submission.
+- Play app pricing is **Free**. Production countries are unset; selecting all
+  countries awaits explicit worldwide approval.
+- IARC online-content severity answers remain unresolved; support case
+  **8-3703000041808** awaits a human answer. Google's help excludes user-imported
+  material, but the form explicitly includes AI output. Do not guess a severity
+  rating for unrestricted coding-agent content. See the
   [official content-rating guidance](https://support.google.com/googleplay/android-developer/answer/11070055).
 - The Data safety draft includes messages, other user content, app interactions,
   diagnostics, and identifiers, without a universal encryption claim. Keep it in

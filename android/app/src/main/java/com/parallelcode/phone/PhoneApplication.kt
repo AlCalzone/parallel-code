@@ -28,6 +28,26 @@ class PhoneApplication : Application() {
     @Volatile
     var inForeground = false
 
+    @Volatile
+    var demoActive = false
+        private set
+
+    fun setDemoActive(active: Boolean) {
+        demoActive = active
+        if (active) {
+            client.setSuspended(true)
+            updates.setPaused(true)
+            networkMonitor.stop()
+        } else {
+            // Refresh network policy before any real token may leave the phone again.
+            networkMonitor.start()
+            networkMonitor.setForeground(inForeground)
+            client.setSuspended(false)
+            updates.setPaused(false)
+        }
+        AgentWatchService.sync(this)
+    }
+
     override fun onCreate() {
         super.onCreate()
         settings = SettingsStore(getSharedPreferences(SettingsStore.PREFS_NAME, Context.MODE_PRIVATE))
@@ -52,7 +72,7 @@ class PhoneApplication : Application() {
                     state.status == ConnectionStatus.CONNECTED,
                     others.values.toList(),
                 )
-            }.collect { AgentWidget.publish(this@PhoneApplication, it) }
+            }.collect { if (!demoActive) AgentWidget.publish(this@PhoneApplication, it) }
         }
     }
 }

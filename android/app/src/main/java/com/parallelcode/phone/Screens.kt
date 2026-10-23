@@ -277,7 +277,7 @@ fun ConnectScreen(
 }
 
 @Composable
-fun PairScreen(pair: suspend (pin: String, remember: Boolean) -> Unit, onDone: () -> Unit) {
+fun PairScreen(pair: suspend (pin: String, remember: Boolean) -> Unit, onDone: () -> Unit, instructions: String? = null) {
     val scope = rememberCoroutineScope()
     var pin by rememberSaveable { mutableStateOf("") }
     var remember by rememberSaveable { mutableStateOf(true) }
@@ -286,7 +286,7 @@ fun PairScreen(pair: suspend (pin: String, remember: Boolean) -> Unit, onDone: (
 
     SetupPage(title = "Enable replies") {
         Text(
-            "Enter the six-digit code from Connect Phone on your computer to send messages to agents.",
+            instructions ?: "Enter the six-digit code from Connect Phone on your computer to send messages to agents.",
             color = AppTheme.extra.textMuted,
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -384,7 +384,7 @@ private fun SetupPage(title: String, content: @Composable () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AgentsScreen(
-    client: RemoteClient,
+    client: PhoneClient,
     host: String,
     state: ConnectionState,
     agents: List<RemoteAgent>,
@@ -399,6 +399,7 @@ fun AgentsScreen(
     onSearch: (String) -> Unit = {},
     filter: TaskFilter = TaskFilter.ALL,
     onFilter: (TaskFilter) -> Unit = {},
+    showUpdates: Boolean = true,
 ) {
     var refreshing by remember { mutableStateOf(false) }
     var showSwitchMenu by remember { mutableStateOf(false) }
@@ -563,7 +564,7 @@ fun AgentsScreen(
                 contentPadding = PaddingValues(vertical = 12.dp),
             ) {
                 item { UsageStrip(client, connected = state.status == ConnectionStatus.CONNECTED) }
-                item { UpdateBanner() }
+                if (showUpdates) item { UpdateBanner() }
                 if (state.status == ConnectionStatus.CONNECTED && !state.canControl) {
                     item { PairBanner(onPair) }
                 }
@@ -820,7 +821,7 @@ fun AgentScreen(
     agent: RemoteAgent?,
     agentId: String,
     state: ConnectionState,
-    client: RemoteClient,
+    client: PhoneClient,
     alwaysFollowOutput: Boolean,
     fitTerminalToPhone: Boolean,
     quickReplies: List<String> = emptyList(),

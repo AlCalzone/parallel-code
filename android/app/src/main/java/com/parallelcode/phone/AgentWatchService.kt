@@ -34,6 +34,10 @@ class AgentWatchService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        if (app.demoActive) {
+            stopSelf()
+            return
+        }
         createChannels(this)
         ServiceCompat.startForeground(
             this,
@@ -69,7 +73,13 @@ class AgentWatchService : Service() {
         }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (app.demoActive) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        return START_STICKY
+    }
 
     override fun onDestroy() {
         scope.cancel()
@@ -138,7 +148,7 @@ class AgentWatchService : Service() {
         fun sync(context: Context) {
             val app = context.applicationContext as PhoneApplication
             val intent = Intent(context, AgentWatchService::class.java)
-            if (app.settings.notificationsEnabled && app.client.state.value.link != null) {
+            if (!app.demoActive && app.settings.notificationsEnabled && app.client.state.value.link != null) {
                 ContextCompat.startForegroundService(context, intent)
             } else {
                 context.stopService(intent)

@@ -151,6 +151,12 @@ fun PromptHistoryDialog(
  */
 @Composable
 fun VoiceInputButton(enabled: Boolean, modifier: Modifier = Modifier, onText: (String) -> Unit) {
+    if (LocalDemoMode.current) {
+        OutlinedButton(onClick = { onText("Demo dictation: review the sample changes") }, enabled = enabled, modifier = modifier) {
+            Icon(Icons.Filled.Mic, contentDescription = "Simulate dictation (no microphone)")
+        }
+        return
+    }
     val context = LocalContext.current
     val intent = remember {
         Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
