@@ -231,6 +231,24 @@ describe('TaskBranchInfoBar project chip', () => {
     expect(html).toContain('>PC</span>');
     expect(html).toContain('aria-label="Project: parallel-code · Project actions"');
   });
+
+  it('shows the project icon instead of the color stripe when the project has one', () => {
+    vi.mocked(getProject).mockReturnValue({
+      id: 'project-1',
+      name: 'parallel-code',
+      path: '/repo',
+      color: 'hsl(210, 70%, 75%)',
+      icon: 'terminal',
+    } as never);
+
+    const html = renderToString(() => TaskBranchInfoBar({ task, onEditProject: vi.fn() }));
+
+    expect(html).not.toContain('border-left:3px');
+    expect(html).toMatch(
+      /class="project-swatch project-swatch-icon"[^>]*style="[^"]*color:hsl\(210, 70%, 75%\)/,
+    );
+    expect(html).toContain('class="task-branch-project-label">parallel-code</span>');
+  });
 });
 
 describe('TaskBranchInfoBar responsive styles', () => {
