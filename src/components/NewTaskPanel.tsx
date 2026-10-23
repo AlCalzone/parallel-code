@@ -1518,8 +1518,8 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
                   fallback={
                     <>
                       No coding agent CLI found on this machine. Install one, such as Claude Code (
-                      <code>claude</code>), Codex CLI (<code>codex</code>) or Gemini CLI (
-                      <code>gemini</code>), then reopen this panel.
+                      <code>claude</code>), Codex CLI (<code>codex</code>) or Antigravity CLI (
+                      <code>agy</code>), then reopen this panel.
                     </>
                   }
                 >
