@@ -1040,7 +1040,7 @@ private fun HomeWifiEditor(ssid: String?, onChange: (String?) -> Unit, currentSs
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            "On this Wi-Fi network, connect without waiting for the VPN. Android needs location access to read the network's name; allow it all the time so agent notifications connect here too.",
+            "While the app is open, connect on this Wi-Fi without waiting for the VPN. Optional location access lets Android reveal the Wi-Fi name; we do not read your GPS position. In the background, connect your VPN or turn off Wait for VPN to receive agent notifications.",
             style = MaterialTheme.typography.bodySmall,
             color = AppTheme.extra.textMuted,
         )

@@ -2,6 +2,8 @@
 
 _Last updated: 2026-05-26_
 
+For the Android companion app, see the [Android privacy policy](https://parallelcode.app/android-privacy/). The policy below covers the desktop application.
+
 Parallel Code is an open-source desktop application that runs entirely on your local machine. This policy describes what data the application handles and how.
 
 ## Summary

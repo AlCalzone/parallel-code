@@ -63,6 +63,7 @@ fun UpdateSettings() {
             style = MaterialTheme.typography.bodySmall,
             color = AppTheme.extra.textMuted,
         )
+        PrivacyPolicyButton()
         if (updates.storeManaged) {
             Text(
                 "Updates come from the app store this was installed from.",

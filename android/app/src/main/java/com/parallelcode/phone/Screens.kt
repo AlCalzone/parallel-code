@@ -265,6 +265,7 @@ fun ConnectScreen(
             )
             RestoreBackupButton(Modifier.fillMaxWidth())
         }
+        PrivacyPolicyButton()
         onCancel?.let { TextButton(onClick = it) { Text("Cancel") } }
     }
 }
