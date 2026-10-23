@@ -5,6 +5,7 @@ import { IPC } from '../../electron/ipc/channels';
 import { invoke } from '../lib/ipc';
 import { setStore, store } from '../store/core';
 import { toggleNewTaskPanel } from '../store/navigation';
+import { clearNotification } from '../store/notification';
 import { NewTaskPanel } from './NewTaskPanel';
 
 vi.mock('../lib/ipc', () => ({ invoke: vi.fn() }));
@@ -20,6 +21,7 @@ beforeEach(() => {
     if (channel === IPC.CheckDockerAvailable) return false;
     return undefined;
   });
+  clearNotification();
   setStore('tasks', reconcile({}));
   setStore({
     newTaskPrefillPrompt: null,

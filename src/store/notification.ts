@@ -1,6 +1,8 @@
 import { setStore } from './core';
 
 let notificationTimer: ReturnType<typeof setTimeout> | null = null;
+/** Ongoing work with no known end; shown whenever no timed notice is up. */
+let progressMessage: string | null = null;
 
 export const NOTIFICATION_DEFAULT_MS = 3000;
 /** Errors the user must act on stay up longer than a passing status message. */
@@ -10,13 +12,22 @@ export function showNotification(message: string, opts?: { durationMs?: number }
   if (notificationTimer) clearTimeout(notificationTimer);
   setStore('notification', message);
   notificationTimer = setTimeout(() => {
-    setStore('notification', null);
+    setStore('notification', progressMessage);
     notificationTimer = null;
   }, opts?.durationMs ?? NOTIFICATION_DEFAULT_MS);
+}
+
+/** Sets (or with null, ends) a notice that stays up until the work it
+ *  describes finishes. Timed notices show over it and then give way back. */
+export function showProgressNotification(message: string | null): void {
+  progressMessage = message;
+  if (!notificationTimer) setStore('notification', message);
 }
 
 export function clearNotification(): void {
   if (notificationTimer) clearTimeout(notificationTimer);
   notificationTimer = null;
+  // A dismissed progress notice returns with its next update.
+  progressMessage = null;
   setStore('notification', null);
 }

@@ -1,6 +1,6 @@
 import { errMessage } from '../lib/log';
 import { setStore, store } from './core';
-import { NOTIFICATION_ERROR_MS, showNotification } from './notification';
+import { NOTIFICATION_ERROR_MS, showNotification, showProgressNotification } from './notification';
 import type { AppStore } from './types';
 
 /** Past this, the user has moved on: the task gets notices instead of focus. */
@@ -15,6 +15,16 @@ interface FailedDraft {
 // Session-only. Failed drafts wait for the next New Task instead of reopening
 // the panel, which would take focus from whatever the user moved on to.
 const failedDrafts: FailedDraft[] = [];
+
+/** Names of creations past SLOW_CREATION_MS, oldest first. */
+const slowCreations: string[] = [];
+
+function updateCreatingNotice(): void {
+  const [first, ...rest] = slowCreations;
+  showProgressNotification(
+    first ? `Creating "${first}"${rest.length ? ` and ${rest.length} more` : ''}…` : null,
+  );
+}
 
 export interface BackgroundTaskCreation {
   name: string;
@@ -32,11 +42,12 @@ export interface BackgroundTaskCreation {
  * can start the next draft while a slow worktree setup runs.
  */
 export async function createTaskInBackground(job: BackgroundTaskCreation): Promise<void> {
-  // shortcut: one transient notice — a sidebar placeholder if users lose track of slow creations
+  // shortcut: one shared notice — a sidebar placeholder if users lose track of slow creations
   let slow = false;
   const timer = setTimeout(() => {
     slow = true;
-    showNotification(`Creating "${job.name}"…`);
+    slowCreations.push(job.name);
+    updateCreatingNotice();
   }, SLOW_CREATION_MS);
   let taskId: string;
   try {
@@ -57,6 +68,10 @@ export async function createTaskInBackground(job: BackgroundTaskCreation): Promi
     return;
   } finally {
     clearTimeout(timer);
+    if (slow) {
+      slowCreations.splice(slowCreations.indexOf(job.name), 1);
+      updateCreatingNotice();
+    }
   }
   if (slow) showNotification(`"${job.name}" is ready`);
   try {
