@@ -19,6 +19,7 @@ import {
 import { taskUsesAgentChat } from './agent-chat';
 import { getPrChecks } from './pr-checks-state';
 import { fireAndForget } from '../lib/ipc';
+import { boardLaneOf } from '../components/task-board-lanes';
 import { IPC } from '../../electron/ipc/channels';
 import type {
   RemoteAttentionState,
@@ -98,6 +99,7 @@ export function startRemoteStatusSync(): () => void {
           | 'taskName'
           | 'collapsed'
           | 'ci'
+          | 'lane'
         >
       > = {};
       for (const taskId of [...store.taskOrder, ...store.collapsedTaskOrder]) {
@@ -116,6 +118,7 @@ export function startRemoteStatusSync(): () => void {
           taskName: task.name,
           collapsed: Boolean(task.collapsed),
           ci: remoteCiStatus(taskId),
+          lane: boardLaneOf(task),
           projectName: project?.name ?? '',
           projectColor: project?.color ?? '',
           agentName: agent?.def.name ?? task.savedAgentDef?.name ?? '',

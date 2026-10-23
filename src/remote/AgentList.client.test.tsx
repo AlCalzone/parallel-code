@@ -124,7 +124,7 @@ it('combines search with status filters and restores them when returning from a 
   search.value = 'Codex';
   search.dispatchEvent(new Event('input', { bubbles: true }));
   expect(host.querySelectorAll('.agent-card')).toHaveLength(2);
-  click('Review 1');
+  click('Needs you 1');
   expect(host.querySelectorAll('.agent-card')).toHaveLength(1);
   expect(host.querySelector('.agent-card')?.textContent).toContain('Review tests');
   dispose();
@@ -167,18 +167,28 @@ it('points Android browsers to the app and leaves other phones alone', () => {
   userAgent.mockRestore();
 });
 
-it('files failed CI under Needs you and names a ready task by its checks', () => {
+it('groups tasks under the desktop board lanes and names a ready task by its checks', () => {
   const base = { status: 'running', exitCode: null, lastLine: '' } as const;
   const list: RemoteAgent[] = [
-    { ...base, agentId: 'a1', taskId: 't1', taskName: 'Red PR', attention: 'idle', ci: 'failure' },
+    {
+      ...base,
+      agentId: 'a1',
+      taskId: 't1',
+      taskName: 'Red PR',
+      attention: 'idle',
+      ci: 'failure',
+      lane: 'pr',
+    },
     {
       ...base,
       agentId: 'a2',
       taskId: 't2',
-      taskName: 'Green PR',
+      taskName: 'Green work',
       attention: 'ready',
       ci: 'success',
+      lane: 'stopped',
     },
+    { ...base, agentId: 'a3', taskId: 't3', taskName: 'Question', attention: 'needs_input' },
   ];
   Socket.current.onmessage?.({ data: JSON.stringify({ type: 'agents', list }) });
   dispose = render(
@@ -186,9 +196,13 @@ it('files failed CI under Needs you and names a ready task by its checks', () =>
     host,
   );
   const group = (name: string) => host.querySelector(`section[aria-label="${name}"]`);
-  expect(group('Needs you')?.textContent).toContain('Red PR');
-  expect(group('Needs you')?.textContent).toContain('CI failed');
-  expect(group('Ready to review')?.textContent).toContain('Green PR');
-  expect(group('Ready to review')?.textContent).toContain('Ready to merge');
-  expect(host.textContent).toContain('1 task needs your attention');
+  expect(group('In pull request')?.textContent).toContain('Red PR');
+  expect(group('In pull request')?.textContent).toContain('CI failed');
+  expect(group('Stopped')?.textContent).toContain('Green work');
+  expect(group('Stopped')?.textContent).toContain('Ready to merge');
+  // Without a lane from the desktop, the phone still files a question under Needs you.
+  expect(group('Needs you')?.textContent).toContain('Question');
+  // Failed CI keeps its lane but still counts, and shows, as needing you.
+  expect(host.textContent).toContain('2 tasks need your attention');
+  expect(group('In pull request')?.querySelector('.agent-card.attention')).not.toBeNull();
 });

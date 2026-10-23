@@ -34,9 +34,14 @@ export interface RemoteAgent {
   collapsed?: boolean;
   /** Overall PR check status; absent without an open PR that reports checks. */
   ci?: RemoteCiStatus;
+  /** The desktop board lane the task sits in, so the phone groups tasks the same way. */
+  lane?: RemoteBoardLane;
 }
 
 export type RemoteCiStatus = 'pending' | 'failure' | 'success';
+
+/** Mirrors the desktop board's lanes (src/components/task-board-lanes.ts). */
+export type RemoteBoardLane = 'needs' | 'stopped' | 'working' | 'pr' | 'snoozed';
 
 /** An agent the mobile "New Task" screen can launch, with the models it offers. */
 export interface RemoteAgentChoice {
@@ -92,6 +97,7 @@ export type RemoteTaskContext = Pick<
   taskName?: string;
   collapsed?: boolean;
   ci?: RemoteCiStatus;
+  lane?: RemoteBoardLane;
 };
 
 /** Conversation actions a paired phone may take on a running chat. */

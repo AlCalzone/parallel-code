@@ -84,6 +84,7 @@ import {
 import type {
   RemoteAgentChoice,
   RemoteAttentionState,
+  RemoteBoardLane,
   RemoteCiStatus,
   RemoteCloseResult,
   RemoteMergeReadiness,
@@ -1864,6 +1865,13 @@ export function registerAllHandlers(win: BrowserWindow): void {
     'review',
   ]);
   const VALID_CI: ReadonlySet<RemoteCiStatus> = new Set(['pending', 'failure', 'success']);
+  const VALID_LANE: ReadonlySet<RemoteBoardLane> = new Set([
+    'needs',
+    'stopped',
+    'working',
+    'pr',
+    'snoozed',
+  ]);
 
   // Renderer pushes the full per-task attention snapshot whenever it changes.
   // We replace the cache and re-broadcast the agent list so connected phones
@@ -1884,6 +1892,7 @@ export function registerAllHandlers(win: BrowserWindow): void {
             taskName?: unknown;
             collapsed?: unknown;
             ci?: unknown;
+            lane?: unknown;
           }
         >;
       },
@@ -1909,6 +1918,9 @@ export function registerAllHandlers(win: BrowserWindow): void {
             lastLine: typeof context.lastLine === 'string' ? context.lastLine.slice(0, 300) : '',
             ci: VALID_CI.has(context.ci as RemoteCiStatus)
               ? (context.ci as RemoteCiStatus)
+              : undefined,
+            lane: VALID_LANE.has(context.lane as RemoteBoardLane)
+              ? (context.lane as RemoteBoardLane)
               : undefined,
           });
         }
