@@ -123,12 +123,17 @@ export function activityLine(task: Task): { text: string; since?: number } {
   return { text: agent ?? '', since: hook?.since };
 }
 
-/** Opens the task on the panel that is asking, if one is. */
-export function openTask(task: Task): void {
+/** The pane of the task's agent that is asking a question, if any. */
+export function askingPanel(taskId: string): string | null {
   const question = computeAttentionEntries().find(
-    (entry) => entry.taskId === task.id && entry.kind === 'question',
+    (entry) => entry.taskId === taskId && entry.kind === 'question',
   );
-  jumpToWaitingTask(task.id, question?.panel ?? null);
+  return question?.panel ?? null;
+}
+
+/** Opens the task on the panel that is asking, if one is. */
+export function openTask(task: Task, panel = askingPanel(task.id)): void {
+  jumpToWaitingTask(task.id, panel);
 }
 
 function TaskRow(props: { task: Task; tabIndex: number }) {

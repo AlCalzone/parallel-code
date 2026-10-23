@@ -52,7 +52,7 @@ function setAsideLabel(task: Task): string {
 }
 
 /** Opens the task in the board's side panel, moving the panel across first when asked. */
-export function openBeside(task: Task, otherSide = false): void {
+export function openBeside(task: Task, otherSide = false, panel?: string | null): void {
   // Only a panel that stays put swaps its task; opening or moving it has its own motion.
   const switching = !otherSide && boardSidePanelOpen() && store.activeTaskId !== task.id;
   withViewTransition(
@@ -60,7 +60,7 @@ export function openBeside(task: Task, otherSide = false): void {
       batch(() => {
         if (otherSide) toggleBoardSidePanelSide();
         openBoardSidePanel();
-        openTask(task);
+        openTask(task, panel);
       }),
     switching ? ['task-switch'] : [],
   );

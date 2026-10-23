@@ -1,7 +1,9 @@
 import { store } from '../store/core';
+import { isAiTerminalPanel } from '../store/focused-panel';
 import { boardShown } from '../store/project-pages';
+import { samePanelKindIn } from '../store/store';
 import type { Task } from '../store/types';
-import { openTask } from './KanbanCard';
+import { askingPanel, openTask } from './KanbanCard';
 import { openBeside } from './TaskBoardCard';
 import { forgetWorkingHolds } from './task-board-hold';
 import { boardLanes, boardTasks } from './task-board-lanes';
@@ -32,10 +34,22 @@ function nextInQueue(queue: Task[], currentId: string | null): Task | undefined 
   return next?.id === currentId ? undefined : next;
 }
 
-/** Opens the next waiting task, beside the board while it is shown, on the panel that asks. */
+/**
+ * The pane to land on: the kind the keyboard is in now, so cycling does not
+ * pull it elsewhere; among agent terminals, the one that asks.
+ */
+function landingPanel(taskId: string): string | null {
+  const asking = askingPanel(taskId);
+  const same = samePanelKindIn(taskId);
+  if (same && isAiTerminalPanel(same) && asking && isAiTerminalPanel(asking)) return asking;
+  return same ?? asking;
+}
+
+/** Opens the next waiting task, beside the board while it is shown. */
 export function openNextAttentionTask(): void {
   const task = nextInQueue(attentionQueue(), store.activeTaskId);
   if (!task) return;
-  if (boardShown()) openBeside(task);
-  else openTask(task);
+  const panel = landingPanel(task.id);
+  if (boardShown()) openBeside(task, false, panel);
+  else openTask(task, panel);
 }

@@ -17,6 +17,7 @@ import {
   isShellPanel,
   setTaskFocusedPanel,
   shellPanelId,
+  shellPanelIndex,
   triggerFocus,
 } from './focused-panel';
 
@@ -575,6 +576,24 @@ export function navigateTask(
   }
 
   switchTaskKeepingPanel(taskOrder[targetIdx]);
+}
+
+/**
+ * The target task's pane of the kind the keyboard is in now, or null when it
+ * has none. Any agent terminal stands for another, as agents differ per task;
+ * shells keep their position where the target has that many.
+ */
+export function samePanelKindIn(targetId: string): string | null {
+  const { activeTaskId } = store;
+  const target = store.tasks[targetId];
+  if (!activeTaskId || !target) return null;
+  const current = getTaskFocusedPanel(activeTaskId);
+  if (isAiTerminalPanel(current)) return AI_TERMINAL_PANEL;
+  if (isShellPanel(current)) {
+    const shells = target.shellAgentIds.length;
+    return shells > 0 ? shellPanelId(Math.min(shellPanelIndex(current) ?? 0, shells - 1)) : null;
+  }
+  return findInGrid(buildGrid(targetId), current) !== null ? current : null;
 }
 
 /** Activates a task with the keyboard on the pane of the same name, where it has one. */

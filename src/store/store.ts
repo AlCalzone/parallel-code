@@ -118,6 +118,7 @@ export {
   unfocusSidebar,
   unfocusPlaceholder,
   focusBoardSidePanel,
+  samePanelKindIn,
   switchTaskKeepingPanel,
   navigateRow,
   navigateColumn,

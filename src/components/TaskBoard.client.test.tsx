@@ -14,6 +14,7 @@ import {
 import { navigateBoard, navigateBoardTask } from './task-board-keys';
 import { openNextAttentionTask } from './next-attention-task';
 import { retryCloseTask } from '../store/tasks';
+import type { AttentionEntry } from '../store/sidebar-attention';
 import type { Task } from '../store/types';
 import { BoardSidePanelClose } from './BoardSidePanel';
 import { FocusModeTaskIndicators } from './FocusModeTaskIndicators';
@@ -45,6 +46,16 @@ vi.mock('../store/taskStatus', async (importOriginal) => {
     getTaskAttentionState: (id: string) =>
       (forced()[id] as ReturnType<typeof original.getTaskAttentionState> | undefined) ??
       original.getTaskAttentionState(id),
+  };
+});
+
+// Agent questions are too far removed from the board to drive.
+const asking = vi.hoisted(() => ({ entries: [] as AttentionEntry[] }));
+vi.mock('../store/sidebar-attention', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../store/sidebar-attention')>();
+  return {
+    ...original,
+    computeAttentionEntries: () => [...asking.entries, ...original.computeAttentionEntries()],
   };
 });
 
@@ -113,6 +124,7 @@ afterEach(() => {
   dispose();
   document.body.replaceChildren();
   attention.force({});
+  asking.entries = [];
   vi.useRealTimers();
 });
 
@@ -768,6 +780,51 @@ describe('next task that needs you', () => {
     attention.force({});
     openNextAttentionTask();
     expect(store.activeTaskId).toBe('idle');
+  });
+
+  it('keeps the keyboard in the same kind of pane', () => {
+    setStore('activeTaskId', 'pr');
+    setTaskFocusedPanel('pr', 'notes');
+    openNextAttentionTask();
+    expect(store.activeTaskId).toBe('review');
+    expect(getTaskFocusedPanel('review')).toBe('notes');
+  });
+
+  it('keeps the keyboard in an agent terminal, landing on the one that asks', () => {
+    setStore('tasks', 'pr', 'agentIds', ['pr-agent']);
+    setStore('tasks', 'review', 'agentIds', ['first', 'asking']);
+    setStore('activeTaskId', 'pr');
+    setTaskFocusedPanel('pr', 'ai-terminal:pr-agent');
+    asking.entries = [
+      {
+        key: 'q',
+        kind: 'question',
+        taskId: 'review',
+        label: 'Answer',
+        panel: 'ai-terminal:asking',
+      },
+    ];
+    openNextAttentionTask();
+    expect(getTaskFocusedPanel('review')).toBe('ai-terminal:asking');
+  });
+
+  it('keeps the keyboard in an agent terminal when no agent asks', () => {
+    setStore('tasks', 'pr', 'agentIds', ['pr-agent']);
+    setStore('tasks', 'review', 'agentIds', ['review-agent']);
+    setTaskFocusedPanel('review', 'notes');
+    setStore('activeTaskId', 'pr');
+    setTaskFocusedPanel('pr', 'ai-terminal:pr-agent');
+    openNextAttentionTask();
+    expect(getTaskFocusedPanel('review')).toBe('ai-terminal:review-agent');
+  });
+
+  it('keeps the keyboard in a shell, even one the next task numbers differently', () => {
+    setStore('tasks', 'pr', 'shellAgentIds', ['s1', 's2']);
+    setStore('tasks', 'review', 'shellAgentIds', ['s3']);
+    setStore('activeTaskId', 'pr');
+    setTaskFocusedPanel('pr', 'shell:1');
+    openNextAttentionTask();
+    expect(getTaskFocusedPanel('review')).toBe('shell:0');
   });
 
   it('stays put when nothing else is waiting', () => {
