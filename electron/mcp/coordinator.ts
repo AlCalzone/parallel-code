@@ -939,17 +939,15 @@ export class Coordinator {
     // second coordinator starting up does not overwrite the first's task configs.
     for (const task of this.tasks.values()) {
       if (task.coordinatorTaskId !== coordinatorTaskId) continue;
-      if (!task.mcpConfigPath) continue;
       const mcpConfigPath = task.mcpConfigPath;
       const safeMcpConfigPath = isAllowedSubTaskMcpConfigPath(mcpConfigPath, {
         taskId: task.id,
         serverPath,
         dockerContainerName: state?.dockerContainerName ?? null,
       });
-      if (!safeMcpConfigPath) {
-        task.mcpConfigPath = undefined;
-        continue;
-      }
+      if (!safeMcpConfigPath) task.mcpConfigPath = undefined;
+      // An agy child may have only its worktree file, which needs the new token too.
+      if (!safeMcpConfigPath && !task.antigravityWorkspaceMcp) continue;
       // Preserve existing doneToken; generate a fresh one if not yet set (e.g. older persisted task).
       if (!task.doneToken) task.doneToken = randomBytes(24).toString('base64url');
       const session = this.sessionMcpProvider?.(task);
@@ -961,7 +959,7 @@ export class Coordinator {
         taskId: task.id,
         doneToken: task.doneToken,
       });
-      writeSubTaskMcpConfigSync(mcpConfigPath, mcpConfig);
+      if (safeMcpConfigPath && mcpConfigPath) writeSubTaskMcpConfigSync(mcpConfigPath, mcpConfig);
       if (!task.antigravityWorkspaceMcp || !existsSync(task.worktreePath)) continue;
       try {
         writeAntigravityMcpConfig(task.worktreePath, mcpConfig);

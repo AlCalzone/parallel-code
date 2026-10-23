@@ -3504,6 +3504,30 @@ describe('Coordinator MCP config restart rewrite', () => {
     ).not.toThrow();
   });
 
+  it('refreshes a restored Antigravity child that has no temp config path', () => {
+    coordinator.setMCPServerInfo('coord-1', 'http://localhost:3001', 'old', 'old', '/srv.js');
+    mockExistsSync.mockReturnValue(true);
+    coordinator.hydrateTask({
+      id: 'agy-no-path',
+      name: 'restored',
+      projectId: 'proj-1',
+      projectRoot: '/tmp/project',
+      branchName: 'task/restored',
+      worktreePath: '/tmp/restored',
+      agentId: 'agent-agy-no-path',
+      coordinatorTaskId: 'coord-1',
+      agentCommand: 'agy',
+    });
+    mockWriteAntigravityMcpConfig.mockClear();
+
+    coordinator.setMCPServerInfo('coord-1', 'http://localhost:3002', 'new', 'new', '/srv.js');
+
+    const rewritten = mockWriteAntigravityMcpConfig.mock.calls[0]?.[1] as
+      | { mcpServers: { 'parallel-code': { args: string[] } } }
+      | undefined;
+    expect(rewritten?.mcpServers['parallel-code'].args).toContain('http://localhost:3002');
+  });
+
   it('restores an Antigravity child even when its worktree config cannot be written', () => {
     coordinator.setMCPServerInfo('coord-1', 'http://localhost:3002', 'new', 'new', '/srv.js');
     mockExistsSync.mockReturnValue(true);
