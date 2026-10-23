@@ -459,20 +459,51 @@ html[data-look^='islands-'] .task-board {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
   padding: 0 24px;
-  font-size: 13px;
 }
 .task-board-first strong {
-  color: var(--fg-muted);
-  font-size: 16px;
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--fg);
 }
 .task-board-first span {
-  max-width: 420px;
+  max-width: 400px;
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.55;
+  text-wrap: balance;
 }
-.task-board-first .task-board-act {
-  margin: 8px 0 0;
+/* The welcome screen's action, one step on: neutral, with full-strength text. */
+.task-board-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 9px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--fg);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.task-board-start:hover {
+  background: var(--bg-hover);
+}
+.task-board-start:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+}
+.task-board-start kbd {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fg-subtle);
 }
 
 /* The workspace, narrowed to one task beside the board. A dragged width

@@ -82,21 +82,21 @@ function BoardFirstSteps() {
         when={codeProjects().length > 0}
         fallback={
           <>
-            <strong>Link your first project to get started</strong>
-            <span>A project is a local folder with your code; its tasks show up here.</span>
-            <button type="button" class="task-board-act" onClick={() => void pickAndAddProject()}>
-              Link project
+            <strong>Link a project to get started</strong>
+            <span>A project is a folder with your code; its tasks show up here.</span>
+            <button type="button" class="task-board-start" onClick={() => void pickAndAddProject()}>
+              Link a project folder…
             </button>
           </>
         }
       >
-        <strong>No tasks yet</strong>
+        <strong>Start a task</strong>
         <span>
-          Each task gets its own agent and worktree, and its card moves to Needs you whenever the
-          agent wants you.
+          Describe the work, and an agent takes it on in its own worktree. Its card moves to Needs
+          you whenever the agent wants you.
         </span>
-        <button type="button" class="task-board-act" onClick={() => toggleNewTaskPanel(true)}>
-          New task ({mod}+N)
+        <button type="button" class="task-board-start" onClick={() => toggleNewTaskPanel(true)}>
+          New task <kbd>{mod}+N</kbd>
         </button>
       </Show>
     </div>

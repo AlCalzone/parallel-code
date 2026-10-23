@@ -1,6 +1,7 @@
-import { For, Show, createSignal, onMount } from 'solid-js';
+import { For, Show, createSignal, onCleanup, onMount } from 'solid-js';
 import { isAgentInstalled } from '../lib/default-agent';
-import { errMessage } from '../lib/log';
+import * as log from '../lib/log';
+import { agentsLoaded, loadAgents } from '../store/agents';
 import { store } from '../store/core';
 import { showNotification } from '../store/notification';
 import { pickAndAddProject } from '../store/projects';
@@ -8,10 +9,39 @@ import { AppLogo } from './icons';
 import './welcome.css';
 
 const STEPS = [
-  { title: 'Link a project', detail: 'Any folder with your code; a Git repository works best.' },
-  { title: 'Start tasks', detail: 'Describe the work, and an agent takes it on its own branch.' },
-  { title: 'Review and merge', detail: 'The board shows which tasks need you, and when.' },
+  { title: 'Link a project', detail: 'Once for each codebase.' },
+  { title: 'Start tasks', detail: 'Each gets its own agent and branch.' },
+  { title: 'Review and merge', detail: 'The board shows what needs you.' },
 ];
+
+/** "A", "A and B", "A, B and C". */
+function listNames(names: string[]): string {
+  return names.length < 2
+    ? names.join('')
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/** Which agents tasks can use; re-detected on return, so a CLI installed meanwhile shows up. */
+function AgentsLine() {
+  const installed = () => store.availableAgents.filter(isAgentInstalled).map((agent) => agent.name);
+  const redetect = () => {
+    if (installed().length > 0) return;
+    loadAgents().catch((err: unknown) => log.error('agents', 'Agent re-detection failed', err));
+  };
+  window.addEventListener('focus', redetect);
+  onCleanup(() => window.removeEventListener('focus', redetect));
+  return (
+    // Reserves its line while agents load, so nothing above it moves.
+    <p class="welcome-agents" classList={{ pending: !agentsLoaded() }}>
+      <Show
+        when={installed().length > 0}
+        fallback="No coding agent found yet. Install one, such as Claude Code or Codex CLI, to run tasks."
+      >
+        Found {listNames(installed())}.
+      </Show>
+    </p>
+  );
+}
 
 /**
  * The first screen of a new install, whatever view is selected: the one step
@@ -20,8 +50,8 @@ const STEPS = [
  */
 export function WelcomeScreen() {
   const [linking, setLinking] = createSignal(false);
-  const agents = () => store.availableAgents.filter(isAgentInstalled).map((agent) => agent.name);
   let action: HTMLButtonElement | undefined;
+  // Enter links right away; nothing else on the screen competes for the keyboard.
   onMount(() => action?.focus());
 
   const link = async () => {
@@ -29,7 +59,7 @@ export function WelcomeScreen() {
     try {
       await pickAndAddProject();
     } catch (err) {
-      showNotification(`Couldn't link the project: ${errMessage(err)}`);
+      showNotification(`Couldn't link the project: ${log.errMessage(err)}`);
     } finally {
       setLinking(false);
     }
@@ -41,10 +71,20 @@ export function WelcomeScreen() {
         <AppLogo class="welcome-logo" />
         <h1 id="welcome-title">Parallel Code</h1>
         <p class="welcome-lead">
-          Run coding agents side by side. Each task gets its own agent and Git worktree, so they
-          never step on each other.
+          Run several coding agents at once, each in its own Git worktree, so they never step on
+          each other.
         </p>
-        <ol class="welcome-steps">
+        <button
+          ref={action}
+          type="button"
+          class="welcome-action"
+          disabled={linking()}
+          onClick={() => void link()}
+        >
+          Link a project folder…
+        </button>
+        <p class="welcome-hint">Any folder with your code. A Git repository works best.</p>
+        <ol class="welcome-steps" aria-label="How it works">
           <For each={STEPS}>
             {(step) => (
               <li>
@@ -54,23 +94,7 @@ export function WelcomeScreen() {
             )}
           </For>
         </ol>
-        <button
-          ref={action}
-          type="button"
-          class="welcome-action"
-          disabled={linking()}
-          onClick={() => void link()}
-        >
-          Link a project…
-        </button>
-        <p class="welcome-agents">
-          <Show
-            when={agents().length > 0}
-            fallback="No coding agent found yet. Install one, such as Claude Code or Codex CLI, before you start a task."
-          >
-            Ready with {agents().join(', ')}.
-          </Show>
-        </p>
+        <AgentsLine />
       </div>
     </main>
   );

@@ -2,11 +2,16 @@ import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentDef } from '../../electron/ipc/shared-types';
 import { setStore, store } from '../store/core';
+import { loadAgents } from '../store/agents';
 import { pickAndAddProject } from '../store/projects';
 import { WelcomeScreen } from './WelcomeScreen';
 
 vi.mock('../lib/ipc', () => ({ invoke: vi.fn(async () => undefined) }));
 vi.mock('../store/projects', () => ({ pickAndAddProject: vi.fn(async () => null) }));
+vi.mock('../store/agents', () => ({
+  agentsLoaded: () => true,
+  loadAgents: vi.fn(async () => undefined),
+}));
 
 function agent(name: string, available: boolean): AgentDef {
   return {
@@ -38,6 +43,7 @@ afterEach(() => {
   setStore('availableAgents', []);
   setStore('notification', null);
   vi.mocked(pickAndAddProject).mockReset();
+  vi.mocked(loadAgents).mockClear();
 });
 
 describe('WelcomeScreen', () => {
@@ -65,10 +71,26 @@ describe('WelcomeScreen', () => {
   });
 
   it('names the installed agents, or says one is needed', () => {
-    setStore('availableAgents', [agent('Claude Code', true), agent('Codex CLI', false)]);
+    setStore('availableAgents', [
+      agent('Claude Code', true),
+      agent('Codex CLI', true),
+      agent('OpenCode', true),
+      agent('Gemini CLI', false),
+    ]);
     const host = mount();
-    expect(host.querySelector('.welcome-agents')?.textContent).toBe('Ready with Claude Code.');
-    setStore('availableAgents', [agent('Codex CLI', false)]);
-    expect(host.querySelector('.welcome-agents')?.textContent).toContain('No coding agent found');
+    const line = () => host.querySelector('.welcome-agents')?.textContent;
+    expect(line()).toBe('Found Claude Code, Codex CLI and OpenCode.');
+    setStore('availableAgents', [agent('Gemini CLI', false)]);
+    expect(line()).toContain('No coding agent found');
+  });
+
+  it('looks for agents again on returning to the window, until one is found', () => {
+    mount();
+    window.dispatchEvent(new Event('focus'));
+    expect(loadAgents).toHaveBeenCalledTimes(1);
+
+    setStore('availableAgents', [agent('Claude Code', true)]);
+    window.dispatchEvent(new Event('focus'));
+    expect(loadAgents).toHaveBeenCalledTimes(1);
   });
 });
