@@ -25,6 +25,8 @@ export interface RemoteAgent {
   lastLine: string;
   projectName?: string;
   projectColor?: string;
+  /** Project icon id; the phone falls back to the color square for unknown ids. */
+  projectIcon?: string;
   agentName?: string;
   /** Richer, renderer-derived task status. Defaults to 'idle' when unknown. */
   attention: RemoteAttentionState;
@@ -92,7 +94,7 @@ export interface RemoteMergeReadiness {
 /** Metadata attached to a task's remote agent entry. */
 export type RemoteTaskContext = Pick<
   RemoteAgent,
-  'projectName' | 'projectColor' | 'agentName' | 'lastLine'
+  'projectName' | 'projectColor' | 'projectIcon' | 'agentName' | 'lastLine'
 > & {
   taskName?: string;
   collapsed?: boolean;

@@ -65,6 +65,11 @@ it('keeps a focused task card mounted when live preview text and project color c
   expect(document.activeElement).toBe(card);
   expect(card.textContent).toContain('Running tests');
   expect(swatch()?.style.background).toBe('#0000ff');
+  publish([{ ...agent, projectColor: '#0000ff', projectIcon: 'bug' }]);
+  expect(swatch()?.style.color).toBe('#0000ff');
+  expect(swatch()?.querySelector('svg')).not.toBeNull();
+  publish([{ ...agent, projectColor: '#0000ff', projectIcon: 'not-an-icon' }]);
+  expect(swatch()?.style.background).toBe('#0000ff');
   publish([{ ...agent, projectColor: undefined }]);
   expect(swatch()).toBeNull();
 });

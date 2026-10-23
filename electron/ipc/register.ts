@@ -1887,6 +1887,7 @@ export function registerAllHandlers(win: BrowserWindow): void {
           {
             projectName?: unknown;
             projectColor?: unknown;
+            projectIcon?: unknown;
             agentName?: unknown;
             lastLine?: unknown;
             taskName?: unknown;
@@ -1914,6 +1915,8 @@ export function registerAllHandlers(win: BrowserWindow): void {
               typeof context.projectName === 'string' ? context.projectName.slice(0, 200) : '',
             projectColor:
               typeof context.projectColor === 'string' ? context.projectColor.slice(0, 200) : '',
+            projectIcon:
+              typeof context.projectIcon === 'string' ? context.projectIcon.slice(0, 64) : '',
             agentName: typeof context.agentName === 'string' ? context.agentName.slice(0, 200) : '',
             lastLine: typeof context.lastLine === 'string' ? context.lastLine.slice(0, 300) : '',
             ci: VALID_CI.has(context.ci as RemoteCiStatus)
