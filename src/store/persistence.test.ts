@@ -1027,12 +1027,12 @@ describe('loadState theme persistence', () => {
     setStore('customAgents', []);
   });
 
-  it('defaults to dark mode with obsidian/islands-light when no theme fields saved', async () => {
+  it('defaults to dark mode with parallel-code/islands-light when no theme fields saved', async () => {
     mockInvoke.mockResolvedValueOnce(basePayload());
     await loadState();
 
     expect(store.appearanceMode).toBe('dark');
-    expect(store.darkThemePreset).toBe('obsidian');
+    expect(store.darkThemePreset).toBe('parallel-code');
     expect(store.lightThemePreset).toBe('islands-light');
     expect(store.darkThemeCustomId).toBeNull();
     expect(store.lightThemeCustomId).toBeNull();
@@ -1060,12 +1060,12 @@ describe('loadState theme persistence', () => {
     expect(store.darkThemePreset).toBe('classic');
   });
 
-  it('falls back to obsidian for an invalid darkThemePreset', async () => {
+  it('falls back to parallel-code for an invalid darkThemePreset', async () => {
     mockInvoke.mockResolvedValueOnce(
       basePayload({ appearanceMode: 'dark', darkThemePreset: 'not-a-theme' }),
     );
     await loadState();
-    expect(store.darkThemePreset).toBe('obsidian');
+    expect(store.darkThemePreset).toBe('parallel-code');
   });
 
   it.each(['dark', 'light', 'system'])(
@@ -1077,7 +1077,7 @@ describe('loadState theme persistence', () => {
     },
   );
 
-  it('saves and restores Obsidian explicitly when using the new default', async () => {
+  it('keeps a saved Obsidian preference after the default changed', async () => {
     setStore('darkThemePreset', 'obsidian');
     setStore('themePreset', 'obsidian');
     setStore('appearanceMode', 'dark');
@@ -1144,11 +1144,11 @@ describe('loadState theme persistence', () => {
     expect(store.darkThemePreset).toBe('classic');
   });
 
-  it('backward compat: invalid old themePreset leaves dark mode with obsidian', async () => {
+  it('backward compat: invalid old themePreset leaves dark mode with parallel-code', async () => {
     mockInvoke.mockResolvedValueOnce(basePayload({ themePreset: 'legacy-unknown' }));
     await loadState();
     expect(store.appearanceMode).toBe('dark');
-    expect(store.darkThemePreset).toBe('obsidian');
+    expect(store.darkThemePreset).toBe('parallel-code');
   });
 });
 

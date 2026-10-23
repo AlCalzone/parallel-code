@@ -1,5 +1,5 @@
-import { For } from 'solid-js';
-import { presetsForTone } from '../../lib/look';
+import { For, Show } from 'solid-js';
+import { defaultPresetForTone, presetsForTone } from '../../lib/look';
 import { theme } from '../../lib/theme';
 import { detectThemeTone } from '../../lib/custom-theme';
 import { store, setLightTheme, setDarkTheme } from '../../store/store';
@@ -20,7 +20,12 @@ export function PresetThemeCard(props: {
         class={`settings-theme-card${props.active ? ' active' : ''}`}
         onClick={() => props.onSelect()}
       >
-        <span class="settings-theme-title">{props.preset.label}</span>
+        <span class="settings-theme-title">
+          {props.preset.label}{' '}
+          <Show when={props.preset.id === defaultPresetForTone(props.preset.tone)}>
+            <span class="settings-theme-default">Default</span>
+          </Show>
+        </span>
         <span class="settings-theme-desc">{props.preset.description}</span>
       </button>
       <button
