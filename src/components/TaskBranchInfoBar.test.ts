@@ -229,7 +229,7 @@ describe('TaskBranchInfoBar project chip', () => {
     expect(html).toContain('class="task-branch-project-label">parallel-code</span>');
     expect(html).toContain('class="task-branch-project-compact-label"');
     expect(html).toContain('>PC</span>');
-    expect(html).toContain('aria-label="Project: parallel-code · Project settings"');
+    expect(html).toContain('aria-label="Project: parallel-code · Project actions"');
   });
 });
 

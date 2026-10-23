@@ -3,10 +3,8 @@ import { TaskProjectFilter } from './TaskProjectFilter';
 import { createProjectFilterTransition } from '../lib/projectFilterTransition';
 import { createSignal, createEffect, createMemo, onMount, onCleanup, For, Show } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { ClockIcon, GitHubIcon, PlanIcon } from './icons';
+import { ClockIcon } from './icons';
 import { createTaskContextMenu } from './task-context-menu';
-import { openGitHubIssues } from '../store/github';
-import { openKanban } from '../store/kanban';
 import { errMessage } from '../lib/log';
 import {
   store,
@@ -44,6 +42,7 @@ import { getChildAttentionSummary } from '../store/sidebar-attention';
 import { AttentionTray } from './AttentionTray';
 import { ConnectPhoneModal } from './ConnectPhoneModal';
 import { RemoveProjectConfirm } from './RemoveProjectConfirm';
+import { menuPointFor, ProjectMenu } from './project-menu';
 import { EditProjectDialog } from './EditProjectDialog';
 import { AddProjectDialog } from '../documents/AddProjectDialog';
 import { openDocumentWorkspace } from '../documents/store';
@@ -345,6 +344,10 @@ export function TaskRowShell(props: {
 export function Sidebar() {
   const [confirmRemove, setConfirmRemove] = createSignal<string | null>(null);
   const [editingProject, setEditingProject] = createSignal<Project | null>(null);
+  const [projectMenu, setProjectMenu] = createSignal<{
+    project: Project;
+    at: { x: number; y: number };
+  } | null>(null);
   const [showConnectPhone, setShowConnectPhone] = createSignal(false);
   const [importProject, setImportProject] = createSignal<Project | null>(null);
   const [initialImportCandidates, setInitialImportCandidates] = createSignal<
@@ -483,11 +486,17 @@ export function Sidebar() {
     else void addCodeProject();
   }
 
-  /** A document project navigates; a code project opens its settings. */
-  function openProjectRow(project: Project): void {
+  /** A document project navigates; a code project offers its menu. */
+  function openProjectRow(project: Project, event?: MouseEvent): void {
     if (isDocumentProject(project) && !isProjectMissing(project.id))
       void openDocumentWorkspace(project.id);
-    else setEditingProject(project);
+    else openProjectMenu(project, event);
+  }
+
+  /** Opens at the pointer, or below the row when the keyboard opened it. */
+  function openProjectMenu(project: Project, event?: MouseEvent): void {
+    const row = document.querySelector(`.project-row[data-project-id="${project.id}"]`);
+    setProjectMenu({ project, at: menuPointFor(event, row) });
   }
 
   async function addCodeProject() {
@@ -706,9 +715,20 @@ export function Sidebar() {
                       tabIndex={0}
                       class="project-row"
                       data-project-id={project.id}
-                      onClick={() => openProjectRow(project)}
+                      aria-haspopup={
+                        isDocumentProject(project) && !isProjectMissing(project.id)
+                          ? undefined
+                          : 'menu'
+                      }
+                      onClick={(e) => openProjectRow(project, e)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        openProjectMenu(project, e);
+                      }}
                       onKeyDown={(e) => {
                         if (e.key !== 'Enter') return;
+                        // The task list's Enter handler would open it again for the focused id.
+                        e.stopPropagation();
                         openProjectRow(project);
                       }}
                       title={
@@ -769,81 +789,6 @@ export function Sidebar() {
                           Folder not found
                         </span>
                       </Show>
-                      <Show when={!isDocumentProject(project) && !isProjectMissing(project.id)}>
-                        <button
-                          type="button"
-                          class="icon-btn"
-                          title={`Plan for ${project.name}`}
-                          aria-label={`Plan for ${project.name}`}
-                          aria-pressed={store.kanbanProjectId === project.id}
-                          onKeyDown={(e) => e.stopPropagation()}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // A second click goes back to the running tasks.
-                            withViewTransition(() =>
-                              openKanban(store.kanbanProjectId === project.id ? null : project.id),
-                            );
-                          }}
-                          style={{
-                            color:
-                              store.kanbanProjectId === project.id ? theme.accent : theme.fgMuted,
-                            display: 'flex',
-                            background: 'transparent',
-                            border: 'none',
-                            padding: '2px',
-                            'flex-shrink': '0',
-                          }}
-                        >
-                          <PlanIcon size={14} />
-                        </button>
-                      </Show>
-                      <Show when={!isDocumentProject(project) && !isProjectMissing(project.id)}>
-                        <button
-                          type="button"
-                          class="icon-btn"
-                          title={`Browse GitHub issues for ${project.name}`}
-                          aria-label={`Browse GitHub issues for ${project.name}`}
-                          aria-pressed={store.githubIssuesProjectId === project.id}
-                          onKeyDown={(e) => e.stopPropagation()}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openGitHubIssues(project.id);
-                          }}
-                          style={{
-                            color:
-                              store.githubIssuesProjectId === project.id
-                                ? theme.accent
-                                : theme.fgMuted,
-                            display: 'flex',
-                            background: 'transparent',
-                            border: 'none',
-                            padding: '2px',
-                            'flex-shrink': '0',
-                          }}
-                        >
-                          <GitHubIcon size={14} />
-                        </button>
-                      </Show>
-                      <button
-                        class="icon-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setConfirmRemove(project.id);
-                        }}
-                        title="Remove project"
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: theme.fgSubtle,
-                          cursor: 'pointer',
-                          'font-size': sf(13),
-                          'line-height': '1',
-                          padding: '0 2px',
-                          'flex-shrink': '0',
-                        }}
-                      >
-                        &times;
-                      </button>
                     </div>
                   )}
                 </For>
@@ -1054,6 +999,16 @@ export function Sidebar() {
 
         <ConnectPhoneModal open={showConnectPhone()} onClose={() => setShowConnectPhone(false)} />
 
+        <Show when={projectMenu()}>
+          {(menu) => (
+            <ProjectMenu
+              project={menu().project}
+              at={menu().at}
+              dialogs={{ editSettings: setEditingProject, remove: setConfirmRemove }}
+              onClose={() => setProjectMenu(null)}
+            />
+          )}
+        </Show>
         <EditProjectDialog project={editingProject()} onClose={() => setEditingProject(null)} />
         <AddProjectDialog
           open={showAddProject()}

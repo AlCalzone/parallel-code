@@ -2488,15 +2488,6 @@ textarea::placeholder {
   background: var(--bg-hover);
 }
 
-.project-row .icon-btn {
-  opacity: 0.5;
-  transition: opacity 0.12s ease;
-}
-
-.project-row:is(:hover, :focus-within) .icon-btn {
-  opacity: 1;
-}
-
 /* Give empty notes a visible input boundary instead of a floating prompt.
    Keep the textarea mounted and directly editable in every theme. */
 .task-notes-body[data-empty='true'] textarea {

@@ -20,6 +20,8 @@ import { projectInitials } from '../lib/project-initials';
 import type { Task } from '../store/types';
 import { GitMergeIcon, ToolsIcon } from './icons';
 import { PrChip } from './PrChip';
+import { menuPointFor, ProjectMenu } from './project-menu';
+import { RemoveProjectConfirm } from './RemoveProjectConfirm';
 import { BabysitButton } from './BabysitButton';
 import { extraPrWatchId, getTaskExtraPrs, isPrReadyToMerge } from '../store/pr-checks-state';
 
@@ -114,6 +116,8 @@ interface TaskBranchInfoBarProps {
 
 export function TaskBranchInfoBar(props: TaskBranchInfoBarProps) {
   const project = () => getProject(props.task.projectId);
+  const [projectMenuAt, setProjectMenuAt] = createSignal<{ x: number; y: number } | null>(null);
+  const [confirmRemove, setConfirmRemove] = createSignal<string | null>(null);
   // Keep project color separate from the status indicators above the bar.
   const projectStripe = () => {
     const color = project()?.color;
@@ -191,21 +195,43 @@ export function TaskBranchInfoBar(props: TaskBranchInfoBarProps) {
     <InfoBar class="task-branch-info-bar" style={projectStripe()}>
       <Show when={project()}>
         {(p) => (
-          <button
-            type="button"
-            class="task-branch-info-button task-branch-project"
-            onClick={() => props.onEditProject(p().id)}
-            title={`${p().name} · Project settings`}
-            aria-label={`Project: ${p().name} · Project settings`}
-            style={{ ...infoBarBtnStyle, margin: '0 8px 0 0' }}
-          >
-            <span class="task-branch-project-label">{p().name}</span>
-            <span class="task-branch-project-compact-label" aria-hidden="true">
-              {projectInitials(p().name)}
-            </span>
-          </button>
+          <>
+            <button
+              type="button"
+              class="task-branch-info-button task-branch-project"
+              onClick={(e) => setProjectMenuAt(menuPointFor(e, e.currentTarget))}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setProjectMenuAt(menuPointFor(e, e.currentTarget));
+              }}
+              aria-haspopup="menu"
+              aria-expanded={projectMenuAt() !== null}
+              title={`${p().name} · Project actions`}
+              aria-label={`Project: ${p().name} · Project actions`}
+              style={{ ...infoBarBtnStyle, margin: '0 8px 0 0' }}
+            >
+              <span class="task-branch-project-label">{p().name}</span>
+              <span class="task-branch-project-compact-label" aria-hidden="true">
+                {projectInitials(p().name)}
+              </span>
+            </button>
+            <Show when={projectMenuAt()}>
+              {(at) => (
+                <ProjectMenu
+                  project={p()}
+                  at={at()}
+                  dialogs={{
+                    editSettings: (edited) => props.onEditProject(edited.id),
+                    remove: setConfirmRemove,
+                  }}
+                  onClose={() => setProjectMenuAt(null)}
+                />
+              )}
+            </Show>
+          </>
         )}
       </Show>
+      <RemoveProjectConfirm projectId={confirmRemove()} onDone={() => setConfirmRemove(null)} />
       <Show when={prLinkUrl()}>
         {(url) => {
           const pr = () => getPrChecks(props.task.id);
