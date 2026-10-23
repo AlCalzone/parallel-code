@@ -1,7 +1,7 @@
 import { For, Show, createSignal, onCleanup, onMount } from 'solid-js';
 import { isAgentInstalled } from '../lib/default-agent';
 import * as log from '../lib/log';
-import { agentsLoaded, loadAgents } from '../store/agents';
+import { agentsLoadFailed, agentsLoaded, loadAgents } from '../store/agents';
 import { store } from '../store/core';
 import { showNotification } from '../store/notification';
 import { pickAndAddProject } from '../store/projects';
@@ -31,8 +31,9 @@ function AgentsLine() {
   window.addEventListener('focus', redetect);
   onCleanup(() => window.removeEventListener('focus', redetect));
   return (
-    // Reserves its line while agents load, so nothing above it moves.
-    <p class="welcome-agents" classList={{ pending: !agentsLoaded() }}>
+    // Reserves its line while agents load, so nothing above it moves. A failed
+    // listing says nothing about what is installed, so it stays blank too.
+    <p class="welcome-agents" classList={{ pending: !agentsLoaded() || agentsLoadFailed() }}>
       <Show
         when={installed().length > 0}
         fallback="No coding agent found yet. Install one, such as Claude Code or Codex CLI, to run tasks."

@@ -62,6 +62,7 @@ import {
   store,
   loadAgents,
   loadState,
+  isStateLoaded,
   saveState,
   toggleNewTaskPanel,
   toggleSidebar,
@@ -207,6 +208,15 @@ function DropOverlay() {
   );
 }
 
+const WELCOME_ACTIONS = new Set([
+  'toggleHelp',
+  'toggleSettings',
+  'closeDialogs',
+  'zoomIn',
+  'zoomOut',
+  'resetZoom',
+]);
+
 function App() {
   let mainRef!: HTMLDivElement;
   const [windowFocused, setWindowFocused] = createSignal(true);
@@ -215,9 +225,11 @@ function App() {
   const [closeHandlerReady, setCloseHandlerReady] = createSignal(false);
   const [taskSwitcherOpen, setTaskSwitcherOpen] = createSignal(false);
   const [stateLoaded, setStateLoaded] = createSignal(false);
+  const [stateRestored, setStateRestored] = createSignal(false);
   // A new install sees only the welcome screen, whatever view is selected; and
-  // nothing flashes up before the saved state says whether it is one.
-  const welcome = () => stateLoaded() && store.projects.length === 0;
+  // nothing flashes up before the saved state says whether it is one. An
+  // unreadable state is no first run: its projects would not be saved.
+  const welcome = () => stateRestored() && store.projects.length === 0;
   const bare = () => !stateLoaded() || welcome();
   let dragCounter = 0;
 
@@ -469,6 +481,7 @@ function App() {
     try {
       await loadState();
     } finally {
+      setStateRestored(isStateLoaded());
       setStateLoaded(true);
     }
     const themesLoaded = await loadCustomThemes();
@@ -802,6 +815,8 @@ function App() {
           toggleSettingsDialog(false);
           return;
         }
+        // The workspace behind the welcome screen stays as it is.
+        if (welcome()) return;
         // The board covers focus mode, so it closes first, its side panel
         // before it. A draft in the side panel handles Escape itself.
         if (boardShown()) {
@@ -841,7 +856,12 @@ function App() {
     const boardOnly = (binding: { action?: string }) =>
       binding.action?.startsWith('navigateBoardTask:') === true;
     createEffect(() => {
-      const bindings = resolvedBindings().filter((binding) => !boardOnly(binding));
+      // The welcome screen hides the workspace; only shortcuts that open their own UI work there.
+      const fitsScreen = (binding: { action?: string }) =>
+        !welcome() || (binding.action !== undefined && WELCOME_ACTIONS.has(binding.action));
+      const bindings = resolvedBindings().filter(
+        (binding) => !boardOnly(binding) && fitsScreen(binding),
+      );
       onCleanup(registerFromRegistry(bindings, actionHandlers));
     });
     createEffect(() => {

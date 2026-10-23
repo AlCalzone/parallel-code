@@ -105,6 +105,17 @@ describe('startup persistence', () => {
     expect(mockInvoke).toHaveBeenCalledWith(IPC.SaveAppState, { json: expect.any(String) });
   });
 
+  it('tells an unreadable saved state apart from a new install', async () => {
+    const { isStateLoaded, loadState } = await import('./persistence');
+    mockInvoke.mockResolvedValueOnce('{not json');
+    await loadState();
+    expect(isStateLoaded()).toBe(false);
+
+    mockInvoke.mockResolvedValueOnce(null);
+    await loadState();
+    expect(isStateLoaded()).toBe(true);
+  }, 20_000);
+
   it('keeps saves disabled if loading the saved state fails', async () => {
     const { loadState, saveState } = await import('./persistence');
     mockInvoke.mockRejectedValueOnce(new Error('State unavailable'));

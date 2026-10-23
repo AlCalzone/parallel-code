@@ -2,7 +2,7 @@ import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentDef } from '../../electron/ipc/shared-types';
 import { setStore, store } from '../store/core';
-import { loadAgents } from '../store/agents';
+import { agentsLoadFailed, loadAgents } from '../store/agents';
 import { pickAndAddProject } from '../store/projects';
 import { WelcomeScreen } from './WelcomeScreen';
 
@@ -10,6 +10,7 @@ vi.mock('../lib/ipc', () => ({ invoke: vi.fn(async () => undefined) }));
 vi.mock('../store/projects', () => ({ pickAndAddProject: vi.fn(async () => null) }));
 vi.mock('../store/agents', () => ({
   agentsLoaded: () => true,
+  agentsLoadFailed: vi.fn(() => false),
   loadAgents: vi.fn(async () => undefined),
 }));
 
@@ -44,6 +45,7 @@ afterEach(() => {
   setStore('notification', null);
   vi.mocked(pickAndAddProject).mockReset();
   vi.mocked(loadAgents).mockClear();
+  vi.mocked(agentsLoadFailed).mockReturnValue(false);
 });
 
 describe('WelcomeScreen', () => {
@@ -82,6 +84,12 @@ describe('WelcomeScreen', () => {
     expect(line()).toBe('Found Claude Code, Codex CLI and OpenCode.');
     setStore('availableAgents', [agent('Gemini CLI', false)]);
     expect(line()).toContain('No coding agent found');
+  });
+
+  it('claims nothing about agents when listing them failed', () => {
+    vi.mocked(agentsLoadFailed).mockReturnValue(true);
+    const line = mount().querySelector('.welcome-agents');
+    expect(line?.classList.contains('pending')).toBe(true);
   });
 
   it('looks for agents again on returning to the window, until one is found', () => {

@@ -131,7 +131,7 @@ export {
   scrollTaskElementIntoView,
 } from './focus';
 export type { PanelId, PendingAction, TaskViewportVisibility } from './types';
-export { saveState, loadState, loadCustomThemes } from './persistence';
+export { saveState, loadState, isStateLoaded, loadCustomThemes } from './persistence';
 export {
   adjustGlobalScale,
   resetGlobalScale,
