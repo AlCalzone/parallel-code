@@ -266,7 +266,7 @@ export class Coordinator {
   private assertOrchestrationEnabled(epoch = this.orchestrationEpoch): void {
     if (!this.orchestrationEnabled || epoch !== this.orchestrationEpoch) {
       throw new Error(
-        'Agent orchestration is disabled or this operation was canceled. Enable it in Settings > MCP to start new operations.',
+        'Agent orchestration is disabled or this operation was canceled. Enable it in Settings > Agents to start new operations.',
       );
     }
   }

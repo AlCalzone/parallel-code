@@ -172,7 +172,7 @@ export class DelegationService {
   private assertOrchestrationEnabled(epoch = this.orchestrationEpoch): void {
     if (!this.orchestrationEnabled || epoch !== this.orchestrationEpoch)
       throw new DelegationError(
-        'Agent orchestration is disabled or this operation was canceled in Settings > MCP.',
+        'Agent orchestration is disabled or this operation was canceled in Settings > Agents.',
         403,
       );
   }
@@ -339,7 +339,7 @@ export class DelegationService {
       this.requireCaller(caller);
       if (caller.taskId !== taskId || !caller.capabilities.canCreate)
         throw new DelegationError(
-          'This session lacks task-creation tools. Enable orchestration in Settings > MCP, then restart and resume the session.',
+          'This session lacks task-creation tools. Enable orchestration in Settings > Agents, then restart and resume the session.',
           403,
         );
     }

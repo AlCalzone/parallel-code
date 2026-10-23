@@ -30,7 +30,7 @@ New worktree tasks expose **Agent automation** in their advanced options: **Auto
 
 The persisted `coordinatorMode` marker is deprecated and retained only to restore existing tasks with their legacy transport and behavior. New tasks cannot request it. The old global `coordinatorModeEnabled` setting is ignored on restore and is no longer saved; it does not initialize the coordinator backend. Existing legacy task restore/retry paths remain available.
 
-Settings > MCP explains that children launch additional agent sessions that may incur provider charges, and shows the shared default concurrency limit of four. This is a concurrency limit, not a spending cap. The global orchestration switch controls task creation; unrelated peer access retains its separate per-project setting.
+Settings > Agents explains that children launch additional agent sessions that may incur provider charges, and shows the shared default concurrency limit of four. This is a concurrency limit, not a spending cap. The global orchestration switch controls task creation; unrelated peer access retains its separate per-project setting.
 
 Check the global orchestration setting in the backend on every request and again before starting a reserved launch. Disabling it blocks new ordinary-agent creations without abandoning existing children. Show child counts and **Stop all children** on each parent. Stop first pauses that parent's automated creation/restart and cancels pending launches, then stops its children while preserving worktrees; only an explicit user resume re-enables launches. Do not introduce per-tool-call consent dialogs while orchestration is enabled.
 

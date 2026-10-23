@@ -29,7 +29,7 @@ export interface ToolDef {
 }
 
 export const APP_TASK_INSTRUCTIONS =
-  'You are running inside Parallel Code. When the user asks to create a Parallel Code task (or PC task), use this server’s create_task MCP tool. It creates a visible task in the app with its own Git worktree and agent terminal. Native sub-agent tools such as spawn_agent do not create Parallel Code tasks and must not substitute for this request. Only report a task as created after create_task succeeds and returns its taskId. If the tool is missing or rejected, explain the limitation instead of silently using a native sub-agent. Task creation requires orchestration enabled in Settings > MCP, a supported top-level Git worktree task, and an app-managed MCP session. After enabling tools, restart and resume the session where supported.';
+  'You are running inside Parallel Code. When the user asks to create a Parallel Code task (or PC task), use this server’s create_task MCP tool. It creates a visible task in the app with its own Git worktree and agent terminal. Native sub-agent tools such as spawn_agent do not create Parallel Code tasks and must not substitute for this request. Only report a task as created after create_task succeeds and returns its taskId. If the tool is missing or rejected, explain the limitation instead of silently using a native sub-agent. Task creation requires orchestration enabled in Settings > Agents, a supported top-level Git worktree task, and an app-managed MCP session. After enabling tools, restart and resume the session where supported.';
 
 /**
  * Without this, "list them in Parallel Code" matches the canvas guidance and the
@@ -623,7 +623,7 @@ export function sessionInstructions(capabilities: SessionCapabilities): string {
     capabilities.profile === 'ordinary'
       ? (capabilities.canCreate
           ? 'Use create_task to create Parallel Code tasks for bounded assignments with the context needed; children do not inherit your conversation or uncommitted changes. '
-          : 'This launch cannot create Parallel Code tasks. Enable orchestration in Settings > MCP, then restart and resume the session. You may supervise existing children. ') +
+          : 'This launch cannot create Parallel Code tasks. Enable orchestration in Settings > Agents, then restart and resume the session. You may supervise existing children. ') +
         'Follow each child’s returned integrationPolicy. Review-policy children commit and call signal_done for user approval. Automatic-policy children commit, verify, and call land_self to merge and clean up through Parallel Code. Never directly merge or delete child worktrees. Use list_tasks and bounded wait_for_signal_done for progress; self-landed children leave the active list, so reconcile status and app completion summaries rather than expecting signal_done from them. Empty child lists end waiting. After timeout check status once and wait again while work remains; without a blocking wait leave at least 10 seconds between unchanged status checks. Idle and consumed completion events are not integration. Do not resend original assignments. If a wait lists stalled children, tell the user at once.'
       : capabilities.profile === 'child-review'
         ? 'Commit and verify your assigned work, then call signal_done. Your result requires user review before merging; do not call land_self. This is a child task and cannot create further Parallel Code tasks; direct creation requests to a top-level task.'
