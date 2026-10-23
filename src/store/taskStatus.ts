@@ -1208,6 +1208,11 @@ const GIT_STATUS_STALE_MS = 5 * 60_000;
 const gitRefreshVersions = new Map<string, number>();
 const gitStatusStaleTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+/** Whether the task's git status is fresh enough to tell `ready` from `idle`. */
+export function isTaskGitStatusKnown(taskId: string): boolean {
+  return isGitStatusUsable(store.taskGitStatus[taskId]);
+}
+
 function isGitStatusUsable(git: TaskGitStatusSnapshot | undefined): git is TaskGitStatusSnapshot {
   return Boolean(
     git &&

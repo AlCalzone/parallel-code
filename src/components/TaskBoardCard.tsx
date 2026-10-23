@@ -1,47 +1,19 @@
-import { Show, batch, createMemo, createSignal } from 'solid-js';
-import { invoke } from '../lib/ipc';
-import { IPC } from '../../electron/ipc/channels';
+import { Show, createMemo, createSignal } from 'solid-js';
 import { formatRelativeAge } from '../lib/relativeAge';
-import { withViewTransition } from '../lib/viewTransition';
 import { isTaskBackgrounded } from '../store/background-tasks';
 import { store } from '../store/core';
 import { getPrChecks } from '../store/pr-checks-state';
-import {
-  boardSidePanelOpen,
-  openBoardSidePanel,
-  toggleBoardSidePanelSide,
-} from '../store/project-pages';
 import { getProject } from '../store/projects';
 import { ProjectSwatch } from './ProjectSwatch';
-import { getTaskAttentionState, getTaskDotStatus, getTaskOpenQuestion } from '../store/taskStatus';
+import { getTaskAttentionState, getTaskOpenQuestion } from '../store/taskStatus';
 import { retryCloseTask, uncollapseTask } from '../store/tasks';
 import type { Task } from '../store/types';
-import { activityLine, kanbanNow, openTask, stateLabel, type CardTaskState } from './KanbanCard';
+import { activityLine, agentName, boardNow, stateLabel } from './board/task-state';
+import { ASK_ACTION, AskRow, TaskGlyph, TaskPr, openBeside } from './board/TaskStatus';
 import { ContextMenu, type MoreMenuItem } from './chat/MoreMenu';
-import { StatusDot } from './StatusDot';
 import { boardTaskState, type BoardLaneId } from './task-board-lanes';
 import { laterMenuItems } from './task-later-menu';
 import { UndoIcon } from './icons';
-
-const ASK_ACTION: Partial<Record<CardTaskState, string>> = {
-  needs_input: 'Answer',
-  error: 'Show error',
-  review: 'Review',
-};
-
-const CHECK_LABELS: Record<string, string> = {
-  success: 'Checks pass',
-  failure: 'Checks fail',
-  pending: 'Checks running',
-};
-
-function agentName(task: Task): string {
-  return task.agentIds.map((id) => store.agents[id]?.def?.name).find(Boolean) ?? '';
-}
-
-function prNumber(url: string): string {
-  return url.match(/\/pull\/(\d+)/)?.[1] ?? '';
-}
 
 /** Why the card is set aside: when its snooze ends, or that it is minimized. */
 function setAsideLabel(task: Task): string {
@@ -49,21 +21,6 @@ function setAsideLabel(task: Task): string {
   if (task.snoozedUntil === undefined) return task.snoozedUntilCi ? 'Until CI finishes' : '';
   const until = new Date(task.snoozedUntil);
   return `Until ${until.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`;
-}
-
-/** Opens the task in the board's side panel, moving the panel across first when asked. */
-export function openBeside(task: Task, otherSide = false, panel?: string | null): void {
-  // Only a panel that stays put swaps its task; opening or moving it has its own motion.
-  const switching = !otherSide && boardSidePanelOpen() && store.activeTaskId !== task.id;
-  withViewTransition(
-    () =>
-      batch(() => {
-        if (otherSide) toggleBoardSidePanelSide();
-        openBoardSidePanel();
-        openTask(task, panel);
-      }),
-    switching ? ['task-switch'] : [],
-  );
 }
 
 function cardMenuItems(task: Task): MoreMenuItem[] {
@@ -145,29 +102,10 @@ function CardMeta(props: { task: Task; since: number | undefined; waiting: boole
         {(since) => (
           // The card's "Needs input" row already says it waits; the age says how long.
           <span class="task-board-age" title={props.waiting ? 'Waiting for an answer' : undefined}>
-            {formatRelativeAge(since(), kanbanNow())}
+            {formatRelativeAge(since(), boardNow())}
           </span>
         )}
       </Show>
-    </div>
-  );
-}
-
-function CardPr(props: { taskId: string; url: string }) {
-  const checks = () => getPrChecks(props.taskId)?.overall;
-  const label = () => CHECK_LABELS[checks() ?? ''] ?? '';
-  return (
-    <div class="task-board-row">
-      <button
-        type="button"
-        class="task-board-chip"
-        classList={{ failure: checks() === 'failure' }}
-        title="Open pull request"
-        onClick={() => void invoke(IPC.ShellOpenExternal, { url: props.url })}
-      >
-        PR #{prNumber(props.url)}
-      </button>
-      <span classList={{ 'task-board-fail': checks() === 'failure' }}>{label()}</span>
     </div>
   );
 }
@@ -193,6 +131,7 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
   return (
     <li
       class={`task-board-card state-${state()}`}
+      data-board-card={props.task.id}
       data-board-task-id={props.task.id}
       classList={{
         failed: getPrChecks(props.task.id)?.overall === 'failure',
@@ -212,15 +151,7 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
         title={props.task.name}
         onClick={() => openBeside(props.task)}
       >
-        {/* Same glyph as the title-bar pills, which the board hides. */}
-        <span class="task-board-glyph" aria-hidden="true">
-          <StatusDot
-            status={getTaskDotStatus(props.task.id)}
-            taskId={props.task.id}
-            size="sm"
-            attention={getTaskAttentionState(props.task.id)}
-          />
-        </span>
+        <TaskGlyph taskId={props.task.id} />
         <span class="task-board-name">{props.task.name}</span>
       </button>
       <CardMeta
@@ -236,7 +167,7 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
       >
         {activityText() || ' '}
       </p>
-      <Show when={props.task.prUrl}>{(url) => <CardPr taskId={props.task.id} url={url()} />}</Show>
+      <Show when={props.task.prUrl}>{(url) => <TaskPr taskId={props.task.id} url={url()} />}</Show>
       <Show when={props.lane === 'snoozed' && setAsideLabel(props.task)}>
         {(label) => <p class="task-board-row">{label()}</p>}
       </Show>
@@ -245,12 +176,11 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
       </Show>
       <Show when={ask()}>
         {(action) => (
-          <div class="task-board-ask">
-            <span class="task-board-ask-label">{stateLabel(props.task, state())}</span>
-            <button type="button" class="task-board-act" onClick={() => openBeside(props.task)}>
-              {action()}
-            </button>
-          </div>
+          <AskRow
+            label={stateLabel(props.task, state())}
+            action={action()}
+            onAct={() => openBeside(props.task)}
+          />
         )}
       </Show>
       <Show when={menuAt()}>

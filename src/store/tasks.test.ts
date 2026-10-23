@@ -176,6 +176,7 @@ import {
   createAgentRecord,
   selectActiveNeighborAfterRemoval,
   updateTaskName,
+  forgetTask,
 } from './tasks';
 import { armSpCompletion, fireSpCompletion, onTaskRenamed } from './superProductivity';
 import { updateTaskBranch } from './task-branch';
@@ -264,6 +265,32 @@ beforeEach(() => {
   mockAgentEnvFiles = {};
   mockInvoke.mockResolvedValue(undefined);
   mockSaveState.mockResolvedValue(undefined);
+});
+
+describe('task removal beside the board', () => {
+  const state = () =>
+    expectDefined(core.harness, 'mock store harness').state() as unknown as Record<string, unknown>;
+  beforeEach(() => {
+    mockTasks.shown = { agentIds: [], shellAgentIds: [] };
+    mockTasks.other = { agentIds: [], shellAgentIds: [] };
+    mockTaskOrder.push('shown', 'other');
+    Object.assign(state(), {
+      activeTaskId: 'shown',
+      boardView: true,
+      boardPeek: true,
+      taskGitStatus: {},
+    });
+  });
+
+  it('closes the side panel when the task it shows goes', () => {
+    forgetTask('shown', []);
+    expect(state().boardPeek).toBe(false);
+  });
+
+  it('keeps the side panel when another task goes', () => {
+    forgetTask('other', []);
+    expect(state().boardPeek).toBe(true);
+  });
 });
 
 describe('updateTaskBranch', () => {

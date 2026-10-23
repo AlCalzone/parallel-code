@@ -1,6 +1,6 @@
 import { createMemo, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CardTaskState } from './KanbanCard';
+import type { CardTaskState } from './board/task-state';
 import { WORKING_HOLD_MS, holdWorking } from './task-board-hold';
 
 let nextId = 0;

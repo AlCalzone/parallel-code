@@ -376,7 +376,7 @@ export const DEFAULT_BINDINGS: KeyBinding[] = [
     id: 'app.toggle-board-view',
     layer: 'app',
     category: 'App',
-    description: 'Toggle the board of all tasks',
+    description: 'Toggle the board of running tasks',
     platform: 'both',
     key: 'G',
     modifiers: { cmdOrCtrl: true, shift: true },

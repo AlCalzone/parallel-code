@@ -3,7 +3,7 @@ import { TaskProjectFilter } from './TaskProjectFilter';
 import { createProjectFilterTransition } from '../lib/projectFilterTransition';
 import { createSignal, createEffect, createMemo, onMount, onCleanup, For, Show } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { GitHubIcon, KanbanIcon } from './icons';
+import { GitHubIcon, PlanIcon } from './icons';
 import { openGitHubIssues } from '../store/github';
 import { openKanban } from '../store/kanban';
 import { errMessage } from '../lib/log';
@@ -771,13 +771,16 @@ export function Sidebar() {
                         <button
                           type="button"
                           class="icon-btn"
-                          title={`Kanban board for ${project.name}`}
-                          aria-label={`Kanban board for ${project.name}`}
+                          title={`Plan for ${project.name}`}
+                          aria-label={`Plan for ${project.name}`}
                           aria-pressed={store.kanbanProjectId === project.id}
                           onKeyDown={(e) => e.stopPropagation()}
                           onClick={(e) => {
                             e.stopPropagation();
-                            openKanban(project.id);
+                            // A second click goes back to the running tasks.
+                            withViewTransition(() =>
+                              openKanban(store.kanbanProjectId === project.id ? null : project.id),
+                            );
                           }}
                           style={{
                             color:
@@ -789,7 +792,7 @@ export function Sidebar() {
                             'flex-shrink': '0',
                           }}
                         >
-                          <KanbanIcon size={14} />
+                          <PlanIcon size={14} />
                         </button>
                       </Show>
                       <Show when={!isDocumentProject(project) && !isProjectMissing(project.id)}>

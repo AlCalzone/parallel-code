@@ -3,8 +3,8 @@ import { isAiTerminalPanel } from '../store/focused-panel';
 import { boardShown } from '../store/project-pages';
 import { samePanelKindIn } from '../store/store';
 import type { Task } from '../store/types';
-import { askingPanel, openTask } from './KanbanCard';
-import { openBeside } from './TaskBoardCard';
+import { askingPanel, openTask } from './board/task-state';
+import { openBeside } from './board/TaskStatus';
 import { forgetWorkingHolds } from './task-board-hold';
 import { boardLanes, boardTasks } from './task-board-lanes';
 

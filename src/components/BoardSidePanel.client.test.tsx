@@ -128,6 +128,7 @@ function deferViewTransitions(): (() => void)[] {
 
 function addCard(id: string): HTMLButtonElement | null {
   const card = document.createElement('li');
+  card.dataset.boardCard = id;
   card.dataset.boardTaskId = id;
   card.innerHTML = `<button class="task-board-title">${id}</button>`;
   document.body.append(card);

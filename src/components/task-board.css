@@ -100,6 +100,11 @@
 .task-board-controls .task-project-filter-trigger svg {
   margin-left: auto;
 }
+.task-board-plan {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 
 .task-board-lanes {
   position: relative;
@@ -122,7 +127,8 @@ html[data-look^='islands-'] .task-board {
 }
 /* Beside the side panel the board keeps room for a lane (the panel gives way
    first), and lanes it cuts off fade out rather than end at a hard edge. */
-.task-board:has(+ .task-workspace.board-side-panel) {
+.task-board:has(+ .task-workspace.board-side-panel),
+.plan-board-shell:has(+ .task-workspace.board-side-panel) {
   min-width: 320px;
 }
 .task-board:has(+ .task-workspace.board-side-panel) .task-board-lanes {
@@ -462,7 +468,8 @@ html[data-look^='islands-'] .task-board {
 }
 /* A panel on the left sits between the sidebar and the board, its handle on
    the edge facing the board. */
-main.board-panel-left > .task-board {
+main.board-panel-left > .task-board,
+main.board-panel-left > .plan-board-shell {
   order: 1;
 }
 .task-workspace.board-side-panel.panel-left > .resize-handle.board-side-panel-handle {
@@ -473,8 +480,13 @@ main.board-panel-left > .task-board {
 /* View changes run as view transitions (src/lib/viewTransition.ts). The board
    and the task workspace each get a snapshot; snapshots keep their size and
    crop rather than stretch, so terminals never look squashed. */
-.task-board {
+.task-board,
+.plan-board-shell {
   view-transition-name: task-board;
+}
+/* A plan's board moves with its planner as one view. */
+.plan-board-shell .task-board {
+  view-transition-name: none;
 }
 .task-workspace {
   view-transition-name: task-workspace;

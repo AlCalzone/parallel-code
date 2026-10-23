@@ -137,7 +137,7 @@ import { startDesktopNotificationWatcher } from './store/desktopNotifications';
 import { startSuperProductivitySync, startSpOpenListener } from './store/store';
 import { startBackgroundTaskWatcher } from './store/background-tasks';
 import { startTaskBriefWatcher } from './store/task-brief';
-import { startKanbanAutomation } from './store/kanban';
+import { showPlanTasks, startKanbanAutomation } from './store/kanban';
 import { startPrChecksSubscription } from './store/pr-checks';
 import { startUpdateSubscription } from './store/updates';
 import { startRemoteTaskHandlers } from './store/remoteTaskHandler';
@@ -796,6 +796,8 @@ function App() {
         if (boardShown()) {
           if (store.showNewTaskPanel) return;
           if (store.boardPeek) closeSidePanel();
+          // A plan steps back to its project's running tasks before the board closes.
+          else if (store.kanbanProjectId) withViewTransition(showPlanTasks);
           // closeBoard, not a toggle: the update runs a frame later, so a
           // repeated Escape would otherwise reopen the board.
           else withViewTransition(closeBoard);
@@ -998,7 +1000,9 @@ function App() {
             <Sidebar />
           </Show>
           <Show when={boardShown()}>
-            <TaskBoard />
+            <Show when={store.kanbanProjectId} fallback={<TaskBoard />}>
+              <KanbanPage />
+            </Show>
           </Show>
           {/* Keep terminals mounted while a page or the board occupies the
               workspace; the board shows it as its side panel. */}
@@ -1020,7 +1024,6 @@ function App() {
             <TilingLayout />
           </div>
           <GitHubIssuesPage />
-          <KanbanPage />
         </main>
         <UsageStatusBar />
         <HelpDialog open={store.showHelpDialog} onClose={() => toggleHelpDialog(false)} />

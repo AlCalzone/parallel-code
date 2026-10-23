@@ -23,7 +23,7 @@ import {
   ExternalLinkIcon,
   PencilIcon,
   PersonIcon,
-  KanbanIcon,
+  PlanIcon,
   PlayIcon,
   SyncIcon,
 } from './icons';
@@ -128,8 +128,8 @@ export function GitHubIssueDetail(props: {
                 aria-busy={addingToBoard() || boardColumn.loading || undefined}
                 title={
                   boardColumn()
-                    ? "Open the project's Kanban board"
-                    : "Add a card for this item to the project's Kanban board (KANBAN.md)"
+                    ? "Open the project's plan"
+                    : "Add a card for this item to the project's plan (KANBAN.md)"
                 }
                 onClick={() => {
                   if (addingToBoard() || boardColumn.loading) return;
@@ -137,14 +137,14 @@ export function GitHubIssueDetail(props: {
                   else void addToBoard(current());
                 }}
               >
-                <KanbanIcon />{' '}
+                <PlanIcon />{' '}
                 {boardColumn.loading && boardColumn() === undefined
-                  ? 'Board…'
+                  ? 'Plan…'
                   : addingToBoard()
                     ? 'Adding…'
                     : boardColumn()
-                      ? `On board · ${boardColumn()}`
-                      : 'Add to board'}
+                      ? `On plan · ${boardColumn()}`
+                      : 'Add to plan'}
               </button>
             </div>
             <h2>{current().title}</h2>

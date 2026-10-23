@@ -8,7 +8,7 @@ import type { GitHubIssueSummary } from '../ipc/types';
 import type { Project } from '../store/types';
 import { agentsLoadingText, type AgentPaneState } from './GitHubAgentPane';
 import type { BrowserSession } from './github-issues-session';
-import { CheckIcon, CloseIcon, KanbanIcon, ListIcon, SparkleIcon } from './icons';
+import { CheckIcon, CloseIcon, PlanIcon, ListIcon, SparkleIcon } from './icons';
 import { addIssuesToBoard } from '../store/kanban';
 import { showNotification } from '../store/notification';
 
@@ -34,11 +34,11 @@ export function GitHubBatchBar(props: {
         const skipped = total - added;
         showNotification(
           added === 0
-            ? `All ${total} are already on the Kanban board`
+            ? `All ${total} are already on the plan`
             : (created
                 ? `Created KANBAN.md with ${cards} in ${column}`
                 : `Added ${cards} to ${column}`) +
-                (skipped ? `; ${skipped} already on the board` : ''),
+                (skipped ? `; ${skipped} already on the plan` : ''),
         );
       }
     } finally {
@@ -69,10 +69,10 @@ export function GitHubBatchBar(props: {
       </button>
       <button
         disabled={!props.view.selected.length || addingToBoard()}
-        title="Add the selected items as cards to the project's Kanban board"
+        title="Add the selected items as cards to the project's plan (KANBAN.md)"
         onClick={() => void addSelectedToBoard()}
       >
-        <KanbanIcon /> Add to board
+        <PlanIcon /> Add to plan
       </button>
       <button
         class="github-issue-primary"

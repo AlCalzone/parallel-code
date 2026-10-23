@@ -58,7 +58,7 @@ const VIEWS: { view: WorkspaceView; title: string; icon: () => JSX.Element }[] =
   },
   {
     view: 'board',
-    title: `Board: all tasks by state (${mod}+Shift+G)`,
+    title: `Board: running tasks by state (${mod}+Shift+G)`,
     icon: () =>
       viewIcon(
         <>

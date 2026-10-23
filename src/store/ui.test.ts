@@ -134,7 +134,8 @@ describe('workspace views', () => {
     expect(workspaceView()).toBe('tiles');
   });
 
-  it('closes a project page so the chosen view shows', () => {
+  it('closes a plan on the board so the chosen view shows', () => {
+    mockStore.boardView = true;
     mockStore.kanbanProjectId = 'project-1';
 
     setWorkspaceView('focus');

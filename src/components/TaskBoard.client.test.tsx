@@ -287,7 +287,7 @@ it('says why the board is empty', () => {
   setStore('taskOrder', []);
   search.value = '';
   search.dispatchEvent(new Event('input', { bubbles: true }));
-  expect(host.querySelector('.task-board-empty')?.textContent).toBe('No open tasks');
+  expect(host.querySelector('.task-board-empty')?.textContent).toBe('No running tasks');
 });
 
 it("marks a card's project with its icon when it has one, else a color bar", () => {
@@ -758,14 +758,13 @@ describe('next task that needs you', () => {
     expect(store.boardPeek).toBe(false);
   });
 
-  it('closes a project page over the board and shows the task', () => {
+  it("opens the task beside a project's plan, which is part of the board", () => {
     setStore('kanbanProjectId', 'web');
     setStore('activeTaskId', 'pr');
     openNextAttentionTask();
     expect(store.activeTaskId).toBe('review');
-    expect(store.kanbanProjectId).toBeNull();
-    // With no side panel the board closes too, so the task shows in the layout.
-    expect(store.boardView).toBe(false);
+    expect(store.kanbanProjectId).toBe('web');
+    expect(store.boardPeek).toBe(true);
   });
 
   it('does not skip a task that stopped while the board was closed', () => {
