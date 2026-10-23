@@ -169,11 +169,6 @@ function initTaskInStore(
       // the second pane's — so pane one comes back with the wrong conversation.
       assignFreshSessionId(s, taskId, agent.id, agent.def.command);
       s.taskOrder.push(taskId);
-      // New installs start on tiles for the first-run steps; the board takes over from here.
-      if (s.boardOnFirstTask) {
-        s.boardOnFirstTask = false;
-        s.boardView = true;
-      }
       if (opts.activate) {
         if (s.taskProjectFilter && s.taskProjectFilter !== task.projectId)
           s.taskProjectFilter = null;

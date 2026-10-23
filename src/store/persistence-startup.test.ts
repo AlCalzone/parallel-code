@@ -80,9 +80,7 @@ describe('startup persistence', () => {
     await loadState();
     expect(store.featureHintsEnabled).toBe(true);
     expect(store.keybindingMigrationDismissed).toBe(true);
-    // Tiles keep the first-run steps; the first task opens the board.
-    expect(store.boardView).toBe(false);
-    expect(store.boardOnFirstTask).toBe(true);
+    expect(store.boardView).toBe(true);
 
     await saveState();
     const saved = mockInvoke.mock.calls.find(([channel]) => channel === IPC.SaveAppState);

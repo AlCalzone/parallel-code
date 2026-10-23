@@ -455,6 +455,25 @@ html[data-look^='islands-'] .task-board {
   margin-left: 8px;
   pointer-events: auto;
 }
+.task-board-first {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0 24px;
+  font-size: 13px;
+}
+.task-board-first strong {
+  color: var(--fg-muted);
+  font-size: 16px;
+  font-weight: 500;
+}
+.task-board-first span {
+  max-width: 420px;
+}
+.task-board-first .task-board-act {
+  margin: 8px 0 0;
+}
 
 /* The workspace, narrowed to one task beside the board. A dragged width
    arrives as an inline flex-basis; the panel gives way before the board does. */

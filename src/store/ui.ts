@@ -354,8 +354,6 @@ export function workspaceView(): WorkspaceView {
 /** Shows one of the three workspace views, closing any page that covers them. */
 export function setWorkspaceView(view: WorkspaceView): void {
   batch(() => {
-    // A view picked by hand outranks the board a new install's first task would open.
-    setStore('boardOnFirstTask', false);
     closeProjectPages();
     if (view === 'board') {
       setStore('boardView', true);

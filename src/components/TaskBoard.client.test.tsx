@@ -288,7 +288,20 @@ it('says why the board is empty', () => {
   setStore('taskOrder', []);
   search.value = '';
   search.dispatchEvent(new Event('input', { bubbles: true }));
-  expect(host.querySelector('.task-board-empty')?.textContent).toBe('No running tasks');
+  expect(host.querySelector('.task-board-empty strong')?.textContent).toBe('No tasks yet');
+});
+
+it('starts an empty board with the first steps: a new task, or a project first', () => {
+  setStore('taskOrder', []);
+  const empty = () => host.querySelector('.task-board-empty');
+  const action = () => empty()?.querySelector('button');
+  expect(action()?.textContent).toContain('New task');
+  action()?.click();
+  expect(store.showNewTaskPanel).toBe(true);
+
+  setStore('projects', []);
+  expect(empty()?.textContent).toContain('Link your first project');
+  expect(action()?.textContent).toBe('Link project');
 });
 
 it('names the project filter that hid every task, and offers to clear it', () => {

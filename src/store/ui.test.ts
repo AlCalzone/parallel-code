@@ -7,7 +7,6 @@ type MockStore = {
   focusMode: boolean;
   boardView: boolean;
   boardPeek: boolean;
-  boardOnFirstTask: boolean;
   showNewTaskPanel: boolean;
   kanbanProjectId: string | null;
   githubIssuesProjectId: string | null;
@@ -88,7 +87,6 @@ beforeEach(() => {
     focusMode: false,
     boardView: false,
     boardPeek: false,
-    boardOnFirstTask: false,
     showNewTaskPanel: false,
     kanbanProjectId: null,
     githubIssuesProjectId: null,
@@ -125,14 +123,6 @@ describe('workspace views', () => {
 
     toggleBoardView();
     expect(workspaceView()).toBe('focus');
-  });
-
-  it("keeps a view picked by hand when a new install's first task arrives", () => {
-    mockStore.boardOnFirstTask = true;
-
-    setWorkspaceView('tiles');
-
-    expect(mockStore.boardOnFirstTask).toBe(false);
   });
 
   it('leaves focus mode when tiles are chosen from the board', () => {
