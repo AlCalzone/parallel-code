@@ -52,6 +52,11 @@ import {
   emitWorkThenIdle,
 } from './coordinator-test-harness.js';
 
+const mockWriteAntigravityMcpConfig = vi.hoisted(() => vi.fn());
+vi.mock('./antigravity-config.js', () => ({
+  writeAntigravityMcpConfig: mockWriteAntigravityMcpConfig,
+}));
+
 const { Coordinator } = await setupCoordinatorHarness();
 const { removePreambleBlock } = await import('./preamble.js');
 const getChangedFiles = mockGetChangedFiles;
@@ -3414,6 +3419,77 @@ describe('Coordinator MCP config restart rewrite', () => {
     coordinator.setNotify(mockNotify);
     coordinator.setDefaultProject('proj-1', '/tmp/project');
     coordinator.registerCoordinator('coord-1', 'proj-1');
+  });
+
+  it('gives an Antigravity child its server in the worktree, and refreshes it on restart', async () => {
+    coordinator.setMCPServerInfo('coord-1', 'http://localhost:3001', 'old', 'old', '/srv.js');
+    await coordinator.createTask({
+      name: 'test',
+      prompt: 'do',
+      coordinatorTaskId: 'coord-1',
+      agentCommand: 'agy',
+    });
+
+    expect(mockWriteAntigravityMcpConfig).toHaveBeenCalledWith(
+      '/tmp/test',
+      expect.objectContaining({ mcpServers: { 'parallel-code': expect.anything() } }),
+    );
+
+    mockWriteAntigravityMcpConfig.mockClear();
+    mockExistsSync.mockReturnValue(true);
+    coordinator.setMCPServerInfo('coord-1', 'http://localhost:3002', 'new', 'new', '/srv.js');
+
+    const rewritten = mockWriteAntigravityMcpConfig.mock.calls[0]?.[1] as {
+      mcpServers: { 'parallel-code': { args: string[] } };
+    };
+    expect(rewritten.mcpServers['parallel-code'].args).toContain('http://localhost:3002');
+  });
+
+  it('refreshes a restored Antigravity child once the server starts after hydration', () => {
+    const taskId = 'agy-restored';
+    coordinator.hydrateTask({
+      id: taskId,
+      name: 'restored',
+      projectId: 'proj-1',
+      projectRoot: '/tmp/project',
+      branchName: 'task/restored',
+      worktreePath: '/tmp/restored',
+      agentId: 'agent-agy-restored',
+      coordinatorTaskId: 'coord-1',
+      mcpConfigPath: join(os.tmpdir(), `parallel-code-subtask-${taskId}.json`),
+      agentCommand: 'agy',
+    });
+    expect(mockWriteAntigravityMcpConfig).not.toHaveBeenCalled();
+
+    mockExistsSync.mockReturnValue(true);
+    coordinator.setMCPServerInfo('coord-1', 'http://localhost:3002', 'new', 'new', '/srv.js');
+
+    expect(mockWriteAntigravityMcpConfig).toHaveBeenCalledWith('/tmp/restored', expect.anything());
+  });
+
+  it('keeps refreshing tokens when one Antigravity worktree cannot be written', async () => {
+    coordinator.setMCPServerInfo('coord-1', 'http://localhost:3001', 'old', 'old', '/srv.js');
+    await coordinator.createTask({
+      name: 'test',
+      prompt: 'do',
+      coordinatorTaskId: 'coord-1',
+      agentCommand: 'agy',
+    });
+    mockExistsSync.mockReturnValue(true);
+    mockWriteAntigravityMcpConfig.mockImplementationOnce(() => {
+      throw new Error('.agents must not be a symbolic link.');
+    });
+
+    expect(() =>
+      coordinator.setMCPServerInfo('coord-1', 'http://localhost:3002', 'new', 'new', '/srv.js'),
+    ).not.toThrow();
+  });
+
+  it('leaves the worktree alone for agents that take MCP launch args', async () => {
+    coordinator.setMCPServerInfo('coord-1', 'http://localhost:3001', 'old', 'old', '/srv.js');
+    await coordinator.createTask({ name: 'test', prompt: 'do', coordinatorTaskId: 'coord-1' });
+
+    expect(mockWriteAntigravityMcpConfig).not.toHaveBeenCalled();
   });
 
   it('rewrites MCP config for existing task when server info changes (restart)', async () => {

@@ -14,7 +14,13 @@ import {
   writeSubTaskMcpConfig,
   writeSubTaskMcpConfigSync,
 } from './config.js';
-import { buildMcpLaunchArgs, isCodexCommand, type ParallelCodeMcpConfig } from './agent-args.js';
+import {
+  buildMcpLaunchArgs,
+  isAntigravityCommand,
+  isCodexCommand,
+  type ParallelCodeMcpConfig,
+} from './agent-args.js';
+import { writeAntigravityMcpConfig } from './antigravity-config.js';
 import { validateBranchName } from './validation.js';
 import { atomicWriteFileSync } from './atomic.js';
 import { ReplayCache } from './replay-cache.js';
@@ -956,6 +962,16 @@ export class Coordinator {
         doneToken: task.doneToken,
       });
       writeSubTaskMcpConfigSync(mcpConfigPath, mcpConfig);
+      if (!task.antigravityWorkspaceMcp || !existsSync(task.worktreePath)) continue;
+      try {
+        writeAntigravityMcpConfig(task.worktreePath, mcpConfig);
+      } catch (err) {
+        // One child's broken worktree must not leave the others on a stale token.
+        logWarn('coordinator.antigravity_mcp', 'could not refresh Antigravity MCP config', {
+          taskId: task.id,
+          err: String(err),
+        });
+      }
     }
   }
 
@@ -1515,6 +1531,10 @@ export class Coordinator {
         subTaskMcpConfig = mcpConfig;
         const configPath = getSubTaskMcpConfigPath(dockerContainerName, serverPath, task.id);
         await writeSubTaskMcpConfig(configPath, mcpConfig);
+        if (isAntigravityCommand(agentCommand)) {
+          writeAntigravityMcpConfig(result.worktree_path, mcpConfig);
+          task.antigravityWorkspaceMcp = true;
+        }
         subTaskMcpConfigPath = configPath;
         task.mcpConfigPath = configPath;
         assertStillPresent();
@@ -3045,6 +3065,8 @@ export class Coordinator {
     mcpConfigPath: string | undefined,
     agentCommand: string | undefined,
   ): string[] | undefined {
+    // Set before the early return: a server that starts later must still refresh the file.
+    if (agentCommand) task.antigravityWorkspaceMcp = isAntigravityCommand(agentCommand);
     const serverInfo = this.coordinators.get(coordinatorTaskId)?.mcpServerInfo;
     if (!serverInfo) return undefined;
     const { serverUrl, subtaskToken, serverPath } = serverInfo;
@@ -3068,6 +3090,10 @@ export class Coordinator {
     }
     if (mcpConfigPath) {
       writeSubTaskMcpConfigSync(mcpConfigPath, mcpConfig);
+    }
+    // A restored child whose worktree is gone has no session to configure.
+    if (task.antigravityWorkspaceMcp && existsSync(task.worktreePath)) {
+      writeAntigravityMcpConfig(task.worktreePath, mcpConfig);
     }
     return this.buildTaskMcpLaunchArgs(agentCommand ?? 'claude', mcpConfigPath, mcpConfig);
   }

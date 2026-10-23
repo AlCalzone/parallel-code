@@ -107,9 +107,15 @@ import type { GitHubCustomList } from '../shared/github-list.js';
 import type { EvidenceSubmission } from '../shared/evidence.js';
 import {
   buildMcpLaunchArgs,
+  isAntigravityCommand,
   isCodexCommand,
   type ParallelCodeMcpConfig,
 } from '../mcp/agent-args.js';
+import {
+  ANTIGRAVITY_MCP_CONFIG,
+  ensureAntigravityConfigDir,
+  excludeAntigravityConfig,
+} from '../mcp/antigravity-config.js';
 import {
   getSymlinkCandidates,
   getMainBranch,
@@ -202,6 +208,11 @@ import { redactServerUrl } from '../remote/server.js';
 
 export function selectMcpJsonDir(worktreePath: string | undefined, projectRoot: string): string {
   return worktreePath ?? projectRoot;
+}
+
+/** Workspace MCP file the coordinator's agent discovers; agy has no `--mcp-config` flag. */
+export function selectMcpJsonFile(agentCommand: string | undefined): string {
+  return agentCommand && isAntigravityCommand(agentCommand) ? ANTIGRAVITY_MCP_CONFIG : '.mcp.json';
 }
 
 export interface CoordinatorMCPConfigOpts {
@@ -2210,11 +2221,17 @@ export function registerAllHandlers(win: BrowserWindow): void {
       // Fail fast on malformed .mcp.json BEFORE any coordinator state mutations.
       // Only the read/parse happens here; the merge step (which needs mcpConfig) runs later.
       const mcpJsonDir = selectMcpJsonDir(args.worktreePath, args.projectRoot);
+      const mcpJsonFile = selectMcpJsonFile(args.agentCommand);
       let worktreeMcpPath: string | undefined;
       let mcpFileExistedBefore = false;
       let existingMcpContent: Record<string, unknown> = {};
       if (mcpJsonDir) {
-        worktreeMcpPath = path.join(mcpJsonDir, '.mcp.json');
+        // Before the read: a linked `.agents` would put the token in another checkout.
+        if (mcpJsonFile === ANTIGRAVITY_MCP_CONFIG) {
+          ensureAntigravityConfigDir(mcpJsonDir);
+          excludeAntigravityConfig(mcpJsonDir);
+        }
+        worktreeMcpPath = path.join(mcpJsonDir, mcpJsonFile);
         mcpFileExistedBefore = fs.existsSync(worktreeMcpPath);
         if (mcpFileExistedBefore) {
           let rawContent: string;
@@ -2359,14 +2376,15 @@ export function registerAllHandlers(win: BrowserWindow): void {
         );
 
         // Append to .git/info/exclude (local-only gitignore, not committed)
-        appendGitInfoExcludeBlock(
-          mcpJsonDir,
-          '.mcp.json',
-          '# Parallel Code MCP config (contains ephemeral token)\n.mcp.json\n',
-          (err) => console.warn('[MCP] Could not git-exclude .mcp.json:', err),
-        );
+        if (mcpJsonFile === '.mcp.json')
+          appendGitInfoExcludeBlock(
+            mcpJsonDir,
+            '.mcp.json',
+            '# Parallel Code MCP config (contains ephemeral token)\n.mcp.json\n',
+            (err) => console.warn('[MCP] Could not git-exclude .mcp.json:', err),
+          );
 
-        console.warn('[MCP] .mcp.json written to:', worktreeMcpPath);
+        console.warn('[MCP] MCP config written to:', worktreeMcpPath);
 
         const staleWarning = detectStaleDockerMCPUrl(serverUrl, args.dockerContainerName);
         if (staleWarning) {

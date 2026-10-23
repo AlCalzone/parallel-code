@@ -1,5 +1,7 @@
 import type { BrowserWindow } from 'electron';
+import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { IPC } from './channels.js';
@@ -196,5 +198,32 @@ describe('registerAllHandlers wiring', () => {
       ]),
     );
     expect(onPtyEvent.mock.calls.map(([event]) => event)).toEqual(['exit']);
+  });
+});
+
+describe('StartMCPServer for Antigravity', () => {
+  it('refuses a linked .agents before touching coordinator state', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'start-mcp-agy-'));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'start-mcp-agy-outside-'));
+    try {
+      fs.symlinkSync(outside, path.join(root, '.agents'));
+      register();
+      const start = handlers.get(IPC.StartMCPServer);
+
+      await expect(
+        Promise.resolve(
+          start?.(undefined, {
+            coordinatorTaskId: '12345678-1234-4234-8234-123456789abc',
+            projectId: 'project',
+            projectRoot: root,
+            agentCommand: 'agy',
+          }),
+        ),
+      ).rejects.toThrow(/symbolic link/);
+      expect(fs.readdirSync(outside)).toEqual([]);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
   });
 });
