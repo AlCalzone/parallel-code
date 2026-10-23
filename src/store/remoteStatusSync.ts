@@ -94,6 +94,7 @@ export function startRemoteStatusSync(): () => void {
           RemoteAgent,
           | 'projectName'
           | 'projectColor'
+          | 'projectIcon'
           | 'agentName'
           | 'lastLine'
           | 'taskName'
@@ -121,6 +122,7 @@ export function startRemoteStatusSync(): () => void {
           lane: boardLaneOf(task),
           projectName: project?.name ?? '',
           projectColor: project?.color ?? '',
+          projectIcon: project?.icon ?? '',
           agentName: agent?.def.name ?? task.savedAgentDef?.name ?? '',
           // Untracked like the terminal tail: a streaming reply changes every frame.
           lastLine: taskUsesAgentChat(task)

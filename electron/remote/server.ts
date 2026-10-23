@@ -309,6 +309,10 @@ interface RemoteServer {
 export interface RemoteProject {
   id: string;
   name: string;
+  color?: string;
+  icon?: string;
+  /** The project the desktop last created a task in. */
+  lastUsed?: boolean;
 }
 
 /** The task a paired phone asked for; agent and model fall back to the desktop default. */

@@ -582,6 +582,22 @@ textarea.mobile-input {
 .mobile-project-hint {
   margin-top: -14px;
 }
+/* A native <option> can't show a glyph, so the chosen project's mark sits inside the field.
+   The padding stays constant so the text doesn't jump when the mark appears. */
+.mobile-project-select {
+  position: relative;
+  display: block;
+}
+.mobile-project-select .project-swatch {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.mobile-project-select select {
+  padding-left: 38px;
+}
 .mobile-title-options {
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);

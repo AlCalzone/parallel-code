@@ -102,6 +102,9 @@ function handleGetProjects(req: RendererRequest): void {
     codeProjects().map((p) => ({
       id: p.id,
       name: p.name,
+      color: p.color,
+      icon: p.icon,
+      lastUsed: p.id === store.lastProjectId,
       agentName: defaultAgent()?.name ?? '',
     })),
   );

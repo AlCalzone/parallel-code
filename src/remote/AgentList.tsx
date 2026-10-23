@@ -5,6 +5,7 @@ import { ConnectionBanner } from './ConnectionBanner';
 import { NotificationSettings } from './NotificationSettings';
 import { readLocal, writeLocal } from './storage';
 import { ProjectSwatch } from '../components/ProjectSwatch';
+import { sanitizeProjectIcon } from '../lib/project-icon';
 import type { RemoteAgent, RemoteBoardLane } from '../../electron/remote/protocol';
 
 const ANDROID_APP_GUIDE = 'https://github.com/johannesjo/parallel-code#android-app';
@@ -204,7 +205,13 @@ export function AgentList(props: AgentListProps) {
                           <div class="agent-card-meta">
                             <p class="muted">
                               <Show when={agent.projectColor}>
-                                {(color) => <ProjectSwatch color={color()} size={10} />}
+                                {(color) => (
+                                  <ProjectSwatch
+                                    color={color()}
+                                    icon={sanitizeProjectIcon(agent.projectIcon)}
+                                    size={10}
+                                  />
+                                )}
                               </Show>
                               {[agent.projectName, agent.agentName].filter(Boolean).join(' · ') ||
                                 'Agent task'}
