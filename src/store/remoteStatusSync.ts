@@ -17,7 +17,8 @@ import {
   stripAnsi,
 } from './taskStatus';
 import { taskUsesAgentChat } from './agent-chat';
-import { getPrChecks } from './pr-checks-state';
+import { getPrChecks, prBoardStatus } from './pr-checks-state';
+import { taskPrUrl } from './pr-checks';
 import { fireAndForget } from '../lib/ipc';
 import { boardLaneOf } from '../components/task-board-lanes';
 import { IPC } from '../../electron/ipc/channels';
@@ -25,8 +26,10 @@ import type {
   RemoteAttentionState,
   RemoteAgent,
   RemoteCiStatus,
+  RemoteTaskPr,
 } from '../../electron/remote/protocol';
 import type { AgentChatState } from '../../electron/shared/agent-chat-types';
+import type { Task } from './types';
 
 /** Pick recent content rather than terminal UI chrome for the phone's task cards. */
 export function remoteOutputPreview(rawTail: string): string {
@@ -69,6 +72,18 @@ function remoteCiStatus(taskId: string): RemoteCiStatus | undefined {
   return checks.overall;
 }
 
+/** The board card's PR row: the PR, the checks' status line, and whether babysitting is on. */
+function remotePr(task: Task): RemoteTaskPr | undefined {
+  const url = taskPrUrl(task);
+  if (!url) return undefined;
+  const status = prBoardStatus(getPrChecks(task.id));
+  return {
+    url,
+    ...(status && { label: status.label, kind: status.kind }),
+    ...(task.prBabysit && { babysit: true }),
+  };
+}
+
 export function startRemoteStatusSync(): () => void {
   // Serialized snapshot of the last push, so we only send on actual change.
   let lastSerialized = '';
@@ -101,6 +116,7 @@ export function startRemoteStatusSync(): () => void {
           | 'collapsed'
           | 'ci'
           | 'lane'
+          | 'pr'
         >
       > = {};
       for (const taskId of [...store.taskOrder, ...store.collapsedTaskOrder]) {
@@ -123,6 +139,7 @@ export function startRemoteStatusSync(): () => void {
           projectName: project?.name ?? '',
           projectColor: project?.color ?? '',
           projectIcon: project?.icon ?? '',
+          pr: remotePr(task),
           agentName: agent?.def.name ?? task.savedAgentDef?.name ?? '',
           // Untracked like the terminal tail: a streaming reply changes every frame.
           lastLine: taskUsesAgentChat(task)

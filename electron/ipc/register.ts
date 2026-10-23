@@ -81,6 +81,7 @@ import {
   type MobileTaskRequest,
   type RemoteProject,
 } from '../remote/server.js';
+import { sanitizeRemotePr } from '../remote/task-context.js';
 import type {
   RemoteAgentChoice,
   RemoteAttentionState,
@@ -1894,6 +1895,7 @@ export function registerAllHandlers(win: BrowserWindow): void {
             collapsed?: unknown;
             ci?: unknown;
             lane?: unknown;
+            pr?: unknown;
           }
         >;
       },
@@ -1925,6 +1927,7 @@ export function registerAllHandlers(win: BrowserWindow): void {
             lane: VALID_LANE.has(context.lane as RemoteBoardLane)
               ? (context.lane as RemoteBoardLane)
               : undefined,
+            pr: sanitizeRemotePr(context.pr),
           });
         }
       }
