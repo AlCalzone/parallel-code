@@ -2,6 +2,7 @@ import { onMount, onCleanup, createSignal, createEffect, untrack, Show, For } fr
 import { Terminal } from '@xterm/xterm';
 import { TERMINAL_SCROLL_OPTIONS, base64ToUint8Array } from '../lib/terminalConstants';
 import { createTerminalHttpLinkHandler } from '../lib/terminalLinks';
+import { PARALLEL_CODE_TERMINAL_THEME } from '../lib/parallelCodeTerminalTheme';
 import { fetchNotes, saveNotes, ApiError } from './api';
 import { TaskDiffView } from './TaskDiffView';
 import { TaskActionsDialog } from './TaskActionsDialog';
@@ -179,7 +180,8 @@ export function AgentDetail(props: AgentDetailProps) {
       fontSize,
       fontFamily: 'monospace',
       lineHeight: 1.2,
-      theme: { background: '#0b0f14', foreground: '#dce7f1' },
+      // The phone screen's background, with the desktop default look's ANSI colours.
+      theme: { background: '#080c10', ...PARALLEL_CODE_TERMINAL_THEME },
       ...TERMINAL_SCROLL_OPTIONS,
       cursorBlink: false,
       disableStdin: true,
