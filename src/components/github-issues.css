@@ -2,7 +2,6 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  background: var(--island-bg);
   display: flex;
   flex-direction: column;
   min-height: 0;
