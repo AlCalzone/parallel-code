@@ -1,10 +1,9 @@
 import { For } from 'solid-js';
-import { PASTEL_HUES } from '../store/store';
+import { PROJECT_COLORS } from '../store/store';
 import { sectionLabelStyle, theme } from '../lib/theme';
-import { colorFromHue } from './project-settings-form';
 
-/** Swatches for the project's hue; the selected one is ringed. */
-export function ProjectColorPicker(props: { hue: number; onChange: (hue: number) => void }) {
+/** Swatches for the project's colour; the selected one is ringed. */
+export function ProjectColorPicker(props: { color: string; onChange: (color: string) => void }) {
   return (
     <div style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
       <span style={sectionLabelStyle}>Color</span>
@@ -13,22 +12,22 @@ export function ProjectColorPicker(props: { hue: number; onChange: (hue: number)
         aria-label="Color"
         style={{ display: 'flex', gap: '8px', 'flex-wrap': 'wrap' }}
       >
-        <For each={PASTEL_HUES}>
-          {(hue) => {
-            const isSelected = () => props.hue === hue;
+        <For each={PROJECT_COLORS}>
+          {(color) => {
+            const isSelected = () => props.color === color;
             return (
               <button
                 type="button"
-                aria-label={`Hue ${hue}`}
+                aria-label={color}
                 aria-pressed={isSelected()}
-                onClick={() => props.onChange(hue)}
+                onClick={() => props.onChange(color)}
                 style={{
                   width: '24px',
                   height: '24px',
                   // Matches ProjectSwatch: the picker previews the
                   // square mark the project will actually show.
                   'border-radius': 'var(--radius-sm)',
-                  background: colorFromHue(hue),
+                  background: color,
                   border: isSelected() ? `2px solid ${theme.fg}` : '2px solid transparent',
                   outline: isSelected() ? `2px solid ${theme.accent}` : 'none',
                   'outline-offset': '1px',

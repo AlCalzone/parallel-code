@@ -8,19 +8,10 @@ import type { ProjectIconId } from '../lib/project-icon';
 import type { GitIsolationMode, Project, TerminalBookmark } from '../store/types';
 import { finalizeChecks, type CheckDraft } from './EvidenceSettingsFields';
 
-function hueFromColor(color: string): number {
-  const match = color.match(/hsl\((\d+)/);
-  return match ? Number(match[1]) : 0;
-}
-
-export function colorFromHue(hue: number): string {
-  return `hsl(${hue}, 70%, 75%)`;
-}
-
 /** Editable copy of a project's settings, saved only when the dialog saves. */
 export function createProjectSettingsForm() {
   const [name, setName] = createSignal('');
-  const [hue, setHue] = createSignal(0);
+  const [color, setColor] = createSignal('');
   const [icon, setIcon] = createSignal<ProjectIconId | undefined>();
   const [allowPeerAccess, setAllowPeerAccess] = createSignal(false);
   const [branchPrefix, setBranchPrefix] = createSignal('task');
@@ -36,7 +27,7 @@ export function createProjectSettingsForm() {
 
   function load(p: Project) {
     setName(p.name);
-    setHue(hueFromColor(p.color));
+    setColor(p.color);
     setIcon(p.icon);
     setAllowPeerAccess(p.allowPeerAccess === true);
     setBranchPrefix(sanitizeBranchPrefix(p.branchPrefix ?? 'task'));
@@ -55,7 +46,7 @@ export function createProjectSettingsForm() {
   function updates() {
     return {
       name: name().trim(),
-      color: colorFromHue(hue()),
+      color: color(),
       icon: icon(),
       branchPrefix: sanitizeBranchPrefix(branchPrefix()),
       deleteBranchOnClose: deleteBranchOnClose(),
@@ -73,8 +64,8 @@ export function createProjectSettingsForm() {
   return {
     name,
     setName,
-    hue,
-    setHue,
+    color,
+    setColor,
     icon,
     setIcon,
     allowPeerAccess,
