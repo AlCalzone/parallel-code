@@ -12,7 +12,7 @@ import {
   unregisterFocusFn,
 } from '../store/store';
 import { navigateBoard, navigateBoardTask } from './task-board-keys';
-import { openNextAttentionTask } from './next-attention-task';
+import { openNextAttentionTask, openPreviousAttentionTask } from './next-attention-task';
 import { retryCloseTask } from '../store/tasks';
 import type { AttentionEntry } from '../store/sidebar-attention';
 import type { Task } from '../store/types';
@@ -741,6 +741,23 @@ describe('next task that needs you', () => {
     });
     expect(visited).toEqual(['review', 'idle', 'idle2', 'review']);
     expect(boardSidePanelOpen()).toBe(true);
+  });
+
+  it('goes back up the list, wrapping to the last, with the previous command', () => {
+    setStore('tasks', 'idle2', task('idle2', 'Tidy tests'));
+    setStore('taskOrder', ['review', 'pr', 'idle', 'idle2']);
+    setStore('activeTaskId', 'idle');
+    const visited = [1, 2, 3].map(() => {
+      openPreviousAttentionTask();
+      return store.activeTaskId;
+    });
+    expect(visited).toEqual(['review', 'idle2', 'idle']);
+  });
+
+  it('starts from the least urgent going back when the current task is not waiting', () => {
+    setStore('activeTaskId', 'pr');
+    openPreviousAttentionTask();
+    expect(store.activeTaskId).toBe('idle');
   });
 
   it('starts from the most urgent once the current task stops waiting', () => {

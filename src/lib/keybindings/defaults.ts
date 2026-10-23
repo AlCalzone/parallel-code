@@ -396,6 +396,18 @@ export const DEFAULT_BINDINGS: KeyBinding[] = [
     global: true,
   },
   {
+    id: 'app.nav.previous-attention',
+    layer: 'app',
+    category: 'Navigation',
+    description: 'Go back up the tasks that need you, then stopped ones',
+    platform: 'both',
+    // Reverses Ctrl+Tab, so Ctrl on macOS too.
+    key: 'Tab',
+    modifiers: { ctrl: true, shift: true },
+    action: 'openPreviousAttentionTask',
+    global: true,
+  },
+  {
     id: 'app.switch-document',
     layer: 'app',
     category: 'App',

@@ -24,13 +24,15 @@ function attentionQueue(): Task[] {
 }
 
 /**
- * The task after the current one, wrapping around; the first when the current
- * one is not waiting. An answered task leaves the queue, so the next press
- * starts again from the most urgent.
+ * The task `step` places from the current one, wrapping around; when the
+ * current one is not waiting, the first going forward or the last going back.
+ * An answered task leaves the queue, so the next press starts again from the
+ * most urgent.
  */
-function nextInQueue(queue: Task[], currentId: string | null): Task | undefined {
+function stepInQueue(queue: Task[], currentId: string | null, step: 1 | -1): Task | undefined {
   const at = queue.findIndex((task) => task.id === currentId);
-  const next = queue[(at + 1) % queue.length];
+  const from = at === -1 && step === -1 ? 0 : at;
+  const next = queue[(from + step + queue.length) % queue.length];
   return next?.id === currentId ? undefined : next;
 }
 
@@ -45,11 +47,20 @@ function landingPanel(taskId: string): string | null {
   return same ?? asking;
 }
 
-/** Opens the next waiting task, beside the board while it is shown. */
-export function openNextAttentionTask(): void {
-  const task = nextInQueue(attentionQueue(), store.activeTaskId);
+function openAttentionTask(step: 1 | -1): void {
+  const task = stepInQueue(attentionQueue(), store.activeTaskId, step);
   if (!task) return;
   const panel = landingPanel(task.id);
   if (boardShown()) openBeside(task, false, panel);
   else openTask(task, panel);
+}
+
+/** Opens the next waiting task, beside the board while it is shown. */
+export function openNextAttentionTask(): void {
+  openAttentionTask(1);
+}
+
+/** Opens the previous waiting task, beside the board while it is shown. */
+export function openPreviousAttentionTask(): void {
+  openAttentionTask(-1);
 }
