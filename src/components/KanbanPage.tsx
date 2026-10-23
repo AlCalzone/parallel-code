@@ -51,6 +51,7 @@ import {
   writeKanbanFile,
 } from '../store/kanban';
 import { showNotification } from '../store/notification';
+import { setKanbanHideDetails } from '../store/ui';
 import {
   DEFAULT_KANBAN_MARKDOWN,
   addCard,
@@ -1077,6 +1078,14 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
             </button>
             <button
               type="button"
+              aria-pressed={store.kanbanHideDetails}
+              title="Hide card descriptions and checklists; checklist progress stays in the footer"
+              onClick={() => setKanbanHideDetails(!store.kanbanHideDetails)}
+            >
+              Hide details
+            </button>
+            <button
+              type="button"
               ref={pickerToggle}
               data-popover-toggle
               aria-haspopup="dialog"
@@ -1425,6 +1434,7 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
                                       projectId={projectId}
                                       blockedBy={openDependencies(b(), ref())}
                                       draggable={!editing()}
+                                      compact={store.kanbanHideDetails}
                                       dataRef={`${columnIndex}:${cardIndex}`}
                                       dropBefore={
                                         dragOver()?.column === columnIndex &&

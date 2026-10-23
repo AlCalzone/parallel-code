@@ -161,6 +161,7 @@ export {
   deleteCustomTheme,
   setAutoTrustFolders,
   setShowPlans,
+  setKanbanHideDetails,
   setShowPromptInput,
   setModelTaskNames,
   setTaskNameModel,

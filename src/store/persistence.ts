@@ -437,6 +437,7 @@ export async function saveState(): Promise<void> {
     windowState: store.windowState ? { ...store.windowState } : undefined,
     autoTrustFolders: store.autoTrustFolders,
     showPlans: store.showPlans,
+    kanbanHideDetails: store.kanbanHideDetails || undefined,
     modelTaskNames: store.modelTaskNames,
     taskNameModel: store.taskNameModel,
     taskBriefs: store.taskBriefs || undefined,
@@ -646,6 +647,7 @@ interface LegacyPersistedState {
   windowState?: unknown;
   autoTrustFolders?: unknown;
   showPlans?: unknown;
+  kanbanHideDetails?: unknown;
   modelTaskNames?: unknown;
   taskNameModel?: unknown;
   taskBriefs?: unknown;
@@ -903,6 +905,7 @@ export async function loadState(): Promise<void> {
       s.windowState = parsePersistedWindowState(raw.windowState);
       s.autoTrustFolders = typeof raw.autoTrustFolders === 'boolean' ? raw.autoTrustFolders : false;
       s.showPlans = typeof raw.showPlans === 'boolean' ? raw.showPlans : true;
+      s.kanbanHideDetails = raw.kanbanHideDetails === true;
       s.modelTaskNames = raw.modelTaskNames === true;
       s.taskNameModel = isTaskNameModelId(raw.taskNameModel)
         ? raw.taskNameModel

@@ -179,6 +179,8 @@ export interface KanbanCardViewProps {
   /** Open dependencies (cards on the board that are not done yet). */
   blockedBy: string[];
   draggable: boolean;
+  /** Leave out the description and checklist; the footer still shows checklist progress. */
+  compact?: boolean;
   dropBefore: boolean;
   dragging: boolean;
   flash: boolean;
@@ -289,10 +291,10 @@ export function KanbanCardView(props: KanbanCardViewProps) {
       <span id={describedId} class="kanban-sr-only">
         {description()}
       </span>
-      <Show when={summary()}>
+      <Show when={!props.compact && summary()}>
         <p class="plan-card-body">{summary()}</p>
       </Show>
-      <Show when={checklist().length}>
+      <Show when={!props.compact && checklist().length}>
         <ul class="kanban-checklist" aria-label="Checklist">
           <For each={checklist().slice(0, 5)}>
             {(item) => (

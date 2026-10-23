@@ -168,6 +168,10 @@ export function setShowPlans(showPlans: boolean): void {
   setStore('showPlans', showPlans);
 }
 
+export function setKanbanHideDetails(hide: boolean): void {
+  setStore('kanbanHideDetails', hide);
+}
+
 export function setModelTaskNames(enabled: boolean): void {
   setStore('modelTaskNames', enabled);
 }

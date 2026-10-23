@@ -35,6 +35,7 @@ function structuralSnapshot(): string {
     windowState: store.windowState,
     autoTrustFolders: store.autoTrustFolders,
     showPlans: store.showPlans,
+    kanbanHideDetails: store.kanbanHideDetails,
     preferUiMode: store.preferUiMode,
     disableClaudeUiMode: store.disableClaudeUiMode,
     defaultSkipPermissions: store.defaultSkipPermissions,
