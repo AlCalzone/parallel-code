@@ -2714,6 +2714,25 @@ html:is(
   gap: 8px;
 }
 
+/* Neutral until hovered: closing is routine, not urgent. */
+.dialog-close {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.dialog-close:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
 .dialog-footer-lead {
   flex: 1;
   min-width: 0;

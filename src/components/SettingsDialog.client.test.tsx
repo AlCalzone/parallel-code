@@ -32,7 +32,7 @@ function selectTab(label: string): void {
 }
 
 function orchestrationCheckbox(): HTMLInputElement {
-  const label = [...document.querySelectorAll('#settings-tab-agents label')].find((element) =>
+  const label = [...document.querySelectorAll('#settings-panel-agents label')].find((element) =>
     element.textContent?.includes('Allow agents to orchestrate tasks'),
   );
   const input = label?.querySelector<HTMLInputElement>('input[type="checkbox"]');
@@ -57,20 +57,20 @@ afterEach(() => {
 
 it('groups agent orchestration and child update controls in the Agents tab', () => {
   selectTab('Agents');
-  expect(document.querySelector('#settings-tab-agents')?.textContent).toContain(
+  expect(document.querySelector('#settings-panel-agents')?.textContent).toContain(
     'Allow agents to orchestrate tasks',
   );
-  expect(document.querySelector('#settings-tab-agents')?.textContent).toContain(
+  expect(document.querySelector('#settings-panel-agents')?.textContent).toContain(
     'Child update delay',
   );
-  expect(document.querySelector('#settings-tab-agents')?.textContent).not.toContain(
+  expect(document.querySelector('#settings-panel-agents')?.textContent).not.toContain(
     'Coordinator mode',
   );
   selectTab('Experimental');
-  expect(document.querySelector('#settings-tab-experimental')?.textContent).toContain(
+  expect(document.querySelector('#settings-panel-experimental')?.textContent).toContain(
     'Document workspaces',
   );
-  expect(document.querySelector('#settings-tab-experimental')?.textContent).not.toContain(
+  expect(document.querySelector('#settings-panel-experimental')?.textContent).not.toContain(
     'Coordinator mode',
   );
 });
@@ -193,7 +193,7 @@ it('moves selection and focus between tabs with arrow, Home and End keys', () =>
 
   press('ArrowLeft');
   expect(document.activeElement?.textContent).toBe('Experimental');
-  expect(document.querySelector('#settings-tab-experimental')).not.toBeNull();
+  expect(document.querySelector('#settings-panel-experimental')).not.toBeNull();
   press('ArrowRight');
   expect(document.activeElement?.textContent).toBe('General');
   press('End');
@@ -214,7 +214,7 @@ it('loads Codex models only once the AI assist tab shows the Codex provider', ()
 it('keeps the propagate default in place but disabled while orchestration is off', () => {
   setStore('mcpOrchestrationEnabled', false);
   selectTab('Agents');
-  const label = [...document.querySelectorAll('#settings-tab-agents label')].find((element) =>
+  const label = [...document.querySelectorAll('#settings-panel-agents label')].find((element) =>
     element.textContent?.includes('Propagate skip-permissions to sub-tasks'),
   );
   expect(label?.querySelector('input')?.disabled).toBe(true);

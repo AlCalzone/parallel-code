@@ -1,5 +1,6 @@
 import { createSignal, createEffect, Show, For, createUniqueId, on, createMemo } from 'solid-js';
 import { Dialog } from './Dialog';
+import { DialogCloseButton } from './DialogCloseButton';
 import { DialogFooter } from './DialogFooter';
 import { errMessage } from '../lib/log';
 import { theme, sectionLabelStyle } from '../lib/theme';
@@ -165,21 +166,7 @@ export function CustomThemeDialog(props: CustomThemeDialogProps) {
         >
           {props.editId ? 'Edit Theme' : 'New Custom Theme'}
         </h2>
-        <button
-          onClick={() => props.onClose()}
-          aria-label="Close"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: theme.fgMuted,
-            cursor: 'pointer',
-            'font-size': '19px',
-            padding: '0 4px',
-            'line-height': '1',
-          }}
-        >
-          &times;
-        </button>
+        <DialogCloseButton label="Close" onClick={() => props.onClose()} />
       </div>
 
       {/* AI Prompt section */}
