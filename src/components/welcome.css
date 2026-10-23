@@ -1,0 +1,118 @@
+/* The first-run screen: one column in the middle of an otherwise empty window. */
+.welcome {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 32px 24px;
+}
+
+.welcome-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 440px;
+  text-align: center;
+}
+
+.welcome-logo {
+  width: 44px;
+  height: 44px;
+  color: var(--accent);
+}
+
+.welcome h1 {
+  margin: 20px 0 8px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+}
+
+.welcome-lead {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--fg-muted);
+}
+
+/* Numbered by CSS so the counters line up with the left-aligned text. */
+.welcome-steps {
+  counter-reset: welcome-step;
+  list-style: none;
+  width: 100%;
+  margin: 28px 0;
+  padding: 0;
+  border-top: 1px solid var(--border-subtle, var(--border));
+  text-align: left;
+}
+
+.welcome-steps li {
+  counter-increment: welcome-step;
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  column-gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-subtle, var(--border));
+}
+
+.welcome-steps li::before {
+  content: counter(welcome-step);
+  grid-row: span 2;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 22px;
+  text-align: center;
+  color: var(--fg-muted);
+}
+
+.welcome-steps strong {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.welcome-steps span {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg-subtle, var(--fg-muted));
+}
+
+/* Neutral like every routine action; full-strength text marks it as the one to take. */
+.welcome-action {
+  padding: 9px 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--fg);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.welcome-action:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.welcome-action:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+}
+
+.welcome-action:disabled {
+  color: var(--fg-muted);
+  cursor: default;
+}
+
+.welcome-agents {
+  margin: 14px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg-subtle, var(--fg-muted));
+}

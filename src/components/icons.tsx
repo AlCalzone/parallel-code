@@ -626,3 +626,24 @@ export function EvidenceNoteIcon(props: { size?: number }): JSX.Element {
     </svg>
   );
 }
+
+/** The Parallel Code mark: two worktree lines beside two branches; sized by CSS. */
+export function AppLogo(props: { class?: string }): JSX.Element {
+  return (
+    <svg
+      class={props.class}
+      viewBox="0 0 56 56"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="4"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <line x1="10" y1="6" x2="10" y2="50" />
+      <line x1="22" y1="6" x2="22" y2="50" />
+      <path d="M30 8 H47 V24 H30" />
+      <path d="M49 32 H32 V48 H49" />
+    </svg>
+  );
+}
