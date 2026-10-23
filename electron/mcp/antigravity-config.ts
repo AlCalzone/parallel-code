@@ -14,7 +14,7 @@ import { appendGitInfoExcludeBlock } from '../ipc/git-exclude.js';
 export const ANTIGRAVITY_MCP_CONFIG = '.agents/mcp_config.json';
 
 /** Creates the config's parent directory. A linked `.agents` could put the token in another checkout. */
-export function ensureAntigravityConfigDir(workspace: string): void {
+function ensureAntigravityConfigDir(workspace: string): void {
   const dir = path.join(workspace, '.agents');
   // Not recursive: a workspace that is gone must fail, not be recreated.
   if (!fs.existsSync(dir)) fs.mkdirSync(dir);
@@ -22,7 +22,7 @@ export function ensureAntigravityConfigDir(workspace: string): void {
 }
 
 /** The file holds a session token: keep it out of `git status` and so out of agent commits. */
-export function excludeAntigravityConfig(workspace: string): void {
+function excludeAntigravityConfig(workspace: string): void {
   const result = appendGitInfoExcludeBlock(
     workspace,
     `/${ANTIGRAVITY_MCP_CONFIG}`,
@@ -39,10 +39,25 @@ function isTracked(workspace: string): boolean {
       timeout: 3000,
     });
     return true;
-  } catch {
-    // Non-zero exit means untracked.
-    return false;
+  } catch (err) {
+    // Exit 1 means untracked. Anything else (no repo, no git, timeout) is no answer:
+    // fail closed rather than risk writing the token into a tracked file.
+    if ((err as { status?: unknown }).status === 1) return false;
+    throw new Error(`Could not check whether ${ANTIGRAVITY_MCP_CONFIG} is tracked: ${String(err)}`);
   }
+}
+
+/**
+ * Makes `workspace` safe to hold the token file: refuses a tracked file or a linked
+ * `.agents`, creates the directory and excludes the file from Git.
+ */
+export function prepareAntigravityConfigDir(workspace: string): void {
+  if (isTracked(workspace))
+    throw new Error(
+      `${ANTIGRAVITY_MCP_CONFIG} is tracked by Git; a commit would publish its MCP token.`,
+    );
+  ensureAntigravityConfigDir(workspace);
+  excludeAntigravityConfig(workspace);
 }
 
 function readServers(file: string): Record<string, unknown> {
@@ -57,12 +72,7 @@ function readServers(file: string): Record<string, unknown> {
  * so the file is merged in place and goes with the worktree; nothing is restored.
  */
 export function writeAntigravityMcpConfig(workspace: string, config: ParallelCodeMcpConfig): void {
-  if (isTracked(workspace))
-    throw new Error(
-      `${ANTIGRAVITY_MCP_CONFIG} is tracked by Git; Antigravity sub-tasks would commit their MCP token.`,
-    );
-  ensureAntigravityConfigDir(workspace);
-  excludeAntigravityConfig(workspace);
+  prepareAntigravityConfigDir(workspace);
   const file = path.join(workspace, ANTIGRAVITY_MCP_CONFIG);
   const mcpServers = { ...readServers(file), ...config.mcpServers };
   atomicWriteFileSync(file, JSON.stringify({ mcpServers }, null, 2), { mode: 0o600 });

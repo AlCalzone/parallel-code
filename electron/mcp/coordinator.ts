@@ -1531,12 +1531,13 @@ export class Coordinator {
         subTaskMcpConfig = mcpConfig;
         const configPath = getSubTaskMcpConfigPath(dockerContainerName, serverPath, task.id);
         await writeSubTaskMcpConfig(configPath, mcpConfig);
+        subTaskMcpConfigPath = configPath;
+        task.mcpConfigPath = configPath;
+        // After recording the temp path, so a failure here still cleans up its token.
         if (isAntigravityCommand(agentCommand)) {
           writeAntigravityMcpConfig(result.worktree_path, mcpConfig);
           task.antigravityWorkspaceMcp = true;
         }
-        subTaskMcpConfigPath = configPath;
-        task.mcpConfigPath = configPath;
         assertStillPresent();
       }
 
@@ -3093,7 +3094,15 @@ export class Coordinator {
     }
     // A restored child whose worktree is gone has no session to configure.
     if (task.antigravityWorkspaceMcp && existsSync(task.worktreePath)) {
-      writeAntigravityMcpConfig(task.worktreePath, mcpConfig);
+      try {
+        writeAntigravityMcpConfig(task.worktreePath, mcpConfig);
+      } catch (err) {
+        // Losing the restored task would be worse than one session without coordinator tools.
+        logWarn('coordinator.antigravity_mcp', 'could not write Antigravity MCP config', {
+          taskId: task.id,
+          err: String(err),
+        });
+      }
     }
     return this.buildTaskMcpLaunchArgs(agentCommand ?? 'claude', mcpConfigPath, mcpConfig);
   }

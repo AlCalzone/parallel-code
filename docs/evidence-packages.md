@@ -66,7 +66,7 @@ Research agents gathered the sources; the numbers were not checked against the f
 | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Agent finishes a turn** (`Stop`/idle hook, or any "done" status transition)       | **Static refresh only:** recompute the integrity scan and test inventory from Git. No command execution and no model call. Free and safe, so it can run every turn. |
 | **Agent hands off** (`submit_evidence`, or `signal_done`/`land_self` for sub-tasks) | Attach the agent's claims, run **auto checks** if the execution gate allows it (§8), and run the evidence model if it is set to `handoff`.                          |
-| **"Build evidence" button**                                                         | The same as a handoff, without claims. This is first-class: it covers Codex, Antigravity or any agent without MCP or hooks.                                         |
+| **"Build evidence" button**                                                         | The same as a handoff, without claims. This is first-class: it covers Codex or any agent without MCP or hooks.                                                      |
 | **Finish dialog opens and the package is stale**                                    | Offer one click to re-run. Never run the model implicitly.                                                                                                          |
 
 Handoff semantics:

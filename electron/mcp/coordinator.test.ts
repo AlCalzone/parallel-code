@@ -3467,6 +3467,25 @@ describe('Coordinator MCP config restart rewrite', () => {
     expect(mockWriteAntigravityMcpConfig).toHaveBeenCalledWith('/tmp/restored', expect.anything());
   });
 
+  it('deletes the temp token file when an Antigravity child cannot get its worktree config', async () => {
+    coordinator.setMCPServerInfo('coord-1', 'http://localhost:3001', 'old', 'old', '/srv.js');
+    mockWriteAntigravityMcpConfig.mockImplementationOnce(() => {
+      throw new Error('.agents/mcp_config.json is tracked by Git');
+    });
+
+    await expect(
+      coordinator.createTask({
+        name: 'test',
+        prompt: 'do',
+        coordinatorTaskId: 'coord-1',
+        agentCommand: 'agy',
+      }),
+    ).rejects.toThrow(/tracked/);
+
+    const configPath = join(os.tmpdir(), 'parallel-code-subtask-task-1.json');
+    await vi.waitFor(() => expect(mockUnlinkSync).toHaveBeenCalledWith(configPath));
+  });
+
   it('keeps refreshing tokens when one Antigravity worktree cannot be written', async () => {
     coordinator.setMCPServerInfo('coord-1', 'http://localhost:3001', 'old', 'old', '/srv.js');
     await coordinator.createTask({
@@ -3483,6 +3502,28 @@ describe('Coordinator MCP config restart rewrite', () => {
     expect(() =>
       coordinator.setMCPServerInfo('coord-1', 'http://localhost:3002', 'new', 'new', '/srv.js'),
     ).not.toThrow();
+  });
+
+  it('restores an Antigravity child even when its worktree config cannot be written', () => {
+    coordinator.setMCPServerInfo('coord-1', 'http://localhost:3002', 'new', 'new', '/srv.js');
+    mockExistsSync.mockReturnValue(true);
+    mockWriteAntigravityMcpConfig.mockImplementationOnce(() => {
+      throw new Error('.agents must not be a symbolic link.');
+    });
+
+    coordinator.hydrateTask({
+      id: 'agy-broken',
+      name: 'restored',
+      projectId: 'proj-1',
+      projectRoot: '/tmp/project',
+      branchName: 'task/restored',
+      worktreePath: '/tmp/restored',
+      agentId: 'agent-agy-broken',
+      coordinatorTaskId: 'coord-1',
+      agentCommand: 'agy',
+    });
+
+    expect(coordinator.getTask('agy-broken')).toBeDefined();
   });
 
   it('leaves the worktree alone for agents that take MCP launch args', async () => {

@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -206,6 +207,7 @@ describe('StartMCPServer for Antigravity', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'start-mcp-agy-'));
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'start-mcp-agy-outside-'));
     try {
+      execFileSync('git', ['init', '-q'], { cwd: root });
       fs.symlinkSync(outside, path.join(root, '.agents'));
       register();
       const start = handlers.get(IPC.StartMCPServer);
@@ -224,6 +226,31 @@ describe('StartMCPServer for Antigravity', () => {
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
       fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a tracked config, whose token a commit would publish', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'start-mcp-agy-tracked-'));
+    try {
+      execFileSync('git', ['init', '-q'], { cwd: root });
+      fs.mkdirSync(path.join(root, '.agents'));
+      fs.writeFileSync(path.join(root, '.agents', 'mcp_config.json'), '{}');
+      execFileSync('git', ['add', '.agents/mcp_config.json'], { cwd: root });
+      register();
+      const start = handlers.get(IPC.StartMCPServer);
+
+      await expect(
+        Promise.resolve(
+          start?.(undefined, {
+            coordinatorTaskId: '12345678-1234-4234-8234-123456789abc',
+            projectId: 'project',
+            projectRoot: root,
+            agentCommand: 'agy',
+          }),
+        ),
+      ).rejects.toThrow(/tracked/);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
     }
   });
 });

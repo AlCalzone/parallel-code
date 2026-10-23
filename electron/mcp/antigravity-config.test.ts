@@ -60,6 +60,16 @@ describe('writeAntigravityMcpConfig', () => {
     expect(fs.readFileSync(configFile(), 'utf8')).toBe('{}');
   });
 
+  it('refuses to write when Git cannot say whether the file is tracked', () => {
+    const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'antigravity-config-nogit-'));
+    try {
+      expect(() => writeAntigravityMcpConfig(plain, config)).toThrow(/tracked/);
+      expect(fs.existsSync(path.join(plain, '.agents'))).toBe(false);
+    } finally {
+      fs.rmSync(plain, { recursive: true, force: true });
+    }
+  });
+
   it('refuses a linked .agents directory', () => {
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'antigravity-config-outside-'));
     try {

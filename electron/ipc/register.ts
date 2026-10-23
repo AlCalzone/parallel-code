@@ -111,11 +111,7 @@ import {
   isCodexCommand,
   type ParallelCodeMcpConfig,
 } from '../mcp/agent-args.js';
-import {
-  ANTIGRAVITY_MCP_CONFIG,
-  ensureAntigravityConfigDir,
-  excludeAntigravityConfig,
-} from '../mcp/antigravity-config.js';
+import { ANTIGRAVITY_MCP_CONFIG, prepareAntigravityConfigDir } from '../mcp/antigravity-config.js';
 import {
   getSymlinkCandidates,
   getMainBranch,
@@ -2227,10 +2223,7 @@ export function registerAllHandlers(win: BrowserWindow): void {
       let existingMcpContent: Record<string, unknown> = {};
       if (mcpJsonDir) {
         // Before the read: a linked `.agents` would put the token in another checkout.
-        if (mcpJsonFile === ANTIGRAVITY_MCP_CONFIG) {
-          ensureAntigravityConfigDir(mcpJsonDir);
-          excludeAntigravityConfig(mcpJsonDir);
-        }
+        if (mcpJsonFile === ANTIGRAVITY_MCP_CONFIG) prepareAntigravityConfigDir(mcpJsonDir);
         worktreeMcpPath = path.join(mcpJsonDir, mcpJsonFile);
         mcpFileExistedBefore = fs.existsSync(worktreeMcpPath);
         if (mcpFileExistedBefore) {
