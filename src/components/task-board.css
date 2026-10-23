@@ -356,10 +356,11 @@ html[data-look^='islands-'] .task-board {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Narrow cards, such as beside the side panel, drop it instead of cutting
-   it to a letter. The query measures the content box, inside the padding. */
+/* Narrow cards, such as beside the side panel, drop the agent's name instead
+   of cutting it to a letter; "Terminal busy" is state, so it stays. The query
+   measures the content box, inside the padding. */
 @container (max-width: 200px) {
-  .task-board-agent {
+  .task-board-agent:not(.busy) {
     display: none;
   }
 }
@@ -448,6 +449,11 @@ html[data-look^='islands-'] .task-board {
 }
 .task-board-chip.failure:hover {
   color: var(--error);
+}
+/* The empty state ignores the pointer so lanes stay droppable; its one action opts back in. */
+.task-board-empty .task-board-act {
+  margin-left: 8px;
+  pointer-events: auto;
 }
 
 /* The workspace, narrowed to one task beside the board. A dragged width

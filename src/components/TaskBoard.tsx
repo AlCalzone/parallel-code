@@ -1,7 +1,9 @@
 import { For, Index, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { isTypingTarget } from '../lib/tour-keys';
 import { store } from '../store/core';
+import { setTaskProjectFilter } from '../store/navigation';
 import { boardSidePanelOpen } from '../store/project-pages';
+import { taskProjectFilter } from '../store/task-project-filter';
 import {
   getTaskFocusedPanel,
   registerFocusFn,
@@ -65,6 +67,33 @@ function SnoozedLane(props: { lane: LaneData }) {
     >
       <Lane lane={props.lane} />
     </Show>
+  );
+}
+
+/** Says what hid the tasks, so a project filter left on doesn't read as an empty board. */
+function BoardEmpty() {
+  const project = () => store.projects.find((p) => p.id === taskProjectFilter());
+  const query = () => boardQuery().trim();
+  const message = () => {
+    const where = project() ? ` in ${project()?.name}` : '';
+    return query() ? `No tasks${where} match “${query()}”` : `No running tasks${where}`;
+  };
+  return (
+    <p class="task-board-empty">
+      {message()}
+      <Show when={project()}>
+        <button
+          type="button"
+          class="task-board-act"
+          onClick={() => {
+            setTaskProjectFilter(null);
+            focusBoardFilter();
+          }}
+        >
+          Show all projects
+        </button>
+      </Show>
+    </p>
   );
 }
 
@@ -136,9 +165,7 @@ export function TaskBoard() {
       </h2>
       <div class="task-board-lanes" ref={lanesEl}>
         <Show when={tasks().length === 0}>
-          <p class="task-board-empty">
-            {boardQuery().trim() ? `No tasks match “${boardQuery().trim()}”` : 'No running tasks'}
-          </p>
+          <BoardEmpty />
         </Show>
         {/* Index, not For: lanes are rebuilt on every change but keep their place,
             so a lane's cards and the snoozed rail's open state survive updates. */}

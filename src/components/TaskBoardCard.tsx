@@ -78,7 +78,7 @@ function CardMeta(props: { task: Task; since: number | undefined; waiting: boole
     <div class="task-board-meta">
       <Show when={project()}>
         {(p) => (
-          <span class="task-board-project">
+          <span class="task-board-project" title={p().name}>
             <Show
               when={p().icon}
               fallback={<i style={{ background: p().color }} aria-hidden="true" />}
@@ -94,7 +94,7 @@ function CardMeta(props: { task: Task; since: number | undefined; waiting: boole
         when={getTaskAttentionState(props.task.id) === 'shell_busy'}
         fallback={<span class="task-board-agent">{agentName(props.task)}</span>}
       >
-        <span class="task-board-agent" title={agentName(props.task)}>
+        <span class="task-board-agent busy" title={agentName(props.task)}>
           Terminal busy
         </span>
       </Show>
@@ -119,8 +119,13 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
   const fromAgent = () => !activity().text || activity().text === agentName(props.task);
   const closing = () =>
     props.task.closingStatus === 'closing' || props.task.closingStatus === 'removing';
+  const closeErrorText = () =>
+    props.task.closingStatus === 'error' ? props.task.closingError : undefined;
   const activityText = () => {
     if (closing()) return 'Closing…';
+    // Spelled out on the card, not only in a tooltip, so keyboard users see why.
+    const closeError = closeErrorText();
+    if (closeError) return closeError;
     return fromAgent() ? props.task.branchName : activity().text;
   };
   const shown = () => store.boardPeek && store.activeTaskId === props.task.id;
@@ -162,7 +167,7 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
       {/* Always rendered so a task starting or stopping never changes the card's height. */}
       <p
         class="task-board-activity"
-        classList={{ branch: fromAgent() && !closing() }}
+        classList={{ branch: fromAgent() && !closing() && !closeErrorText() }}
         title={activityText()}
       >
         {activityText() || ' '}

@@ -203,7 +203,7 @@ export function TaskTitleBar(props: TaskTitleBarProps) {
             {isTaskSnoozedUntilCi(props.task.id)
               ? 'Snoozed until CI finishes'
               : snoozedUntil() === undefined
-                ? 'Background'
+                ? 'Snoozed until new activity'
                 : `Snoozed until ${new Date(snoozedUntil() ?? 0).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`}
           </span>
         </Show>
