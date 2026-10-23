@@ -2,6 +2,7 @@ package com.parallelcode.phone
 
 import android.app.Application
 import android.content.Context
+import android.os.Build
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -45,7 +46,9 @@ class PhoneApplication : Application() {
             client.setSuspended(false)
             updates.setPaused(false)
         }
-        AgentWatchService.sync(this)
+        // Android 12+ refuses foreground-service starts from the background (e.g. the task was swiped
+        // away during the demo); MainActivity.onStart syncs again once the app is visible.
+        if (active || inForeground || Build.VERSION.SDK_INT < 31) AgentWatchService.sync(this)
     }
 
     override fun onCreate() {

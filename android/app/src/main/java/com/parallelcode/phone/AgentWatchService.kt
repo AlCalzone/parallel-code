@@ -34,10 +34,6 @@ class AgentWatchService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        if (app.demoActive) {
-            stopSelf()
-            return
-        }
         createChannels(this)
         ServiceCompat.startForeground(
             this,
@@ -45,6 +41,11 @@ class AgentWatchService : Service() {
             watchingNotification(0),
             if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0,
         )
+        // Only after startForeground: stopping a service started with startForegroundService before it crashes the app.
+        if (app.demoActive) {
+            stopSelf()
+            return
+        }
         app.client.start(HOLDER)
         // The widget's usage lines; the app refreshes them itself while on screen.
         scope.launch {

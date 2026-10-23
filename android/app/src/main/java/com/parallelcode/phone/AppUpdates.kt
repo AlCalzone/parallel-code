@@ -27,6 +27,7 @@ class AppUpdates(private val context: Context) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val http = OkHttpClient.Builder()
+        // Fails closed: every request must carry the current requestGeneration tag, as fetchNewest's does.
         .addInterceptor { chain ->
             if (paused || chain.request().tag(Int::class.javaObjectType) != requestGeneration) throw IOException("Update checks are paused during the offline demo.")
             chain.proceed(chain.request())

@@ -232,6 +232,10 @@ class PhoneViewModel internal constructor(application: Application, internal val
         demo?.reloadComputers()
     }
 
+    override fun onCleared() {
+        // Back finishes the activity before Android 12; don't leave real connections and notifications paused.
+        if (demo == null && demoSession.value != null) phoneApp.setDemoActive(false)
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -248,6 +252,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val demo by model.demoSession.collectAsState()
+            // Built outside ViewModelProvider, so onCleared never runs: keep viewModelScope out of PhoneViewModel.
             val activeModel = remember(demo) { if (demo == null) model else PhoneViewModel(application, demo) }
             val keepScreenOn by activeModel.keepScreenOn.collectAsState()
             val keepScreenOnOnlyActive by activeModel.keepScreenOnOnlyWhenActive.collectAsState()

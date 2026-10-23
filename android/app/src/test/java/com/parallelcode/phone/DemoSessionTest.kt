@@ -108,6 +108,20 @@ class DemoSessionTest {
     }
 
     @Test
+    fun closedChatRefusesFurtherActions() = runBlocking<Unit> {
+        val client: PhoneClient = DemoSession()
+        val chat = client.watchChat("demo-working")
+        assertTrue(client.closeTask("demo-working", true).isEmpty())
+        assertEquals("This sample task has closed.", fails {
+            client.sendChatAction("demo-working", "send", JSONObject().put("text", "Still there?"))
+        }.message)
+        assertEquals("closed", chat.value?.status)
+        // The outgoing screen still composes after a close; like the real client, these must not throw.
+        assertEquals("closed", client.watchChat("demo-working").value?.status)
+        assertNotNull(client.getTerminalBuffer("demo-working"))
+    }
+
+    @Test
     fun mergeCleanupAndFixCiUpdateSamplesWithoutRunningTools() = runBlocking<Unit> {
         val client: PhoneClient = DemoSession()
         assertEquals("attention", client.fetchMergeReadiness("demo-ci").overall)

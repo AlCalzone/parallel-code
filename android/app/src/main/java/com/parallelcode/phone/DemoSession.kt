@@ -207,14 +207,14 @@ internal class DemoSession : PhoneClient {
         diffs.remove(taskId)
     }
 
+    // Screens animating out still read a just-closed task; like RemoteClient, never throw here.
     override fun getTerminalBuffer(agentId: String): TerminalBuffer {
-        task(agentId)
         return terminals.getOrPut(agentId) {
             TerminalBuffer(agentId).also { it.onScrollback((
                 "Parallel Code — OFFLINE DEMO\r\n" +
                 "No shell, desktop or AI service is connected.\r\n\r\n" +
                 "Reviewing sample welcome.ts…\r\n" +
-                (if (task(agentId).ci == "failure") "\u001b[31mFAIL\u001b[0m welcome.test.ts (sample CI)\r\n\r\n"
+                (if (findTask(agentId)?.ci == "failure") "\u001b[31mFAIL\u001b[0m welcome.test.ts (sample CI)\r\n\r\n"
                     else "\u001b[32mPASS\u001b[0m 12 sample checks\r\n\r\n") +
                 "Type a reply, try quick keys, or open Notes and Changes.\r\n" +
                 "Commands are displayed only; they never execute.\r\n> "
@@ -244,13 +244,13 @@ internal class DemoSession : PhoneClient {
     }
 
     override fun watchChat(agentId: String): StateFlow<ChatState?> {
-        task(agentId)
         return chats.getOrPut(agentId) { MutableStateFlow(chat("This offline conversation is ready for your reply.")) }.asStateFlow()
     }
     override fun unwatchChat(agentId: String) = Unit
 
     override suspend fun sendChatAction(agentId: String, action: String, params: JSONObject) {
         requireControl()
+        task(agentId)
         val flow = chats[agentId] ?: throw ApiException("Unknown sample conversation.")
         val current = flow.value ?: throw ApiException("Sample conversation is not ready.")
         when (action) {
@@ -285,7 +285,8 @@ internal class DemoSession : PhoneClient {
     private fun requireControl() {
         if (!state.value.canControl) throw ApiException("Pair the sample phone with code 123456 first.", 401)
     }
-    private fun task(id: String) = agents.value.firstOrNull { it.taskId == id || it.agentId == id }
+    private fun findTask(id: String) = agents.value.firstOrNull { it.taskId == id || it.agentId == id }
+    private fun task(id: String) = findTask(id)
         ?: throw ApiException("This sample task has closed.")
     private fun updateTask(id: String, transform: (RemoteAgent) -> RemoteAgent) {
         _agents.value = agents.value.map { if (it.taskId == id || it.agentId == id) transform(it) else it }

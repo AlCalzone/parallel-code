@@ -94,6 +94,7 @@ class RemoteClient(
 ) : PhoneClient {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val http = OkHttpClient.Builder()
+        // Fails closed: build every request with [transportRequest] so it carries its transport generation.
         .addInterceptor { chain ->
             if (suspended || chain.request().tag(Int::class.javaObjectType) != transportGeneration) throw IOException("Real connections are paused during the offline demo.")
             chain.proceed(chain.request())
@@ -183,13 +184,19 @@ class RemoteClient(
         pollJob = null
     }
 
+    /** A request the transport interceptor lets through while [generation] is still current. */
+    private fun transportRequest(generation: Int) = Request.Builder().tag(Int::class.javaObjectType, generation)
+
     /** Pause every real transport while an offline review session is visible, preserving holders. */
     internal fun setSuspended(value: Boolean) {
         suspended = value
         if (value) {
             transportGeneration++
             started = false
+            // Cancel rather than wait for a close handshake: a queued auth frame must not reach the desktop.
+            val open = socket
             closeSocket()
+            open?.cancel()
             pollJob?.cancel()
             pollJob = null
             http.dispatcher.cancelAll()
@@ -241,8 +248,7 @@ class RemoteClient(
     /** The status and body of a GET to [path] on [computer], or null when it can't be reached. */
     private suspend fun getFrom(computer: SavedComputer, path: String): Pair<Int, String>? = withContext(Dispatchers.IO) {
         if (suspended) return@withContext null
-        val request = Request.Builder()
-            .tag(Int::class.javaObjectType, transportGeneration)
+        val request = transportRequest(transportGeneration)
             .url(computer.baseUrl + path)
             .header("Authorization", "Bearer ${computer.pairedToken ?: computer.token}")
             .build()
@@ -530,8 +536,7 @@ class RemoteClient(
             throw ApiException("Waiting for VPN connection. Connect your VPN and try again.")
         }
         val generation = transportGeneration
-        val request = Request.Builder()
-            .tag(Int::class.javaObjectType, generation)
+        val request = transportRequest(generation)
             .url(link.baseUrl + path)
             .header("Authorization", "Bearer $token")
             .method(method, body?.toString()?.toRequestBody("application/json".toMediaType()))
@@ -786,7 +791,7 @@ class RemoteClient(
         reconnectJob?.cancel()
         _state.update { it.copy(status = ConnectionStatus.CONNECTING, canControl = false, linkExpired = false) }
         val generation = transportGeneration
-        val request = Request.Builder().tag(Int::class.javaObjectType, generation).url(link.webSocketUrl).build()
+        val request = transportRequest(generation).url(link.webSocketUrl).build()
         lateinit var ws: WebSocket
         ws = http.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
