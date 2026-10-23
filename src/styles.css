@@ -254,6 +254,16 @@ body.font-smoothing {
   text-decoration: underline;
 }
 
+/* A neutral badge that acts; only hover reveals it is clickable. */
+.task-badge-action {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.task-badge-action:hover {
+  text-decoration: underline;
+}
+
 .task-title-bar .task-title-actions .icon-btn {
   padding: 4px !important;
   border-radius: var(--radius-xs);
@@ -503,6 +513,11 @@ body.font-smoothing {
 
 .task-branch-source-prefix {
   flex: 0 0 auto;
+}
+
+/* Routine link: neutral like the rest of the bar, emphasis on hover only. */
+.task-branch-source:hover {
+  color: var(--fg);
 }
 
 .task-branch-source-compact-label,

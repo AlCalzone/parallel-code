@@ -21,7 +21,7 @@ import { StatusDot, getDotTooltip } from './StatusDot';
 import { ClockIcon, CloseIcon } from './icons';
 import { theme } from '../lib/theme';
 import { withViewTransition } from '../lib/viewTransition';
-import { badgeStyle } from '../lib/badgeStyle';
+import { badgeStyle, neutralBadgeStyle } from '../lib/badgeStyle';
 import { taskCheckSignal } from '../lib/task-check-signal';
 import { handleDragReorder } from '../lib/dragReorder';
 import { getTaskDockerBadgeLabel } from '../lib/docker';
@@ -56,7 +56,7 @@ export function TaskTitleBar(props: TaskTitleBarProps) {
   const landingBadge = () => {
     switch (props.task.landingState) {
       case 'landed_pending_review':
-        return { label: 'Landed', color: theme.success, title: 'Landed — pending review' };
+        return { label: 'Landed', color: undefined, title: 'Landed — pending review' };
       case 'landed_cleanup_failed':
         return {
           label: 'Cleanup failed',
@@ -76,7 +76,7 @@ export function TaskTitleBar(props: TaskTitleBarProps) {
           title: props.task.landingReason ?? 'Landing failed',
         };
       case 'reviewed':
-        return { label: 'Reviewed', color: theme.fgMuted, title: 'Landing reviewed' };
+        return { label: 'Reviewed', color: undefined, title: 'Landing reviewed' };
       default:
         return null;
     }
@@ -188,18 +188,18 @@ export function TaskTitleBar(props: TaskTitleBarProps) {
           <span style={badgeStyle(theme.warning)}>{props.task.branchName}</span>
         </Show>
         <Show when={props.task.gitIsolation === 'none'}>
-          <span style={badgeStyle(theme.fgMuted)}>no git</span>
+          <span style={neutralBadgeStyle}>no git</span>
         </Show>
         <Show when={props.task.dockerMode}>
-          <span style={badgeStyle(theme.fgMuted)} title={props.task.dockerImage}>
+          <span style={neutralBadgeStyle} title={props.task.dockerImage}>
             {dockerBadgeLabel()}
           </span>
         </Show>
         <Show when={props.task.externalWorktree}>
-          <span style={badgeStyle(theme.accent)}>Imported</span>
+          <span style={neutralBadgeStyle}>Imported</span>
         </Show>
         <Show when={isTaskBackgrounded(props.task.id)}>
-          <span style={badgeStyle(theme.fgMuted)}>
+          <span style={neutralBadgeStyle}>
             {isTaskSnoozedUntilCi(props.task.id)
               ? 'Snoozed until CI finishes'
               : snoozedUntil() === undefined
@@ -216,27 +216,36 @@ export function TaskTitleBar(props: TaskTitleBarProps) {
           </span>
         </Show>
         <Show when={landingBadge()}>
-          {(badge) => (
-            <button
-              style={{
-                ...badgeStyle(badge().color),
-                cursor: props.task.landingState === 'landed_pending_review' ? 'pointer' : 'default',
-              }}
-              title={
-                props.task.landingState === 'landed_pending_review'
-                  ? `${badge().title}. Click to mark reviewed.`
-                  : badge().title
-              }
-              onClick={(e) => {
-                e.stopPropagation();
-                if (props.task.landingState === 'landed_pending_review') {
-                  clearTaskLandingReview(props.task.id);
+          {(badge) => {
+            const style = () => {
+              const color = badge().color;
+              return color ? badgeStyle(color) : neutralBadgeStyle;
+            };
+            // Only a landing awaiting review has an action; other states are plain status.
+            return (
+              <Show
+                when={props.task.landingState === 'landed_pending_review'}
+                fallback={
+                  <span style={style()} title={badge().title}>
+                    {badge().label}
+                  </span>
                 }
-              }}
-            >
-              {badge().label}
-            </button>
-          )}
+              >
+                <button
+                  type="button"
+                  class="task-badge-action"
+                  style={style()}
+                  title={`${badge().title}. Click to mark reviewed.`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    clearTaskLandingReview(props.task.id);
+                  }}
+                >
+                  {badge().label}
+                </button>
+              </Show>
+            );
+          }}
         </Show>
       </div>
       <div class="task-title-actions">
