@@ -40,6 +40,16 @@ describe('main stylesheet reduced-motion styles', () => {
     expectRule(
       block,
       [
+        '.dialog-overlay',
+        '.dialog-overlay > form',
+        '.dialog-overlay > .dialog-content',
+        '.exit-badge',
+      ],
+      /animation:\s*none\s*;/,
+    );
+    expectRule(
+      block,
+      [
         '.task-appearing',
         '.new-task-appearing',
         '.task-item-appearing',
