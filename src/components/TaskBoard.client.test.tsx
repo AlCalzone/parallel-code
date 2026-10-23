@@ -14,6 +14,7 @@ import {
 import { navigateBoard, navigateBoardTask } from './task-board-keys';
 import { openNextAttentionTask, openPreviousAttentionTask } from './next-attention-task';
 import { retryCloseTask } from '../store/tasks';
+import { setTaskProjectFilter } from '../store/navigation';
 import type { AttentionEntry } from '../store/sidebar-attention';
 import type { Task } from '../store/types';
 import { BoardSidePanelClose } from './BoardSidePanel';
@@ -290,6 +291,19 @@ it('says why the board is empty', () => {
   expect(host.querySelector('.task-board-empty')?.textContent).toBe('No running tasks');
 });
 
+it('names the project filter that hid every task, and offers to clear it', () => {
+  setStore('projects', [
+    { id: 'web', name: 'Website', path: '/repo', color: '#0af' },
+    { id: 'api', name: 'Backend', path: '/api', color: '#fa0' },
+  ]);
+  setTaskProjectFilter('api');
+  const empty = () => host.querySelector('.task-board-empty');
+  expect(empty()?.textContent).toBe('No running tasks in BackendShow all projects');
+  empty()?.querySelector('button')?.click();
+  expect(empty()).toBeNull();
+  expect(host.querySelectorAll('.task-board-name')).toHaveLength(3);
+});
+
 it("marks a card's project with its icon when it has one, else a color bar", () => {
   const project = () => host.querySelector('.lane-stopped .task-board-project');
   expect(project()?.querySelector('i')).not.toBeNull();
@@ -348,6 +362,10 @@ it('moves a task whose close failed to Needs you, with a retry', () => {
   const ask = host.querySelector('[data-board-task-id="pr"] .task-board-ask');
   expect(ask?.querySelector('.task-board-ask-label')?.textContent).toBe('Close failed');
   expect(ask?.querySelector('.task-board-ask-label')?.getAttribute('title')).toBe(
+    'worktree is locked',
+  );
+  // The reason is readable without hovering.
+  expect(host.querySelector('[data-board-task-id="pr"]')?.textContent).toContain(
     'worktree is locked',
   );
   ask?.querySelector<HTMLButtonElement>('.task-board-act')?.click();

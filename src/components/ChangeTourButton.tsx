@@ -214,7 +214,7 @@ export function ChangeTourButton(props: {
                 'max-height': `${Math.min(260, position().maxHeight)}px`,
                 'box-sizing': 'border-box',
                 overflow: 'auto',
-                'z-index': '2000',
+                'z-index': 'var(--z-overlay)',
                 padding: '14px',
                 background: theme.bgElevated,
                 color: theme.fg,

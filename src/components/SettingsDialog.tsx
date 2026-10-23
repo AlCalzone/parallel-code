@@ -1,6 +1,8 @@
-import { For, Show, createSignal, createEffect, createUniqueId, on } from 'solid-js';
+import { Show, createSignal, createEffect, createUniqueId, on } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { Dialog } from './Dialog';
+import { DialogCloseButton } from './DialogCloseButton';
+import { DialogTabs, dialogTabId, dialogTabPanelId, type DialogTab } from './DialogTabs';
 import { getAvailableTerminalFonts, fetchAvailableTerminalFonts } from '../lib/fonts';
 import { theme } from '../lib/theme';
 import { store, setDocumentWorkspacesEnabled } from '../store/store';
@@ -21,7 +23,7 @@ function ensureSelectedFont(available: string[]): string[] {
   return [store.terminalFont, ...available];
 }
 
-const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
+const SETTINGS_TABS: DialogTab<SettingsTab>[] = [
   { id: 'general', label: 'General' },
   { id: 'appearance', label: 'Appearance' },
   { id: 'agents', label: 'Agents' },
@@ -29,22 +31,12 @@ const SETTINGS_TABS: { id: SettingsTab; label: string }[] = [
   { id: 'experimental', label: 'Experimental' },
 ];
 
-/** Tab index an arrow/Home/End key moves to, wrapping at the ends; null for other keys. */
-function tabIndexForKey(key: string, current: number): number | null {
-  const count = SETTINGS_TABS.length;
-  if (key === 'ArrowRight') return (current + 1) % count;
-  if (key === 'ArrowLeft') return (current - 1 + count) % count;
-  if (key === 'Home') return 0;
-  if (key === 'End') return count - 1;
-  return null;
-}
-
 function SettingsTabPanel(props: { tab: SettingsTab; children: JSX.Element }) {
   return (
     <div
-      id={`settings-tab-${props.tab}`}
+      id={dialogTabPanelId('settings', props.tab)}
       role="tabpanel"
-      aria-labelledby={`settings-tabbutton-${props.tab}`}
+      aria-labelledby={dialogTabId('settings', props.tab)}
       data-dialog-scroll
       style={{
         'min-height': '0',
@@ -129,73 +121,16 @@ export function SettingsDialog(props: SettingsDialogProps) {
             </kbd>
           </span>
         </div>
-        <button
-          onClick={() => props.onClose()}
-          aria-label="Close settings"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: theme.fgMuted,
-            cursor: 'pointer',
-            'font-size': '19px',
-            padding: '0 4px',
-            'line-height': '1',
-          }}
-        >
-          &times;
-        </button>
+        <DialogCloseButton label="Close settings" onClick={() => props.onClose()} />
       </div>
 
-      <div
-        role="tablist"
-        aria-label="Settings tabs"
-        style={{
-          'flex-shrink': '0',
-          display: 'flex',
-          gap: '2px',
-          'border-bottom': `1px solid ${theme.border}`,
-          'padding-bottom': '0',
-          'margin-bottom': '2px',
-        }}
-      >
-        <For each={SETTINGS_TABS}>
-          {(tab) => (
-            <button
-              role="tab"
-              aria-selected={activeTab() === tab.id}
-              aria-controls={`settings-tab-${tab.id}`}
-              id={`settings-tabbutton-${tab.id}`}
-              type="button"
-              tabIndex={activeTab() === tab.id ? 0 : -1}
-              onClick={() => setActiveTab(tab.id)}
-              onKeyDown={(e) => {
-                const next = tabIndexForKey(e.key, SETTINGS_TABS.indexOf(tab));
-                if (next === null) return;
-                e.preventDefault();
-                const nextId = SETTINGS_TABS[next].id;
-                setActiveTab(nextId);
-                document.getElementById(`settings-tabbutton-${nextId}`)?.focus();
-              }}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                'border-bottom':
-                  activeTab() === tab.id ? `2px solid ${theme.accent}` : '2px solid transparent',
-                color: activeTab() === tab.id ? theme.fg : theme.fgMuted,
-                cursor: 'pointer',
-                'font-size': '14px',
-                'font-weight': activeTab() === tab.id ? '600' : '400',
-                padding: '6px 14px',
-                'margin-bottom': '-1px',
-                'border-radius': '0',
-                transition: 'color 0.15s, border-color 0.15s',
-              }}
-            >
-              {tab.label}
-            </button>
-          )}
-        </For>
-      </div>
+      <DialogTabs
+        tabs={SETTINGS_TABS}
+        active={activeTab()}
+        onChange={setActiveTab}
+        idPrefix="settings"
+        label="Settings tabs"
+      />
 
       <Show when={activeTab() === 'general'}>
         <SettingsTabPanel tab="general">

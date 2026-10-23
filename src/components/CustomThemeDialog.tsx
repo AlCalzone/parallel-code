@@ -1,5 +1,7 @@
 import { createSignal, createEffect, Show, For, createUniqueId, on, createMemo } from 'solid-js';
 import { Dialog } from './Dialog';
+import { DialogCloseButton } from './DialogCloseButton';
+import { DialogFooter } from './DialogFooter';
 import { errMessage } from '../lib/log';
 import { theme, sectionLabelStyle } from '../lib/theme';
 import {
@@ -164,21 +166,7 @@ export function CustomThemeDialog(props: CustomThemeDialogProps) {
         >
           {props.editId ? 'Edit Theme' : 'New Custom Theme'}
         </h2>
-        <button
-          onClick={() => props.onClose()}
-          aria-label="Close"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: theme.fgMuted,
-            cursor: 'pointer',
-            'font-size': '19px',
-            padding: '0 4px',
-            'line-height': '1',
-          }}
-        >
-          &times;
-        </button>
+        <DialogCloseButton label="Close" onClick={() => props.onClose()} />
       </div>
 
       {/* AI Prompt section */}
@@ -276,25 +264,30 @@ export function CustomThemeDialog(props: CustomThemeDialogProps) {
             transition: 'border-color 0.15s',
           }}
         />
-        <Show when={error()}>
-          <p style={{ margin: '0', 'font-size': '12px', color: theme.error, 'line-height': '1.5' }}>
-            {error()}
-          </p>
-        </Show>
-        <Show when={parsed()} keyed>
-          {(p) => (
+        {/* One reserved line for the parse result, so it doesn't push the dialog. */}
+        <div style={{ 'min-height': '18px' }}>
+          <Show when={error()}>
             <p
-              style={{
-                margin: '0',
-                'font-size': '12px',
-                color: warnings().length > 0 ? theme.warning : theme.success,
-              }}
+              style={{ margin: '0', 'font-size': '12px', color: theme.error, 'line-height': '1.5' }}
             >
-              Theme is valid — {Object.keys(p.vars).length} variable(s) defined.
-              {warnings().length > 0 ? ` ${warnings().length} contrast warning(s).` : ''}
+              {error()}
             </p>
-          )}
-        </Show>
+          </Show>
+          <Show when={parsed()} keyed>
+            {(p) => (
+              <p
+                style={{
+                  margin: '0',
+                  'font-size': '12px',
+                  color: warnings().length > 0 ? theme.warning : theme.success,
+                }}
+              >
+                Theme is valid — {Object.keys(p.vars).length} variable(s) defined.
+                {warnings().length > 0 ? ` ${warnings().length} contrast warning(s).` : ''}
+              </p>
+            )}
+          </Show>
+        </div>
         <Show when={warnings().length > 0}>
           <div
             style={{
@@ -327,84 +320,52 @@ export function CustomThemeDialog(props: CustomThemeDialogProps) {
         </Show>
       </div>
 
-      <Show when={saveError()}>
-        <p style={{ margin: '0', 'font-size': '12px', color: theme.error, 'line-height': '1.5' }}>
-          {saveError()}
-        </p>
-      </Show>
-
-      {/* Actions */}
-      <div
-        style={{
-          display: 'flex',
-          'justify-content': 'space-between',
-          'align-items': 'center',
-          'margin-top': '4px',
-        }}
+      <DialogFooter
+        error={saveError()}
+        style={{ 'margin-top': '4px' }}
+        start={
+          <Show when={props.editId}>
+            {(editId) => (
+              <button
+                class="btn-with-icon"
+                type="button"
+                onClick={async () => {
+                  try {
+                    await deleteCustomTheme(editId());
+                    props.onClose();
+                  } catch (e) {
+                    setSaveError(`Failed to delete theme: ${errMessage(e)}`);
+                  }
+                }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: theme.error,
+                  cursor: 'pointer',
+                  'font-size': '13px',
+                  padding: '7px 0',
+                }}
+              >
+                <TrashIcon size={14} />
+                Delete Theme
+              </button>
+            )}
+          </Show>
+        }
       >
-        <Show when={props.editId}>
-          {(editId) => (
-            <button
-              class="btn-with-icon"
-              type="button"
-              onClick={async () => {
-                try {
-                  await deleteCustomTheme(editId());
-                  props.onClose();
-                } catch (e) {
-                  setSaveError(`Failed to delete theme: ${errMessage(e)}`);
-                }
-              }}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: theme.error,
-                cursor: 'pointer',
-                'font-size': '13px',
-                padding: '7px 0',
-              }}
-            >
-              <TrashIcon size={14} />
-              Delete Theme
-            </button>
-          )}
-        </Show>
-        <div style={{ display: 'flex', gap: '8px', 'margin-left': 'auto' }}>
-          <button
-            type="button"
-            onClick={() => props.onClose()}
-            style={{
-              background: 'transparent',
-              border: `1px solid ${theme.border}`,
-              color: theme.fgMuted,
-              cursor: 'pointer',
-              'font-size': '14px',
-              padding: '7px 18px',
-              'border-radius': 'var(--radius-sm)',
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={!isValid()}
-            style={{
-              background: isValid() ? theme.accent : theme.bgInput,
-              border: `1px solid ${isValid() ? theme.accent : theme.border}`,
-              color: isValid() ? theme.accentText : theme.fgSubtle,
-              cursor: isValid() ? 'pointer' : 'not-allowed',
-              'font-size': '14px',
-              'font-weight': '600',
-              padding: '7px 18px',
-              'border-radius': 'var(--radius-sm)',
-              transition: 'background 0.15s, border-color 0.15s',
-            }}
-          >
-            {saveLabel()}
-          </button>
-        </div>
-      </div>
+        <button type="button" class="btn-secondary" onClick={() => props.onClose()}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          onClick={handleSave}
+          disabled={!isValid()}
+          title={isValid() ? undefined : 'Paste valid theme CSS to save'}
+        >
+          {saveLabel()}
+        </button>
+      </DialogFooter>
     </Dialog>
   );
 }

@@ -1062,7 +1062,7 @@ function App() {
               padding: '10px 20px',
               color: theme.fg,
               'font-size': '14px',
-              'z-index': '2000',
+              'z-index': 'var(--z-overlay)',
               'box-shadow': '0 4px 24px rgba(0,0,0,0.4)',
               cursor: 'pointer',
             }}

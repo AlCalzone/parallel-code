@@ -132,10 +132,10 @@ export function AttentionTray(props: { nowMs: number }) {
   return (
     <>
       <Show when={store.sidebarNeedsInputFirst && entries().length > 0}>
-        <section class="sidebar-attention-tray" aria-label="Needs attention">
+        <section class="sidebar-attention-tray" aria-label="Needs you">
           <div class="sidebar-attention-tray-header">
             <span style={{ 'font-size': sf(12), color: theme.warning, 'font-weight': '600' }}>
-              Needs attention ({entries().length})
+              Needs you ({entries().length})
             </span>
             <IconButton
               icon={<span aria-hidden="true">×</span>}

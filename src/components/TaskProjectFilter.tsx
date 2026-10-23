@@ -1,6 +1,6 @@
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { CaretDownIcon } from './icons';
+import { CaretDownIcon, CloseIcon } from './icons';
 import { createAnchorEffect, placeBelow } from '../lib/floating';
 import { codeProjects } from '../store/projects';
 import { store } from '../store/core';
@@ -84,7 +84,7 @@ export function TaskProjectFilter(props: { hideLabel?: boolean; onPick?: () => v
             setTaskProjectFilter(null);
           }}
         >
-          ×
+          <CloseIcon size={12} />
         </button>
       </Show>
       <Show when={open()}>

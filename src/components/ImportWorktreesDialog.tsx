@@ -1,5 +1,6 @@
-import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, createUniqueId } from 'solid-js';
 import { Dialog } from './Dialog';
+import { DialogFooter } from './DialogFooter';
 import { AgentSelector } from './AgentSelector';
 import { invoke } from '../lib/ipc';
 import { IPC } from '../../electron/ipc/channels';
@@ -27,6 +28,7 @@ export function ImportWorktreesDialog(props: ImportWorktreesDialogProps) {
   const [loading, setLoading] = createSignal(false);
   const [importing, setImporting] = createSignal(false);
   const [error, setError] = createSignal('');
+  const titleId = createUniqueId();
 
   const trackedWorktreePaths = createMemo(() => {
     const projectId = props.project?.id;
@@ -105,6 +107,15 @@ export function ImportWorktreesDialog(props: ImportWorktreesDialogProps) {
     !!selectedAgent() &&
     visibleCandidates().some((candidate) => selectedPaths().has(candidate.path));
 
+  // Says why Import is unavailable; loading and importing explain themselves.
+  const importBlockedReason = () => {
+    if (loading() || importing() || !props.project) return undefined;
+    if (!selectedAgent()) return 'Choose an agent first';
+    if (!visibleCandidates().some((candidate) => selectedPaths().has(candidate.path)))
+      return 'Select at least one worktree';
+    return undefined;
+  };
+
   const closeDisabled = () => shouldDisableImportClose(importing());
 
   function handleClose(): void {
@@ -139,10 +150,17 @@ export function ImportWorktreesDialog(props: ImportWorktreesDialogProps) {
   }
 
   return (
-    <Dialog open={props.open} onClose={handleClose} width="560px" panelStyle={{ gap: '18px' }}>
+    <Dialog
+      open={props.open}
+      onClose={handleClose}
+      width="560px"
+      panelStyle={{ gap: '18px' }}
+      labelledBy={titleId}
+    >
       <div style={{ display: 'flex', 'flex-direction': 'column', gap: '18px' }}>
         <div>
           <h2
+            id={titleId}
             style={{
               margin: '0 0 6px',
               'font-size': '16px',
@@ -296,60 +314,26 @@ export function ImportWorktreesDialog(props: ImportWorktreesDialogProps) {
           </Show>
         </div>
 
-        <Show when={error()}>
-          <div
-            style={{
-              'font-size': '12px',
-              color: theme.error,
-              background: `color-mix(in srgb, ${theme.error} 8%, transparent)`,
-              padding: '8px 12px',
-              'border-radius': 'var(--radius-md)',
-              border: `1px solid color-mix(in srgb, ${theme.error} 20%, transparent)`,
-            }}
-          >
-            {error()}
-          </div>
-        </Show>
-
-        <div style={{ display: 'flex', 'justify-content': 'flex-end', gap: '8px' }}>
+        <DialogFooter error={error()}>
           <button
             type="button"
+            class="btn-secondary"
             disabled={closeDisabled()}
             onClick={handleClose}
-            style={{
-              padding: '9px 18px',
-              background: theme.bgInput,
-              border: `1px solid ${theme.border}`,
-              'border-radius': 'var(--radius-md)',
-              color: theme.fgMuted,
-              cursor: closeDisabled() ? 'not-allowed' : 'pointer',
-              'font-size': '13px',
-              opacity: closeDisabled() ? '0.4' : '1',
-            }}
           >
             Cancel
           </button>
           <button
-            class="btn-with-icon"
             type="button"
+            class="btn-primary"
             disabled={!canImport()}
+            title={importBlockedReason()}
             onClick={() => void handleImport()}
-            style={{
-              padding: '9px 18px',
-              background: theme.accent,
-              border: 'none',
-              'border-radius': 'var(--radius-md)',
-              color: theme.accentText,
-              cursor: canImport() ? 'pointer' : 'not-allowed',
-              'font-size': '13px',
-              'font-weight': '600',
-              opacity: canImport() ? '1' : '0.4',
-            }}
           >
             <DownloadIcon size={14} />
             {importing() ? 'Importing...' : 'Import Selected'}
           </button>
-        </div>
+        </DialogFooter>
       </div>
     </Dialog>
   );

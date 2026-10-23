@@ -1,5 +1,6 @@
 import { createSignal, createEffect, createUniqueId, For, on, Show, type JSX } from 'solid-js';
 import { Dialog } from './Dialog';
+import { DialogFooter } from './DialogFooter';
 import { updateProject, spConnection, listSpProjects, setProjectSpMapping } from '../store/store';
 import type { SpProject } from '../../electron/shared/super-productivity';
 import { theme } from '../lib/theme';
@@ -283,59 +284,29 @@ export function EditProjectDialog(props: EditProjectDialogProps) {
               </TabPanel>
             </Show>
 
-            {/* The error sits beside Save, where the retry happens; its slot is
-                always there so an error doesn't push the buttons. */}
-            <div
+            {/* The error sits beside Save, where the retry happens. */}
+            <DialogFooter
+              error={saveError()}
               style={{
-                'flex-shrink': '0',
                 'margin-top': 'auto',
-                display: 'flex',
-                'align-items': 'center',
-                gap: '8px',
                 'padding-top': '16px',
                 'border-top': `1px solid ${theme.border}`,
               }}
             >
-              <span
-                role="alert"
-                style={{ flex: '1', 'min-width': '0', color: theme.error, 'font-size': '13px' }}
-              >
-                {saveError()}
-              </span>
-              <button
-                type="button"
-                class="btn-secondary"
-                onClick={() => props.onClose()}
-                style={{
-                  padding: '9px 18px',
-                  background: theme.bgInput,
-                  border: `1px solid ${theme.border}`,
-                  'border-radius': 'var(--radius-md)',
-                  color: theme.fgMuted,
-                  cursor: 'pointer',
-                  'font-size': '14px',
-                }}
-              >
+              <button type="button" class="btn-secondary" onClick={() => props.onClose()}>
                 Cancel
               </button>
               <button
                 type="button"
                 class="btn-primary"
                 disabled={saveDisabled()}
+                title={canSave() ? undefined : 'Enter a project name to save'}
                 aria-busy={saving()}
                 onClick={handleSave}
-                style={{
-                  padding: '9px 20px',
-                  'border-radius': 'var(--radius-md)',
-                  cursor: saveDisabled() ? 'not-allowed' : 'pointer',
-                  'font-size': '14px',
-                  'font-weight': '500',
-                  opacity: saveDisabled() ? '0.4' : '1',
-                }}
               >
                 {saving() ? 'Saving…' : 'Save'}
               </button>
-            </div>
+            </DialogFooter>
             <ImportWorktreesDialog
               open={showImportDialog()}
               project={project()}

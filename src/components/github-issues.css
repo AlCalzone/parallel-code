@@ -450,7 +450,7 @@
 .github-item-kind {
   font-size: 11px;
   font-weight: 600;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   padding: 2px 6px;
   color: var(--fg-muted);
   background: var(--bg-input);

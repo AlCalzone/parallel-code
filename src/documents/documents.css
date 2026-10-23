@@ -189,7 +189,7 @@
   font-size: 11px;
   color: var(--fg-subtle);
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border-subtle);
   white-space: nowrap;
   flex-shrink: 0;
@@ -267,7 +267,7 @@
   margin-left: 6px;
   font-size: 11px;
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent);
   color: var(--accent-text);
 }
@@ -481,7 +481,7 @@
   gap: 2px;
   padding: 4px 8px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--island-bg);
   font-size: 12px;
   color: var(--fg-muted);
@@ -1481,7 +1481,7 @@
   gap: 6px;
   background: var(--bg-input);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 4px 6px 4px 10px;
   color: var(--fg-muted);
   font-family: var(--font-ui);
@@ -1517,7 +1517,7 @@
 .docws-count-btn {
   min-width: 22px;
   height: 20px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border);
   background: var(--bg-elevated);
   color: var(--fg);
@@ -1676,7 +1676,7 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border);
   color: var(--fg-muted);
   white-space: nowrap;

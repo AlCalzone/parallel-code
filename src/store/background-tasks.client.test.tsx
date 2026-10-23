@@ -375,7 +375,7 @@ it('offers the action and a manual return in the task header', () => {
     expect(send).toBeDefined();
     send?.click();
     expect(isTaskBackgrounded('one')).toBe(true);
-    expect(container.textContent).toContain('Background');
+    expect(container.textContent).toContain('Snoozed until new activity');
     doLater?.click();
     const restore = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
       (item) => item.textContent === 'Restore to front',
@@ -383,7 +383,7 @@ it('offers the action and a manual return in the task header', () => {
     expect(restore).toBeDefined();
     restore?.click();
     expect(isTaskBackgrounded('one')).toBe(false);
-    expect(container.textContent).not.toContain('Background');
+    expect(container.textContent).not.toContain('Snoozed until new activity');
   } finally {
     dispose();
     container.remove();

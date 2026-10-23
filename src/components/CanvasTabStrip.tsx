@@ -251,7 +251,7 @@ export function CanvasTabStrip(props: CanvasTabStripProps) {
         <Show when={menuOpen()}>
           <div
             onClick={() => setMenuOpen(false)}
-            style={{ position: 'fixed', inset: '0', 'z-index': '1200' }}
+            style={{ position: 'fixed', inset: '0', 'z-index': 'var(--z-popover)' }}
           />
           <div
             role="menu"
@@ -261,7 +261,7 @@ export function CanvasTabStrip(props: CanvasTabStripProps) {
               position: 'absolute',
               top: '100%',
               right: '0',
-              'z-index': '1201',
+              'z-index': 'calc(var(--z-popover) + 1)',
               'min-width': '160px',
               padding: '4px',
               background: theme.bgElevated,

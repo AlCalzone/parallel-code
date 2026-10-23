@@ -297,10 +297,11 @@ export const linkButtonStyle: Record<string, string> = {
 export function dialogButtonStyle(primary: boolean, disabled = false): Record<string, string> {
   return {
     padding: '9px 18px',
-    background: primary ? theme.accent : theme.bgInput,
-    border: primary ? 'none' : `1px solid ${theme.border}`,
+    // Neutral for both: full-strength text, not an accent fill, ranks the primary action.
+    background: theme.bgInput,
+    border: `1px solid ${theme.border}`,
     'border-radius': 'var(--radius-md)',
-    color: primary ? theme.accentText : theme.fgMuted,
+    color: primary ? theme.fg : theme.fgMuted,
     cursor: disabled ? 'default' : 'pointer',
     opacity: disabled ? '0.5' : '1',
     'font-size': '14px',
