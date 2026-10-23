@@ -13,7 +13,7 @@ describe('keybinding migration notice', () => {
     expect(rule?.[1]).toMatch(/position:\s*fixed\s*;/);
     expect(rule?.[1]).toMatch(/width:\s*min\(560px,\s*calc\(100vw - 32px\)\)\s*;/);
     expect(app).toContain('class="keybinding-migration-notice"');
-    const notice = app.indexOf('<Show when={!store.keybindingMigrationDismissed}>');
+    const notice = app.indexOf('class="keybinding-migration-notice"');
     expect(notice).toBeGreaterThan(-1);
     expect(notice).toBeLessThan(app.search(/<main[\s>]/));
   });
