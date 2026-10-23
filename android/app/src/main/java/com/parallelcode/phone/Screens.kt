@@ -141,7 +141,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
@@ -254,7 +253,7 @@ fun ConnectScreen(
             )
             saved.forEach { computer ->
                 OutlinedButton(onClick = { onSelectSaved(computer.baseUrl) }, modifier = Modifier.fillMaxWidth()) {
-                    Text(computer.label, fontFamily = FontFamily.Monospace)
+                    Text(computer.label, fontFamily = AppFonts.mono)
                 }
             }
         }
@@ -291,7 +290,7 @@ fun PairScreen(pair: suspend (pin: String, remember: Boolean) -> Unit, onDone: (
             label = { Text("Code from your computer") },
             singleLine = true,
             enabled = !busy,
-            textStyle = MaterialTheme.typography.headlineSmall.copy(fontFamily = FontFamily.Monospace),
+            textStyle = MaterialTheme.typography.headlineSmall.copy(fontFamily = AppFonts.mono),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
             shape = MaterialTheme.shapes.large,
             colors = OutlinedTextFieldDefaults.colors(
@@ -397,8 +396,11 @@ fun AgentsScreen(
     var refreshing by remember { mutableStateOf(false) }
     var showSwitchMenu by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val activeAgents = remember(agents) { agents.filter { !it.collapsed } }
-    val minimizedAgents = remember(agents) { agents.filter { it.collapsed } }
+    // As on the desktop board, a minimized task still shows under Needs you; the setting only
+    // decides whether the rest of them join the Snoozed & minimized lane.
+    val activeAgents = remember(agents, showMinimizedTasks) {
+        agents.filter { !it.collapsed || showMinimizedTasks || taskLane(it) != TaskLane.SNOOZED }
+    }
     val matchingSearch = remember(activeAgents, search) { activeAgents.filter { matchesSearch(it, search) } }
     val groups = remember(matchingSearch, filter) { groupTasks(matchingSearch.filter(filter::matches)) }
     val showHostSwitch = computers.size > 1
@@ -479,7 +481,7 @@ fun AgentsScreen(
                                                 Column {
                                                     Text(
                                                         computer.label,
-                                                        fontFamily = FontFamily.Monospace,
+                                                        fontFamily = AppFonts.mono,
                                                         fontWeight = if (inUse) FontWeight.SemiBold else FontWeight.Normal,
                                                     )
                                                     Text(
@@ -531,14 +533,6 @@ fun AgentsScreen(
                 HorizontalDivider(thickness = 1.dp, color = AppTheme.extra.border)
             }
         },
-        bottomBar = {
-            if (showMinimizedTasks && minimizedAgents.isNotEmpty()) {
-                MinimizedTasksBottomBar(
-                    minimizedAgents = minimizedAgents,
-                    onOpen = onOpen,
-                )
-            }
-        },
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = refreshing,
@@ -569,14 +563,14 @@ fun AgentsScreen(
                 if (state.status == ConnectionStatus.CONNECTED && activeAgents.isEmpty()) {
                     item {
                         Text(
-                            if (showMinimizedTasks && minimizedAgents.isNotEmpty()) "No active agents running." else "No agents are running.",
+                            "No agents are running.",
                             Modifier.padding(24.dp),
                             color = AppTheme.extra.textMuted,
                             style = MaterialTheme.typography.bodyLarge,
                         )
                     }
                 }
-                if (state.status != ConnectionStatus.CONNECTED && activeAgents.isEmpty() && (!showMinimizedTasks || minimizedAgents.isEmpty())) {
+                if (state.status != ConnectionStatus.CONNECTED && activeAgents.isEmpty()) {
                     item {
                         Row(
                             Modifier.padding(24.dp),
@@ -614,148 +608,14 @@ fun AgentsScreen(
                         }
                     }
                 }
-                groups.forEach { (group, groupAgents) ->
-                    item(key = "group:${group.name}") {
-                        TaskGroupHeader(group, groupAgents.size, Modifier.animateItem())
+                groups.forEach { (lane, laneAgents) ->
+                    item(key = "lane:${lane.name}") {
+                        TaskLaneHeader(lane, laneAgents.size, Modifier.animateItem())
                     }
-                    items(groupAgents, key = { it.agentId }) { agent ->
+                    items(laneAgents, key = { it.agentId }) { agent ->
                         AgentCard(agent, onOpen, modifier = Modifier.animateItem())
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MinimizedTasksBottomBar(
-    minimizedAgents: List<RemoteAgent>,
-    onOpen: (RemoteAgent) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var isExpanded by rememberSaveable { mutableStateOf(true) }
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, AppTheme.extra.border),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { isExpanded = !isExpanded }
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(AppTheme.extra.textMuted),
-                    )
-                    Text(
-                        "Minimized (${minimizedAgents.size})",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                Text(
-                    if (isExpanded) "Hide" else "Show",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            AnimatedVisibility(
-                visible = isExpanded,
-                enter = expandVertically(animationSpec = tween(220, easing = FastOutSlowInEasing)) + fadeIn(tween(180)),
-                exit = shrinkVertically(animationSpec = tween(200, easing = FastOutSlowInEasing)) + fadeOut(tween(150)),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    minimizedAgents.forEach { agent ->
-                        MinimizedTaskCard(
-                            agent = agent,
-                            onClick = { onOpen(agent) },
-                            single = minimizedAgents.size == 1,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MinimizedTaskCard(
-    agent: RemoteAgent,
-    onClick: () -> Unit,
-    single: Boolean,
-) {
-    Card(
-        modifier = Modifier
-            .width(if (single) 260.dp else 220.dp)
-            .clickable(onClick = onClick),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = AppTheme.extra.cardBg),
-        border = BorderStroke(1.dp, AppTheme.extra.borderSubtle),
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    text = agent.taskName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = AppTheme.extra.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    text = "Minimized",
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                    color = AppTheme.extra.textMuted,
-                )
-            }
-            listOfNotNull(agent.projectName, agent.agentName).takeIf { it.isNotEmpty() }?.let {
-                Text(
-                    text = it.joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                    color = AppTheme.extra.textMuted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (agent.lastLine.isNotBlank()) {
-                Text(
-                    text = agent.lastLine,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 14.sp),
-                    fontFamily = FontFamily.Monospace,
-                    color = AppTheme.extra.textMuted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
             }
         }
     }
@@ -799,7 +659,8 @@ private fun AgentCard(
     modifier: Modifier = Modifier,
 ) {
     val isError = agent.attention == "error" || agent.ciFailed()
-    val isAttention = !agent.collapsed && (agent.attention == "needs_input" || isError)
+    // A minimized task only lists here while it needs you or the Snoozed & minimized lane shows.
+    val isAttention = agent.attention == "needs_input" || isError
     val attentionTransition = rememberInfiniteTransition(label = "attentionPulse")
     val attentionGlow by if (isAttention) {
         attentionTransition.animateFloat(
@@ -834,15 +695,17 @@ private fun AgentCard(
         bump.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
     }
 
+    // The PR row already spells out what the checks say, so the pill does not repeat it.
+    val prSaysChecks = agent.pr?.label != null
     val (statusColor, statusText) = when {
+        agent.ciFailed() && !prSaysChecks -> Pair(MaterialTheme.colorScheme.error, "CI failed")
+        agent.running && agent.attention == "needs_input" -> Pair(AppTheme.extra.warningText, "Needs input")
+        agent.running && agent.attention == "error" -> Pair(MaterialTheme.colorScheme.error, "Error")
         agent.collapsed -> Pair(AppTheme.extra.textMuted, "Minimized")
-        agent.ciFailed() -> Pair(MaterialTheme.colorScheme.error, "CI failed")
         !agent.running -> Pair(AppTheme.extra.textMuted, agent.exitCode?.let { "Exited ($it)" } ?: "Exited")
-        agent.attention == "needs_input" -> Pair(AppTheme.extra.warningText, "Needs input")
-        agent.attention == "error" -> Pair(MaterialTheme.colorScheme.error, "Error")
         agent.attention == "active" -> Pair(MaterialTheme.colorScheme.primary, "Working")
         agent.attention == "shell_busy" -> Pair(MaterialTheme.colorScheme.primary, "Running command")
-        agent.attention == "ready" -> Pair(AppTheme.extra.success, readyLabel(agent.ci))
+        agent.attention == "ready" -> Pair(AppTheme.extra.success, readyLabel(if (prSaysChecks) null else agent.ci))
         agent.attention == "review" -> Pair(AppTheme.extra.review, "Review")
         else -> Pair(AppTheme.extra.textMuted, "Idle")
     }
@@ -918,13 +781,7 @@ private fun AgentCard(
                     }
                 }
             }
-            listOfNotNull(agent.projectName, agent.agentName).takeIf { it.isNotEmpty() }?.let {
-                Text(
-                    it.joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = AppTheme.extra.textMuted,
-                )
-            }
+            TaskCardMeta(agent)
             val detail = agent.lastLine.ifBlank { if (agent.isChat) "Built-in chat" else "" }
             if (detail.isNotBlank()) {
                 Box(
@@ -938,13 +795,14 @@ private fun AgentCard(
                     Text(
                         detail,
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = AppFonts.mono,
                         color = AppTheme.extra.textMuted,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
+            agent.pr?.let { TaskCardPr(it) }
         }
     }
 }
@@ -1452,7 +1310,7 @@ private fun TerminalText(
         val paddingPx = with(density) { (TERMINAL_PADDING_H * 2).roundToPx() }
         val textWidthPx = constraints.maxWidth - paddingPx
         val charPxAt10 = remember(measurer) {
-            measurer.measure("0".repeat(10), TextStyle(fontFamily = FontFamily.Monospace, fontSize = 10.sp)).size.width / 10f
+            measurer.measure("0".repeat(10), TextStyle(fontFamily = AppFonts.mono, fontSize = 10.sp)).size.width / 10f
         }
         val autoFont = (10f * textWidthPx / (cols.coerceAtLeast(1) * charPxAt10)).coerceIn(8f, 14f).sp
         val phoneFont = TERMINAL_FONT
@@ -1468,7 +1326,7 @@ private fun TerminalText(
         LaunchedEffect(textWidthPx, viewHeightPx, phoneFont, density) {
             val probe = measurer.measure(
                 "0".repeat(10),
-                TextStyle(fontFamily = FontFamily.Monospace, fontSize = phoneFont, lineHeight = phoneFont * 1.27f),
+                TextStyle(fontFamily = AppFonts.mono, fontSize = phoneFont, lineHeight = phoneFont * 1.27f),
             )
             val viewCols = (textWidthPx / (probe.size.width / 10f)).toInt()
             val viewRows = ((viewHeightPx - viewPaddingPx) / probe.size.height.toFloat()).toInt()
@@ -1500,7 +1358,7 @@ private fun TerminalText(
                 Text(
                     text = text,
                     color = Color(palette.foreground),
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppFonts.mono,
                     fontSize = fontSize,
                     lineHeight = fontSize * 1.27f,
                 )
@@ -1803,7 +1661,7 @@ private fun ReplyBox(
                         if (arrow != null) {
                             Icon(arrow.first, contentDescription = arrow.second, modifier = Modifier.size(20.dp))
                         } else {
-                            Text(label, fontFamily = FontFamily.Monospace, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            Text(label, fontFamily = AppFonts.mono, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -1851,7 +1709,7 @@ private fun ReplyBox(
                                 onClick = { shellMode = false },
                                 enabled = !busy,
                                 modifier = Modifier.semantics { contentDescription = "Shell command mode. Tap to message the agent instead." },
-                            ) { Text("!", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold) }
+                            ) { Text("!", fontFamily = AppFonts.mono, fontWeight = FontWeight.Bold) }
                         }
                     } else null,
                     minLines = if (compact) 1 else 2,

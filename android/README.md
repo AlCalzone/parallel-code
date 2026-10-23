@@ -7,8 +7,8 @@ Native companion app for the desktop's **Connect Phone** (Remote Access) feature
 - **Connect:** scan the QR code in Connect Phone, or paste the link under it. This gives a view-only token.
 - **Pair:** enter the six-digit code from Connect Phone to get a paired token, which may type into terminals. "Keep this phone authorized" asks the desktop to remember the phone across restarts.
 - **Several computers:** link more than one desktop (for example the installed app and a dev build, or two machines) and switch between them in Settings → Computers; each keeps its own pairing.
-- **Agents:** live list with each agent's status and last line, grouped as in the phone web UI (Needs you, Working, Ready to review, Other tasks). Search by task, project, or agent name, and narrow it with the All / Needs you / Review chips. The list sits under the desktop's Claude, Codex, and Antigravity 5-hour and weekly usage meters (hidden on desktops without `/api/mobile/usage`).
-- **Minimized tasks:** tasks minimized on the desktop are pinned below the live list; a setting hides them.
+- **Agents:** the desktop's task board as one column: the same lanes in the same order (Needs you, Stopped, Working, In pull request, Snoozed & minimized), with each card showing its status, last line, project icon and, once a PR is open, a PR row with what its checks say and whether the desktop is babysitting it. Search by task, project, or agent name, and narrow it with the All / Needs you / Stopped chips. The list sits under the desktop's Claude, Codex, and Antigravity 5-hour and weekly usage meters (hidden on desktops without `/api/mobile/usage`).
+- **Minimized tasks:** tasks minimized on the desktop stay under Needs you while they need you; the others fill the Snoozed & minimized lane when Settings → Show minimized tasks is on.
 - **Looks:** the same 15 themes as the desktop, in Settings → Appearance. Follow system / always dark / always light picks the tone, and a separate dark and light look is remembered, so switching your phone's theme switches the look with it. Each look is drawn with a live swatch, and every color and corner radius comes from the desktop's own stylesheet. See [Looks](#looks).
 - **Settings:** theme and looks, keep the screen on, widget background transparency and card color, connection status, wait for VPN (skipped on your home Wi-Fi, which needs location access to read the network name, and "Allow all the time" for agent notifications in the background), and forget this computer.
 - **Swipe between tasks:** with a task open, swipe sideways to the previous or next active one in the list (minimized tasks are skipped); the header shows its position ("2 of 5"). When another task needs you, **Next task →** at the bottom of the terminal jumps straight to it.
@@ -39,6 +39,7 @@ The phone uses the desktop's look presets, not its own. `LookPalettes.kt` is gen
 ```sh
 npm run generate:android-looks   # rewrite LookPalettes.kt after a desktop theme change
 npm run check:android-looks      # fail if it is out of date (also run by the Kotlin tests)
+node scripts/generate-android-project-icons.mjs   # rewrite ProjectIcons.kt after the desktop's project icons change
 ```
 
 Three things are worth knowing about the mapping:
@@ -47,7 +48,7 @@ Three things are worth knowing about the mapping:
 - **Gradients are flattened.** Several desktop backgrounds are `radial-gradient`s. The phone draws flat surfaces, so a gradient becomes its middle stop, which keeps the look recognizable. Everything else is the exact value.
 - **Terminals follow the look.** A terminal is drawn over the look's `--task-panel-bg` with the ANSI set the desktop pairs with that look, so Midnight gets a pure-black panel and Noir gets Noir's ANSI colors. Dark looks with no set of their own on the desktop fall back to the muted Noir set, because the desktop's fallback there is xterm's own defaults.
 
-Obsidian in both tones is the default, and its values are pinned by `LookPalettesTest`, so adding a theme cannot quietly change what the app looks like out of the box.
+As on the desktop, Parallel Code is the default dark look and Obsidian Light the default light look. Obsidian's values are pinned by `LookPalettesTest`, and the defaults are asserted there too, so adding a theme cannot quietly change what the app looks like out of the box.
 
 ## Build
 

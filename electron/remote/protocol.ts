@@ -38,7 +38,22 @@ export interface RemoteAgent {
   ci?: RemoteCiStatus;
   /** The desktop board lane the task sits in, so the phone groups tasks the same way. */
   lane?: RemoteBoardLane;
+  /** The task's open pull request, as the desktop board card shows it. */
+  pr?: RemoteTaskPr;
 }
+
+/** Mirrors the board card's PR row (src/components/board/TaskStatus.tsx). */
+export interface RemoteTaskPr {
+  url: string;
+  /** The board's status line, such as "CI failed" or "CI passed · Review needed". */
+  label?: string;
+  kind?: RemotePrStatusKind;
+  /** Babysitting is on: the desktop sends failing checks to the agent until CI passes. */
+  babysit?: boolean;
+}
+
+/** Mirrors PrBoardStatusKind in src/store/pr-checks-state.ts. */
+export type RemotePrStatusKind = 'merged' | 'ready' | 'blocked' | 'running' | 'failed';
 
 export type RemoteCiStatus = 'pending' | 'failure' | 'success';
 
@@ -100,6 +115,7 @@ export type RemoteTaskContext = Pick<
   collapsed?: boolean;
   ci?: RemoteCiStatus;
   lane?: RemoteBoardLane;
+  pr?: RemoteTaskPr;
 };
 
 /** Conversation actions a paired phone may take on a running chat. */

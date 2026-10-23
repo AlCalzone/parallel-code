@@ -58,7 +58,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.rememberUpdatedState
@@ -366,7 +365,7 @@ fun SettingsScreen(
                     ) {
                         SettingSwitchRow(
                             title = "Show minimized tasks",
-                            description = "Pin collapsed and minimized tasks to the bottom of the overview.",
+                            description = "List minimized tasks in the Snoozed & minimized lane at the end of the overview. A minimized task that needs you always shows.",
                             checked = showMinimizedTasks,
                             onCheckedChange = onShowMinimizedTasksChange,
                         )
@@ -498,7 +497,7 @@ fun SettingsScreen(
                             Text(
                                 "$widgetTransparency%",
                                 style = MaterialTheme.typography.bodyLarge,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = AppFonts.mono,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.primary,
                             )
@@ -596,7 +595,7 @@ fun SettingsScreen(
                             Text(
                                 hostLabel,
                                 style = MaterialTheme.typography.bodyMedium,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = AppFonts.mono,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
@@ -639,7 +638,7 @@ fun SettingsScreen(
                                 Text(
                                     latencyMs?.let { "${it} ms" } ?: "< 10 ms",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    fontFamily = FontFamily.Monospace,
+                                    fontFamily = AppFonts.mono,
                                     fontWeight = FontWeight.Medium,
                                     color = AppTheme.extra.textPrimary,
                                 )
@@ -1123,7 +1122,7 @@ private fun ComputerRow(
         Column(Modifier.weight(1f).padding(start = 4.dp)) {
             Text(
                 computer.label,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = AppFonts.mono,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -1131,7 +1130,7 @@ private fun ComputerRow(
             if (computer.alias?.isNotBlank() == true) {
                 Text(
                     computer.baseUrl.substringAfter("://"),
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = AppFonts.mono,
                     style = MaterialTheme.typography.bodySmall,
                     color = AppTheme.extra.textMuted,
                 )
