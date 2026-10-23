@@ -156,3 +156,18 @@ it('publishes the PR check status, and drops it once the PR merges or has no che
   setPrChecks('task', { ...checks, overall: 'success', merged: true });
   expect(lastCi()).toBeUndefined();
 });
+
+it('publishes the board lane so the phone groups tasks like the desktop board', () => {
+  const lastLane = () => {
+    const [, payload] = vi.mocked(fireAndForget).mock.lastCall ?? [];
+    return (payload as { contexts: Record<string, { lane?: unknown }> }).contexts.task.lane;
+  };
+  stop = startRemoteStatusSync();
+  expect(lastLane()).toBe('stopped');
+
+  setStore('tasks', 'task', 'prUrl', 'https://github.com/o/r/pull/1');
+  expect(lastLane()).toBe('pr');
+
+  setStore('tasks', 'task', 'collapsed', true);
+  expect(lastLane()).toBe('snoozed');
+});

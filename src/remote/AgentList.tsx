@@ -5,7 +5,7 @@ import { ConnectionBanner } from './ConnectionBanner';
 import { NotificationSettings } from './NotificationSettings';
 import { readLocal, writeLocal } from './storage';
 import { ProjectSwatch } from '../components/ProjectSwatch';
-import type { RemoteAgent } from '../../electron/remote/protocol';
+import type { RemoteAgent, RemoteBoardLane } from '../../electron/remote/protocol';
 
 const ANDROID_APP_GUIDE = 'https://github.com/johannesjo/parallel-code#android-app';
 
@@ -15,28 +15,34 @@ interface AgentListProps {
   onPair: () => void;
 }
 
-const inStates = (states: string[]) => (agent: RemoteAgent) => states.includes(agent.attention);
-
-// A task lands in the first group it matches, so failed CI files under "Needs you".
-const groups = [
-  { name: 'Needs you', matches: agentNeedsYou },
-  { name: 'Working', matches: inStates(['active']) },
-  { name: 'Ready to review', matches: inStates(['review', 'ready']) },
-  { name: 'Other tasks', matches: inStates(['idle', 'shell_busy']) },
+// The desktop board's lanes, top to bottom in its left-to-right order, so a
+// task sits under the same heading on both screens.
+const lanes: { id: RemoteBoardLane; name: string }[] = [
+  { id: 'needs', name: 'Needs you' },
+  { id: 'stopped', name: 'Stopped' },
+  { id: 'working', name: 'Working' },
+  { id: 'pr', name: 'In pull request' },
+  { id: 'snoozed', name: 'Snoozed & minimized' },
 ];
 
-const groupOf = (agent: RemoteAgent) => groups.find((group) => group.matches(agent));
+/** The desktop sends each task's lane; this only covers a task it has not described yet. */
+function laneOf(agent: RemoteAgent): RemoteBoardLane {
+  if (agent.lane) return agent.lane;
+  if (agentNeedsYou(agent) || agent.attention === 'review') return 'needs';
+  if (agent.collapsed) return 'snoozed';
+  return agent.attention === 'active' ? 'working' : 'stopped';
+}
 
 export function AgentList(props: AgentListProps) {
   let searchInput: HTMLInputElement | undefined;
   const [search, setSearch] = createSignal(readLocal('task-search'));
   const savedFilter = readLocal('task-filter');
   const [filter, setFilter] = createSignal(
-    savedFilter === 'attention' || savedFilter === 'review' ? savedFilter : 'all',
+    savedFilter === 'needs' || savedFilter === 'stopped' ? savedFilter : 'all',
   );
   createEffect(() => writeLocal('task-search', search()));
   createEffect(() => writeLocal('task-filter', filter()));
-  const needsYou = createMemo(() => agents().filter(agentNeedsYou).length);
+  const needsYou = createMemo(() => agents().filter((a) => laneOf(a) === 'needs').length);
   const matchingSearch = createMemo(() => {
     const query = search().trim().toLocaleLowerCase();
     return agents().filter((a) =>
@@ -45,10 +51,7 @@ export function AgentList(props: AgentListProps) {
         .includes(query),
     );
   });
-  const matchesFilter = (agent: RemoteAgent, id: string) =>
-    id === 'all' ||
-    (id === 'attention' && agentNeedsYou(agent)) ||
-    (id === 'review' && groupOf(agent)?.name === 'Ready to review');
+  const matchesFilter = (agent: RemoteAgent, id: string) => id === 'all' || laneOf(agent) === id;
   const filtered = createMemo(() => matchingSearch().filter((a) => matchesFilter(a, filter())));
   function clearFilters() {
     setSearch('');
@@ -122,8 +125,8 @@ export function AgentList(props: AgentListProps) {
             <For
               each={[
                 { id: 'all', label: 'All' },
-                { id: 'attention', label: 'Needs you' },
-                { id: 'review', label: 'Review' },
+                { id: 'needs', label: 'Needs you' },
+                { id: 'stopped', label: 'Stopped' },
               ]}
             >
               {(item) => (
@@ -156,9 +159,9 @@ export function AgentList(props: AgentListProps) {
             <h2>
               {search()
                 ? 'No matching tasks'
-                : filter() === 'attention'
+                : filter() === 'needs'
                   ? 'Nothing needs you right now'
-                  : 'Nothing to review yet'}
+                  : 'No stopped tasks'}
             </h2>
             <p>
               {search()
@@ -170,9 +173,9 @@ export function AgentList(props: AgentListProps) {
             </button>
           </div>
         </Show>
-        <For each={groups}>
+        <For each={lanes}>
           {(group) => {
-            const items = () => filtered().filter((a) => groupOf(a) === group);
+            const items = () => filtered().filter((a) => laneOf(a) === group.id);
             return (
               <Show when={items().length > 0}>
                 <section class="mobile-group" aria-label={group.name}>
@@ -185,7 +188,7 @@ export function AgentList(props: AgentListProps) {
                       return (
                         <button
                           class="agent-card"
-                          classList={{ attention: group.name === 'Needs you' }}
+                          classList={{ attention: group.id === 'needs' }}
                           onClick={() => props.onSelect(agent.taskId)}
                         >
                           <div class="agent-card-top">
