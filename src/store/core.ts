@@ -64,6 +64,7 @@ export const [store, setStore] = createStore<AppStore>({
   windowState: null,
   autoTrustFolders: false,
   showPlans: true,
+  kanbanHideDetails: false,
   modelTaskNames: false,
   taskNameModel: DEFAULT_TASK_NAME_MODEL,
   taskBriefs: false,

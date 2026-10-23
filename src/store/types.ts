@@ -515,6 +515,7 @@ export interface PersistedState {
   windowState?: PersistedWindowState;
   autoTrustFolders?: boolean;
   showPlans?: boolean;
+  kanbanHideDetails?: boolean;
   modelTaskNames?: boolean;
   taskNameModel?: TaskNameModelId;
   taskBriefs?: boolean;
@@ -648,6 +649,8 @@ export interface AppStore {
   windowState: PersistedWindowState | null;
   autoTrustFolders: boolean;
   showPlans: boolean;
+  /** Plan cards leave out their description and checklist. */
+  kanbanHideDetails: boolean;
   /** Opt-in: ask a cheap model for a short title when a task is named from its prompt. */
   modelTaskNames: boolean;
   taskNameModel: TaskNameModelId;

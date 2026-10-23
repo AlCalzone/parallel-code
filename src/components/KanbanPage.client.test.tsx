@@ -33,6 +33,7 @@ vi.mock('../store/core', async () => {
     newTaskPrefillPrompt: null,
     editorCommand: '',
     panelUserSize: {},
+    kanbanHideDetails: false,
   });
   return { store, setStore };
 });
@@ -169,6 +170,7 @@ beforeEach(() => {
       newTaskPrefillPrompt: null,
       editorCommand: '',
       panelUserSize: {},
+      kanbanHideDetails: false,
     } as never),
   );
 });
@@ -356,6 +358,23 @@ describe('KanbanPage', () => {
     ).toEqual(['Sync engine']);
     // The filter is remembered per project; leave it off as the next tests expect.
     toggle.click();
+  });
+
+  it('hides card descriptions and checklists while Hide details is pressed', async () => {
+    await mount();
+    const toggle = button('Hide details');
+    toggle.click();
+    await settle();
+    const card = cardEl('Write migration');
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(card.textContent).not.toContain('Move the records.');
+    expect(card.querySelector('.kanban-checklist')).toBeNull();
+    expect(card.querySelector('.kanban-progress')?.textContent).toBe('0/1');
+    expect(store.kanbanHideDetails).toBe(true);
+    toggle.click();
+    await settle();
+    expect(cardEl('Write migration').textContent).toContain('Move the records.');
+    expect(store.kanbanHideDetails).toBe(false);
   });
 
   it('keeps the file actions and keyboard help in the more menu', async () => {

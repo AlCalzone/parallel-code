@@ -1796,6 +1796,17 @@ describe('code Q&A model persistence', () => {
     expect((await lastSaved()).modelTaskNames).toBe(true);
   });
 
+  it('remembers hidden plan card details and shows them otherwise', async () => {
+    mockInvoke.mockResolvedValueOnce(stateJson({ kanbanHideDetails: 'yes' }));
+    await loadState();
+    expect(store.kanbanHideDetails).toBe(false);
+
+    mockInvoke.mockResolvedValueOnce(stateJson({ kanbanHideDetails: true }));
+    await loadState();
+    expect(store.kanbanHideDetails).toBe(true);
+    expect((await lastSaved()).kanbanHideDetails).toBe(true);
+  });
+
   it('keeps a chosen naming model and falls back to Haiku for an unknown one', async () => {
     mockInvoke.mockResolvedValueOnce(stateJson({ taskNameModel: 'luna' }));
     await loadState();
