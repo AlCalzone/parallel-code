@@ -358,6 +358,7 @@ export interface EditorDraft {
   title: string;
   body: string;
   depends: string[];
+  group: string;
   column: number;
 }
 
@@ -370,7 +371,12 @@ export function KanbanCardEditor(props: {
   column: number;
   /** Titles of the other cards, for dependencies. */
   otherTitles: string[];
-  onSave: (change: { title: string; body: string; depends: string[] }, column: number) => void;
+  /** Themes already on the board, offered while typing one. */
+  themes: string[];
+  onSave: (
+    change: { title: string; body: string; depends: string[]; group: string },
+    column: number,
+  ) => void;
   onDelete: () => void;
   onArchive: () => void;
   onCancel: () => void;
@@ -380,11 +386,12 @@ export function KanbanCardEditor(props: {
   const [title, setTitle] = createSignal(saved?.title ?? initial.title);
   const [body, setBody] = createSignal(saved?.body ?? initial.body);
   const [depends, setDepends] = createSignal<string[]>([...(saved?.depends ?? initial.depends)]);
+  const [group, setGroup] = createSignal(saved?.group ?? initial.group ?? '');
   const [column, setColumn] = createSignal(saved?.column ?? untrack(() => props.column));
   createEffect(
     on(
-      [title, body, depends, column],
-      ([t, b, d, c]) => props.onDraft?.({ title: t, body: b, depends: d, column: c }),
+      [title, body, depends, group, column],
+      ([t, b, d, g, c]) => props.onDraft?.({ title: t, body: b, depends: d, group: g, column: c }),
       {
         defer: true,
       },
@@ -402,7 +409,9 @@ export function KanbanCardEditor(props: {
     titleRef?.select();
     grow();
   });
-  const save = () => props.onSave({ title: title(), body: body(), depends: depends() }, column());
+  const save = () =>
+    props.onSave({ title: title(), body: body(), depends: depends(), group: group() }, column());
+  const themeList = createUniqueId();
   const onKeyDown: JSX.EventHandler<HTMLElement, KeyboardEvent> = (e) => {
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -486,6 +495,18 @@ export function KanbanCardEditor(props: {
           </Show>
         </div>
       </div>
+      <label class="kanban-editor-row">
+        <span class="kanban-editor-label">Theme</span>
+        <input
+          list={themeList}
+          placeholder="Cluster in the map, e.g. Auth"
+          value={group()}
+          onInput={(e) => setGroup(e.currentTarget.value)}
+        />
+        <datalist id={themeList}>
+          <For each={props.themes}>{(theme) => <option value={theme} />}</For>
+        </datalist>
+      </label>
       <label class="kanban-editor-row">
         <span class="kanban-editor-label">Column</span>
         <select value={column()} onChange={(e) => setColumn(Number(e.currentTarget.value))}>

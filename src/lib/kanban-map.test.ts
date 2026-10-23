@@ -119,6 +119,73 @@ describe('boardToMap', () => {
   });
 });
 
+describe('boardToMap by theme', () => {
+  const THEMED = `# P
+
+## Backlog
+
+- [ ] Login form
+  group: Auth
+  related: Invoices
+- [ ] Invoices
+  group: Billing
+  related: Login form
+- [ ] Loose end
+
+## Doing
+
+- [ ] Session store
+  group: auth
+  depends: Login form
+  related: Login form
+
+## Archive
+
+- [x] Old idea
+  group: Auth
+`;
+
+  it('hangs cards under their theme, unthemed ones last, and leaves the archive out', () => {
+    const { map } = boardToMap(parseKanban(THEMED), undefined, 'theme');
+    const tree = map.records.map((r) => [
+      r.title,
+      r.parent && titleOfParent(map.records, r.parent),
+    ]);
+    expect(tree).toEqual([
+      ['P', undefined],
+      ['Auth', 'P'],
+      ['Login form', 'Auth'],
+      ['Billing', 'P'],
+      ['Invoices', 'Billing'],
+      ['Session store', 'Auth'],
+      ['No theme', 'P'],
+      ['Loose end', 'No theme'],
+    ]);
+  });
+
+  it('draws related cards once, and not where they already wait for each other', () => {
+    for (const grouping of ['column', 'theme'] as const) {
+      const result = boardToMap(parseKanban(THEMED), undefined, grouping);
+      const links = result.map.relations.map((l) => [
+        titleOf(result, l.source),
+        l.kind,
+        titleOf(result, l.target),
+      ]);
+      expect(links).toEqual([
+        ['Session store', 'waits for', 'Login form'],
+        ['Login form', 'relates to', 'Invoices'],
+      ]);
+    }
+  });
+
+  it('keeps a card’s node ID when switching grouping', () => {
+    const board = parseKanban(THEMED);
+    const idOf = (grouping: 'column' | 'theme') =>
+      boardToMap(board, undefined, grouping).map.records.find((r) => r.title === 'Invoices')?.id;
+    expect(idOf('theme')).toBe(idOf('column'));
+  });
+});
+
 function titleOfParent(records: { id: string; title: string }[], id: string) {
   return records.find((r) => r.id === id)?.title;
 }

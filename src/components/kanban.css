@@ -757,7 +757,7 @@
   flex: 0 0 64px;
   color: var(--fg-muted);
 }
-.kanban-editor-row select {
+.kanban-editor-row :is(select, input) {
   flex: 1;
   min-width: 0;
   padding: 4px 6px;
@@ -864,6 +864,10 @@
   overflow: hidden;
 }
 /* Tasks that wait on the user or failed stand out, as on the board's cards. */
+/* The map toolbar's flat buttons would leave the toggle without its outline. */
+.kanban-map .kanban-view-toggle button:not([aria-pressed='true']) {
+  border-color: var(--border);
+}
 .kanban-map .graph-task-badge[data-state='needs_input'] {
   color: var(--warning);
   border-color: color-mix(in srgb, var(--warning) 55%, var(--border));

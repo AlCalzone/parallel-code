@@ -2,8 +2,9 @@ import { createMemo, createSignal, Show } from 'solid-js';
 import { GraphCanvas } from '../graph/GraphCanvas';
 import { visibleNodes } from '../graph/model';
 import { createReducedMotion } from '../graph/reducedMotion';
-import { boardToMap } from '../lib/kanban-map';
+import { boardToMap, type KanbanMapGrouping } from '../lib/kanban-map';
 import type { KanbanBoard, KanbanCardRef } from '../lib/kanban';
+import { SparkleIcon } from './icons';
 import { urgentTask } from './KanbanCard';
 import { stateLabel } from './board/task-state';
 import { openBeside } from './board/TaskStatus';
@@ -18,15 +19,22 @@ interface Props {
   /** The user's folds by node ID; branches without one use the map's default. */
   folds: Record<string, boolean>;
   onFoldsChange: (folds: Record<string, boolean>) => void;
+  grouping: KanbanMapGrouping;
+  onGroupingChange: (grouping: KanbanMapGrouping) => void;
+  /** Asks the planning agent to give the cards themes. */
+  onCluster: () => void;
   onOpenCard: (ref: KanbanCardRef) => void;
 }
 
-/** KANBAN.md as a read-only mind map; changes happen on the board. */
+/**
+ * KANBAN.md as a read-only mind map; changes happen on the board or through
+ * the planning agent, which clusters the cards by writing `group:` lines.
+ */
 export function KanbanMapView(props: Props) {
   const reducedMotion = createReducedMotion();
   // Nothing starts selected: a selection dims the cards outside its branch.
   const [selected, setSelected] = createSignal('');
-  const data = createMemo(() => boardToMap(props.board, props.shown));
+  const data = createMemo(() => boardToMap(props.board, props.shown, props.grouping));
   const collapsed = createMemo<ReadonlySet<string>>(() => {
     const { map, folded } = data();
     return new Set(
@@ -82,6 +90,34 @@ export function KanbanMapView(props: Props) {
 
   return (
     <section class="mindmap-editor kanban-map" aria-label="Plan as a mind map">
+      <div class="mindmap-toolbar" role="toolbar" aria-label="Map actions">
+        <div class="kanban-view-toggle" role="group" aria-label="Group cards by">
+          <button
+            type="button"
+            aria-pressed={props.grouping === 'column'}
+            title="Group cards under their column"
+            onClick={() => props.onGroupingChange('column')}
+          >
+            Columns
+          </button>
+          <button
+            type="button"
+            aria-pressed={props.grouping === 'theme'}
+            title="Group cards under their group: line"
+            onClick={() => props.onGroupingChange('theme')}
+          >
+            Themes
+          </button>
+        </div>
+        <button
+          type="button"
+          class="mindmap-export"
+          title="Ask the planning agent to sort the cards into themes"
+          onClick={() => props.onCluster()}
+        >
+          <SparkleIcon /> Cluster with agent
+        </button>
+      </div>
       <div class="mindmap-stage">
         <GraphCanvas
           snapshot={data().map}
