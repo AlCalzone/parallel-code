@@ -267,6 +267,31 @@ export interface CreateTaskOptions {
    *  (e.g. a phone created it), so it cannot take focus from their current work.
    *  A function decides once the task exists, after a slow creation. */
   activate?: boolean | (() => boolean);
+  /** Runs once the worktree exists, before the task registers or its agent starts.
+   *  A rejection removes the new worktree and fails the creation. */
+  launchGuard?: () => Promise<void>;
+}
+
+/** Removes a worktree whose task was refused before it registered, then rethrows. */
+async function refuseLaunch(
+  err: unknown,
+  cleanup: {
+    taskId: string;
+    branchName: string;
+    worktreePath: string;
+    projectRoot: string;
+    deleteBranch: boolean;
+  },
+): Promise<never> {
+  try {
+    await invoke(IPC.DeleteTask, { ...cleanup, agentIds: [] });
+  } catch (cleanupErr) {
+    logWarn('tasks', 'Failed to remove the worktree of a refused task', {
+      taskId: cleanup.taskId,
+      err: String(cleanupErr),
+    });
+  }
+  throw err;
 }
 
 export async function createTask(opts: CreateTaskOptions): Promise<string> {
@@ -332,6 +357,22 @@ export async function createTask(opts: CreateTaskOptions): Promise<string> {
     taskId = crypto.randomUUID();
     branchName = '';
     worktreePath = projectRoot;
+  }
+
+  if (opts.launchGuard) {
+    try {
+      await opts.launchGuard();
+    } catch (err) {
+      if (gitIsolation !== 'worktree') throw err;
+      await refuseLaunch(err, {
+        taskId,
+        branchName,
+        worktreePath,
+        projectRoot,
+        // A PR checkout's branch tracks the PR, so only remove a branch this task made.
+        deleteBranch: !opts.pullRequestNumber,
+      });
+    }
   }
 
   const agentId = crypto.randomUUID();

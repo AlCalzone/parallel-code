@@ -40,7 +40,9 @@ Replace terminal-regex spawning with explicit MCP calls. Do not interpret arbitr
 
 ### Create from the current agent terminal
 
-The user asks the current agent to create one or more named Parallel Code tasks with concrete assignments. The agent calls `create_task` with a request ID, name, prompt, and any explicit snapshot choices. The app creates visible child tasks using the parent's project and supported agent configuration.
+The user asks the current agent to create one or more named Parallel Code tasks with concrete assignments. The agent calls `create_task` with a request ID, name, prompt, relation, and any explicit snapshot choices. With `relation: "child"`, the app creates visible child tasks using the parent's project and supported agent configuration.
+
+With `relation: "independent"`, the app instead creates an ordinary top-level task, as the New Task dialog would, without taking focus. It uses the creator's project, agent, and Docker sandbox, and inherits permission bypass only under the same propagation rule as children. The creator does not supervise it: it starts from the main branch, is absent from the creator's `list_tasks`, sends no `signal_done`, does not count toward the child limit, and survives the creator's close. Only top-level tasks may create independent tasks, and a launch pause blocks both relations. Choose `child` only for work the creator will wait for, review, or build on.
 
 Children branch from the main branch and merge back into main by default, so results do not accumulate on the parent branch. They receive neither the parent's conversation nor its edits. Include the required context in the prompt. Never silently stage or commit files. With `baseOnParent:true`, a child instead branches from the parent's committed snapshot and lands on the parent branch. A dirty parent then produces a clear error with the changed-file count. The agent can explicitly choose `useLastCommit:true` when omitting those changes matches the assignment, or ask the user to review and commit first.
 

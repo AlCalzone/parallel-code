@@ -57,6 +57,8 @@ export interface IndependentTaskRequest {
   creatorTaskId: string;
   name: string;
   prompt: string;
+  /** Pass to `assertIndependentLaunch` right before the agent starts. */
+  launchId: string;
 }
 
 export interface DelegateAssignment {
@@ -144,7 +146,8 @@ export type DelegationRequest =
   | { action: 'dismissAttempt'; parentTaskId: string; requestId: string }
   | { action: 'state'; taskId: string }
   | { action: 'closeParent'; taskId: string; deleteBranch?: boolean }
-  | { action: 'detachChild'; taskId: string };
+  | { action: 'detachChild'; taskId: string }
+  | { action: 'assertIndependentLaunch'; launchId: string };
 
 export interface DelegationState {
   attempts: DelegationAttempt[];

@@ -229,9 +229,14 @@ it('creates an agent-requested independent task with the creator agent and sandb
     creatorTaskId: 'task',
     name: 'Sibling',
     prompt: 'Fix the unrelated bug',
+    launchId: 'launch-1',
   });
 
   expect(reply).toMatchObject({ ok: true, data: { taskId: 'sibling' } });
+  expect(vi.mocked(invoke)).toHaveBeenCalledWith(IPC.DelegationRequest, {
+    action: 'assertIndependentLaunch',
+    launchId: 'launch-1',
+  });
   const sibling = store.tasks.sibling;
   expect(sibling).toMatchObject({
     projectId: 'project',
@@ -251,6 +256,63 @@ it('creates an agent-requested independent task with the creator agent and sandb
     prompt: 'Fix it',
   });
   expect(missing).toMatchObject({ ok: false, error: 'Creating task not found' });
+});
+
+it('removes the new worktree and starts no agent when the launch is refused', async () => {
+  const agentDef = {
+    id: 'codex',
+    name: 'Codex',
+    command: 'codex',
+    args: [],
+    resume_args: [],
+    skip_permissions_args: [],
+    description: '',
+  };
+  setStore('projects', [
+    { id: 'project', name: 'Project', path: '/tmp/project', color: '', defaultBaseBranch: 'main' },
+  ]);
+  setStore('agents', 'agent', {
+    id: 'agent',
+    taskId: 'task',
+    def: agentDef,
+    resumed: false,
+    status: 'running',
+    exitCode: null,
+  });
+  vi.mocked(invoke).mockImplementation(async (channel: string, args?: unknown) => {
+    if (channel === IPC.GetGitignoredDirs) return [];
+    if (channel === IPC.CreateTask)
+      return { id: 'refused', branch_name: 'task/refused', worktree_path: '/tmp/refused' };
+    if (
+      channel === IPC.DelegationRequest &&
+      (args as { action?: string }).action === 'assertIndependentLaunch'
+    )
+      throw new Error('Task creation is paused. Resume it in Parallel Code.');
+    return undefined;
+  });
+
+  const reply = await phoneRequest(IPC.MCP_CreateIndependentTaskRequest, {
+    creatorTaskId: 'task',
+    name: 'Refused',
+    prompt: 'Do it',
+    launchId: 'launch-2',
+  });
+
+  expect(reply).toMatchObject({ ok: false, error: expect.stringContaining('paused') });
+  expect(store.tasks.refused).toBeUndefined();
+  expect(vi.mocked(invoke)).toHaveBeenCalledWith(
+    IPC.DeleteTask,
+    expect.objectContaining({
+      taskId: 'refused',
+      branchName: 'task/refused',
+      deleteBranch: true,
+      worktreePath: '/tmp/refused',
+    }),
+  );
+  expect(vi.mocked(invoke)).not.toHaveBeenCalledWith(
+    IPC.DelegationRequest,
+    expect.objectContaining({ action: 'register' }),
+  );
 });
 
 const phoneAgents = [

@@ -147,6 +147,8 @@ export class DelegationService {
     string,
     { payload: string; promise: Promise<CreatedIndependentTask> }
   >();
+  /** launchId → recheck, live while the renderer builds an independent task's worktree. */
+  private readonly independentLaunches = new Map<string, () => void>();
   private readonly attempts = new Map<string, DelegationAttempt>();
   private readonly messages = new Map<string, PeerMessage>();
   /** sessionInstanceId → requestId → request. Keeps a payload hash, not the prompt,
@@ -171,7 +173,7 @@ export class DelegationService {
       changed: (event: DelegationChanged) => void;
       persist: () => void;
       parentCreated?: (taskId: string) => void;
-      createIndependent?: (request: IndependentTaskRequest) => Promise<{ taskId: string }>;
+      createIndependent: (request: IndependentTaskRequest) => Promise<{ taskId: string }>;
     },
   ) {
     this.orchestrationEnabled = options.orchestrationEnabled ?? true;
@@ -346,7 +348,7 @@ export class DelegationService {
     if (task.parentTaskId || task.gitIsolation !== 'worktree')
       throw new DelegationError('Only top-level worktree tasks may delegate', 403);
     if (task.delegationPaused)
-      throw new DelegationError('Child creation is paused. Resume it in Parallel Code.', 403);
+      throw new DelegationError('Task creation is paused. Resume it in Parallel Code.', 403);
     if (caller) {
       this.requireCaller(caller);
       if (caller.taskId !== taskId || !caller.capabilities.canCreate)
@@ -479,14 +481,14 @@ export class DelegationService {
       throw new DelegationError(
         "Independent tasks start from the main branch; use relation 'child' with baseOnParent to build on your commits",
       );
-    const create = this.options.createIndependent;
-    if (!create) throw new DelegationError('Independent task creation is unavailable', 503);
     const requestId = id(params.requestId, 'requestId');
-    const request: IndependentTaskRequest = {
+    const request = {
       creatorTaskId,
       name: text(params.name, 'name'),
       prompt: text(params.prompt, 'prompt', MAX_PROMPT_BYTES),
     };
+    if (Buffer.byteLength(request.prompt) > MAX_PROMPT_BYTES)
+      throw new DelegationError('Prompt too large');
     const key = `${creatorTaskId}:${requestId}`;
     const payload = JSON.stringify(request);
     const previous = this.independentRequests.get(key);
@@ -495,10 +497,18 @@ export class DelegationService {
         throw new DelegationError('Request ID reused with a different assignment');
       return previous.promise;
     }
-    const promise = create(request).then(({ taskId }) => ({
-      taskId,
-      relation: 'independent' as const,
-    }));
+    // Building the worktree can take a while; a pause or disable meanwhile must still
+    // stop the agent from starting, as the child path's launch guard does.
+    const epoch = this.orchestrationEpoch;
+    const launchId = randomUUID();
+    this.independentLaunches.set(launchId, () => {
+      this.assertOrchestrationEnabled(epoch);
+      this.creationGuard(creatorTaskId, caller);
+    });
+    const promise = this.options
+      .createIndependent({ ...request, launchId })
+      .then(({ taskId }) => ({ taskId, relation: 'independent' as const }))
+      .finally(() => this.independentLaunches.delete(launchId));
     this.independentRequests.set(key, { payload, promise });
     return promise;
   }
@@ -1127,6 +1137,12 @@ export class DelegationService {
         return this.closeParent(id(request.taskId), request.deleteBranch ?? true);
       case 'detachChild':
         return this.detachChild(id(request.taskId));
+      case 'assertIndependentLaunch': {
+        const guard = this.independentLaunches.get(id(request.launchId, 'launchId'));
+        if (!guard) throw new DelegationError('Task creation was canceled', 403);
+        guard();
+        return { ok: true };
+      }
       default:
         throw new DelegationError('Unknown delegation action');
     }

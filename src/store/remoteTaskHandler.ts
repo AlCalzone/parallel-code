@@ -11,6 +11,7 @@ import { getTaskMindMap, openCanvasViewFromAgent, updateTaskMindMapFromAgent } f
 import { getEvidenceForAgent, submitEvidence } from './evidence';
 import { getTaskReasoning, updateTaskReasoningFromAgent } from './reasoning';
 import { store } from './core';
+import { delegationRequest } from './delegation';
 import { codeProjects, getProject, getProjectPath } from './projects';
 import {
   closeTask,
@@ -64,6 +65,7 @@ interface CreateIndependentTaskRequest extends RendererRequest {
   creatorTaskId: string;
   name: string;
   prompt: string;
+  launchId: string;
 }
 
 interface GetNotesRequest extends RendererRequest {
@@ -246,6 +248,10 @@ async function handleCreateIndependentTask(req: CreateIndependentTaskRequest): P
       dockerImage: creator.dockerImage,
       // The user did not ask for this task directly, so it must not take focus.
       activate: false,
+      // Building the worktree takes a while; the user may pause creation meanwhile.
+      launchGuard: async () => {
+        await delegationRequest({ action: 'assertIndependentLaunch', launchId: req.launchId });
+      },
     });
     reply(req.reqId, true, { taskId });
   } catch (err) {

@@ -363,6 +363,7 @@ describe('delegation authority and creation', () => {
       creatorTaskId: 'parent',
       name: 'Sibling',
       prompt: 'Fix the unrelated bug',
+      launchId: expect.any(String),
     });
     expect(core.createTask).not.toHaveBeenCalled();
     expect(prepareParent).not.toHaveBeenCalled();
@@ -386,6 +387,56 @@ describe('delegation authority and creation', () => {
     ).rejects.toThrow('baseOnParent');
     expect(createIndependent).not.toHaveBeenCalled();
     expect(core.createTask).not.toHaveBeenCalled();
+  });
+
+  it('rechecks pause, orchestration and the session just before an independent agent starts', async () => {
+    await register('parent');
+    const caller = session('parent');
+    const guard = (launchId: string) =>
+      service.request({ action: 'assertIndependentLaunch', launchId });
+    const outcomes: string[] = [];
+    let launch = '';
+    createIndependent.mockImplementation(async ({ launchId }) => {
+      launch = launchId;
+      await guard(launchId);
+      outcomes.push('allowed');
+      await service.request({ action: 'pause', taskId: 'parent', paused: true });
+      await guard(launchId).catch((error: Error) => outcomes.push(error.message));
+      await service.request({ action: 'pause', taskId: 'parent', paused: false });
+      await service.request({ action: 'orchestrationSetting', enabled: false });
+      await service.request({ action: 'orchestrationSetting', enabled: true });
+      await guard(launchId).catch((error: Error) => outcomes.push(error.message));
+      return { taskId: 'sibling' };
+    });
+    await service.callTool(caller, 'create_task', {
+      requestId: 'guarded',
+      relation: 'independent',
+      name: 'Sibling',
+      prompt: 'Work alone',
+    });
+    expect(outcomes).toEqual([
+      'allowed',
+      expect.stringContaining('Task creation is paused'),
+      expect.stringContaining('canceled'),
+    ]);
+    // A finished launch can no longer be approved.
+    await expect(guard(launch)).rejects.toThrow('canceled');
+  });
+
+  it('holds independent tasks to the child byte limit and the launch pause', async () => {
+    await register('parent');
+    const caller = session('parent');
+    const base = { requestId: 'r', relation: 'independent', name: 'Task' };
+    // Under the character limit, over the byte limit.
+    const prompt = '€'.repeat(30 * 1024);
+    await expect(service.callTool(caller, 'create_task', { ...base, prompt })).rejects.toThrow(
+      'Prompt too large',
+    );
+    await service.request({ action: 'pause', taskId: 'parent', paused: true });
+    await expect(
+      service.callTool(caller, 'create_task', { ...base, requestId: 'p', prompt: 'Do it' }),
+    ).rejects.toThrow('Task creation is paused');
+    expect(createIndependent).not.toHaveBeenCalled();
   });
 
   it('uses only the task automation option to select child integration policy', async () => {
