@@ -3253,7 +3253,15 @@ html:is(
 }
 
 .new-task-panel-form {
+  container: new-task-panel / inline-size;
   user-select: none;
+}
+
+/* A narrow tile keeps Cancel and Create Task on one line; the shortcut still works. */
+@container new-task-panel (max-width: 400px) {
+  .new-task-submit-kbd {
+    display: none;
+  }
 }
 
 .new-task-panel-form :is(input, textarea) {

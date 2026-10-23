@@ -4,6 +4,7 @@ import type { AppStore, KanbanNewTaskSource, SpNewTaskSource } from '../store/ty
 import { linkNewTaskToSp } from '../store/superProductivityOpen';
 import { linkNewTaskToKanbanCard } from '../store/kanban';
 import { nameTaskWithModel } from '../store/model-task-name';
+import { activeFeatureHint, markFeatureHintSeen } from '../store/onboarding';
 import { createTaskInBackground } from '../store/task-creation';
 import type { CreateTaskOptions } from '../store/tasks';
 import {
@@ -83,11 +84,15 @@ import {
   MIN_COORDINATOR_CONCURRENT_TASKS,
 } from '../lib/coordinator-limits';
 
-/** Ends with a cue for the user's own goal, so the cursor lands where they type it. */
-const DELEGATION_EXAMPLE_PROMPT =
-  'Split the work below into independent parts. Start a Parallel Code task for each, with a ' +
-  'prompt that stands on its own. Wait for them to finish, then summarize what each one ' +
-  'changed.\n\nThe work: ';
+/** Follows the user's prompt, so their own description of the work stays first. */
+const DELEGATION_REQUEST =
+  '\n\nSplit this work into independent parts. Start a Parallel Code task for each, with a ' +
+  'prompt that stands on its own. Wait for them to finish, then summarize what each one changed.';
+// shortcut: prompt length as a proxy for "several changes" — ask the naming model if it misfires
+/** A prompt this long likely describes enough work to be worth splitting. */
+const SPLIT_TIP_MIN_PROMPT = 80;
+/** The split tip waits for typing to stop this long, so it never interrupts a sentence. */
+const SPLIT_TIP_PAUSE_MS = 1500;
 
 interface NewTaskPanelProps {
   open: boolean;
@@ -460,9 +465,26 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
   );
   const [branchPrefix, setBranchPrefix] = createSignal('');
   let promptRef!: HTMLTextAreaElement;
+  let submitRef: HTMLButtonElement | undefined;
   const hasOtherTasks = () => store.taskOrder.length + store.collapsedTaskOrder.length > 0;
-  function applyDelegationExample(): void {
-    setPrompt(DELEGATION_EXAMPLE_PROMPT);
+  const [promptPaused, setPromptPaused] = createSignal(false);
+  let promptPauseTimer: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(promptPauseTimer));
+  function handlePromptInput(value: string): void {
+    setPrompt(value);
+    // Typing on past the split tip counts as having seen it, so it never comes back.
+    if (activeFeatureHint() === 'delegate-subtasks') markFeatureHintSeen('delegate-subtasks');
+    setPromptPaused(false);
+    clearTimeout(promptPauseTimer);
+    promptPauseTimer = setTimeout(() => setPromptPaused(true), SPLIT_TIP_PAUSE_MS);
+  }
+  const wantsSplitTip = () =>
+    orchestrationEnabled() &&
+    hasOtherTasks() &&
+    promptPaused() &&
+    prompt().trim().length >= SPLIT_TIP_MIN_PROMPT;
+  function addDelegationRequest(): void {
+    setPrompt(prompt().trimEnd() + DELEGATION_REQUEST);
     promptRef.focus();
     promptRef.setSelectionRange(promptRef.value.length, promptRef.value.length);
   }
@@ -471,6 +493,8 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
   const advancedOptionsId = createUniqueId();
   const promptInputId = createUniqueId();
   const nameInputId = createUniqueId();
+  const projectSelectId = createUniqueId();
+  const isolationLabelId = createUniqueId();
   let panelRef!: HTMLElement;
   let formRef!: HTMLFormElement;
   let buildOutputRef!: HTMLPreElement;
@@ -980,6 +1004,8 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
     const next = rest ? `${text}\n\n${rest}` : text;
     picked.prompt = text;
     setPrompt(next);
+    // The split tip waits for a pause after the user's own typing, not after a pick.
+    setPromptPaused(false);
     return next;
   }
 
@@ -1039,26 +1065,37 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
     return !!agent && resolveSkipPermissionsArgs(agent).length > 0;
   };
 
-  const canSubmit = () => {
+  // Why Create Task is disabled, shown beside it so a greyed-out button is
+  // never unexplained. Empty when the form can be submitted.
+  const submitBlockedReason = () => {
     // No name/prompt requirement — an empty task defaults to "Task N".
+    if (!selectedProjectId()) return 'Select a project';
     // Block submit while branches load — and require a resolved base branch
     // for git projects — so a task can't be created with a stale or empty
     // base branch (e.g. after a failed branch fetch).
+    if (branchesLoading()) return 'Loading branches…';
+    // Block submit until the symlink candidate list for THIS project has
+    // resolved — otherwise stale checkmarks could be submitted against a
+    // project whose candidates haven't loaded yet. Direct-mode submits
+    // never send symlinkDirs, so a pending probe doesn't block them.
+    if (symlinkProbeBlocksSubmit(gitIsolation(), symlinkCandidates.loading())) {
+      return 'Checking ignored folders…';
+    }
     // A PR task takes its base from the PR, so it does not need the picker's.
-    const branchOk = isNonGitProject() || !!githubPr() || (!!baseBranch() && !branchesError());
-    return (
-      !!selectedProjectId() &&
-      !loading() &&
-      !branchesLoading() &&
-      // Block submit until the symlink candidate list for THIS project has
-      // resolved — otherwise stale checkmarks could be submitted against a
-      // project whose candidates haven't loaded yet. Direct-mode submits
-      // never send symlinkDirs, so a pending probe doesn't block them.
-      !symlinkProbeBlocksSubmit(gitIsolation(), symlinkCandidates.loading()) &&
-      branchOk &&
-      !branchPrefixConflict()
-    );
+    if (!isNonGitProject() && !githubPr()) {
+      if (branchesError()) return "Couldn't load branches";
+      if (!baseBranch()) return 'Select a base branch';
+    }
+    if (branchPrefixConflict()) return 'Fix the branch prefix';
+    return '';
   };
+
+  const canSubmit = () => !loading() && !submitBlockedReason();
+
+  // Only a direct task waits before the panel closes (it switches branches);
+  // a worktree task closes at once, and dimming it would flash in the
+  // view transition's captured frame.
+  const showBusy = () => loading() && gitIsolation() === 'direct';
 
   async function handleSubmit(e: Event) {
     e.preventDefault();
@@ -1274,7 +1311,7 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
         inert={loading()}
         aria-busy={loading()}
         style={{
-          opacity: loading() ? '0.4' : '1',
+          opacity: showBusy() ? '0.4' : '1',
           display: 'flex',
           'flex-direction': 'column',
           'min-height': '0',
@@ -1325,7 +1362,9 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
                   title="Start from an open GitHub issue or pull request (uses the gh CLI)"
                   style={{
                     'margin-left': 'auto',
-                    padding: '2px 10px',
+                    'flex-shrink': '0',
+                    'white-space': 'nowrap',
+                    padding: '4px 12px',
                     background: 'transparent',
                     border: `1px solid ${theme.border}`,
                     'border-radius': 'var(--radius-sm)',
@@ -1385,7 +1424,7 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
               id={promptInputId}
               class="input-field"
               value={prompt()}
-              onInput={(e) => setPrompt(e.currentTarget.value)}
+              onInput={(e) => handlePromptInput(e.currentTarget.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                   e.preventDefault();
@@ -1407,16 +1446,17 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
                 resize: 'vertical',
               }}
             />
+            {/* Points at Create Task, the decision it informs, so the card sits
+            over the footer instead of the fields still being filled in. */}
             <FeatureHint
               id="delegate-subtasks"
-              when={orchestrationEnabled() && !prompt().trim() && hasOtherTasks()}
-              anchor={() => promptRef}
-              title="Let one agent split the work"
-              actions={[{ label: 'Use example prompt', run: applyDelegationExample }]}
+              when={wantsSplitTip()}
+              anchor={() => submitRef}
+              title="Big change? Let the agent split it"
+              actions={[{ label: 'Add split request', run: addDelegationRequest }]}
             >
-              {selectedAgent()?.name ?? 'This agent'} can start its own sub-tasks. Ask it to split a
-              change into parts: each part runs as its own task in its own worktree, and the agent
-              keeps track of them.
+              {selectedAgent()?.name ?? 'The agent'} can run each part as its own task in its own
+              worktree and keep track of them.
               <Show when={!autoMergeChildren()}> You review each result before it merges.</Show>
             </FeatureHint>
           </div>
@@ -1426,12 +1466,18 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
             data-nav-field="project"
             style={{ display: 'flex', 'flex-direction': 'column', gap: '8px' }}
           >
-            <label style={sectionLabelStyle}>Project</label>
+            <label for={projectSelectId} style={sectionLabelStyle}>
+              Project
+            </label>
             <Show
               when={!canvasPrefill()?.canvasSource}
               fallback={<span>{getProject(selectedProjectId() ?? '')?.name}</span>}
             >
-              <ProjectSelect value={selectedProjectId()} onChange={setSelectedProjectId} />
+              <ProjectSelect
+                id={projectSelectId}
+                value={selectedProjectId()}
+                onChange={setSelectedProjectId}
+              />
             </Show>
           </div>
 
@@ -1458,18 +1504,6 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
                 </Show>
               </InlineBanner>
             )}
-          </Show>
-
-          <Show when={gitIsolation() === 'direct' && !isNonGitProject()}>
-            <InlineBanner color={theme.warning}>
-              Changes will be made on the selected branch without worktree isolation.
-            </InlineBanner>
-          </Show>
-          <Show when={agentSupportsSkipPermissions() && skipPermissions()}>
-            <InlineBanner color={theme.warning}>
-              The agent will run without asking for confirmation. It can read, write, and delete
-              files, and execute commands without your approval.
-            </InlineBanner>
           </Show>
 
           <div
@@ -1544,9 +1578,10 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
                   when={gitIsolation() === 'direct' && !isNonGitProject() && selectedProjectPath()}
                 >
                   <div
+                    data-direct-target
                     style={{
                       'font-size': '12px',
-                      'font-family': "'JetBrains Mono', monospace",
+                      'font-family': 'var(--font-mono)',
                       color: theme.fgSubtle,
                       display: 'flex',
                       'flex-direction': 'column',
@@ -1556,7 +1591,9 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
                   >
                     <span style={{ display: 'flex', 'align-items': 'center', gap: '6px' }}>
                       <GitBranchIcon size={11} style={{ 'flex-shrink': '0' }} />
-                      main branch (detected on create)
+                      {/* Submit checks out this branch before the agent starts. */}
+                      {baseBranch() ||
+                        (branchesLoading() ? 'Loading branches…' : 'No branch selected')}
                     </span>
                     <span style={{ display: 'flex', 'align-items': 'center', gap: '6px' }}>
                       <FolderIcon size={11} style={{ 'flex-shrink': '0' }} />
@@ -1582,8 +1619,11 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
                   data-nav-field="git-isolation"
                   style={{ display: 'flex', 'flex-direction': 'column', gap: '8px' }}
                 >
-                  <label style={sectionLabelStyle}>Git Isolation</label>
+                  <span id={isolationLabelId} style={sectionLabelStyle}>
+                    Git Isolation
+                  </span>
                   <SegmentedButtons
+                    labelledBy={isolationLabelId}
                     options={[
                       {
                         value: 'worktree',
@@ -1750,8 +1790,23 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
             </div>
           </Show>
 
+          {/* Below the options that cause them, so a warning appearing never
+          pushes the clicked control out from under the pointer. */}
+          <Show when={gitIsolation() === 'direct' && !isNonGitProject()}>
+            <InlineBanner color={theme.warning}>
+              Changes will be made on the selected branch without worktree isolation.
+            </InlineBanner>
+          </Show>
+          <Show when={agentSupportsSkipPermissions() && skipPermissions()}>
+            <InlineBanner color={theme.warning}>
+              The agent will run without asking for confirmation. It can read, write, and delete
+              files, and execute commands without your approval.
+            </InlineBanner>
+          </Show>
+
           <Show when={error()}>
             <div
+              role="alert"
               style={{
                 ...bannerStyle(theme.error),
                 'font-size': '13px',
@@ -1774,6 +1829,24 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
             'flex-shrink': '0',
           }}
         >
+          {/* Space stays reserved so the reason coming and going never moves the buttons. */}
+          <span
+            data-submit-reason
+            aria-live="polite"
+            style={{
+              'margin-right': 'auto',
+              'align-self': 'center',
+              'min-width': '0',
+              overflow: 'hidden',
+              'text-overflow': 'ellipsis',
+              'white-space': 'nowrap',
+              'font-size': '12px',
+              color: theme.fgSubtle,
+              visibility: submitBlockedReason() && !loading() ? 'visible' : 'hidden',
+            }}
+          >
+            {submitBlockedReason()}
+          </span>
           <button
             type="button"
             class="btn-secondary"
@@ -1792,9 +1865,11 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
             Cancel
           </button>
           <button
+            ref={submitRef}
             type="submit"
             class="btn-primary"
             disabled={!canSubmit()}
+            aria-keyshortcuts={isMac ? 'Meta+Enter' : 'Control+Enter'}
             style={{
               padding: '9px 20px',
               'border-radius': 'var(--radius-md)',
@@ -1802,6 +1877,8 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
               'font-size': '14px',
               'font-weight': '500',
               opacity: !canSubmit() ? '0.4' : '1',
+              'white-space': 'nowrap',
+              'flex-shrink': '0',
               display: 'inline-flex',
               'align-items': 'center',
               gap: '8px',
@@ -1809,10 +1886,17 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
           >
             <PlusIcon size={14} />
             Create Task
+            <kbd
+              class="new-task-submit-kbd"
+              aria-hidden="true"
+              style={{ font: 'inherit', 'font-size': '11px', color: theme.fgSubtle }}
+            >
+              {isMac ? '⌘↵' : 'Ctrl+Enter'}
+            </kbd>
           </button>
         </div>
       </form>
-      <Show when={loading()}>
+      <Show when={showBusy()}>
         <div
           role="status"
           style={{
@@ -1837,7 +1921,7 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
             }}
           >
             <span class="inline-spinner" aria-hidden="true" />
-            Creating task...
+            Creating task…
           </span>
         </div>
       </Show>

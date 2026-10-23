@@ -9,11 +9,13 @@ interface ProjectSelectProps {
   placeholder?: string;
   class?: string;
   showPath?: boolean;
+  id?: string;
 }
 
 export function ProjectSelect(props: ProjectSelectProps) {
   return (
     <select
+      id={props.id}
       class={`project-select${props.class ? ` ${props.class}` : ''}`}
       value={props.value ?? ''}
       onChange={(e) => props.onChange(e.currentTarget.value || null)}
