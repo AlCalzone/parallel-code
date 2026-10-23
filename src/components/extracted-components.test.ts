@@ -61,6 +61,20 @@ describe('extracted component helpers', () => {
     expect(html).toContain('title="Clone as custom theme"');
   });
 
+  it('labels only the default preset of each tone', () => {
+    const render = (preset: ReturnType<typeof presetsForTone>[number]) =>
+      renderToString(() =>
+        PresetThemeCard({ preset, active: false, onSelect: vi.fn(), onClone: vi.fn() }),
+      );
+    const labelled = (tone: 'light' | 'dark') =>
+      presetsForTone(tone)
+        .filter((preset) => render(preset).includes('class="settings-theme-default">Default<'))
+        .map((preset) => preset.id);
+
+    expect(labelled('dark')).toEqual(['parallel-code']);
+    expect(labelled('light')).toEqual(['obsidian-light']);
+  });
+
   it('renders new-task checkbox options with disabled state and title', () => {
     const html = renderToString(() =>
       CheckboxOption({

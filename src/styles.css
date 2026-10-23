@@ -67,9 +67,9 @@ body,
   height: 100%;
   margin: 0;
   overflow: hidden;
-  /* Painted before data-look is applied; matches the default Obsidian --bg
-     and the BrowserWindow backgroundColor in electron/main.ts. */
-  background: #171717;
+  /* Painted before data-look is applied; matches the default Parallel Code
+     --bg and the BrowserWindow backgroundColor in electron/main.ts. */
+  background: #080c10;
 }
 
 body {
@@ -671,17 +671,19 @@ html[data-look='parallel-code'] {
   --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-display: 'Sora', var(--font-ui);
   --bg: #080c10;
-  --bg-elevated: #10161c;
+  /* Menus and dialogs sit a step above the #10161c panels so they lift off them. */
+  --bg-elevated: #161e26;
   --bg-input: #0c1218;
-  --bg-hover: #151e26;
+  --bg-hover: #1b252f;
   --bg-selected: #18343e;
   --bg-selected-subtle: #11232c;
   --border: #29343d;
   --border-subtle: #1e272f;
   --border-focus: #67d9ed;
   --fg: #f0f4f7;
-  --fg-muted: #9aa9b6;
-  --fg-subtle: #8193a2;
+  --fg-muted: #b4c0cb;
+  /* Keeps 4.5:1 on hovered menu rows, the lightest common surface. */
+  --fg-subtle: #7f91a1;
   --accent: #67d9ed;
   --accent-hover: #91e5f3;
   --accent-text: #080c10;
@@ -690,7 +692,8 @@ html[data-look='parallel-code'] {
   --error: #f08f8a;
   --warning: #dfba83;
   --review: #c1b0e8;
-  --info: #8fbddd;
+  /* Periwinkle rather than cyan, so info never reads as the accent. */
+  --info: #9db3e6;
   --diff-add-bg: rgba(152, 201, 174, 0.12);
   --diff-remove-bg: rgba(240, 143, 138, 0.12);
   --search-match: #dfba83;
@@ -701,7 +704,7 @@ html[data-look='parallel-code'] {
   --task-container-bg: #0c1218;
   --task-panel-bg: #10161c;
   --shadow-soft: 0 4px 16px rgba(0, 0, 0, 0.16);
-  --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.3);
+  --shadow-pop: 0 16px 48px rgba(0, 0, 0, 0.45);
 }
 
 .app-shell[data-look='parallel-code']::before {
@@ -776,7 +779,7 @@ html[data-look='parallel-code'] .task-notes-body textarea {
 
 html[data-look='parallel-code'] :is(.prompt-textarea, .input-field, .project-select):focus {
   border-color: var(--border-focus) !important;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 html[data-look='parallel-code'] .settings-theme-card.active {
@@ -3577,6 +3580,15 @@ body.dragging-task * {
   color: var(--fg-muted);
   font-size: 12px;
   line-height: 1.4;
+}
+
+.settings-theme-default {
+  margin-left: 2px;
+  color: var(--fg-subtle);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: normal;
 }
 
 @media (max-width: 720px) {
