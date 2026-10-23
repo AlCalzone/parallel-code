@@ -65,6 +65,8 @@ it('opens a context menu on right-click that snoozes the task', () => {
     'Snooze · keep running',
     'Snooze · stop agents',
     'Minimize (stop agents)',
+    'Finish',
+    'Close',
   ]);
   menuItem('Snooze until new activity')?.click();
   expect(isTaskBackgrounded('one')).toBe(true);
@@ -79,7 +81,13 @@ it('offers only restore for a minimized task', () => {
   setStore('tasks', 'one', { collapsed: true });
   setStore('collapsedTaskOrder', ['one']);
   rightClick();
-  expect(labels()).toEqual(['Open', 'Open on the left', 'Restore (start agents)']);
+  expect(labels()).toEqual([
+    'Open',
+    'Open on the left',
+    'Restore (start agents)',
+    'Finish',
+    'Close',
+  ]);
   menuItem('Restore (start agents)')?.click();
   expect(store.tasks.one.collapsed).toBe(false);
 });
@@ -88,6 +96,30 @@ it('offers no set-aside actions while the task closes', () => {
   setStore('tasks', 'one', { closingStatus: 'closing' });
   rightClick();
   expect(labels()).toEqual(['Open', 'Open on the left']);
+});
+
+it('finishes the task from its menu by opening it with the Finish dialog requested', () => {
+  rightClick();
+  menuItem('Finish')?.click();
+  expect(store.activeTaskId).toBe('one');
+  expect(store.pendingAction).toEqual({ type: 'finish', taskId: 'one' });
+  setStore('pendingAction', null);
+});
+
+it('offers no Finish for a task without its own worktree', () => {
+  setStore('tasks', 'one', { gitIsolation: 'direct' });
+  rightClick();
+  expect(labels()).not.toContain('Finish');
+  expect(labels()).toContain('Close');
+});
+
+it('asks to confirm closing the task from its menu', () => {
+  setStore('tasks', 'one', { gitIsolation: 'direct' });
+  rightClick();
+  menuItem('Close')?.click();
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+  const dialog = document.querySelector('[role="dialog"], [role="alertdialog"]');
+  expect(dialog?.textContent).toContain('Close');
 });
 
 it("opens the task on the board's other side from its menu", () => {

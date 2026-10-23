@@ -6,6 +6,8 @@ import { getPrChecks } from '../store/pr-checks-state';
 import { getProject } from '../store/projects';
 import { ProjectSwatch } from './ProjectSwatch';
 import { getTaskAttentionState, getTaskOpenQuestion } from '../store/taskStatus';
+import { setPendingAction } from '../store/focus';
+import { isLandedTaskState } from '../store/landing';
 import { retryCloseTask, uncollapseTask } from '../store/tasks';
 import type { Task } from '../store/types';
 import { activityLine, agentName, boardNow, stateLabel } from './board/task-state';
@@ -13,7 +15,8 @@ import { ASK_ACTION, AskRow, TaskGlyph, TaskPr, openBeside } from './board/TaskS
 import { ContextMenu, type MoreMenuItem } from './chat/MoreMenu';
 import { boardTaskState, type BoardLaneId } from './task-board-lanes';
 import { laterMenuItems } from './task-later-menu';
-import { UndoIcon } from './icons';
+import { CloseTaskDialog } from './CloseTaskDialog';
+import { CloseIcon, GitMergeIcon, UndoIcon } from './icons';
 
 /** Why the card is set aside: when its snooze ends, or that it is minimized. */
 function setAsideLabel(task: Task): string {
@@ -23,7 +26,24 @@ function setAsideLabel(task: Task): string {
   return `Until ${until.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`;
 }
 
-function cardMenuItems(task: Task): MoreMenuItem[] {
+/** Ending actions: Finish runs in the task's panel, so it opens the task first; Close confirms in place. */
+function endMenuItems(task: Task, confirmClose: () => void): MoreMenuItem[] {
+  const finish = {
+    label: 'Finish',
+    icon: <GitMergeIcon size={14} />,
+    run: () => {
+      openBeside(task);
+      setPendingAction({ type: 'finish', taskId: task.id });
+    },
+  };
+  const canFinish = task.gitIsolation === 'worktree' && !isLandedTaskState(task.landingState);
+  return [
+    ...(canFinish ? [finish] : []),
+    { label: 'Close', icon: <CloseIcon size={14} />, run: confirmClose },
+  ];
+}
+
+function cardMenuItems(task: Task, confirmClose: () => void): MoreMenuItem[] {
   // Moving the panel lives here rather than on the panel, which rarely needs it.
   const opens = [
     { label: 'Open', run: () => openBeside(task) },
@@ -43,8 +63,9 @@ function cardMenuItems(task: Task): MoreMenuItem[] {
         icon: <UndoIcon size={14} />,
         run: () => uncollapseTask(task.id, { activate: false }),
       },
+      ...endMenuItems(task, confirmClose),
     ];
-  return [...opens, ...laterMenuItems(task)];
+  return [...opens, ...laterMenuItems(task), ...endMenuItems(task, confirmClose)];
 }
 
 /** Where a right-click opened the menu; a keyboard-opened one reports 0,0, so use the card. */
@@ -133,6 +154,7 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
   const ask = () =>
     props.lane === 'needs' && !props.task.closingStatus ? ASK_ACTION[state()] : undefined;
   const [menuAt, setMenuAt] = createSignal<{ x: number; y: number }>();
+  const [confirmingClose, setConfirmingClose] = createSignal(false);
   return (
     <li
       class={`task-board-card state-${state()}`}
@@ -191,13 +213,18 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
       <Show when={menuAt()}>
         {(at) => (
           <ContextMenu
-            items={cardMenuItems(props.task)}
+            items={cardMenuItems(props.task, () => setConfirmingClose(true))}
             at={at()}
             label={`Task ${props.task.name}`}
             onClose={() => setMenuAt(undefined)}
           />
         )}
       </Show>
+      <CloseTaskDialog
+        open={confirmingClose()}
+        task={props.task}
+        onDone={() => setConfirmingClose(false)}
+      />
     </li>
   );
 }
