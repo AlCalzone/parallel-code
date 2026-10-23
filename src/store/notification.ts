@@ -10,9 +10,9 @@ export const NOTIFICATION_ERROR_MS = 10_000;
 
 export function showNotification(message: string, opts?: { durationMs?: number }): void {
   if (notificationTimer) clearTimeout(notificationTimer);
-  setStore('notification', message);
+  setNotice(message, false);
   notificationTimer = setTimeout(() => {
-    setStore('notification', progressMessage);
+    setNotice(progressMessage, progressMessage !== null);
     notificationTimer = null;
   }, opts?.durationMs ?? NOTIFICATION_DEFAULT_MS);
 }
@@ -21,7 +21,7 @@ export function showNotification(message: string, opts?: { durationMs?: number }
  *  describes finishes. Timed notices show over it and then give way back. */
 export function showProgressNotification(message: string | null): void {
   progressMessage = message;
-  if (!notificationTimer) setStore('notification', message);
+  if (!notificationTimer) setNotice(message, message !== null);
 }
 
 export function clearNotification(): void {
@@ -29,5 +29,11 @@ export function clearNotification(): void {
   notificationTimer = null;
   // A dismissed progress notice returns with its next update.
   progressMessage = null;
-  setStore('notification', null);
+  setNotice(null, false);
+}
+
+/** `busy` marks ongoing work, so the notice shows a spinner. */
+function setNotice(message: string | null, busy: boolean): void {
+  setStore('notification', message);
+  setStore('notificationBusy', busy);
 }
