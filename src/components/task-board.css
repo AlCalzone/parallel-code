@@ -429,6 +429,11 @@ html[data-look^='islands-'] .task-board {
   padding: 0 6px;
   font-size: 11px;
 }
+.task-board-chip.task-pr-babysit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 .task-board-chip.failure {
   background: color-mix(in srgb, var(--error) 14%, transparent);
   color: var(--error);
@@ -464,6 +469,11 @@ html[data-look^='islands-'] .task-board {
 .task-board-act:hover {
   background: color-mix(in srgb, var(--fg) 11%, transparent);
   color: var(--fg);
+}
+/* Outranks the chip hover, so a babysat PR keeps its pressed look. */
+.task-board-chip.task-pr-babysit[aria-pressed='true'] {
+  background: var(--bg-selected);
+  color: var(--accent);
 }
 .task-board-chip.failure:hover {
   color: var(--error);

@@ -1,4 +1,4 @@
-import { Match, Switch, batch } from 'solid-js';
+import { Match, Show, Switch, batch } from 'solid-js';
 import { IPC } from '../../../electron/ipc/channels';
 import { invoke } from '../../lib/ipc';
 import { withViewTransition } from '../../lib/viewTransition';
@@ -13,6 +13,7 @@ import {
 import { setOpenDraftAside } from '../../store/task-creation';
 import { getTaskAttentionState, getTaskDotStatus } from '../../store/taskStatus';
 import type { Task } from '../../store/types';
+import { BabysitButton } from '../BabysitButton';
 import { CheckIcon, GitMergeIcon } from '../icons';
 import { StatusDot } from '../StatusDot';
 import { openTask, type CardTaskState } from './task-state';
@@ -90,6 +91,9 @@ export function TaskPr(props: { taskId: string; url: string }) {
         PR #{prNumber(props.url)}
       </button>
       <span class={`task-board-pr-status ${kind() ?? ''}`}>{status()?.label ?? ''}</span>
+      <Show when={getPrChecks(props.taskId) && !getPrChecks(props.taskId)?.merged}>
+        <BabysitButton taskId={props.taskId} class="task-board-chip" />
+      </Show>
     </div>
   );
 }

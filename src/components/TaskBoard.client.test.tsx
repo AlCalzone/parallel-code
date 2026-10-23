@@ -4,6 +4,7 @@ import { reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { store, setStore } from '../store/core';
 import { boardSidePanelOpen } from '../store/project-pages';
+import { checksFromUpdate, removePrChecks, setPrChecks } from '../store/pr-checks-state';
 import {
   getTaskFocusedPanel,
   navigateColumn,
@@ -134,6 +135,16 @@ it('sorts tasks into lanes by what they need', () => {
   expect(cardNames('In pull request')).toEqual(['Add dark mode']);
   expect(cardNames('Stopped')).toEqual(['Update docs']);
   expect(lane('In pull request')?.textContent).toContain('PR #42');
+});
+
+it('offers Babysit beside an open pull request', () => {
+  setPrChecks('pr', checksFromUpdate({ overall: 'pending' }));
+  const babysit = lane('In pull request')?.querySelector('.task-pr-babysit');
+  expect(babysit?.textContent).toContain('Babysit');
+  expect(babysit?.getAttribute('aria-pressed')).toBe('false');
+  setPrChecks('pr', { ...checksFromUpdate({ overall: 'success' }), merged: true });
+  expect(lane('In pull request')?.querySelector('.task-pr-babysit')).toBeNull();
+  removePrChecks('pr');
 });
 
 it('puts the lanes that need attention next to each other', () => {

@@ -5,8 +5,9 @@ import { showNotification } from '../store/store';
 import { getPrBabysit, startPrBabysit, stopPrBabysit } from '../store/pr-babysit';
 import { EyeIcon } from './icons';
 
-/** Toggles automatic hand-off of the PR's CI failures to the task's agent. */
-export function BabysitButton(props: { taskId: string }) {
+/** Toggles automatic hand-off of the PR's CI failures to the task's agent.
+ *  `class` sets the look, so board cards can show it as one of their chips. */
+export function BabysitButton(props: { taskId: string; class?: string }) {
   const [busy, setBusy] = createSignal(false);
   const on = () => getPrBabysit(props.taskId) !== undefined;
   const title = () => {
@@ -34,7 +35,7 @@ export function BabysitButton(props: { taskId: string }) {
   return (
     <button
       type="button"
-      class="task-pr-merge task-pr-babysit"
+      class={`${props.class ?? 'task-pr-merge'} task-pr-babysit`}
       aria-pressed={on()}
       aria-busy={busy()}
       disabled={busy()}
