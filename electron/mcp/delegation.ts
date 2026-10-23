@@ -34,6 +34,7 @@ import type {
   DelegationRequest,
   DelegationSnapshot,
   DelegationState,
+  IndependentTaskRequest,
   IntegrationPolicy,
   PeerMessage,
   PeerSession,
@@ -90,6 +91,11 @@ interface CreatedChild {
   integrationPolicy: IntegrationPolicy;
 }
 
+interface CreatedIndependentTask {
+  taskId: string;
+  relation: 'independent';
+}
+
 type Authority = TaskAuthorityInput & { closing?: boolean; closed?: boolean };
 
 export class DelegationError extends Error {
@@ -136,6 +142,11 @@ export class DelegationService {
     string,
     { payload: string; promise: Promise<CreatedChild> }
   >();
+  /** Same keys as `requests`, so closing the creator forgets both. */
+  private readonly independentRequests = new Map<
+    string,
+    { payload: string; promise: Promise<CreatedIndependentTask> }
+  >();
   private readonly attempts = new Map<string, DelegationAttempt>();
   private readonly messages = new Map<string, PeerMessage>();
   /** sessionInstanceId → requestId → request. Keeps a payload hash, not the prompt,
@@ -160,6 +171,7 @@ export class DelegationService {
       changed: (event: DelegationChanged) => void;
       persist: () => void;
       parentCreated?: (taskId: string) => void;
+      createIndependent?: (request: IndependentTaskRequest) => Promise<{ taskId: string }>;
     },
   ) {
     this.orchestrationEnabled = options.orchestrationEnabled ?? true;
@@ -456,6 +468,41 @@ export class DelegationService {
     }
   }
 
+  /** A top-level task the creator neither supervises nor integrates; the user reviews it. */
+  private createIndependent(
+    creatorTaskId: string,
+    params: Record<string, unknown>,
+    caller: SessionCaller,
+  ): Promise<CreatedIndependentTask> {
+    this.creationGuard(creatorTaskId, caller);
+    if (params.baseOnParent === true)
+      throw new DelegationError(
+        "Independent tasks start from the main branch; use relation 'child' with baseOnParent to build on your commits",
+      );
+    const create = this.options.createIndependent;
+    if (!create) throw new DelegationError('Independent task creation is unavailable', 503);
+    const requestId = id(params.requestId, 'requestId');
+    const request: IndependentTaskRequest = {
+      creatorTaskId,
+      name: text(params.name, 'name'),
+      prompt: text(params.prompt, 'prompt', MAX_PROMPT_BYTES),
+    };
+    const key = `${creatorTaskId}:${requestId}`;
+    const payload = JSON.stringify(request);
+    const previous = this.independentRequests.get(key);
+    if (previous) {
+      if (previous.payload !== payload)
+        throw new DelegationError('Request ID reused with a different assignment');
+      return previous.promise;
+    }
+    const promise = create(request).then(({ taskId }) => ({
+      taskId,
+      relation: 'independent' as const,
+    }));
+    this.independentRequests.set(key, { payload, promise });
+    return promise;
+  }
+
   private requireCaller(caller: SessionCaller): Authority {
     if (
       !this.options
@@ -512,6 +559,10 @@ export class DelegationService {
     if (caller.capabilities.profile !== 'ordinary')
       throw new DelegationError('Invalid session profile', 403);
     if (name === 'create_task') {
+      if (params.relation === 'independent')
+        return this.createIndependent(task.taskId, params, caller);
+      if (params.relation !== 'child')
+        throw new DelegationError("relation must be 'child' or 'independent'");
       this.creationGuard(task.taskId, caller);
       const requestId = id(params.requestId, 'requestId');
       const previous = this.requests.get(`${task.taskId}:${requestId}`);
@@ -1222,6 +1273,8 @@ export class DelegationService {
   private forgetLaunches(taskId: string): void {
     const prefix = `${taskId}:`;
     for (const key of this.requests.keys()) if (key.startsWith(prefix)) this.requests.delete(key);
+    for (const key of this.independentRequests.keys())
+      if (key.startsWith(prefix)) this.independentRequests.delete(key);
     for (const key of this.attempts.keys()) if (key.startsWith(prefix)) this.attempts.delete(key);
   }
 

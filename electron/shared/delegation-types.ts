@@ -51,6 +51,14 @@ export interface DelegationSnapshot {
   changedFileCount: number;
 }
 
+/** An agent's request for a top-level task that is not its child; the renderer creates it
+ *  like the New Task dialog would, inheriting the creator's project, agent and sandbox. */
+export interface IndependentTaskRequest {
+  creatorTaskId: string;
+  name: string;
+  prompt: string;
+}
+
 export interface DelegateAssignment {
   parentTaskId: string;
   requestId: string;

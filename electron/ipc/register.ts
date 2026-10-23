@@ -643,6 +643,8 @@ export function registerAllHandlers(win: BrowserWindow): void {
     serverOptions: () => remoteServerOptions(),
     rememberedDevicesPath: () => path.join(getUserDataDir(), 'paired-phones.json'),
     onCoordinatorLoaded: () => registerCoordinatorHandlers(),
+    createIndependentTask: (request) =>
+      callRenderer<{ taskId: string }>(IPC.MCP_CreateIndependentTaskRequest, { ...request }),
   });
   const { transport, delegation, pendingSpawns, canvasOwners, wideBindAgents, needsWideBind } = mcp;
   const taskNames = new Map<string, string>();

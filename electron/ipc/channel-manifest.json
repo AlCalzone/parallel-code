@@ -101,6 +101,7 @@
   "MCP_PublishGitHubListRequest": "mcp_publish_github_list_request",
   "MCP_SubmitEvidenceRequest": "mcp_submit_evidence_request",
   "MCP_GetEvidenceRequest": "mcp_get_evidence_request",
+  "MCP_CreateIndependentTaskRequest": "mcp_create_independent_task_request",
   "Remote_GetNotesRequest": "remote_get_notes_request",
   "Remote_SetNotesRequest": "remote_set_notes_request",
   "Remote_CloseTaskRequest": "remote_close_task_request",

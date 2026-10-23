@@ -588,19 +588,20 @@ const ORDINARY_TOOLS: ToolDef[] = COORDINATOR_TOOLS.filter(
     return {
       ...tool,
       description:
-        'Create a visible Parallel Code task with its own Git worktree and agent terminal. Use this for requests to create a Parallel Code task or PC task, not native sub-agent tools. Children branch from the main branch and their results merge into main, not into your branch; merge main into your branch when you need a landed result. Children inherit neither conversation nor your edits. Include required context in prompt. Use requestId for identical retries. Set baseOnParent:true only when the child must build on your own commits; it then branches from your committed snapshot and lands on your branch. With baseOnParent, supply expectedBranch and expectedHeadSha after inspecting your Git state; if dirty, explicitly choose useLastCommit:true to omit dirty edits. This never authorizes committing. The result reports integrationPolicy: review requires user approval; automatic permits the child to verify and self-land via land_self. The policy comes from this task’s user-selected automation options; do not override it in the child prompt.',
+        'Create a visible Parallel Code task with its own Git worktree and agent terminal. Use this for requests to create a Parallel Code task or PC task, not native sub-agent tools. Choose relation: "child" only when the task is part of your assignment and you will wait for, review or build on its result; "independent" for a separate deliverable the user reviews on its own, which you will not wait for (for example an unrelated bug you noticed, or when the user asks for separate tasks). An independent task is a top-level task on the main branch: it is not listed in list_tasks, sends you no signal_done, and outlives you; the result reports only its taskId. The rest applies to children. Children branch from the main branch and their results merge into main, not into your branch; merge main into your branch when you need a landed result. Children inherit neither conversation nor your edits. Include required context in prompt. Use requestId for identical retries. Set baseOnParent:true only when the child must build on your own commits; it then branches from your committed snapshot and lands on your branch. With baseOnParent, supply expectedBranch and expectedHeadSha after inspecting your Git state; if dirty, explicitly choose useLastCommit:true to omit dirty edits. This never authorizes committing. The result reports integrationPolicy: review requires user approval; automatic permits the child to verify and self-land via land_self. The policy comes from this task’s user-selected automation options; do not override it in the child prompt.',
       inputSchema: {
         type: 'object' as const,
         properties: {
           name: { type: 'string' },
           prompt: { type: 'string' },
+          relation: { type: 'string', enum: ['child', 'independent'] },
           requestId: { type: 'string' },
           expectedBranch: { type: 'string' },
           expectedHeadSha: { type: 'string' },
           useLastCommit: { type: 'boolean', default: false },
           baseOnParent: { type: 'boolean', default: false },
         },
-        required: ['name', 'prompt', 'requestId'],
+        required: ['name', 'prompt', 'relation', 'requestId'],
       },
     };
   if (tool.name === 'wait_for_signal_done' || tool.name === 'wait_for_idle')

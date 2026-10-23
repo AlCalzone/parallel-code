@@ -275,6 +275,19 @@ describe('session capability tool sets', () => {
     expect(names('ordinary', true)).toEqual([...canvas, 'create_task', ...supervision]);
   });
 
+  it('makes ordinary sessions choose between a child and an independent task', () => {
+    const createTask = selectTools('task', '', false, {
+      profile: 'ordinary',
+      canCreate: true,
+      peers: false,
+    }).find((tool) => tool.name === 'create_task');
+    expect(createTask?.inputSchema.required).toContain('relation');
+    expect(createTask?.inputSchema.properties.relation).toEqual({
+      type: 'string',
+      enum: ['child', 'independent'],
+    });
+  });
+
   it('never grants children creation even if a malformed capability requests it', () => {
     expect(names('child-review', true)).toEqual([...canvas, 'signal_done']);
     expect(names('child-automatic', true)).toEqual([...canvas, 'land_self', 'signal_done']);

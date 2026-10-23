@@ -108,6 +108,7 @@ const ALLOWED_CHANNELS = new Set([
   'mcp_publish_github_list_request',
   'mcp_submit_evidence_request',
   'mcp_get_evidence_request',
+  'mcp_create_independent_task_request',
   'remote_get_notes_request',
   'remote_set_notes_request',
   'remote_close_task_request',

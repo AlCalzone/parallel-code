@@ -7,6 +7,7 @@ import type {
   DelegateAssignment,
   DelegationChanged,
   DelegationState,
+  IndependentTaskRequest,
   SessionCaller,
   TaskAuthorityInput,
 } from '../shared/delegation-types.js';
@@ -82,6 +83,7 @@ let core: {
 let persist: () => void;
 let changed: Mock<(event: DelegationChanged) => void>;
 let prepareParent: ReturnType<typeof vi.fn<() => Promise<void>>>;
+let createIndependent: Mock<(request: IndependentTaskRequest) => Promise<{ taskId: string }>>;
 
 function task(taskId: string, extra: Partial<TaskAuthorityInput> = {}): TaskAuthorityInput {
   return {
@@ -208,6 +210,7 @@ beforeEach(() => {
   persist = vi.fn();
   changed = vi.fn();
   prepareParent = vi.fn(async () => {});
+  createIndependent = vi.fn(async () => ({ taskId: 'sibling' }));
   service = new DelegationService({
     coordinator: async () => core as unknown as Coordinator,
     currentCoordinator: () => core as unknown as Coordinator,
@@ -215,6 +218,7 @@ beforeEach(() => {
     sessions: () => sessions,
     changed,
     persist,
+    createIndependent,
   });
 });
 afterEach(() => {
@@ -331,12 +335,57 @@ describe('delegation authority and creation', () => {
     await expect(
       service.callTool(caller, 'create_task', {
         requestId: 'default-create',
+        relation: 'child',
         name: 'Haiku',
         prompt: 'Write a haiku',
       }),
     ).resolves.toEqual({ taskId: 'child', agentId: 'agent-child', integrationPolicy: 'review' });
     expect(core.createTask).toHaveBeenCalledOnce();
     expect(service.capabilities('parent')?.canCreate).toBe(true);
+  });
+
+  it('creates an independent top-level task instead of a child when asked', async () => {
+    await register('parent');
+    const caller = session('parent');
+    const params = {
+      requestId: 'sibling-request',
+      relation: 'independent',
+      name: 'Sibling',
+      prompt: 'Fix the unrelated bug',
+    };
+    await expect(service.callTool(caller, 'create_task', params)).resolves.toEqual({
+      taskId: 'sibling',
+      relation: 'independent',
+    });
+    await service.callTool(caller, 'create_task', params);
+    expect(createIndependent).toHaveBeenCalledOnce();
+    expect(createIndependent).toHaveBeenCalledWith({
+      creatorTaskId: 'parent',
+      name: 'Sibling',
+      prompt: 'Fix the unrelated bug',
+    });
+    expect(core.createTask).not.toHaveBeenCalled();
+    expect(prepareParent).not.toHaveBeenCalled();
+    expect(service.getTask('parent')?.delegationParent).toBeFalsy();
+  });
+
+  it('requires a relation and rejects building an independent task on the creator', async () => {
+    await register('parent');
+    const caller = session('parent');
+    const base = { requestId: 'r', name: 'Task', prompt: 'Do it' };
+    await expect(service.callTool(caller, 'create_task', base)).rejects.toThrow('relation');
+    await expect(
+      service.callTool(caller, 'create_task', { ...base, relation: 'sibling' }),
+    ).rejects.toThrow('relation');
+    await expect(
+      service.callTool(caller, 'create_task', {
+        ...base,
+        relation: 'independent',
+        baseOnParent: true,
+      }),
+    ).rejects.toThrow('baseOnParent');
+    expect(createIndependent).not.toHaveBeenCalled();
+    expect(core.createTask).not.toHaveBeenCalled();
   });
 
   it('uses only the task automation option to select child integration policy', async () => {
@@ -346,6 +395,7 @@ describe('delegation authority and creation', () => {
     await expect(
       service.callTool(caller, 'create_task', {
         requestId: 'automatic',
+        relation: 'child',
         name: 'Child',
         prompt: 'Implement assignment',
         integrationPolicy: 'review',
@@ -359,6 +409,7 @@ describe('delegation authority and creation', () => {
     await register('parent', { autoMergeChildren: false });
     await service.callTool(caller, 'create_task', {
       requestId: 'review',
+      relation: 'child',
       name: 'Child',
       prompt: 'Implement assignment',
       integrationPolicy: 'automatic',
@@ -415,7 +466,12 @@ describe('delegation authority and creation', () => {
   it('replays an agent request without deriving a new snapshot after the parent advances', async () => {
     await register('parent');
     const caller = session('parent');
-    const params = { requestId: 'stable-request', name: 'Child', prompt: 'Implement assignment' };
+    const params = {
+      requestId: 'stable-request',
+      relation: 'child',
+      name: 'Child',
+      prompt: 'Implement assignment',
+    };
     const first = await service.callTool(caller, 'create_task', params);
     const snapshot = vi.spyOn(service, 'snapshot').mockRejectedValue(new Error('Parent changed'));
     await expect(service.callTool(caller, 'create_task', params)).resolves.toEqual(first);
@@ -575,6 +631,15 @@ describe('delegation authority and creation', () => {
     await register('child', { parentTaskId: 'parent', integrationPolicy: 'review' });
     const child = session('child', 'child-instance', true);
     await expect(service.callTool(child, 'create_task', {})).rejects.toThrow('unavailable');
+    await expect(
+      service.callTool(child, 'create_task', {
+        requestId: 'escape',
+        relation: 'independent',
+        name: 'Sibling',
+        prompt: 'Work alone',
+      }),
+    ).rejects.toThrow('unavailable');
+    expect(createIndependent).not.toHaveBeenCalled();
     const parent = session('parent');
     core.getTaskStatus.mockReturnValue({ coordinatorTaskId: 'someone-else' });
     await expect(

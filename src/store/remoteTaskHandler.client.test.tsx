@@ -194,6 +194,65 @@ it('adds a task created from a phone without taking focus from the active task',
   expect(store.activeAgentId).toBe('agent');
 });
 
+it('creates an agent-requested independent task with the creator agent and sandbox', async () => {
+  const agentDef = {
+    id: 'codex',
+    name: 'Codex',
+    command: 'codex',
+    args: ['--model', 'gpt-5'],
+    resume_args: [],
+    skip_permissions_args: [],
+    description: '',
+  };
+  setStore('projects', [
+    { id: 'project', name: 'Project', path: '/tmp/project', color: '', defaultBaseBranch: 'main' },
+  ]);
+  setStore('agents', 'agent', {
+    id: 'agent',
+    taskId: 'task',
+    def: agentDef,
+    resumed: false,
+    status: 'running',
+    exitCode: null,
+  });
+  setStore('tasks', 'task', { dockerMode: true, dockerImage: 'sandbox:1' });
+  setStore('taskOrder', ['task']);
+  setStore('activeTaskId', 'task');
+  vi.mocked(invoke).mockImplementation(async (channel: string) => {
+    if (channel === IPC.GetGitignoredDirs) return [];
+    if (channel === IPC.CreateTask)
+      return { id: 'sibling', branch_name: 'task/sibling', worktree_path: '/tmp/sibling' };
+    return undefined;
+  });
+
+  const reply = await phoneRequest(IPC.MCP_CreateIndependentTaskRequest, {
+    creatorTaskId: 'task',
+    name: 'Sibling',
+    prompt: 'Fix the unrelated bug',
+  });
+
+  expect(reply).toMatchObject({ ok: true, data: { taskId: 'sibling' } });
+  const sibling = store.tasks.sibling;
+  expect(sibling).toMatchObject({
+    projectId: 'project',
+    initialPrompt: 'Fix the unrelated bug',
+    dockerMode: true,
+    dockerImage: 'sandbox:1',
+    skipPermissions: false,
+  });
+  expect(sibling?.coordinatedBy).toBeUndefined();
+  expect(store.agents[sibling?.agentIds[0] ?? '']?.def).toMatchObject({ id: 'codex' });
+  expect(store.activeTaskId).toBe('task');
+
+  vi.mocked(invoke).mockClear();
+  const missing = await phoneRequest(IPC.MCP_CreateIndependentTaskRequest, {
+    creatorTaskId: '__proto__',
+    name: 'Sibling',
+    prompt: 'Fix it',
+  });
+  expect(missing).toMatchObject({ ok: false, error: 'Creating task not found' });
+});
+
 const phoneAgents = [
   {
     id: 'claude',

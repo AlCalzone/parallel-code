@@ -1,5 +1,5 @@
-// Handles task-creation requests from paired phones. The remote HTTP server
-// (main process) forwards them here so we can run the renderer's normal
+// Handles task-creation requests from paired phones and agents. The remote HTTP server
+// and the MCP runtime (main process) forward them here so we can run the renderer's normal
 // createTask orchestration — the same path the desktop "New Task" dialog uses —
 // and reply with the resulting task id. See electron/ipc/register.ts for the
 // main-side bridge.
@@ -15,6 +15,7 @@ import { codeProjects, getProject, getProjectPath } from './projects';
 import {
   closeTask,
   createTask,
+  type CreateTaskOptions,
   getCoordinatorCloseWarning,
   mergeTask,
   sendPrompt,
@@ -40,7 +41,7 @@ import {
 } from '../../electron/shared/ask-code-models';
 import { reviewerWithModel } from '../lib/agent-handoff';
 import type { AgentDef, GitIgnoredEntry, MergeStatus, WorktreeStatus } from '../ipc/types';
-import type { Task } from './types';
+import type { Project, Task } from './types';
 import type {
   RemoteAgentChoice,
   RemoteCloseResult,
@@ -57,6 +58,12 @@ interface CreateTaskRequest extends RendererRequest {
   prompt: string;
   agentId?: string;
   model?: string;
+}
+
+interface CreateIndependentTaskRequest extends RendererRequest {
+  creatorTaskId: string;
+  name: string;
+  prompt: string;
 }
 
 interface GetNotesRequest extends RendererRequest {
@@ -170,6 +177,25 @@ export function remoteSkipPermissions(
   return defaultSkipPermissions && resolveSkipPermissionsArgs(agentDef).length > 0;
 }
 
+/** The Git settings the New Task dialog defaults to, for tasks created without it. */
+async function newTaskGitDefaults(
+  project: Project,
+): Promise<Pick<CreateTaskOptions, 'gitIsolation' | 'baseBranch' | 'symlinkDirs'>> {
+  // Non-git projects can't use worktree isolation; fall back to working
+  // directly in the project folder.
+  if (project.isGitRepo === false) return { gitIsolation: 'none', baseBranch: '', symlinkDirs: [] };
+  const baseBranch =
+    project.defaultBaseBranch ??
+    (await invoke<string>(IPC.GetMainBranch, { projectRoot: project.path }));
+  // Match the desktop New Task default without opting remote users into
+  // newly discovered entries that have no confirmation UI.
+  const ignoredEntries = await invoke<GitIgnoredEntry[]>(IPC.GetGitignoredDirs, {
+    projectRoot: project.path,
+  });
+  const symlinkDirs = ignoredEntries.filter((entry) => entry.isDefault).map((entry) => entry.name);
+  return { gitIsolation: 'worktree', baseBranch, symlinkDirs };
+}
+
 async function handleCreateTask(req: CreateTaskRequest): Promise<void> {
   try {
     const project = store.projects.find((p) => p.id === req.projectId);
@@ -178,35 +204,47 @@ async function handleCreateTask(req: CreateTaskRequest): Promise<void> {
     // Without a choice from the phone, the agent the New Task dialog preselects.
     const agentDef = await resolveMobileAgent(req);
 
-    // Non-git projects can't use worktree isolation; fall back to working
-    // directly in the project folder.
-    const isGit = project.isGitRepo !== false;
-    let baseBranch = '';
-    let symlinkDirs: string[] = [];
-    if (isGit) {
-      baseBranch =
-        project.defaultBaseBranch ??
-        (await invoke<string>(IPC.GetMainBranch, { projectRoot: project.path }));
-      // Match the desktop New Task default without opting remote users into
-      // newly discovered entries that have no confirmation UI.
-      const ignoredEntries = await invoke<GitIgnoredEntry[]>(IPC.GetGitignoredDirs, {
-        projectRoot: project.path,
-      });
-      symlinkDirs = ignoredEntries.filter((entry) => entry.isDefault).map((entry) => entry.name);
-    }
-
     const taskId = await createTask({
       name: req.name,
       agentDef,
       projectId: req.projectId,
-      gitIsolation: isGit ? 'worktree' : 'none',
-      baseBranch,
-      symlinkDirs,
+      ...(await newTaskGitDefaults(project)),
       initialPrompt: req.prompt,
       // Without this the flag was simply never passed, so every task created
       // from a phone launched bare regardless of the setting.
       skipPermissions: remoteSkipPermissions(store.defaultSkipPermissions, agentDef),
       // Someone at the desktop may be mid-task; only they decide what gets focus.
+      activate: false,
+    });
+    reply(req.reqId, true, { taskId });
+  } catch (err) {
+    reply(req.reqId, false, undefined, errMessage(err));
+  }
+}
+
+/** A top-level task an agent asked for: the creator's project, agent and sandbox, no parent. */
+async function handleCreateIndependentTask(req: CreateIndependentTaskRequest): Promise<void> {
+  try {
+    if (!isKnownTask(store.tasks, req.creatorTaskId)) throw new Error('Creating task not found');
+    const creator = store.tasks[req.creatorTaskId];
+    const project = store.projects.find((p) => p.id === creator.projectId);
+    if (!project) throw new Error('Project not found');
+    const agentDef = creator.agentIds[0] ? store.agents[creator.agentIds[0]]?.def : undefined;
+    if (!agentDef) throw new Error('Creating agent not found');
+
+    const taskId = await createTask({
+      name: req.name,
+      agentDef,
+      projectId: project.id,
+      ...(await newTaskGitDefaults(project)),
+      initialPrompt: req.prompt,
+      // Same rule as children: an agent may hand on permission bypass only when the
+      // user allowed it, and may not start work outside its own container.
+      skipPermissions: creator.propagateSkipPermissions === true,
+      dockerMode: creator.dockerMode,
+      dockerSource: creator.dockerSource,
+      dockerImage: creator.dockerImage,
+      // The user did not ask for this task directly, so it must not take focus.
       activate: false,
     });
     reply(req.reqId, true, { taskId });
@@ -499,6 +537,13 @@ export function startRemoteTaskHandlers(): () => void {
       if (data && typeof data === 'object') void handleCreateTask(data as CreateTaskRequest);
     },
   );
+  const offCreateIndependent = window.electron.ipcRenderer.on(
+    IPC.MCP_CreateIndependentTaskRequest,
+    (data: unknown) => {
+      if (data && typeof data === 'object')
+        void handleCreateIndependentTask(data as CreateIndependentTaskRequest);
+    },
+  );
   const offGetNotes = window.electron.ipcRenderer.on(
     IPC.Remote_GetNotesRequest,
     (data: unknown) => {
@@ -649,6 +694,7 @@ export function startRemoteTaskHandlers(): () => void {
     offPublishGitHubList();
     offProjects();
     offCreate();
+    offCreateIndependent();
     offAgents();
     offGetNotes();
     offSetNotes();
