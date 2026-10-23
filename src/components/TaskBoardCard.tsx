@@ -1,6 +1,4 @@
-import { Show, createMemo, createSignal } from 'solid-js';
-import { IPC } from '../../electron/ipc/channels';
-import { invoke } from '../lib/ipc';
+import { Show, createMemo } from 'solid-js';
 import { formatRelativeAge } from '../lib/relativeAge';
 import { isTaskBackgrounded } from '../store/background-tasks';
 import { store } from '../store/core';
@@ -8,17 +6,13 @@ import { getPrChecks } from '../store/pr-checks-state';
 import { getProject } from '../store/projects';
 import { ProjectSwatch } from './ProjectSwatch';
 import { getTaskAttentionState, getTaskOpenQuestion } from '../store/taskStatus';
-import { setPendingAction } from '../store/focus';
-import { isLandedTaskState } from '../store/landing';
-import { retryCloseTask, uncollapseTask } from '../store/tasks';
+import { retryCloseTask } from '../store/tasks';
 import type { Task } from '../store/types';
 import { activityLine, agentName, boardNow, stateLabel } from './board/task-state';
 import { ASK_ACTION, AskRow, TaskGlyph, TaskPr, openBeside } from './board/TaskStatus';
-import { ContextMenu, type MoreMenuItem } from './chat/MoreMenu';
+import type { MoreMenuItem } from './chat/MoreMenu';
 import { boardTaskState, type BoardLaneId } from './task-board-lanes';
-import { laterMenuItems } from './task-later-menu';
-import { CloseTaskDialog } from './CloseTaskDialog';
-import { CloseIcon, ExternalLinkIcon, GitMergeIcon, UndoIcon } from './icons';
+import { createTaskContextMenu } from './task-context-menu';
 
 /** Why the card is set aside: when its snooze ends, or that it is minimized. */
 function setAsideLabel(task: Task): string {
@@ -28,68 +22,15 @@ function setAsideLabel(task: Task): string {
   return `Until ${until.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`;
 }
 
-/** Ending actions: Finish runs in the task's panel, so it opens the task first; Close confirms in place. */
-function endMenuItems(task: Task, confirmClose: () => void): MoreMenuItem[] {
-  const canFinish = task.gitIsolation === 'worktree' && !isLandedTaskState(task.landingState);
-  // Finishing usually ends the task, so the menu pre-checks closing it. Where the Finish
-  // dialog cannot (imported worktrees, coordinated tasks), it offers a plain Finish.
-  const closeAfter = !task.externalWorktree && !task.delegationParent && !task.coordinatorMode;
-  const finish = {
-    label: closeAfter ? 'Finish and close' : 'Finish',
-    title: closeAfter
-      ? 'Opens Finish with deleting the branch and worktree after merge checked.'
-      : undefined,
-    icon: <GitMergeIcon size={14} />,
-    run: () => {
-      openBeside(task);
-      setPendingAction({ type: 'finish', taskId: task.id, closeAfter });
-    },
-  };
+/** The board's ways to open a task; moving the panel lives here rather than on the panel, which rarely needs it. */
+function boardOpenItems(task: Task): MoreMenuItem[] {
   return [
-    ...(canFinish ? [finish] : []),
-    { label: 'Close', icon: <CloseIcon size={14} />, run: confirmClose },
-  ];
-}
-
-function cardMenuItems(task: Task, confirmClose: () => void): MoreMenuItem[] {
-  // Moving the panel lives here rather than on the panel, which rarely needs it.
-  const opens = [
     { label: 'Open', run: () => openBeside(task) },
     {
       label: `Open on the ${store.boardSidePanelLeft ? 'right' : 'left'}`,
       run: () => openBeside(task, true),
     },
-    ...(task.prUrl
-      ? [
-          {
-            label: 'Open PR in browser',
-            icon: <ExternalLinkIcon size={14} />,
-            run: () => void invoke(IPC.ShellOpenExternal, { url: task.prUrl }),
-          },
-        ]
-      : []),
   ];
-  // A closing task is on its way out; setting it aside would race the teardown.
-  if (task.closingStatus) return opens;
-  // Snoozing a minimized task means nothing: its agents are already stopped.
-  if (task.collapsed)
-    return [
-      ...opens,
-      {
-        label: 'Restore (start agents)',
-        icon: <UndoIcon size={14} />,
-        run: () => uncollapseTask(task.id, { activate: false }),
-      },
-      ...endMenuItems(task, confirmClose),
-    ];
-  return [...opens, ...laterMenuItems(task), ...endMenuItems(task, confirmClose)];
-}
-
-/** Where a right-click opened the menu; a keyboard-opened one reports 0,0, so use the card. */
-function menuPoint(event: MouseEvent): { x: number; y: number } {
-  if (event.clientX || event.clientY) return { x: event.clientX, y: event.clientY };
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  return { x: rect.left, y: rect.bottom };
 }
 
 /** Offers another try at a close whose teardown failed; the error is the label's tooltip. */
@@ -170,8 +111,11 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
   const question = () => getTaskOpenQuestion(props.task.id);
   const ask = () =>
     props.lane === 'needs' && !props.task.closingStatus ? ASK_ACTION[state()] : undefined;
-  const [menuAt, setMenuAt] = createSignal<{ x: number; y: number }>();
-  const [confirmingClose, setConfirmingClose] = createSignal(false);
+  const menu = createTaskContextMenu({
+    task: () => props.task,
+    open: () => openBeside(props.task),
+    leading: () => boardOpenItems(props.task),
+  });
   return (
     <li
       class={`task-board-card state-${state()}`}
@@ -183,10 +127,7 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
         shown: shown(),
         closing: closing(),
       }}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        setMenuAt(menuPoint(event));
-      }}
+      onContextMenu={(event) => menu.onContextMenu(event)}
     >
       <button
         type="button"
@@ -227,21 +168,7 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
           />
         )}
       </Show>
-      <Show when={menuAt()}>
-        {(at) => (
-          <ContextMenu
-            items={cardMenuItems(props.task, () => setConfirmingClose(true))}
-            at={at()}
-            label={`Task ${props.task.name}`}
-            onClose={() => setMenuAt(undefined)}
-          />
-        )}
-      </Show>
-      <CloseTaskDialog
-        open={confirmingClose()}
-        task={props.task}
-        onDone={() => setConfirmingClose(false)}
-      />
+      <menu.Menu />
     </li>
   );
 }
