@@ -2,7 +2,7 @@ import { GitHubIssuesPage } from './components/GitHubIssuesPage';
 import { KanbanPage } from './components/KanbanPage';
 import { TaskBoard } from './components/TaskBoard';
 import { navigateBoard, navigateBoardTask } from './components/task-board-keys';
-import { openNextAttentionTask } from './components/next-attention-task';
+import { openNextAttentionTask, openPreviousAttentionTask } from './components/next-attention-task';
 import {
   BoardSidePanelClose,
   BoardSidePanelHandle,
@@ -755,6 +755,7 @@ function App() {
         withViewTransition(() => setWorkspaceView(workspaceView() === 'focus' ? 'tiles' : 'focus')),
       toggleBoardView: () => withViewTransition(toggleBoardView),
       openNextAttentionTask: () => openNextAttentionTask(),
+      openPreviousAttentionTask: () => openPreviousAttentionTask(),
       switchDocument: () => {
         if (store.activeDocumentProjectId && isDocumentAgentTaskId(store.activeTaskId))
           setFilesOpen(true);

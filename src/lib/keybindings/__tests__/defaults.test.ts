@@ -27,6 +27,7 @@ const APP_LAYER_IDS = [
   'app.toggle-focus-mode',
   'app.toggle-board-view',
   'app.nav.next-attention',
+  'app.nav.previous-attention',
   'app.switch-document',
   'app.toggle-help',
   'app.toggle-help-f1',
@@ -74,6 +75,16 @@ describe('DEFAULT_BINDINGS', () => {
   it('binds next attention task to one-handed Ctrl+Tab, never Cmd+Tab', () => {
     const binding = DEFAULT_BINDINGS.find((b) => b.id === 'app.nav.next-attention');
     expect(binding).toMatchObject({ key: 'Tab', modifiers: { ctrl: true }, global: true });
+    expect(binding?.modifiers).not.toHaveProperty('cmdOrCtrl');
+  });
+
+  it('binds previous attention task to Ctrl+Shift+Tab, never Cmd+Shift+Tab', () => {
+    const binding = DEFAULT_BINDINGS.find((b) => b.id === 'app.nav.previous-attention');
+    expect(binding).toMatchObject({
+      key: 'Tab',
+      modifiers: { ctrl: true, shift: true },
+      global: true,
+    });
     expect(binding?.modifiers).not.toHaveProperty('cmdOrCtrl');
   });
 
