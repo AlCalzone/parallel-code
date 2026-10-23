@@ -338,7 +338,8 @@ export function toggleTaskFocusMode(taskId: string | null = store.activeTaskId):
   if (store.activeTaskId !== taskId) setActiveTask(taskId);
   closeBoard();
   toggleFocusMode(enteringFocusMode);
-  if (!enteringFocusMode) return;
+  // An open draft is what focus mode shows; it keeps its own focus.
+  if (!enteringFocusMode || store.showNewTaskPanel) return;
   const panel = store.focusedPanel[taskId] ?? 'ai-terminal';
   requestAnimationFrame(() => setTaskFocusedPanel(taskId, panel));
 }

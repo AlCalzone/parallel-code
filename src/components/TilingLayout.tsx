@@ -79,9 +79,8 @@ export function TilingLayout() {
     [...store.taskOrder, ...store.collapsedTaskOrder].some(
       (id) => matchesTaskProjectFilter(id) && isTaskBackgrounded(id),
     );
-  // The board's side panel shows one item too, the draft while there is one.
-  const focusMode = () =>
-    boardSidePanelOpen() || (store.focusMode && hasPanels() && !store.showNewTaskPanel);
+  // Focus mode and the board's side panel show one item, the draft while there is one.
+  const focusMode = () => boardSidePanelOpen() || (store.focusMode && hasPanels());
   const shownId = () => (store.showNewTaskPanel ? '__new-task' : store.activeTaskId);
   let containerRef: HTMLDivElement | undefined;
   createProjectFilterTransition(taskProjectFilter, () => containerRef);

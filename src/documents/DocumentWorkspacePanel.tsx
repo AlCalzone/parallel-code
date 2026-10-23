@@ -95,8 +95,9 @@ function DocumentPane(props: { project: Project; toolbarSlot: HTMLElement | unde
     const taskId = documentAgentTaskId(props.project.id);
     return isTerminalPaneOnScreen({
       taskId,
-      activeTaskId: store.activeTaskId,
-      focusMode: store.focusMode && !store.showNewTaskPanel,
+      // In focus mode a new-task draft takes the pane's place.
+      activeTaskId: store.showNewTaskPanel ? null : store.activeTaskId,
+      focusMode: store.focusMode,
       viewportVisibility: store.taskViewportVisibility[taskId],
     });
   };

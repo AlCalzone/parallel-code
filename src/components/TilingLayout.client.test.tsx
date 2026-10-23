@@ -562,6 +562,31 @@ describe('inline task creation', () => {
     expect(store.focusMode).toBe(true);
   });
 
+  it('shows the draft alone in focus mode, the task behind it', async () => {
+    setStore('tasks', 'task', {
+      id: 'task',
+      name: 'Task',
+      projectId: 'project',
+      branchName: 'task/test',
+      worktreePath: '/repo/task',
+      agentIds: [],
+      shellAgentIds: [],
+      notes: '',
+      lastPrompt: '',
+    });
+    setStore('taskOrder', ['task']);
+    setActiveTask('task');
+    await openDraft();
+    const wrapperOf = (selector: string) =>
+      container.querySelector(selector)?.parentElement?.style.visibility;
+    expect(wrapperOf('[data-task-id="task"]')).not.toBe('hidden');
+
+    setStore('focusMode', true);
+
+    expect(wrapperOf('[data-new-task-panel]')).toBe('visible');
+    expect(wrapperOf('[data-task-id="task"]')).toBe('hidden');
+  });
+
   it('returns to the active task instantly when the draft is cancelled', async () => {
     setStore('tasks', 'task', {
       id: 'task',

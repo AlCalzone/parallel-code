@@ -198,6 +198,15 @@ describe('toggleTaskFocusMode', () => {
     expect(mockStore.focusedPanel['task-1']).toBe('ai-terminal');
   });
 
+  it('leaves focus in an open draft, which focus mode shows instead of the task', () => {
+    mockStore.showNewTaskPanel = true;
+
+    toggleTaskFocusMode('task-1');
+
+    expect(mockStore.focusMode).toBe(true);
+    expect(mocks.setTaskFocusedPanel).not.toHaveBeenCalled();
+  });
+
   it('does not refocus again when leaving focus mode', () => {
     mockStore.focusMode = true;
 

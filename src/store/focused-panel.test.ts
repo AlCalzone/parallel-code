@@ -36,7 +36,7 @@ it('treats focus mode and the board side panel as a single column', () => {
   expect(isSoloTaskColumn()).toBe(true);
 });
 
-it('keeps focus mode multi-column while the draft sits beside the task', () => {
+it('keeps focus mode a single column while the draft shows', () => {
   setStore({ focusMode: true, showNewTaskPanel: true });
-  expect(isSoloTaskColumn()).toBe(false);
+  expect(isSoloTaskColumn()).toBe(true);
 });
