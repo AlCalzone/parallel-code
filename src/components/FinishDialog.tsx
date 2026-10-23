@@ -19,7 +19,7 @@ import { createPushRun } from './push-run';
 import { getProject, getTaskChecks } from '../store/store';
 import { markFeatureHintSeen } from '../store/onboarding';
 import { showNotification } from '../store/notification';
-import { theme } from '../lib/theme';
+import { dialogButtonStyle, theme } from '../lib/theme';
 import { GitMergeIcon, SyncIcon, UploadIcon } from './icons';
 
 export type FinishAction = 'merge' | 'push';
@@ -44,15 +44,6 @@ interface FinishDialogProps {
   /** Closing never stops a running push; it finishes in the background. */
   onClose: () => void;
 }
-
-const pushButtonStyle = {
-  padding: '9px 18px',
-  background: theme.bgInput,
-  border: `1px solid ${theme.border}`,
-  'border-radius': 'var(--radius-md)',
-  color: theme.fgMuted,
-  'font-size': '14px',
-};
 
 const SHOWN_ELSEWHERE = new Set(['Merge safety', 'Verify command', 'Evidence', 'PR checks']);
 
@@ -116,7 +107,8 @@ export function FinishDialog(props: FinishDialogProps) {
     if (merge.merging() || prMerging()) return 'Merging...';
     const method = pr.method();
     if (pr.mode() === 'pr') {
-      const action = `${method ? PR_MERGE_ACTIONS[method] : 'Merge'} PR #${pr.number()}`;
+      // The PR number heads its section; the button names only the action.
+      const action = method ? PR_MERGE_ACTIONS[method] : 'Merge';
       return pr.bypassing() ? `${action} as admin` : action;
     }
     // The target lives on the button, so the dialog needs no sentence restating it.
@@ -126,8 +118,6 @@ export function FinishDialog(props: FinishDialogProps) {
   // verify command in the check list, evidence by the panel these rows sit in.
   const readinessRows = () =>
     merge.mergeReadiness().checks.filter((check) => !SHOWN_ELSEWHERE.has(check.label));
-  const prCheckRows = () =>
-    merge.mergeReadiness().checks.filter((check) => check.label === 'PR checks');
   const confirmDisabled = () => {
     if (push.pushing()) return true;
     if (pr.mode() === 'merged') return false;
@@ -138,6 +128,7 @@ export function FinishDialog(props: FinishDialogProps) {
     if (merge.merging() || prMerging() || pr.mode() === 'merged') return undefined;
     return pr.mode() === 'pr' ? pr.blocker() : merge.mergeBlocker();
   };
+  const pushDisabled = () => push.pushing() || merge.merging() || prMerging();
   const mergeAndClose = async () => {
     if (await merge.merge()) props.onClose();
   };
@@ -249,43 +240,53 @@ export function FinishDialog(props: FinishDialogProps) {
             <FinishPrSection
               task={props.task}
               pr={pr}
-              checkRows={prCheckRows()}
               disabled={push.pushing() || merge.merging()}
               onOpenPullRequest={(url) => props.onOpenPullRequest(url)}
               onStaged={() => {
                 showNotification('Prompt staged in the task input. Review it, then send.');
                 props.onClose();
               }}
-            />
-            <Show when={taskPrUrl(props.task)}>
-              <PrMergeRoute pr={pr} disabled={push.pushing() || merge.merging()} />
-            </Show>
+            >
+              <Show when={taskPrUrl(props.task)}>
+                <PrMergeRoute pr={pr} disabled={push.pushing() || merge.merging()} />
+              </Show>
+            </FinishPrSection>
             <Show when={pr.mode() === 'local'}>
-              <MergeOptions task={props.task} state={merge} />
+              <div style={{ 'margin-top': '12px' }}>
+                <MergeOptions task={props.task} state={merge} />
+              </div>
             </Show>
+            {/* Pushing does not finish the task, so it sits with the content, not the footer. */}
+            <div
+              style={{
+                display: 'flex',
+                'flex-wrap': 'wrap',
+                gap: '8px',
+                'align-items': 'center',
+                'margin-top': '12px',
+                'font-size': '12px',
+                color: theme.fgMuted,
+              }}
+            >
+              <button
+                type="button"
+                class="btn-secondary btn-with-icon"
+                disabled={pushDisabled()}
+                onClick={() => void push.start()}
+                title={`Push ${props.task.branchName} to origin`}
+                style={dialogButtonStyle(false, pushDisabled() && !push.pushing())}
+              >
+                <UploadIcon size={14} />
+                {push.pushing() ? 'Pushing…' : 'Push branch'}
+              </button>
+              {pr.mode() === 'pr' ? 'Updates the PR; the task stays open.' : 'The task stays open.'}
+            </div>
             <Show when={push.pushing() || push.output() || push.error()}>
               <div style={{ 'margin-top': '12px' }}>
                 <PushSection run={push} />
               </div>
             </Show>
           </div>
-        }
-        extraActions={
-          <button
-            type="button"
-            class="btn-secondary btn-with-icon"
-            disabled={push.pushing() || merge.merging() || prMerging()}
-            onClick={() => void push.start()}
-            title={`Push ${props.task.branchName} to origin; the task stays open`}
-            style={{
-              ...pushButtonStyle,
-              cursor: push.pushing() || merge.merging() || prMerging() ? 'not-allowed' : 'pointer',
-              opacity: merge.merging() || prMerging() ? '0.5' : '1',
-            }}
-          >
-            <UploadIcon size={14} />
-            {push.pushing() ? 'Pushing…' : 'Push branch'}
-          </button>
         }
         confirmDisabled={confirmDisabled()}
         footerNote={footerNote()}

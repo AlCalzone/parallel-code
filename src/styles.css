@@ -2730,18 +2730,29 @@ html:is(
 .dialog-footer {
   flex-shrink: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
 }
 
+/* The basis keeps text readable: when wide buttons leave less room, the slot
+   takes its own row above them instead of shrinking to a letter per line.
+   The wrap depends on the buttons, not the text, so a note never moves them. */
 .dialog-footer-lead {
-  flex: 1;
+  flex: 1 1 120px;
   min-width: 0;
   /* Paths and URLs in errors have no break points; wrap rather than run under the buttons. */
   overflow-wrap: anywhere;
   color: var(--fg-muted);
   font-size: 12px;
+}
+
+.dialog-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .dialog-footer-error {
@@ -2751,6 +2762,8 @@ html:is(
 
 .dialog-footer :is(.btn-primary, .btn-secondary, .btn-danger) {
   display: inline-flex;
+  flex-shrink: 0;
+  white-space: nowrap;
   align-items: center;
   justify-content: center;
   gap: 6px;

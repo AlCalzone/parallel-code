@@ -27,7 +27,9 @@ export function DialogFooter(props: DialogFooterProps) {
           {props.error}
         </span>
       </span>
-      {props.children}
+      {/* One group, so a footer too narrow for everything moves the note above
+          the buttons rather than splitting the buttons across rows. */}
+      <span class="dialog-footer-actions">{props.children}</span>
     </div>
   );
 }
