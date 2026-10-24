@@ -12,7 +12,7 @@ import {
   setTaskFocusedPanel,
   unregisterFocusFn,
 } from '../store/store';
-import { navigateBoard, navigateBoardTask } from './task-board-keys';
+import { boardHasFocus, navigateBoard, navigateBoardTask } from './task-board-keys';
 import { openNextAttentionTask, openPreviousAttentionTask } from './next-attention-task';
 import { retryCloseTask } from '../store/tasks';
 import { setTaskProjectFilter } from '../store/navigation';
@@ -248,11 +248,11 @@ it('narrows the cards to the selected project without closing the board', () => 
   expect(host.querySelectorAll('.task-board-name')).toHaveLength(4);
 });
 
-it('puts its actions in the title bar while it shows, and its filter on the board', () => {
+it('puts its actions and filter in the title bar while it shows', () => {
   const controls = host.querySelector('.task-board-controls');
   expect(controls?.textContent).toContain('New task');
   expect(host.querySelector('.task-board')?.contains(controls ?? null)).toBe(false);
-  expect(host.querySelector('.task-board .task-board-search')).not.toBeNull();
+  expect(controls?.querySelector('.task-board-search')).not.toBeNull();
   setStore('boardView', false);
   expect(host.querySelector('.task-board-controls')).toBeNull();
 });
@@ -730,6 +730,12 @@ describe('keyboard edge cases', () => {
     expect(store.boardView).toBe(true);
     expect(store.sidebarFocused).toBe(false);
     expect(focusedId()).toBe('idle');
+  });
+
+  it('counts the title-bar filter as the board, so a side panel does not take its keys', () => {
+    setStore('boardPeek', true);
+    search()?.focus();
+    expect(boardHasFocus()).toBe(true);
   });
 
   it('sends an empty board to its filter and back out to the sidebar', () => {

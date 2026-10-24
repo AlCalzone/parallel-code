@@ -1,7 +1,7 @@
 import { createSignal } from 'solid-js';
 import { store } from '../store/core';
 import { SearchIcon } from './icons';
-import { focusBoardCard } from './task-board-keys';
+import { claimBoardFocus, focusBoardCard, releaseBoardFocus } from './task-board-keys';
 import './task-board.css';
 
 // One query for both boards, so it survives switching between running tasks and the plan.
@@ -9,12 +9,13 @@ const [boardQuery, setBoardQuery] = createSignal('');
 export { boardQuery, setBoardQuery };
 
 /**
- * The text filter in a board's heading row, an icon button until used.
+ * The text filter in the board's title-bar controls, an icon button until used.
  * `what` names what it searches: running tasks or the plan's cards.
  */
 export function BoardSearch(props: { what: string }) {
   return (
-    <span class="task-board-search-box">
+    // In the title bar, outside the board, yet the board's keys still lead here and back.
+    <span class="task-board-search-box" onFocusIn={claimBoardFocus} onFocusOut={releaseBoardFocus}>
       <SearchIcon size={14} />
       <input
         type="search"
@@ -22,7 +23,12 @@ export function BoardSearch(props: { what: string }) {
         placeholder={`Filter ${props.what}`}
         aria-label={`Filter ${props.what}`}
         aria-keyshortcuts="/"
-        title={`Filter ${props.what} (/). Down goes to the cards, Enter opens the first.`}
+        // Folded, the button hides the query, so its tooltip names it.
+        title={
+          boardQuery()
+            ? `Filtering ${props.what} by “${boardQuery()}” (/)`
+            : `Filter ${props.what} (/). Down goes to the cards, Enter opens the first.`
+        }
         value={boardQuery()}
         onInput={(e) => setBoardQuery(e.currentTarget.value)}
         onKeyDown={(e) => {

@@ -13,7 +13,7 @@
 }
 
 /* The board's actions overlay the title bar's middle like the task pills they
-   replace; the heading row below holds the filter and each page's tools. */
+   replace, the text filter included; the plan's own tools sit in its heading row. */
 .task-board-controls {
   position: absolute;
   inset: 0;
@@ -39,15 +39,6 @@
   pointer-events: auto;
   -webkit-app-region: no-drag;
 }
-/* One tool row above the lanes. The plan's heading has the same height, so
-   switching pages leaves the lanes in place. */
-.task-board-heading {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 8px 16px;
-  padding: 8px 20px 4px;
-}
 /* The buttons keep one line. */
 .task-board-new {
   flex-shrink: 0;
@@ -59,45 +50,46 @@
   font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
-/* Qualified to win over the plan heading's generic input style. */
-:is(.task-board-heading, .kanban-heading) .task-board-search {
+/* Qualified to win over generic input styles. */
+.task-board-controls .task-board-search {
   width: 260px;
-  min-width: 80px;
-  flex-shrink: 1;
-  height: 30px;
+  height: 26px;
   box-sizing: border-box;
-  padding: 0 10px;
+  padding: 0 10px 0 24px;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--fg) 5%, transparent);
+  /* Opaque: the open filter overlays the controls to its right. */
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: color-mix(in srgb, var(--fg) 5%, var(--bg-elevated));
   color: var(--fg);
   font: inherit;
   outline: none;
 }
-:is(.task-board-heading, .kanban-heading) .task-board-search:focus {
+.task-board-controls .task-board-search:focus {
+  z-index: 1;
   border-color: var(--border-focus);
 }
-/* Unused, the filter folds to an icon button; focus or a query opens it. */
+/* Unfocused, the filter folds to an icon button; focus opens it over its
+   neighbours, so the centred row keeps the button's slot and never shifts. */
 .task-board-search-box {
   position: relative;
-  display: inline-flex;
-  min-width: 0;
-  flex-shrink: 1;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
 }
 .task-board-search-box > svg {
   position: absolute;
   top: 50%;
-  left: 8px;
+  left: 6px;
   transform: translateY(-50%);
+  z-index: 2;
   color: var(--fg-muted);
   pointer-events: none;
 }
-:is(.task-board-heading, .kanban-heading) .task-board-search {
-  padding-left: 28px;
-}
-:is(.task-board-heading, .kanban-heading) .task-board-search:not(:focus):placeholder-shown {
-  width: 30px;
-  min-width: 30px;
+.task-board-controls .task-board-search:not(:focus) {
+  width: 26px;
   padding: 0;
   border-color: var(--border);
   border-radius: var(--radius-sm);
@@ -105,12 +97,15 @@
   color: transparent;
   cursor: pointer;
 }
-:is(.task-board-heading, .kanban-heading)
-  .task-board-search:not(:focus):placeholder-shown::placeholder {
+.task-board-controls .task-board-search:not(:focus)::placeholder {
   color: transparent;
 }
-:is(.task-board-heading, .kanban-heading) .task-board-search:not(:focus):placeholder-shown:hover {
+.task-board-controls .task-board-search:not(:focus):hover {
   background: var(--bg-hover);
+}
+/* A folded filter still narrowing the cards shows it, like a pressed toggle. */
+.task-board-search-box:has(.task-board-search:not(:focus, :placeholder-shown)) > svg {
+  color: var(--accent);
 }
 /* Framed like the toggle beside it, as one row of title-bar controls. */
 .task-board-new {
@@ -455,7 +450,7 @@ html[data-look^='islands-'] .task-board {
    `:where(…):focus-visible` ring ties with their `outline: none` on
    specificity and loads later, so it would draw a second ring inside. */
 .task-board-title:focus-visible,
-:is(.task-board-heading, .kanban-heading) .task-board-search:focus-visible {
+.task-board-controls .task-board-search:focus-visible {
   outline: none;
 }
 /* A closing task fades while its teardown runs; the card stays put. */

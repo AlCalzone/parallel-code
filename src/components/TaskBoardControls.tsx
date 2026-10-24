@@ -5,6 +5,7 @@ import { isGitHubProject, openGitHubIssues } from '../store/github';
 import { openKanban, openPlanView, planViewProjectId } from '../store/kanban';
 import { toggleNewTaskPanel } from '../store/navigation';
 import { boardShown } from '../store/project-pages';
+import { BoardSearch } from './BoardSearch';
 import { GitHubIcon, PlanIcon } from './icons';
 import { IdeasControl } from './TaskBoardIdeas';
 import { TaskProjectFilter } from './TaskProjectFilter';
@@ -67,9 +68,8 @@ function GitHubIssuesButton() {
 /**
  * The board's actions in the title bar's middle slot, which the task pills
  * leave empty while the board shows: a new task, the sidebar's project filter
- * while the sidebar is hidden, and the plan toggle and GitHub issues for that
- * project. The text filter and each page's own tools sit in the board's
- * heading row.
+ * while the sidebar is hidden, the text filter, and the plan toggle and GitHub
+ * issues for that project. The plan's own tools sit in its heading row.
  */
 export function TaskBoardControls() {
   return (
@@ -96,6 +96,7 @@ export function TaskBoardControls() {
           {/* Board keys only work from a card, so hand the keyboard back after a pick. */}
           <TaskProjectFilter hideLabel onPick={() => focusBoardCard(store.activeTaskId)} />
         </Show>
+        <BoardSearch what={store.kanbanProjectId ? 'plan' : 'running tasks'} />
         {/* Both are about one project, so with all projects they are not there;
             an open plan keeps its way back even if the filter is cleared under it. */}
         <Show when={planViewProjectId() || store.kanbanProjectId}>

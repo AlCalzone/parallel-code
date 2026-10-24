@@ -30,7 +30,7 @@ import {
   moveBoardFocus,
 } from './task-board-keys';
 import { useCardMotion } from './task-board-motion';
-import { BoardSearch, boardQuery, setBoardQuery } from './BoardSearch';
+import { boardQuery, setBoardQuery } from './BoardSearch';
 import { MoreMenu } from './chat/MoreMenu';
 import { ResizablePanel, type PanelChild } from './ResizablePanel';
 import {
@@ -1129,7 +1129,6 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
                 Map
               </button>
             </div>
-            <BoardSearch what="plan" />
           </Show>
           <button
             type="button"
