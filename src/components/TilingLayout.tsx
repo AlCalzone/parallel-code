@@ -34,6 +34,7 @@ import { boardSidePanelOpen } from '../store/project-pages';
 import { isTaskBackgrounded } from '../store/background-tasks';
 import { codeProjects } from '../store/projects';
 import { closeTask } from '../store/tasks';
+import { autoTaskColumnWidth } from '../store/task-column';
 import { TaskPanel } from './TaskPanel';
 import { TerminalPanel } from './TerminalPanel';
 import { NewTaskPanel } from './NewTaskPanel';
@@ -332,7 +333,10 @@ export function TilingLayout() {
       if (!cached) {
         cached = {
           id: panelId,
-          initialSize: TASK_TILE_DEFAULT_WIDTH,
+          // Reactive, so an undragged column follows its panes and canvas.
+          get initialSize() {
+            return autoTaskColumnWidth(panelId);
+          },
           minSize: TASK_TILE_MIN_WIDTH,
           content: () => {
             const task = store.tasks[panelId];

@@ -28,6 +28,7 @@ import {
   setTaskReasoningWorkspace,
 } from './canvas';
 import { deletePanelUserSize, getPanelUserSize, setPanelUserSize } from './ui';
+import { autoTaskColumnWidth } from './task-column';
 import { saveState } from './persistence';
 import { registerFocusFn, unregisterFocusFn } from './focused-panel';
 import type { Agent, Task } from './types';
@@ -282,21 +283,22 @@ describe('canvas tabs', () => {
 describe('task column width with the canvas', () => {
   const columnWidth = () => getPanelUserSize('tiling:task-1');
 
-  it('grows the column by the canvas when it opens and gives it back on close', () => {
+  it('makes room for the canvas while it is open without pinning the column', () => {
     openCanvasDocument('task-1', 'docs/a.md');
-    expect(columnWidth()).toBe(520 + 400);
+    expect(autoTaskColumnWidth('task-1')).toBe(520 + 400);
 
     // More tabs or re-opening must not grow it again.
     openCanvasDocument('task-1', 'docs/b.md');
     openTaskCanvas('task-1');
-    expect(columnWidth()).toBe(520 + 400);
+    expect(autoTaskColumnWidth('task-1')).toBe(520 + 400);
 
     closeCanvasTab('task-1', 'markdown:docs/a.md');
-    expect(columnWidth()).toBe(520 + 400);
+    expect(autoTaskColumnWidth('task-1')).toBe(520 + 400);
     closeCanvasTab('task-1', 'markdown:docs/b.md');
-    expect(columnWidth()).toBe(520);
+    expect(autoTaskColumnWidth('task-1')).toBe(520);
     closeTaskCanvas('task-1');
-    expect(columnWidth()).toBe(520);
+    expect(autoTaskColumnWidth('task-1')).toBe(520);
+    expect(columnWidth()).toBeUndefined();
   });
 
   it('uses the width the user dragged the canvas to', () => {

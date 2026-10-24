@@ -821,7 +821,7 @@ describe('inline document workspace', () => {
 
 describe('task column resizing', () => {
   beforeEach(() => {
-    deletePanelUserSize(['tiling:terminal']);
+    deletePanelUserSize(['tiling:terminal', 'tiling:task']);
     setStore('terminals', 'terminal', { id: 'terminal', name: 'Terminal', agentId: 'shell' });
     setStore('taskOrder', ['terminal']);
     setStore('activeTaskId', 'terminal');
@@ -839,6 +839,51 @@ describe('task column resizing', () => {
     window.dispatchEvent(new MouseEvent('mousemove', { clientX: 210 }));
     window.dispatchEvent(new MouseEvent('mouseup'));
     expect(getPanelUserSize('tiling:terminal')).toBe(310);
+  });
+
+  it('sizes an undragged task column for its canvas without pinning it', () => {
+    setStore('tasks', 'task', {
+      id: 'task',
+      name: 'Task',
+      projectId: 'project',
+      branchName: '',
+      worktreePath: '/repo',
+      agentIds: [],
+      shellAgentIds: [],
+      notes: '',
+      lastPrompt: '',
+      canvasOpen: true,
+    });
+    setStore('taskOrder', ['task']);
+    const columnWidth = () =>
+      container.querySelector<HTMLElement>('[data-task-id="task"]')?.parentElement?.style.width;
+    expect(columnWidth()).toBe('920px');
+    setStore('tasks', 'task', 'canvasOpen', false);
+    expect(columnWidth()).toBe('520px');
+    expect(getPanelUserSize('tiling:task')).toBeUndefined();
+  });
+
+  it('fits side-by-side agents and pins from that width when dragged', () => {
+    setStore('tasks', 'task', {
+      id: 'task',
+      name: 'Task',
+      projectId: 'project',
+      branchName: '',
+      worktreePath: '/repo',
+      agentIds: ['agent-a', 'agent-b'],
+      shellAgentIds: [],
+      notes: '',
+      lastPrompt: '',
+      canvasOpen: false,
+    });
+    setStore('taskOrder', ['task']);
+    const column = container.querySelector<HTMLElement>('[data-task-id="task"]')?.parentElement;
+    expect(column?.style.width).toBe('840px');
+    expect(getPanelUserSize('tiling:task')).toBeUndefined();
+    startDrag();
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 210 }));
+    window.dispatchEvent(new MouseEvent('mouseup'));
+    expect(getPanelUserSize('tiling:task')).toBe(850);
   });
 
   it('does not pin a column on a click without movement', () => {
