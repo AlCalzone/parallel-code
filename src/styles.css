@@ -588,6 +588,10 @@ body.font-smoothing {
   flex: 0 0 auto;
 }
 
+.task-branch-source {
+  max-width: min(32ch, 30%);
+}
+
 /* Routine link: neutral like the rest of the bar, emphasis on hover only. */
 .task-branch-source:hover {
   color: var(--fg);
