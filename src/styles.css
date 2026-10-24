@@ -831,8 +831,7 @@ html[data-look='parallel-code'] :is(.btn-primary, .btn-danger):hover:not(:disabl
   box-shadow: none;
 }
 
-html[data-look='parallel-code'] :is(.btn-primary, .btn-danger):active:not(:disabled),
-html[data-look='parallel-code'] .prompt-send-btn:hover:not(:disabled) {
+html[data-look='parallel-code'] :is(.btn-primary, .btn-danger):active:not(:disabled) {
   transform: none;
 }
 
@@ -1146,12 +1145,6 @@ html[data-look^='obsidian'] .prompt-textarea {
 
 html[data-look^='obsidian'] textarea::placeholder {
   color: var(--fg-subtle);
-}
-
-html[data-look='obsidian'] .prompt-textarea::placeholder,
-html[data-look='islands-dark'] .prompt-textarea::placeholder {
-  color: var(--fg-subtle);
-  opacity: 1;
 }
 
 html[data-look^='obsidian'] .prompt-send-btn {
@@ -2052,7 +2045,8 @@ html:not([data-look^='obsidian'], [data-look^='islands-'], [data-look='workbench
   padding: 10px 44px 10px 14px !important;
 }
 
-html:not([data-look='noir']) .prompt-textarea::placeholder {
+/* The html prefix outranks the faint base placeholder further down. */
+html .prompt-textarea::placeholder {
   color: var(--fg-subtle);
   opacity: 1;
 }
@@ -2089,6 +2083,7 @@ html:not([data-look^='obsidian'], [data-look^='islands-'], [data-look='workbench
 html:not([data-look^='obsidian'], [data-look^='islands-'], [data-look='workbench'])
   .prompt-send-btn:hover:not(:disabled) {
   background: var(--bg-hover) !important;
+  transform: none;
 }
 
 * {
@@ -3772,12 +3767,12 @@ body.dragging-task * {
 
 /* Inside a task, the divider rule below already edges the toolbar; its own
    border would double it. Open shells take over that edge instead, like the
-   agent terminal row's top border. */
-.task-column .shell-toolbar-panel {
+   agent terminal row's top border. Islands frames each pane on its own. */
+html:not([data-look^='islands-']) .task-column .shell-toolbar-panel {
   border-bottom: none;
 }
 
-.task-column .shell-terminals-row {
+html:not([data-look^='islands-']) .task-column .shell-terminals-row {
   border-top: 1px solid var(--border);
 }
 
