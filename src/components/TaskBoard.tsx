@@ -18,7 +18,7 @@ import { FeatureHint } from './FeatureHint';
 import { useBoardClock } from './board/task-state';
 import { TaskBoardCard } from './TaskBoardCard';
 import { forgetWorkingHolds } from './task-board-hold';
-import { boardQuery, setBoardQuery } from './TaskBoardControls';
+import { BoardSearch, boardQuery, setBoardQuery } from './BoardSearch';
 import { useCardMotion } from './task-board-motion';
 import { boardLanes, boardTasks, type BoardLane as LaneData } from './task-board-lanes';
 import {
@@ -201,10 +201,13 @@ export function TaskBoard() {
       onFocusIn={claimBoardFocus}
       onFocusOut={releaseBoardFocus}
     >
-      {/* The filter and actions sit in the title bar; see TaskBoardControls. */}
+      {/* The title bar's tabs name the page; see TaskBoardControls. */}
       <h2 id="task-board-title" class="dialog-sr-only">
         Running tasks
       </h2>
+      <header class="task-board-heading">
+        <BoardSearch what="running tasks" />
+      </header>
       <div class="task-board-lanes" ref={lanesEl}>
         <Show when={tasks().length === 0}>
           <BoardEmpty />

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'solid-js/web';
 import { reconcile } from 'solid-js/store';
 import { KanbanPage } from './KanbanPage';
-import { setBoardQuery } from './TaskBoardControls';
+import { setBoardQuery } from './BoardSearch';
 import { setStore, store } from '../store/core';
 import { getTaskAttentionState } from '../store/taskStatus';
 import { jumpToWaitingTask } from '../store/sidebar-attention';
@@ -130,6 +130,18 @@ function button(name: string): HTMLButtonElement {
   );
   if (!found) throw new Error(`No button ${name}`);
   return found;
+}
+
+/** Opens the board's more menu and picks the item that reads `label`. */
+async function menuItem(label: string): Promise<void> {
+  button('More actions').click();
+  await settle();
+  const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+    (el) => el.querySelector('.chat-menu-label')?.textContent === label,
+  );
+  if (!item) throw new Error(`No menu item ${label}`);
+  item.click();
+  await settle();
 }
 
 function cardEl(title: string): HTMLElement {
@@ -323,13 +335,15 @@ describe('KanbanPage', () => {
     await settle();
   });
 
-  it('shows the project icon beside the project name in the heading', async () => {
-    setStore('projects', 0, 'icon', 'terminal');
+  it("names the page after the board's own title, if it has one", async () => {
     await mount();
+    const section = host.querySelector('.kanban');
+    expect(section?.getAttribute('aria-label')).toBe('Plan · Repo');
+    dispose?.();
 
-    const heading = host.querySelector('#kanban-title');
-    expect(heading?.querySelector('.project-swatch-icon svg')).not.toBeNull();
-    expect(heading?.textContent).toContain('Repo');
+    disk.text = BOARD.replace('# Plan', '# Q4 roadmap');
+    await mount();
+    expect(host.querySelector('.kanban')?.getAttribute('aria-label')).toBe('Q4 roadmap · Repo');
   });
 
   it('offers to create the board when the project has none', async () => {
@@ -434,7 +448,7 @@ describe('KanbanPage', () => {
 
   it('filters cards by text', async () => {
     await mount();
-    // The filter sits in the title bar, which shares it with the board.
+    // The query is shared with the running-tasks board.
     setBoardQuery('migration');
     await settle();
     expect(host.querySelectorAll('.plan-card')).toHaveLength(1);
@@ -463,19 +477,15 @@ describe('KanbanPage', () => {
     toggle.click();
   });
 
-  it('hides card descriptions and checklists while Hide details is pressed', async () => {
+  it('hides card descriptions and checklists from the more menu', async () => {
     await mount();
-    const toggle = button('Hide details');
-    toggle.click();
-    await settle();
+    await menuItem('Hide details');
     const card = cardEl('Write migration');
-    expect(toggle.getAttribute('aria-pressed')).toBe('true');
     expect(card.textContent).not.toContain('Move the records.');
     expect(card.querySelector('.kanban-checklist')).toBeNull();
     expect(card.querySelector('.kanban-progress')?.textContent).toBe('0/1');
     expect(store.kanbanHideDetails).toBe(true);
-    toggle.click();
-    await settle();
+    await menuItem('Show details');
     expect(cardEl('Write migration').textContent).toContain('Move the records.');
     expect(store.kanbanHideDetails).toBe(false);
   });
@@ -483,13 +493,7 @@ describe('KanbanPage', () => {
   it('keeps the file actions and keyboard help in the more menu', async () => {
     await mount();
     expect(() => button('Reload')).toThrow();
-    button('More actions').click();
-    await settle();
-    const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((el) =>
-      el.textContent?.includes('Keyboard shortcuts'),
-    );
-    item?.click();
-    await settle();
+    await menuItem('Keyboard shortcuts');
     expect(host.querySelector('.kanban-help')).not.toBeNull();
   });
 
@@ -722,8 +726,7 @@ describe('KanbanPage', () => {
 
   it('closes the GitHub picker on Escape from its search field', async () => {
     await mount();
-    button('Add from GitHub').click();
-    await settle();
+    await menuItem('Add from GitHub');
     const search = host.querySelector<HTMLInputElement>('.kanban-picker input');
     if (!search) throw new Error('no picker');
     press(search, 'Escape');

@@ -12,6 +12,7 @@ import { mod } from '../lib/platform';
 import { withViewTransition } from '../lib/viewTransition';
 import { FeatureHint } from './FeatureHint';
 import { IconButton } from './IconButton';
+import { ToggleButton, ToggleGroup } from './ToggleGroup';
 import { UpdateButton } from './UpdateButton';
 
 function viewIcon(body: JSX.Element) {
@@ -83,24 +84,20 @@ function visibleTaskCount(): number {
 function WorkspaceViewToggle() {
   let boardButton: HTMLButtonElement | undefined;
   return (
-    <div class="workspace-view-toggle" role="group" aria-label="Workspace view">
+    <ToggleGroup label="Workspace view">
       <For each={VIEWS}>
         {(item) => (
-          <button
+          <ToggleButton
             ref={(el) => {
               if (item.view === 'board') boardButton = el;
             }}
-            type="button"
             title={item.title}
-            aria-label={item.title}
-            aria-pressed={workspaceView() === item.view}
-            onClick={(event) => {
-              event.stopPropagation();
-              withViewTransition(() => setWorkspaceView(item.view));
-            }}
+            label={item.title}
+            pressed={workspaceView() === item.view}
+            onClick={() => withViewTransition(() => setWorkspaceView(item.view))}
           >
             {item.icon()}
-          </button>
+          </ToggleButton>
         )}
       </For>
       <FeatureHint
@@ -115,7 +112,7 @@ function WorkspaceViewToggle() {
         The board sorts your tasks into lanes: waiting for you, still working, stopped, or in a pull
         request. Open any task beside it, and switch back here at any time.
       </FeatureHint>
-    </div>
+    </ToggleGroup>
   );
 }
 

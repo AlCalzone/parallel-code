@@ -10,7 +10,7 @@ import {
   triggerFocus,
 } from './focused-panel';
 import { showNotification } from './notification';
-import { pickAndAddProject } from './projects';
+import { isPlannableProject, pickAndAddProject } from './projects';
 import { reorderTask } from './tasks';
 import { closeProjectPages } from './project-pages';
 import { restoreFailedDraft } from './task-creation';
@@ -162,9 +162,16 @@ export function toggleNewTaskPanel(show?: boolean): void {
   if (shouldShow) triggerFocus('new-task');
 }
 
+/**
+ * Selects the project whose tasks show. On a plan this switches to the new
+ * project's plan; all projects, or one without a plan, show the running tasks.
+ */
 export function setTaskProjectFilter(projectId: string | null): void {
   batch(() => {
     setStore('taskProjectFilter', projectId);
+    if (store.kanbanProjectId && store.kanbanProjectId !== projectId) {
+      setStore('kanbanProjectId', isPlannableProject(projectId) ? projectId : null);
+    }
     setStore('sidebarFocusedTaskId', null);
     if (!store.activeTaskId || !openPanelOrder().includes(store.activeTaskId)) {
       const nextId = openPanelOrder()[0];

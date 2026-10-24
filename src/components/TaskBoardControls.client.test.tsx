@@ -1,6 +1,8 @@
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setStore, store } from '../store/core';
+import { openKanban } from '../store/kanban';
+import { setTaskProjectFilter } from '../store/navigation';
 import { TaskBoardControls } from './TaskBoardControls';
 
 let dispose: (() => void) | undefined;
@@ -12,10 +14,10 @@ function mount(): HTMLElement {
   return host;
 }
 
-function button(host: HTMLElement, name: string): HTMLButtonElement | undefined {
-  return [...host.querySelectorAll('button')].find(
-    (b) => b.getAttribute('aria-label') === name || b.textContent?.trim() === name,
-  );
+function planToggle(host: HTMLElement): HTMLButtonElement {
+  const found = host.querySelector<HTMLButtonElement>('[aria-label="Board page"] button');
+  if (!found) throw new Error('missing plan toggle');
+  return found;
 }
 
 beforeEach(() => {
@@ -25,6 +27,7 @@ beforeEach(() => {
     kanbanProjectId: null,
     githubIssuesProjectId: null,
     boardView: true,
+    sidebarVisible: true,
     taskOrder: [],
     activeTaskId: null,
   });
@@ -36,34 +39,38 @@ afterEach(() => {
 });
 
 describe('TaskBoardControls', () => {
-  it('names the project the running tasks are filtered to, and clears it', () => {
-    setStore('taskProjectFilter', 'p1');
+  it("toggles between the running tasks and the selected project's plan", () => {
     const host = mount();
-    expect(host.textContent).toContain('weather-app');
-    button(host, 'Show all projects')?.click();
-    expect(store.taskProjectFilter).toBeNull();
-    expect(host.textContent).not.toContain('weather-app');
-  });
+    expect(planToggle(host).disabled).toBe(true);
 
-  it("opens the filtered project's plan", () => {
-    setStore('taskProjectFilter', 'p1');
-    const host = mount();
-    button(host, 'Plan')?.click();
+    setTaskProjectFilter('p1');
+    expect(planToggle(host).disabled).toBe(false);
+    planToggle(host).click();
     expect(store.kanbanProjectId).toBe('p1');
-  });
+    expect(planToggle(host).getAttribute('aria-pressed')).toBe('true');
 
-  it('shows neither while all projects show', () => {
-    const host = mount();
-    expect(button(host, 'Plan')).toBeUndefined();
-    expect(button(host, 'Show all projects')).toBeUndefined();
-  });
-
-  it("goes from a plan to its project's running tasks", () => {
-    setStore('kanbanProjectId', 'p1');
-    const host = mount();
-    expect(button(host, 'Plan')).toBeUndefined();
-    button(host, 'Running tasks')?.click();
+    planToggle(host).click();
     expect(store.kanbanProjectId).toBeNull();
+    expect(store.boardView).toBe(true);
     expect(store.taskProjectFilter).toBe('p1');
+  });
+
+  it('shows the project filter only while the sidebar, which has its own, is hidden', () => {
+    const host = mount();
+    expect(host.querySelector('.task-project-filter')).toBeNull();
+    setStore('sidebarVisible', false);
+    expect(host.querySelector('.task-project-filter')).not.toBeNull();
+  });
+
+  it('keeps a plan on the selected project, and shows the running tasks for all projects', () => {
+    setStore('projects', 1, { id: 'p2', name: 'api', color: '#def', path: '/a' });
+    openKanban('p1');
+    expect(store.taskProjectFilter).toBe('p1');
+    setTaskProjectFilter('p2');
+    expect(store.kanbanProjectId).toBe('p2');
+
+    setTaskProjectFilter(null);
+    expect(store.kanbanProjectId).toBeNull();
+    expect(store.boardView).toBe(true);
   });
 });

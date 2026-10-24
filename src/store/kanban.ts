@@ -29,28 +29,44 @@ import { kanbanAgentTaskId } from '../documents/task-id';
 import { setTaskProjectFilter, toggleNewTaskPanel } from './navigation';
 import { showNotification } from './notification';
 import { getPrChecks } from './pr-checks-state';
-import { getProjectPath } from './projects';
+import { getProjectPath, isPlannableProject } from './projects';
+import { taskProjectFilter } from './task-project-filter';
 import { getTaskAttentionState, isTaskGitStatusKnown, type TaskAttentionState } from './taskStatus';
 import type { KanbanNewTaskSource, Project, Task } from './types';
 
-/** Shows a project's plan on the board, or with null the running tasks again. */
+/**
+ * Shows a project's plan on the board, or with null the running tasks again.
+ * A plan selects its project, so every project picker names the plan's.
+ */
 export function openKanban(projectId: string | null): void {
   batch(() => {
     if (projectId) {
       setStore('githubIssuesProjectId', null);
       setStore('boardView', true);
+      setTaskProjectFilter(projectId);
     }
     setStore('kanbanProjectId', projectId);
   });
 }
 
-/** From a plan, shows the running tasks of its project only. */
+/**
+ * The project the Plan view shows: the selected project, which an open plan
+ * always is. Null while all projects show, which disables the Plan tab.
+ */
+export function planViewProjectId(): string | null {
+  const projectId = taskProjectFilter();
+  return isPlannableProject(projectId) ? projectId : null;
+}
+
+/** Opens the Plan view's project plan; does nothing while there is none. */
+export function openPlanView(): void {
+  const projectId = planViewProjectId();
+  if (projectId) openKanban(projectId);
+}
+
+/** From a plan, shows the running tasks of its project only: the filter already follows the plan. */
 export function showPlanTasks(): void {
-  const projectId = store.kanbanProjectId;
-  batch(() => {
-    if (projectId) setTaskProjectFilter(projectId);
-    openKanban(null);
-  });
+  openKanban(null);
 }
 
 /** The board's Markdown, or null when the project has none yet. */

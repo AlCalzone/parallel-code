@@ -98,13 +98,9 @@ function boardTaskColumns(): string[][] {
   );
 }
 
-/** The cards, or the board's filter and actions up in the title bar. */
+/** The cards, or the filter and actions in the board's heading. */
 export function boardHasFocus(): boolean {
-  const active = document.activeElement;
-  return (
-    !!boardElement()?.contains(active) ||
-    !!document.querySelector('.task-board-controls')?.contains(active)
-  );
+  return !!boardElement()?.contains(document.activeElement);
 }
 
 /** The card (or snoozed rail) holding the keyboard; a card's inner buttons count as the card. */
@@ -132,15 +128,15 @@ export function dropBoardFocus(): void {
   if (store.boardFocused) setStore('boardFocused', false);
 }
 
-/** Drops the focus mark once DOM focus leaves the board and its title-bar controls. */
+/** Drops the focus mark once DOM focus leaves the board. */
 export function releaseBoardFocus(e: FocusEvent): void {
   const next = e.relatedTarget;
-  if (next instanceof Element && next.closest('.task-board, .task-board-controls')) return;
+  if (next instanceof Element && next.closest('.task-board')) return;
   dropBoardFocus();
 }
 
 export function focusBoardFilter(): void {
-  document.querySelector<HTMLElement>('.task-board-controls .task-board-search')?.focus();
+  document.querySelector<HTMLElement>('.task-board .task-board-search')?.focus();
 }
 
 /** Focuses a task's card, or the first card when that task has none on the board. */

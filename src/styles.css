@@ -4687,48 +4687,6 @@ html[data-look='islands-light'] .window-title-icon {
   -webkit-app-region: no-drag;
 }
 
-/* Same height, border and radius as the neighbouring icon buttons; the
-   pressed segment shows state with a subtle fill only. */
-.workspace-view-toggle {
-  display: inline-flex;
-  flex-shrink: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-
-.workspace-view-toggle button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--fg-muted);
-  cursor: pointer;
-}
-
-.workspace-view-toggle button + button {
-  border-left: 1px solid var(--border);
-}
-
-.workspace-view-toggle button:hover {
-  background: var(--bg-hover);
-  color: var(--fg);
-}
-
-.workspace-view-toggle button[aria-pressed='true'] {
-  background: var(--bg-selected-subtle);
-  color: var(--fg);
-}
-
-.workspace-view-toggle button:focus-visible {
-  outline: 1px solid var(--border-focus);
-  outline-offset: -2px;
-}
-
 /* Workspace actions lead; activity is a separate, quieter summary. */
 .sidebar-footer {
   display: flex;

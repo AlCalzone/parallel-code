@@ -401,6 +401,12 @@ export function isProjectMissing(projectId: string): boolean {
   return projectId in store.missingProjectIds;
 }
 
+/** Whether a project can have a plan: a code project still on disk. */
+export function isPlannableProject(projectId: string | null): boolean {
+  const project = store.projects.find((p) => p.id === projectId);
+  return !!project && !isDocumentProject(project) && !isProjectMissing(project.id);
+}
+
 /** Peer permission changes take effect in the main process before the UI reports success. */
 export async function updateProjectCoordination(
   projectId: string,

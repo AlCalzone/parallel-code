@@ -1,106 +1,56 @@
-import { Show, createSignal } from 'solid-js';
+import { Show } from 'solid-js';
 import { withViewTransition } from '../lib/viewTransition';
 import { store } from '../store/core';
-import { openKanban, showPlanTasks } from '../store/kanban';
+import { openKanban, openPlanView, planViewProjectId } from '../store/kanban';
+import { toggleNewTaskPanel } from '../store/navigation';
 import { boardShown } from '../store/project-pages';
-import { isDocumentProject, isProjectMissing } from '../store/projects';
-import { toggleNewTaskPanel } from '../store/store';
-import { taskProjectFilter } from '../store/task-project-filter';
 import { PlanIcon } from './icons';
 import { TaskProjectFilter } from './TaskProjectFilter';
-import { claimBoardFocus, focusBoardCard, releaseBoardFocus } from './task-board-keys';
+import { ToggleButton, ToggleGroup } from './ToggleGroup';
+import { focusBoardCard } from './task-board-keys';
 import './task-board.css';
 
-// Shared with the board below: the controls live in the title bar, the cards don't.
-const [boardQuery, setBoardQuery] = createSignal('');
-export { boardQuery, setBoardQuery };
-
-/** The filtered project's plan, one click away from its running tasks. */
-function PlanLink() {
-  const project = () => store.projects.find((p) => p.id === taskProjectFilter());
-  const plannable = () => {
-    const p = project();
-    return p && !isDocumentProject(p) && !isProjectMissing(p.id) ? p : undefined;
-  };
+/** On while the plan shows, off for the running tasks. */
+function PlanToggle() {
+  const projectName = () => store.projects.find((p) => p.id === planViewProjectId())?.name;
+  const open = () => !!store.kanbanProjectId;
   return (
-    <Show when={plannable()}>
-      {(p) => (
-        <button
-          type="button"
-          class="task-board-new task-board-plan"
-          title={`Plan for ${p().name}`}
-          onClick={() => withViewTransition(() => openKanban(p().id))}
-        >
-          <PlanIcon size={14} /> Plan
-        </button>
-      )}
-    </Show>
+    <ToggleGroup label="Board page">
+      {/* Disabled rather than hidden for all projects, so the buttons never shift. */}
+      <ToggleButton
+        pressed={open()}
+        disabled={!open() && !projectName()}
+        title={
+          open()
+            ? 'Back to the running tasks'
+            : projectName()
+              ? `Planned work in ${projectName()}`
+              : 'Select a project to see its plan'
+        }
+        onClick={() => withViewTransition(() => (open() ? openKanban(null) : openPlanView()))}
+      >
+        <PlanIcon size={14} />
+        Plan
+      </ToggleButton>
+    </ToggleGroup>
   );
 }
 
 /**
- * The board's project and text filters and new-task action, in the title bar's
- * middle slot that the task pills leave empty while the board shows. On a
- * project's plan, a way to that project's running tasks replaces the project
- * filter, and the text filter searches the cards.
+ * The board's actions in the title bar's middle slot, which the task pills
+ * leave empty while the board shows: a new task, the sidebar's project filter
+ * while the sidebar is hidden, and the plan toggle for that project. The text
+ * filter and each page's own tools sit in the board's heading row.
  */
 export function TaskBoardControls() {
-  // Named apart on purpose: the plan holds planned work, the board running tasks.
-  const what = () => (store.kanbanProjectId ? 'plan' : 'running tasks');
-  const planProject = () => store.projects.find((p) => p.id === store.kanbanProjectId)?.name;
   return (
     <Show when={boardShown()}>
       <div
         class="task-board-controls"
         role="group"
-        aria-label="Board controls"
-        onFocusIn={claimBoardFocus}
-        onFocusOut={releaseBoardFocus}
+        aria-label="Board"
         onDblClick={(event) => event.stopPropagation()}
       >
-        <Show
-          when={store.kanbanProjectId}
-          fallback={
-            <>
-              {/* Board keys only work from a card, so hand the keyboard back after a pick. */}
-              <TaskProjectFilter hideLabel onPick={() => focusBoardCard(store.activeTaskId)} />
-              <PlanLink />
-            </>
-          }
-        >
-          <button
-            type="button"
-            class="task-board-new"
-            title={`Running Parallel Code tasks in ${planProject() ?? 'this project'} (Esc)`}
-            onClick={() => withViewTransition(showPlanTasks)}
-          >
-            Running tasks
-          </button>
-        </Show>
-        <input
-          type="search"
-          class="task-board-search"
-          placeholder={`Filter ${what()}`}
-          aria-label={`Filter ${what()}`}
-          aria-keyshortcuts="/"
-          title={`Filter ${what()} (/). Down goes to the cards, Enter opens the first.`}
-          value={boardQuery()}
-          onInput={(e) => setBoardQuery(e.currentTarget.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              // A second Escape returns to the cards rather than closing the board.
-              e.stopPropagation();
-              if (boardQuery()) setBoardQuery('');
-              else focusBoardCard(store.activeTaskId);
-            } else if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              focusBoardCard(null);
-            } else if (e.key === 'Enter') {
-              e.preventDefault();
-              document.querySelector<HTMLElement>('.task-board-lane .task-board-title')?.click();
-            }
-          }}
-        />
         <button
           type="button"
           class="task-board-new"
@@ -108,6 +58,12 @@ export function TaskBoardControls() {
         >
           + New task
         </button>
+        {/* The plan follows the selected project, so it needs a picker in reach. */}
+        <Show when={!store.sidebarVisible}>
+          {/* Board keys only work from a card, so hand the keyboard back after a pick. */}
+          <TaskProjectFilter hideLabel onPick={() => focusBoardCard(store.activeTaskId)} />
+        </Show>
+        <PlanToggle />
       </div>
     </Show>
   );

@@ -30,9 +30,8 @@ import {
   moveBoardFocus,
 } from './task-board-keys';
 import { useCardMotion } from './task-board-motion';
-import { boardQuery, setBoardQuery } from './TaskBoardControls';
+import { BoardSearch, boardQuery, setBoardQuery } from './BoardSearch';
 import { MoreMenu } from './chat/MoreMenu';
-import { ProjectSwatch } from './ProjectSwatch';
 import { ResizablePanel, type PanelChild } from './ResizablePanel';
 import {
   ChevronDownIcon,
@@ -303,7 +302,7 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
   const [renaming, setRenaming] = createSignal<string | null>(null);
   const [adding, setAdding] = createSignal<string | null>(null);
   const [selection, setSelection] = createSignal<CardHint | null>(null);
-  // The filter lives in the title bar, shared with the running-tasks board.
+  // The filter's query is shared with the running-tasks board.
   const query = boardQuery;
   const setQuery = setBoardQuery;
   setQuery(session.query);
@@ -666,6 +665,11 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
     () => [visible(), collapsed()],
   );
 
+  /** The board's own name, when it says more than "Plan" or the project's name. */
+  const customTitle = () => {
+    const title = board()?.title.trim();
+    return title && title !== 'Plan' && !sameName(title, props.project.name) ? title : undefined;
+  };
   const summary = createMemo(() => {
     const b = board();
     const counts = { attention: 0, cards: 0, done: 0 };
@@ -1061,31 +1065,29 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
     }
   };
 
-  let pickerToggle: HTMLButtonElement | undefined;
-  /** One popover at a time; closing one hands focus back to its toggle. Help opens from
-   *  the menu, which is gone by then, so its focus goes back to the board. */
+  /** One popover at a time. Both open from the menu, which is gone by then, so
+   *  closing one hands focus back to the board. */
   function togglePopover(which: 'picker' | 'help'): void {
     const opening = which === 'picker' ? !showPicker() : !showHelp();
     batch(() => {
       setShowPicker(which === 'picker' && opening);
       setShowHelp(which === 'help' && opening);
     });
-    if (!opening) (which === 'picker' ? pickerToggle : section)?.focus();
+    if (!opening) section?.focus();
   }
   function closePopovers(returnFocus = true): void {
-    const toggle = showPicker() ? pickerToggle : undefined;
     batch(() => {
       setShowPicker(false);
       setShowHelp(false);
     });
-    if (returnFocus) (toggle ?? section)?.focus();
+    if (returnFocus) section?.focus();
   }
   // Clicks outside the popovers close them.
   createEffect(() => {
     if (!showHelp() && !showPicker()) return;
     const close = (e: PointerEvent) => {
       const target = e.target as HTMLElement;
-      if (target.closest('.kanban-help, .kanban-picker, [data-popover-toggle]')) return;
+      if (target.closest('.kanban-help, .kanban-picker')) return;
       closePopovers(false);
     };
     document.addEventListener('pointerdown', close, true);
@@ -1097,7 +1099,7 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
       class="kanban task-board plan-board"
       ref={section}
       tabIndex={-1}
-      aria-labelledby="kanban-title"
+      aria-label={`${customTitle() ?? 'Plan'} · ${props.project.name}`}
       aria-describedby={hintId}
       inert={props.covered || undefined}
       onKeyDown={onBoardKeyDown}
@@ -1105,40 +1107,7 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
       onFocusOut={releaseBoardFocus}
     >
       <header class="kanban-heading">
-        <div class="kanban-heading-title">
-          <h2 id="kanban-title" title={`${board()?.title || 'Plan'} · ${props.project.name}`}>
-            {board()?.title || 'Plan'}
-            {/* A board titled after its project would name it twice. */}
-            <Show when={!sameName(board()?.title ?? '', props.project.name)}>
-              <span>
-                {' '}
-                ·{' '}
-                <Show when={props.project.icon}>
-                  {(icon) => (
-                    <>
-                      <ProjectSwatch color={props.project.color} icon={icon()} size={10} />{' '}
-                    </>
-                  )}
-                </Show>
-                {props.project.name}
-              </span>
-            </Show>
-          </h2>
-          <small>
-            {/* Says what this board holds, so it isn't taken for the running tasks. */}
-            Planned work in <code>KANBAN.md</code>
-            <Show when={text() === null}>{' · not created yet'}</Show>
-            <Show when={board()}>
-              {' · '}
-              {summary().done}/{summary().cards} done
-            </Show>
-            {/* Reserved slot: the status comes and goes without moving the line. */}
-            <span class="kanban-save-state" classList={{ error: saveState() === 'error' }}>
-              {saveLabel()}
-            </span>
-          </small>
-        </div>
-        <div class="kanban-actions">
+        <div class="kanban-heading-start">
           <Show when={board()}>
             <div class="kanban-view-toggle" role="group" aria-label="Plan view">
               <button
@@ -1160,6 +1129,25 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
                 Map
               </button>
             </div>
+            <BoardSearch what="plan" />
+          </Show>
+          <button
+            type="button"
+            aria-pressed={props.agentPane.open()}
+            title="Plan with an agent that edits KANBAN.md; the board follows"
+            onClick={() =>
+              props.agentPane.open() ? props.agentPane.setOpen(false) : openPlanner()
+            }
+          >
+            <SparkleIcon /> Plan with agent
+          </button>
+          {/* Reserved slot: the save state comes and goes without moving the row. */}
+          <small class="kanban-save-state" classList={{ error: saveState() === 'error' }}>
+            {saveLabel()}
+          </small>
+        </div>
+        <div class="kanban-actions">
+          <Show when={board()}>
             {/* Hidden rather than removed while nothing needs you, so the actions never shift. */}
             <button
               type="button"
@@ -1172,39 +1160,26 @@ function KanbanBoardView(props: { project: Project; agentPane: AgentPaneState; c
             >
               Needs you {summary().attention}
             </button>
-            <button
-              type="button"
-              aria-pressed={store.kanbanHideDetails}
-              title="Hide card descriptions and checklists; checklist progress stays in the footer"
-              onClick={() => setKanbanHideDetails(!store.kanbanHideDetails)}
-            >
-              Hide details
-            </button>
-            <button
-              type="button"
-              ref={pickerToggle}
-              data-popover-toggle
-              aria-haspopup="dialog"
-              aria-expanded={showPicker()}
-              title="Add open GitHub issues and pull requests as cards"
-              onClick={() => togglePopover('picker')}
-            >
-              <GitHubIcon size={14} /> Add from GitHub
-            </button>
           </Show>
-          <button
-            type="button"
-            aria-pressed={props.agentPane.open()}
-            title="Plan with an agent that edits KANBAN.md; the board follows"
-            onClick={() =>
-              props.agentPane.open() ? props.agentPane.setOpen(false) : openPlanner()
-            }
-          >
-            <SparkleIcon /> Plan with agent
-          </button>
           <MoreMenu
             class="kanban-icon-button"
             items={[
+              ...(board()
+                ? [
+                    {
+                      label: 'Add from GitHub',
+                      icon: <GitHubIcon size={14} />,
+                      title: 'Add open GitHub issues and pull requests as cards',
+                      run: () => togglePopover('picker'),
+                    },
+                    {
+                      label: store.kanbanHideDetails ? 'Show details' : 'Hide details',
+                      title:
+                        'Hide card descriptions and checklists; checklist progress stays in the footer',
+                      run: () => setKanbanHideDetails(!store.kanbanHideDetails),
+                    },
+                  ]
+                : []),
               {
                 label: 'Open file',
                 title: 'Open KANBAN.md in your editor',
