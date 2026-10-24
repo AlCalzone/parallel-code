@@ -4,6 +4,31 @@ Package: `com.parallelcode.phone`. Public policy: <https://parallelcode.app/andr
 The policy source bundled in the app is `app/src/main/assets/privacy.html`. Keep the
 website's `pc-landing-page/public/android-privacy/index.html` identical when updating it.
 
+## Current submission status (2026-10-24)
+
+- Signed `0.2.0 (60)` is available in internal testing and submitted for production review.
+- Four emulator screenshots are included in the submitted Play listing.
+- The public Android privacy policy was deployed and verified byte-for-byte against
+  `app/src/main/assets/privacy.html`.
+- The foreground-service declaration is saved with this review video:
+  <https://parallelcode.app/android-privacy/foreground-service-review.mp4>.
+  It records the actual service on an Android 14 emulator using the debug build
+  and a loopback WebSocket fixture. The fixture sends a labelled needs-input event;
+  no live AI agent runs. Android diagnostics confirmed `isForeground=true` while
+  enabled and no service after disabling. The recording explicitly labels these
+  limitations. This does not replace testing the exact Play build on a physical device.
+- The policy and video are preserved in the sibling landing-page repository under
+  `public/android-privacy/`. Both were deployed and verified before submission.
+- The user confirmed AI editing of the artwork. The icon and feature graphic are
+  labelled AI-edited; the four unedited app screenshots are not.
+- Submitted all 11 changes, including production `0.2.0 (60)`, on 2026-10-24.
+  Automated pre-checks completed and Play Console confirmed the changes are being
+  reviewed. Managed publishing is off; the requested
+  full rollout can publish after approval. The only release validation warning
+  was missing native debug symbols; there were no blocking errors.
+
+The historical open items below predate these updates.
+
 ## Build and promote
 
 1. Run `./gradlew testDebugUnitTest assembleDebug lintRelease bundleRelease` with the Android SDK installed.
