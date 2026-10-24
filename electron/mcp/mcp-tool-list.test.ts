@@ -176,6 +176,30 @@ it('offers github_list_publish only to the GitHub page agent', () => {
   ]);
 });
 
+it('gives a page agent only independent task creation besides its page tools', () => {
+  const capabilities = { profile: 'page' as const, canCreate: true, peers: false };
+  const tools = selectTools('gh-agent-p1', '', false, capabilities);
+  const createTask = tools.find((tool) => tool.name === 'create_task');
+  expect(createTask?.inputSchema.properties.relation).toEqual({
+    type: 'string',
+    enum: ['independent'],
+  });
+  expect(createTask?.inputSchema.properties).not.toHaveProperty('baseOnParent');
+  expect(tools.map((tool) => tool.name)).toEqual([
+    ...[
+      ...MINDMAP_TOOLS,
+      ...REASONING_TOOLS,
+      ...CANVAS_VIEW_TOOLS,
+      ...TOUR_TOOLS,
+      ...CONFIDENCE_TOOLS,
+      ...GITHUB_LIST_TOOLS,
+      ...EVIDENCE_TOOLS,
+    ].map((tool) => tool.name),
+    'create_task',
+  ]);
+  expect(sessionInstructions(capabilities)).toContain("relation 'independent'");
+});
+
 it('explains the canvases to every session that advertises canvas tools', () => {
   expect(hasCanvasTools('normal-task', '', true)).toBe(true);
   expect(hasCanvasTools('task-abc', '')).toBe(true);
@@ -348,6 +372,20 @@ describe('serverInstructions', () => {
     }
   });
 
+  it("keeps a page agent's page, role and app guidance within the client limit", () => {
+    const sessionCapabilities = { profile: 'page' as const, canCreate: true, peers: false };
+    const text = serverInstructions({
+      taskId: 'gh-agent-p1',
+      coordinatorId: '',
+      canvasOnly: false,
+      sessionCapabilities,
+    });
+    const essential = `${GITHUB_AGENT_INSTRUCTIONS}\n\n${sessionInstructions(sessionCapabilities)}\n\n${APP_TASK_INSTRUCTIONS}`;
+    expect(text.startsWith(essential)).toBe(true);
+    expect(essential.length).toBeLessThanOrEqual(CLIENT_LIMIT);
+    expect(APP_TASK_INSTRUCTIONS).toContain('project page agent');
+  });
+
   it('leads with app guidance for sessions without capabilities', () => {
     for (const [taskId, coordinatorId, canvasOnly] of [
       ['', 'coordinator', false],
@@ -360,7 +398,7 @@ describe('serverInstructions', () => {
   });
 
   it('tells the GitHub page agent to publish lists there, first and within the client limit', () => {
-    // Hidden agents are never delegation tasks, so they launch canvas-only without capabilities.
+    // Without orchestration a page agent launches canvas-only, without capabilities.
     const text = serverInstructions({ taskId: 'gh-agent-p1', coordinatorId: '', canvasOnly: true });
     expect(text.startsWith(GITHUB_AGENT_INSTRUCTIONS)).toBe(true);
     expect(GITHUB_AGENT_INSTRUCTIONS).toContain('github_list_publish');

@@ -857,6 +857,23 @@ describe('capability-bound sessions', () => {
       expect(() => parseArgs(args)).toThrow();
   });
 
+  it('parses the page-agent profile', () => {
+    expect(
+      parseArgs([
+        '--url',
+        'http://localhost:7777',
+        '--task-id',
+        'gh-agent-p1',
+        '--session-profile',
+        'page',
+        '--allow-create',
+      ]),
+    ).toMatchObject({
+      taskId: 'gh-agent-p1',
+      sessionCapabilities: { profile: 'page', canCreate: true, peers: false },
+    });
+  });
+
   it('routes ordinary creation through session authority without a coordinator header', async () => {
     const client = makeClient();
     client.callSessionTool = vi.fn().mockResolvedValue({ id: 'child' });

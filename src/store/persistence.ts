@@ -88,7 +88,11 @@ import { syncTerminalCounter } from './terminals';
 import { showNotification, NOTIFICATION_ERROR_MS } from './notification';
 import { errMessage, warn as logWarn } from '../lib/log';
 import { canvasTabKey } from '../lib/canvas-tabs';
-import { hiddenAgentTaskIds, isHiddenAgentTaskId } from '../documents/task-id';
+import {
+  hiddenAgentTaskIds,
+  isHiddenAgentTaskId,
+  isProjectPageAgentTaskId,
+} from '../documents/task-id';
 
 /** Reasoning levels per provider, each one the CLI accepts; anything else is dropped. */
 function loadAskCodeEffort(value: unknown): Partial<Record<AskCodeProvider, string>> {
@@ -859,7 +863,13 @@ export async function loadState(): Promise<void> {
   );
   for (const task of authorityTasks) {
     const project = projects.find((p) => p.id === task.projectId);
-    if (!project || project.kind === 'document' || isHiddenAgentTaskId(task.id)) continue;
+    // Page agents register so they can create independent tasks; document agents cannot.
+    if (
+      !project ||
+      project.kind === 'document' ||
+      (isHiddenAgentTaskId(task.id) && !isProjectPageAgentTaskId(task.id))
+    )
+      continue;
     const agent = task.agentDefs?.[0] ?? task.agentDef ?? undefined;
     try {
       await delegationRequest({

@@ -29,7 +29,7 @@ export interface ToolDef {
 }
 
 export const APP_TASK_INSTRUCTIONS =
-  'You are running inside Parallel Code. When the user asks to create a Parallel Code task (or PC task), use this server’s create_task MCP tool. It creates a visible task in the app with its own Git worktree and agent terminal. Native sub-agent tools such as spawn_agent do not create Parallel Code tasks and must not substitute for this request. Only report a task as created after create_task succeeds and returns its taskId. If the tool is missing or rejected, explain the limitation instead of silently using a native sub-agent. Task creation requires orchestration enabled in Settings > Agents, a supported top-level Git worktree task, and an app-managed MCP session. After enabling tools, restart and resume the session where supported.';
+  'You are running inside Parallel Code. When the user asks to create a Parallel Code task (or PC task), use this server’s create_task MCP tool. It creates a visible task in the app with its own Git worktree and agent terminal. Native sub-agent tools such as spawn_agent do not create Parallel Code tasks and must not substitute for this request. Only report a task as created after create_task succeeds and returns its taskId. If the tool is missing or rejected, explain the limitation instead of silently using a native sub-agent. Task creation requires orchestration enabled in Settings > Agents, a top-level Git worktree task or project page agent, and an app-managed MCP session. After enabling tools, restart and resume the session where supported.';
 
 /**
  * Without this, "list them in Parallel Code" matches the canvas guidance and the
@@ -619,6 +619,25 @@ const ORDINARY_TOOLS: ToolDef[] = COORDINATOR_TOOLS.filter(
   return { ...tool, description: `${tool.description} Scoped to your own direct children.` };
 });
 
+/** A page agent works in the checkout, so it may only start tasks the user reviews on their own. */
+const PAGE_TOOLS: ToolDef[] = [
+  {
+    name: 'create_task',
+    description:
+      'Create a visible top-level Parallel Code task with its own Git worktree and agent terminal, branched from the main branch. Use this for requests to create a Parallel Code task or PC task, not native sub-agent tools. The task is independent: the user reviews it on its own, and you neither supervise nor merge it. It inherits no conversation, so include the required context (such as the issue link and what to do) in prompt. Use requestId for identical retries. The result reports only its taskId.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        prompt: { type: 'string' },
+        relation: { type: 'string', enum: ['independent'] },
+        requestId: { type: 'string' },
+      },
+      required: ['name', 'prompt', 'relation', 'requestId'],
+    },
+  },
+];
+
 export function sessionInstructions(capabilities: SessionCapabilities): string {
   const guidance =
     capabilities.profile === 'ordinary'
@@ -626,9 +645,11 @@ export function sessionInstructions(capabilities: SessionCapabilities): string {
           ? 'Use create_task to create Parallel Code tasks for bounded assignments with the context needed; children do not inherit your conversation or uncommitted changes. '
           : 'This launch cannot create Parallel Code tasks. Enable orchestration in Settings > Agents, then restart and resume the session. You may supervise existing children. ') +
         'Follow each child’s returned integrationPolicy. Review-policy children commit and call signal_done for user approval. Automatic-policy children commit, verify, and call land_self to merge and clean up through Parallel Code. Never directly merge or delete child worktrees. Use list_tasks and bounded wait_for_signal_done for progress; self-landed children leave the active list, so reconcile status and app completion summaries rather than expecting signal_done from them. Empty child lists end waiting. After timeout check status once and wait again while work remains; without a blocking wait leave at least 10 seconds between unchanged status checks. Idle and consumed completion events are not integration. Do not resend original assignments. If a wait lists stalled children, tell the user at once.'
-      : capabilities.profile === 'child-review'
-        ? 'Commit and verify your assigned work, then call signal_done. Your result requires user review before merging; do not call land_self. This is a child task and cannot create further Parallel Code tasks; direct creation requests to a top-level task.'
-        : 'Commit and verify your assigned work before land_self. Use signal_done when manual review is needed. This is a child task and cannot create further Parallel Code tasks; direct creation requests to a top-level task.';
+      : capabilities.profile === 'page'
+        ? "Use create_task with relation 'independent' to create Parallel Code tasks, for example one per issue. Each starts from the main branch in its own worktree and inherits neither your conversation nor the checkout, so include the context it needs in its prompt. You cannot supervise, message or merge the tasks you create; the user reviews them."
+        : capabilities.profile === 'child-review'
+          ? 'Commit and verify your assigned work, then call signal_done. Your result requires user review before merging; do not call land_self. This is a child task and cannot create further Parallel Code tasks; direct creation requests to a top-level task.'
+          : 'Commit and verify your assigned work before land_self. Use signal_done when manual review is needed. This is a child task and cannot create further Parallel Code tasks; direct creation requests to a top-level task.';
   return (
     guidance +
     (capabilities.peers
@@ -680,19 +701,21 @@ export function selectTools(
   ];
   if (capabilities) {
     const taskTools =
-      capabilities.profile === 'ordinary'
-        ? ORDINARY_TOOLS.filter((tool) => tool.name !== 'create_task' || capabilities.canCreate)
-        : SUBTASK_TOOLS.filter(
-            (tool) => tool.name === 'signal_done' || capabilities.profile === 'child-automatic',
-          ).map((tool) =>
-            tool.name === 'signal_done'
-              ? {
-                  ...tool,
-                  description:
-                    'Signal that your committed, verified work is ready for review. Include a concise result with summary, checks actually run, useful repository-relative artifact paths, and unresolved issues. Completion does not merge or approve your result.',
-                }
-              : tool,
-          );
+      capabilities.profile === 'page'
+        ? PAGE_TOOLS.filter(() => capabilities.canCreate)
+        : capabilities.profile === 'ordinary'
+          ? ORDINARY_TOOLS.filter((tool) => tool.name !== 'create_task' || capabilities.canCreate)
+          : SUBTASK_TOOLS.filter(
+              (tool) => tool.name === 'signal_done' || capabilities.profile === 'child-automatic',
+            ).map((tool) =>
+              tool.name === 'signal_done'
+                ? {
+                    ...tool,
+                    description:
+                      'Signal that your committed, verified work is ready for review. Include a concise result with summary, checks actually run, useful repository-relative artifact paths, and unresolved issues. Completion does not merge or approve your result.',
+                  }
+                : tool,
+            );
     return [...canvasTools, ...taskTools, ...(capabilities.peers ? PEER_TOOLS : [])];
   }
   if (canvasOnly) return canvasTools;

@@ -392,7 +392,12 @@ export function parseArgs(argv: string[]): {
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--session-profile') {
       const value = argv[++i];
-      if (value !== 'ordinary' && value !== 'child-review' && value !== 'child-automatic')
+      if (
+        value !== 'ordinary' &&
+        value !== 'child-review' &&
+        value !== 'child-automatic' &&
+        value !== 'page'
+      )
         throw new Error('Invalid --session-profile.');
       profile = value;
     } else if (argv[i] === '--allow-create') {

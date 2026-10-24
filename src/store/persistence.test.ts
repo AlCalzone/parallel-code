@@ -2169,15 +2169,16 @@ it('round-trips canvas task links for active and collapsed tasks without revivin
   for (const id of ['task-1', 'task-2']) expect(saved.tasks[id].canvasTaskLinks).toEqual(links);
 });
 
-it('does not register delegation authority for hidden agent tasks', async () => {
-  const hidden = { ...persistedTask(agentDef()), id: 'gh-agent-project-1' };
+it('registers delegation authority for page agents but not other hidden agents', async () => {
+  const hidden = { ...persistedTask(agentDef()), id: 'doc-agent-project-1' };
+  const page = { ...persistedTask(agentDef()), id: 'gh-agent-project-1' };
   const normal = { ...persistedTask(agentDef()), id: 'normal-authority' };
   mockInvoke.mockResolvedValueOnce(
     JSON.stringify({
       projects: [{ id: 'project-1', name: 'Repo', path: '/repo', color: '' }],
-      taskOrder: [hidden.id, normal.id],
+      taskOrder: [hidden.id, page.id, normal.id],
       collapsedTaskOrder: [],
-      tasks: { [hidden.id]: hidden, [normal.id]: normal },
+      tasks: { [hidden.id]: hidden, [page.id]: page, [normal.id]: normal },
     }),
   );
   await loadState();
@@ -2185,6 +2186,7 @@ it('does not register delegation authority for hidden agent tasks', async () => 
     .filter(([channel, args]) => channel === IPC.DelegationRequest && args?.action === 'register')
     .map(([, args]) => args.task.taskId);
   expect(registered).not.toContain(hidden.id);
+  expect(registered).toContain(page.id);
   expect(registered).toContain(normal.id);
 });
 

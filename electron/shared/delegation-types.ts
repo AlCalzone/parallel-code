@@ -1,6 +1,7 @@
 /** Serializable contracts shared by desktop, MCP and main-process coordination. */
 export type IntegrationPolicy = 'review' | 'automatic';
-export type SessionProfile = 'ordinary' | 'child-review' | 'child-automatic';
+/** `page` is a project page's agent: it works in the checkout and may only create independent tasks. */
+export type SessionProfile = 'ordinary' | 'child-review' | 'child-automatic' | 'page';
 export interface SessionCapabilities {
   profile: SessionProfile;
   canCreate: boolean;

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, expect, it } from 'vitest';
+import { parseArgs } from './server.js';
 import {
   canConfigureCanvasMcp,
   prepareCanvasMcpArgs,
@@ -154,4 +155,12 @@ it('launches ordinary session tools without the legacy canvas-only restriction',
     '--peer-tools',
   ]);
   expect(config.mcpServers['parallel-code'].env.PARALLEL_CODE_MCP_TOKEN).toBe('test-token');
+});
+
+it('launches a page agent with arguments the MCP server reads back as the page profile', () => {
+  const sessionCapabilities = { profile: 'page' as const, canCreate: true, peers: false };
+  const args = prepareCanvasMcpArgs({ ...options(), sessionCapabilities });
+  const config = JSON.parse(fs.readFileSync(args[1], 'utf8'));
+  const [, ...serverArgs] = config.mcpServers['parallel-code'].args as string[];
+  expect(parseArgs(serverArgs)).toMatchObject({ canvasOnly: false, sessionCapabilities });
 });

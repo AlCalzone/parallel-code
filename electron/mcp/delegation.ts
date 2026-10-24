@@ -6,6 +6,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Coordinator } from './coordinator.js';
 import type { CoordinatedTask } from './types.js';
 import { parseSignalDoneInput } from '../shared/completion-report.js';
+import { isProjectPageAgentTaskId } from '../shared/project-page-agents.js';
 import {
   getAgentPromptReadiness,
   stripAnsi,
@@ -101,6 +102,11 @@ interface CreatedIndependentTask {
 }
 
 type Authority = TaskAuthorityInput & { closing?: boolean; closed?: boolean };
+
+/** A project page's hidden agent, working in the checkout rather than a worktree of its own. */
+function isPageAgent(task: Authority): boolean {
+  return isProjectPageAgentTaskId(task.taskId) && task.gitIsolation === 'none';
+}
 
 export class DelegationError extends Error {
   constructor(
@@ -305,7 +311,12 @@ export class DelegationService {
 
   capabilities(taskId: string): SessionCapabilities | undefined {
     const task = this.tasks.get(taskId);
-    if (!task || task.closed || task.closing || task.gitIsolation !== 'worktree') return undefined;
+    if (!task || task.closed || task.closing) return undefined;
+    if (isPageAgent(task))
+      return this.orchestrationEnabled
+        ? { profile: 'page', canCreate: true, peers: false }
+        : undefined;
+    if (task.gitIsolation !== 'worktree') return undefined;
     if (!this.orchestrationEnabled && !task.parentTaskId) return undefined;
     return {
       profile: task.parentTaskId
@@ -346,10 +357,12 @@ export class DelegationService {
     return { branchName, headSha, changedFileCount: status ? status.split('\n').length : 0 };
   }
 
-  private creationGuard(taskId: string, caller?: SessionCaller): void {
+  private creationGuard(taskId: string, caller?: SessionCaller, independent = false): void {
     this.assertOrchestrationEnabled();
     const task = this.requireTask(taskId);
-    if (task.parentTaskId || task.gitIsolation !== 'worktree')
+    // Page agents share the project checkout, so they get no children to supervise or land.
+    const pageCreator = independent && isPageAgent(task);
+    if (task.parentTaskId || (task.gitIsolation !== 'worktree' && !pageCreator))
       throw new DelegationError('Only top-level worktree tasks may delegate', 403);
     if (task.delegationPaused)
       throw new DelegationError('Task creation is paused. Resume it in Parallel Code.', 403);
@@ -480,7 +493,7 @@ export class DelegationService {
     params: Record<string, unknown>,
     caller: SessionCaller,
   ): Promise<CreatedIndependentTask> {
-    this.creationGuard(creatorTaskId, caller);
+    this.creationGuard(creatorTaskId, caller, true);
     if (params.baseOnParent === true)
       throw new DelegationError(
         "Independent tasks start from the main branch; use relation 'child' with baseOnParent to build on your commits",
@@ -513,7 +526,7 @@ export class DelegationService {
     const launchId = randomUUID();
     this.independentLaunches.set(launchId, () => {
       this.assertOrchestrationEnabled(epoch);
-      this.creationGuard(creatorTaskId, caller);
+      this.creationGuard(creatorTaskId, caller, true);
     });
     const promise = this.options
       .createIndependent({ ...request, launchId })
@@ -575,6 +588,14 @@ export class DelegationService {
         );
       }
       throw new DelegationError('Tool unavailable to this child session', 403);
+    }
+    if (caller.capabilities.profile === 'page') {
+      if (name === 'create_task' && params.relation === 'independent')
+        return this.createIndependent(task.taskId, params, caller);
+      throw new DelegationError(
+        "A page agent can only create tasks with relation 'independent'",
+        403,
+      );
     }
     if (caller.capabilities.profile !== 'ordinary')
       throw new DelegationError('Invalid session profile', 403);
@@ -663,7 +684,10 @@ export class DelegationService {
       target.closed ||
       sender.closing ||
       target.closing ||
-      sender.projectId !== target.projectId
+      sender.projectId !== target.projectId ||
+      // Page agents are registered only to create independent tasks, not to talk to peers.
+      isPageAgent(sender) ||
+      isPageAgent(target)
     )
       return false;
     if (sender.parentTaskId) return sender.parentTaskId === targetId;

@@ -370,6 +370,41 @@ describe('delegation authority and creation', () => {
     expect(service.getTask('parent')?.delegationParent).toBeFalsy();
   });
 
+  it('lets a project page agent create independent tasks but nothing else', async () => {
+    const pageTask = 'gh-agent-project';
+    await register(pageTask, { gitIsolation: 'none', worktreePath: '/repo', branchName: '' });
+    const capabilities = service.capabilities(pageTask);
+    expect(capabilities).toEqual({ profile: 'page', canCreate: true, peers: false });
+    if (!capabilities) throw new Error('missing capabilities');
+    const caller: SessionCaller = {
+      taskId: pageTask,
+      agentId: 'agent-page',
+      sessionInstanceId: 'instance-page',
+      capabilities,
+    };
+    sessions.push(caller);
+    const base = { requestId: 'page-request', name: 'Fix #1', prompt: 'Fix issue #1' };
+    await expect(
+      service.callTool(caller, 'create_task', { ...base, relation: 'independent' }),
+    ).resolves.toEqual({ taskId: 'sibling', relation: 'independent' });
+    expect(createIndependent).toHaveBeenCalledWith(
+      expect.objectContaining({ creatorTaskId: pageTask, name: 'Fix #1' }),
+    );
+    await expect(
+      service.callTool(caller, 'create_task', { ...base, requestId: 'r2', relation: 'child' }),
+    ).rejects.toThrow('independent');
+    await expect(service.callTool(caller, 'list_tasks', {})).rejects.toThrow('independent');
+    expect(core.createTask).not.toHaveBeenCalled();
+
+    await service.request({ action: 'orchestrationSetting', enabled: false });
+    expect(service.capabilities(pageTask)).toBeUndefined();
+  });
+
+  it('gives no task tools to a checkout task that is not a page agent', async () => {
+    await register('plain', { gitIsolation: 'none', worktreePath: '/repo', branchName: '' });
+    expect(service.capabilities('plain')).toBeUndefined();
+  });
+
   it('requires a relation and rejects building an independent task on the creator', async () => {
     await register('parent');
     const caller = session('parent');
@@ -759,6 +794,20 @@ describe('held peer messages and access', () => {
         sessionInstanceId: peer.sessionInstanceId,
       }),
     ).resolves.toMatchObject({ output: 'Hello peer', truncated: false });
+  });
+
+  it('keeps project page agents out of peer scope', async () => {
+    await register('parent');
+    await register('gh-agent-project', {
+      gitIsolation: 'none',
+      worktreePath: '/repo',
+      branchName: '',
+    });
+    const parent = session('parent'),
+      page = session('gh-agent-project');
+    policy(true);
+    await expect(service.callTool(parent, 'list_agent_sessions', {})).resolves.toEqual([]);
+    await expect(send(parent, page)).rejects.toThrow('scope');
   });
 
   it('limits a child to its own parent even when peer access is enabled', async () => {
