@@ -63,18 +63,18 @@ const failed = check({ status: 'failed', exitCode: 1 });
 const skip = { checkId: 'e2e', name: 'E2E', kind: 'e2e' as const, reason: 'on-demand' as const };
 
 describe('evidenceSummary', () => {
-  it.each<[string, EvidencePackage, string, string]>([
+  it.each<[string, EvidencePackage, string, string | undefined]>([
     [
       'two failed checks',
       pkg({ checks: [failed, { ...failed, checkId: 'lint' }] }),
       '2 checks failed',
-      '2 failed',
+      'Fix 2 failed checks',
     ],
     [
       'an open decision',
       pkg({ scan: { ...pkg().scan, flags: [flag] } }),
       '1 change to confirm',
-      '1 to confirm',
+      'Review 1 flagged change',
     ],
     [
       'a weakened test beside an open decision',
@@ -82,12 +82,12 @@ describe('evidenceSummary', () => {
         scan: { ...pkg().scan, flags: [flag, weakened, { ...weakened, id: 'test-removed:2' }] },
       }),
       '2 tests weakened',
-      '2 tests weakened',
+      'Review 2 weakened tests',
     ],
-    ['a skipped check', pkg({ skipped: [skip] }), '1 check not run', '1 not run'],
-    ['everything passed', pkg(), 'All configured checks passed', 'passed'],
-  ])('gives %s a headline and a short form', (_name, evidence, headline, short) => {
-    expect(evidenceSummary({ level: 'high', reasons: [] }, evidence)).toEqual({ headline, short });
+    ['a skipped check', pkg({ skipped: [skip] }), '1 check not run', 'Run 1 skipped check'],
+    ['everything passed', pkg(), 'All configured checks passed', undefined],
+  ])('gives %s a headline and the next step', (_name, evidence, headline, action) => {
+    expect(evidenceSummary({ level: 'high', reasons: [] }, evidence)).toEqual({ headline, action });
   });
 
   it('puts freshness ahead of older failures', () => {
@@ -95,7 +95,7 @@ describe('evidenceSummary', () => {
       evidenceSummary({ level: 'not-checked', reasons: [] }, pkg({ checks: [failed] })),
     ).toEqual({
       headline: 'Checks outdated',
-      short: 'outdated',
+      action: 'Re-run checks',
     });
   });
 
@@ -104,7 +104,7 @@ describe('evidenceSummary', () => {
       scan: { ...pkg().scan, flags: [flag] },
       acceptedFlags: { [flag.id]: 'reviewed' },
     });
-    expect(evidenceSummary({ level: 'high', reasons: [] }, evidence).short).toBe('passed');
+    expect(evidenceSummary({ level: 'high', reasons: [] }, evidence).action).toBeUndefined();
   });
 });
 

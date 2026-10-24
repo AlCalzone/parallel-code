@@ -171,16 +171,16 @@ body.font-smoothing {
   border: 0;
 }
 
-/* Full-width task titles; status and grouped actions share the second row.
-   The two rows fit the existing 68px header used by panel sizing. */
+/* One row: status icon, title, grouped actions. Status text, badges and the
+   branch share the branch bar below, so the header is two rows in all. */
 .task-title-bar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   height: 100%;
-  grid-template-rows: 26px 28px;
-  padding: 6px 16px;
-  gap: 2px 8px;
+  grid-template-rows: 30px;
+  padding: 4px 8px 4px 16px;
+  gap: 8px;
   font-size: 16px;
   font-weight: 600;
   user-select: none;
@@ -189,7 +189,7 @@ body.font-smoothing {
 }
 
 .task-title-bar > .editable-text {
-  grid-column: 1 / -1;
+  grid-column: 2;
   font-size: inherit;
   letter-spacing: -0.025em;
 }
@@ -201,8 +201,7 @@ body.font-smoothing {
   padding: 1px 2px;
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--bg-input) 65%, transparent);
-  grid-column: 2;
-  grid-row: 2;
+  grid-column: 3;
 }
 
 .task-action-group {
@@ -240,40 +239,58 @@ body.font-smoothing {
   color: var(--success);
 }
 
-.task-title-details {
-  grid-column: 1;
-  font-weight: 400;
-  grid-row: 2;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-  font-size: 11px;
-  color: var(--fg-muted);
-}
-
-.task-title-details > * {
-  flex-shrink: 0;
-}
-
 .task-title-status {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  white-space: nowrap;
 }
 
-/* The lane centres glyphs for sidebar columns; here the glyph's left edge has
-   to meet the title's, and the fixed lane width still keeps the label steady. */
+/* The lane centres glyphs for sidebar columns; here the glyph's left edge
+   lines up with the branch bar, and the fixed lane keeps every title in place. */
 .task-title-status > .status-glyph {
   justify-content: flex-start;
 }
 
-.task-status-explanation {
-  display: none;
+/* Names the header's status icon on hover. Overlaid, so nothing moves. */
+.task-status-hint {
+  position: fixed;
+  z-index: var(--z-overlay);
+  padding: 4px 8px;
+  background: var(--bg-elevated);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Status text and badges in the branch bar: attention items lead and hold
+   their width; routine ones close the row and give way first. */
+.task-header-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  font-family: var(--font-ui);
+  font-size: 11px;
+}
+
+.task-header-badges:not(:empty) {
+  margin-right: 8px;
+}
+
+.task-header-badges--routine {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.task-header-badges--routine:not(:empty) {
+  margin: 0 0 0 8px;
 }
 
 /* Reads as the status text it extends; the underline on hover shows it opens Finish. */
@@ -493,36 +510,44 @@ body.font-smoothing {
   flex: 0 0 auto;
 }
 
-/* Neutral like Finish: merging is routine, so only hover adds emphasis. */
+/* Neutral like the board's chips: a faint fill marks a button in a row of text,
+   but merging is routine, so only hover adds emphasis. */
 .task-pr-merge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   flex: 0 0 auto;
+  box-sizing: border-box;
+  height: 18px;
   margin-right: 8px;
   padding: 0 6px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid transparent;
   border-radius: var(--radius-xs);
-  background: transparent;
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
   color: var(--fg-muted);
   font: inherit;
   font-size: 11px;
   font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
   cursor: pointer;
 }
 
 .task-pr-merge:hover {
-  background: var(--bg-hover);
-  border-color: var(--border);
+  background: color-mix(in srgb, var(--fg) 11%, transparent);
   color: var(--fg);
 }
 
-/* A pressed toggle may show its state in accent; the label stays put so the bar does not shift. */
+/* A pressed toggle may show its state in accent, as on the board's chip; the
+   label stays put and the border is always there, so the bar does not shift. */
 .task-pr-babysit[aria-pressed='true'] {
-  background: var(--bg-selected);
-  border-color: var(--border);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   color: var(--accent);
+}
+
+.task-pr-babysit[aria-pressed='true']:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .task-pr-babysit:disabled {
@@ -3602,6 +3627,31 @@ html:is(
   border-radius: var(--radius-pill);
   border: 1px dashed currentColor;
   animation: spinnerSpin 2.4s linear infinite;
+}
+
+/* Review: a ring with a pupil, "look at this", kept apart from Ready by shape. */
+.status-glyph-waiting {
+  display: inline-block;
+  box-sizing: border-box;
+  border: 1.5px solid currentColor;
+  border-radius: var(--radius-pill);
+}
+
+.status-glyph-review {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1.5px solid currentColor;
+  border-radius: var(--radius-pill);
+}
+
+.status-glyph-review::after {
+  content: '';
+  width: 3px;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: currentColor;
 }
 
 .status-glyph-question {

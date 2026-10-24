@@ -8,7 +8,6 @@ import {
   bringTaskToFront,
   getTaskSnoozedUntil,
   isTaskBackgrounded,
-  sendTaskToBack,
 } from '../store/background-tasks';
 import { invoke } from '../lib/ipc';
 import type { Task } from '../store/types';
@@ -87,40 +86,20 @@ it('offers Finish as a labelled action that reflects push progress', () => {
   expect(finish?.dataset.state).toBe('pushed');
 });
 
-const evidence: NonNullable<Task['evidence']> = {
-  id: 'p1',
-  createdAt: '2026-10-06T10:00:00.000Z',
-  trigger: 'agent',
-  assembling: false,
-  scan: {
-    headSha: 'a'.repeat(40),
-    baseSha: 'b'.repeat(40),
-    dirty: false,
-    files: [],
-    flags: [],
-    tests: [],
-    coveringTests: [],
-    sourceWithoutTests: [],
-  },
-  checks: [],
-  skipped: [],
-  acceptedFlags: {},
-  dismissedFindings: [],
-};
+it('shows the status as an icon whose label appears on hover', () => {
+  const status = container.querySelector<HTMLElement>('.task-title-status');
+  const glyph = status?.querySelector('.status-glyph');
+  expect(status?.nextElementSibling?.classList.contains('editable-text')).toBe(true);
+  expect(glyph?.getAttribute('aria-label')).toBeTruthy();
+  // The custom label replaces the slow native tooltip rather than doubling it.
+  expect(glyph?.hasAttribute('title')).toBe(false);
+  expect(status?.textContent).toBe('');
 
-it('opens Finish from the check summary so open flags can be reviewed', () => {
-  setStore('tasks', 'one', 'evidence', evidence);
-  const summary = container.querySelector<HTMLButtonElement>('button.task-check-signal');
-  expect(summary?.textContent).toMatch(/^ · \S/);
-  summary?.click();
-  expect(onFinish).toHaveBeenCalledOnce();
-});
-
-it('keeps the check summary as plain text once the task cannot be finished', () => {
-  setStore('tasks', 'one', { evidence, landingState: 'landed_pending_review' });
-  const status = container.querySelector('.task-title-status');
-  expect(status?.textContent).toMatch(/ · \S/);
-  expect(container.querySelector('button.task-check-signal')).toBeNull();
+  status?.dispatchEvent(new MouseEvent('mouseenter'));
+  const hint = document.querySelector('[role="tooltip"].task-status-hint');
+  expect(hint?.textContent).toContain(glyph?.getAttribute('aria-label') ?? '');
+  status?.dispatchEvent(new MouseEvent('mouseleave'));
+  expect(document.querySelector('.task-status-hint')).toBeNull();
 });
 
 it('exposes canvas and focus as named toggles', () => {
@@ -224,7 +203,7 @@ it('offers running snooze presets directly in a submenu without a dialog', () =>
   menuItem('15 minutes')?.click();
   expect(getTaskSnoozedUntil('one')).toBeGreaterThanOrEqual(now + 0.25 * 3_600_000);
   expect(store.tasks.one.collapsed).not.toBe(true);
-  expect(container.textContent).toContain('Snoozed until');
+  expect(isTaskBackgrounded('one')).toBe(true);
   expect(document.querySelector('[role="menu"]')).toBeNull();
 });
 
@@ -339,67 +318,4 @@ it.each([
     expect(store.tasks.one.snoozedUntil).toBeGreaterThanOrEqual(now + hours * 3_600_000),
   );
   expect(store.tasks.one.collapsed === true).toBe(mode === 'Snooze · stop agents');
-});
-
-const badge = (label: string) =>
-  [
-    ...container.querySelectorAll<HTMLElement>(
-      '.task-title-details span, .task-title-details button',
-    ),
-  ].find((el) => el.textContent === label);
-// happy-dom drops color-mix() values, so the status text colour marks a tint.
-const isTinted = (el: HTMLElement | undefined) =>
-  /var\(--(warning|error|success|accent)\)/.test(el?.style.color ?? '');
-
-it('keeps routine badges neutral and tints only those that need attention', () => {
-  setStore('tasks', 'one', {
-    gitIsolation: 'none',
-    dockerMode: true,
-    externalWorktree: true,
-    needsReview: true,
-    landingState: 'landing_failed',
-  });
-  for (const label of ['no git', 'Docker', 'Imported']) {
-    expect(isTinted(badge(label)), label).toBe(false);
-  }
-  for (const label of ['Review', 'Landing failed']) {
-    expect(isTinted(badge(label)), label).toBe(true);
-  }
-
-  setStore('tasks', 'one', { gitIsolation: 'direct', branchName: 'main' });
-  expect(isTinted(badge('main'))).toBe(true);
-});
-
-it('shows the snooze badge as neutral', () => {
-  sendTaskToBack('one');
-  const snoozed = [...container.querySelectorAll<HTMLElement>('.task-title-details span')].find(
-    (el) => el.textContent?.startsWith('Snoozed until'),
-  );
-  expect(snoozed).toBeDefined();
-  expect(isTinted(snoozed)).toBe(false);
-});
-
-it.each([
-  ['landed_cleanup_failed', 'Cleanup failed'],
-  ['landing_escalated', 'Landing blocked'],
-  ['landing_failed', 'Landing failed'],
-] as const)('renders %s as a tinted, non-interactive badge', (landingState, label) => {
-  setStore('tasks', 'one', 'landingState', landingState);
-  const el = badge(label);
-  expect(el?.tagName).toBe('SPAN');
-  expect(isTinted(el)).toBe(true);
-});
-
-it('marks a landed task reviewed from its neutral badge', () => {
-  setStore('tasks', 'one', { landingState: 'landed_pending_review', needsReview: false });
-  const landed = badge('Landed');
-  expect(landed?.tagName).toBe('BUTTON');
-  expect(landed?.getAttribute('type')).toBe('button');
-  expect(isTinted(landed)).toBe(false);
-
-  landed?.click();
-  expect(store.tasks.one.landingState).toBe('reviewed');
-  const reviewed = badge('Reviewed');
-  expect(reviewed?.tagName).toBe('SPAN');
-  expect(isTinted(reviewed)).toBe(false);
 });

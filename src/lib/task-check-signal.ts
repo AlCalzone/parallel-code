@@ -12,7 +12,7 @@ import {
   type VerificationSummaryKind,
 } from './verification-run';
 
-/** One short summary after the task status; the title holds the full reasons. */
+/** The next step the checks ask of you, named as an action; the title holds the full reasons. */
 export interface CheckSignal {
   label: string;
   color: string;
@@ -32,29 +32,22 @@ export interface CheckSignalInput {
 // A native tooltip; the Finish dialog lists every flag.
 const MAX_TITLE_FLAGS = 5;
 
-// Kinds without an entry stay silent: a configured-but-never-run command on
-// every task would be noise, and cancelled runs carry no signal. A pass is
-// muted: verify runs in the background, so most tasks show one.
+// Kinds without an entry stay silent: running or passed asks nothing of you, a
+// configured-but-never-run command on every task would be noise, and cancelled
+// runs carry no signal.
 const RUN_SIGNAL: Partial<Record<VerificationSummaryKind, { label: string; color: string }>> = {
-  running: { label: 'verifying…', color: theme.fgMuted },
-  passed: { label: 'verified', color: theme.fgMuted },
-  stale: { label: 'verify stale', color: theme.warning },
-  dirty: { label: 'verify (dirty)', color: theme.warning },
-  failed: { label: 'verify failed', color: theme.error },
+  stale: { label: 'Re-run verify', color: theme.warning },
+  dirty: { label: 'Re-run verify', color: theme.warning },
+  failed: { label: 'Fix failing verify', color: theme.error },
 };
 
 function reportedSignal(verification?: SubtaskVerification): CheckSignal | undefined {
   const checks = verification?.checks;
   if (!checks?.length) return undefined;
   const failed = checks.find((check) => check.result !== 'passed');
-  if (!failed)
-    return {
-      label: 'verified',
-      color: theme.fgMuted,
-      title: checks.map((check) => `${check.name}: ${check.command}`).join('\n'),
-    };
+  if (!failed) return undefined;
   return {
-    label: failed.result === 'blocked' ? 'verify blocked' : 'verify failed',
+    label: failed.result === 'blocked' ? 'Review blocked verify' : 'Fix failing verify',
     color: theme.warning,
     title: `${failed.name}: ${failed.command}${failed.reason ? `\n${failed.reason}` : ''}`,
   };
@@ -67,6 +60,8 @@ function reportedSignal(verification?: SubtaskVerification): CheckSignal | undef
 export function taskCheckSignal(input: CheckSignalInput): CheckSignal | undefined {
   if (input.evidence) {
     const { level, reasons } = input.evidence;
+    const summary = evidenceSummary(input.evidence, input.evidencePackage);
+    if (!summary.action) return undefined;
     const flags = input.evidencePackage ? openEvidenceFlags(input.evidencePackage) : [];
     const title = [
       EVIDENCE_LEVEL[level].label,
@@ -75,8 +70,8 @@ export function taskCheckSignal(input: CheckSignalInput): CheckSignal | undefine
     ];
     if (flags.length > MAX_TITLE_FLAGS) title.push(`…and ${flags.length - MAX_TITLE_FLAGS} more`);
     return {
-      // The short form: the title bar has room for a word or two, not a sentence.
-      label: evidenceSummary(input.evidence, input.evidencePackage).short,
+      label: summary.action,
+      // A failed check already makes the level low, so the colour follows the level.
       color: EVIDENCE_LEVEL[level].color,
       title: title.join('\n'),
     };

@@ -49,6 +49,7 @@ import { PlanViewerDialog } from './PlanViewerDialog';
 import { EditProjectDialog } from './EditProjectDialog';
 import { TaskTitleBar } from './TaskTitleBar';
 import { TaskBranchInfoBar } from './TaskBranchInfoBar';
+import { TaskAttentionBadges, TaskRoutineBadges } from './TaskHeaderBadges';
 import { TaskBranchAdoptionBanner } from './TaskBranchAdoptionBanner';
 import { TaskSuperProductivityBanner } from './TaskSuperProductivityBanner';
 import { TaskNotesBody, notesMinHeight } from './TaskNotesBody';
@@ -944,17 +945,16 @@ export function TaskPanel(props: TaskPanelProps) {
       <div
         class="task-header-stack"
         style={{
-          flex: '0 0 96px',
+          flex: '0 0 66px',
           display: 'flex',
           'flex-direction': 'column',
           overflow: 'hidden',
         }}
       >
         {/* Title + branch bars live outside <Show> so they don't remount on layout flips. */}
-        {/* 68px fits the title bar's two rows: a 30px icon-button row, the 2px
-            row gap, a ~21px badge row, and the bar's 12px vertical padding.
-            The stack total above is this plus the 28px branch bar. */}
-        <div style={{ flex: '0 0 68px', overflow: 'hidden' }}>
+        {/* 38px fits the title bar's single 30px row and its 8px vertical
+            padding. The stack total above is this plus the 28px branch bar. */}
+        <div style={{ flex: '0 0 38px', overflow: 'hidden' }}>
           <TaskTitleBar
             task={props.task}
             isActive={isTaskColumnHighlighted(props.task.id)}
@@ -971,6 +971,13 @@ export function TaskPanel(props: TaskPanelProps) {
             onEditProject={(id) => setEditingProjectId(id)}
             onOpenPullRequest={setOpenPrUrl}
             onFinish={canFinish() ? () => openFinish('merge') : undefined}
+            afterProject={
+              <TaskAttentionBadges
+                task={props.task}
+                onFinish={canFinish() ? () => openFinish('merge') : undefined}
+              />
+            }
+            trailing={<TaskRoutineBadges task={props.task} />}
           />
         </div>
       </div>

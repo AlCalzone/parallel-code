@@ -24,3 +24,18 @@ export const neutralBadgeStyle: JSX.CSSProperties = {
   color: 'var(--fg-muted)',
   border: '1px solid var(--border)',
 };
+
+/**
+ * The box every chip in the task header's branch row shares: one height and
+ * one centred line, so tinted badges, buttons and warnings line up.
+ * `.task-pr-merge` in styles.css mirrors it.
+ */
+export const rowChipBox: JSX.CSSProperties = {
+  display: 'inline-flex',
+  'align-items': 'center',
+  'box-sizing': 'border-box',
+  height: '18px',
+  padding: '0 6px',
+  'font-size': '11px',
+  'line-height': '1',
+};

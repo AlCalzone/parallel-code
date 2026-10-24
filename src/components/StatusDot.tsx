@@ -14,8 +14,18 @@ const SPINNERS = { sm: 10, md: 12 } as const;
 const REVIEW_COLOR = theme.review;
 
 /** Shape carries the state, colour only reinforces it — a scan of the list
- *  should separate "spinning", "asking", and "resting" without reading hue. */
-type StatusGlyph = 'spinner' | 'question' | 'dot' | 'ci_running' | 'ci_failed';
+ *  should separate "spinning", "asking", and "resting" without reading hue:
+ *  motion means working, a filled badge needs you, an outline is at rest. */
+type StatusGlyph =
+  | 'spinner'
+  | 'question'
+  | 'error'
+  | 'review'
+  | 'ready'
+  | 'waiting'
+  | 'dot'
+  | 'ci_running'
+  | 'ci_failed';
 /** Keeps the CI pie visible before any check has finished. */
 const MIN_CI_SWEEP = 12;
 
@@ -93,15 +103,21 @@ export function getStatusGlyph(
   ci?: CiGlyphState['state'],
 ): StatusGlyph {
   if (attention === 'needs_input') return 'question';
-  if (attention === 'error') return 'dot';
+  if (attention === 'error') return 'error';
   if (attention === 'active') return 'spinner';
   // CI outranks resting states and shell activity but not a working agent:
   // that agent is often the one fixing CI, and the CI glyph returns when it stops.
   if (ci === 'failed') return 'ci_failed';
   if (ci === 'running') return 'ci_running';
   // Review outranks activity in the attention state, so a busy task under
-  // review shows the review dot rather than a spinner in its colour.
+  // review shows the review ring rather than a spinner in its colour.
   if (attention === 'shell_busy' || (status === 'busy' && !attention)) return 'spinner';
+  // Same precedence as the colour: a resting attention state beats the dot status.
+  const resting = attention === 'review' || attention === 'ready' ? attention : status;
+  if (resting === 'review') return 'review';
+  if (resting === 'ready') return 'ready';
+  // Hollow: nothing has happened yet, so it must not read as a grey Ready.
+  if (resting === 'waiting') return 'waiting';
   return 'dot';
 }
 
@@ -110,6 +126,8 @@ export function StatusDot(props: {
   size?: 'sm' | 'md';
   attention?: TaskAttentionState;
   taskId?: string;
+  /** False when the host shows its own hover label; the aria-label stays either way. */
+  nativeTitle?: boolean;
 }) {
   const size = () => props.size ?? 'sm';
   const ci = () => (props.taskId ? getCiGlyphState(props.taskId) : undefined);
@@ -142,12 +160,16 @@ export function StatusDot(props: {
       class="status-glyph"
       role="img"
       aria-label={getDotTooltip(props.status, props.attention, props.taskId)}
-      title={[
-        getDotTooltip(props.status, props.attention, props.taskId),
-        props.taskId ? getTaskActivityTooltip(props.taskId) : undefined,
-      ]
-        .filter(Boolean)
-        .join('\n')}
+      title={
+        props.nativeTitle === false
+          ? undefined
+          : [
+              getDotTooltip(props.status, props.attention, props.taskId),
+              props.taskId ? getTaskActivityTooltip(props.taskId) : undefined,
+            ]
+              .filter(Boolean)
+              .join('\n')
+      }
       style={{
         // Lane size travels as a variable so a host row can restyle the box —
         // the sidebar shrinks it to one text line to keep it off wrapped names.
@@ -162,6 +184,37 @@ export function StatusDot(props: {
         />
       ) : glyph() === 'question' ? (
         badge('?', getDotShadow(props.attention))
+      ) : glyph() === 'error' ? (
+        badge('!', getDotShadow(props.attention))
+      ) : glyph() === 'review' ? (
+        <span
+          class="status-glyph-review"
+          style={{
+            width: `${SPINNERS[size()] - 1}px`,
+            height: `${SPINNERS[size()] - 1}px`,
+            'box-shadow': getDotShadow(props.attention),
+          }}
+        />
+      ) : glyph() === 'ready' ? (
+        <svg
+          class="status-glyph-ready"
+          width={SPINNERS[size()]}
+          height={SPINNERS[size()]}
+          viewBox="0 0 12 12"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M2.5 6.3 4.9 8.7 9.6 3.5" />
+        </svg>
+      ) : glyph() === 'waiting' ? (
+        <span
+          class="status-glyph-waiting"
+          style={{ width: `${SIZES[size()] + 1}px`, height: `${SIZES[size()] + 1}px` }}
+        />
       ) : glyph() === 'ci_failed' ? (
         badge('×', halo(theme.error))
       ) : glyph() === 'ci_running' ? (

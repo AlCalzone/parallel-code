@@ -14,10 +14,11 @@ export const EVIDENCE_LEVEL: Record<EvidenceConfidenceLevel, { label: string; co
   high: { label: 'High confidence', color: theme.success },
 };
 
-/** The same fact at two lengths: the Finish dialog headline and the task status suffix. */
+/** The Finish dialog headline, plus the next step when there is one: the task
+ *  header shows only that, so a pass or a run in progress shows nothing there. */
 export interface EvidenceSummary {
   headline: string;
-  short: string;
+  action?: string;
 }
 
 /** Flags that still need the user: not informational and not yet accepted. */
@@ -36,32 +37,42 @@ export function evidenceSummary(
   confidence: EvidenceConfidence,
   pkg?: EvidencePackage,
 ): EvidenceSummary {
-  if (confidence.level === 'checking') return { headline: 'Checking…', short: 'checking…' };
-  if (confidence.level === 'not-checked') return { headline: 'Checks outdated', short: 'outdated' };
+  if (confidence.level === 'checking') return { headline: 'Checking…' };
+  if (confidence.level === 'not-checked')
+    return { headline: 'Checks outdated', action: 'Re-run checks' };
   if (!pkg)
     return confidence.level === 'high'
-      ? { headline: 'Checks passed', short: 'passed' }
-      : { headline: 'Needs attention', short: 'needs attention' };
+      ? { headline: 'Checks passed' }
+      : { headline: 'Needs attention', action: 'Review checks' };
   const failed = pkg.checks.filter((run) =>
     ['failed', 'timed_out', 'error'].includes(run.status),
   ).length;
-  if (failed) return { headline: `${count(failed, 'check')} failed`, short: `${failed} failed` };
+  if (failed)
+    return {
+      headline: `${count(failed, 'check')} failed`,
+      action: `Fix ${count(failed, 'failed check')}`,
+    };
   const open = openEvidenceFlags(pkg);
   // A weakened test undermines the passing checks, so it outranks a routine confirmation.
   const weakened = open.filter((flag) => flag.category === 'test-weakened').length;
-  if (weakened) {
-    const text = `${count(weakened, 'test')} weakened`;
-    return { headline: text, short: text };
-  }
+  if (weakened)
+    return {
+      headline: `${count(weakened, 'test')} weakened`,
+      action: `Review ${count(weakened, 'weakened test')}`,
+    };
   if (open.length)
     return {
       headline: `${count(open.length, 'change')} to confirm`,
-      short: `${open.length} to confirm`,
+      action: `Review ${count(open.length, 'flagged change')}`,
     };
   const notRun = pkg.skipped.length + pkg.checks.filter((run) => run.status === 'cancelled').length;
-  if (notRun) return { headline: `${count(notRun, 'check')} not run`, short: `${notRun} not run` };
-  if (confidence.level !== 'high') return { headline: 'Needs review', short: 'needs review' };
-  return { headline: 'All configured checks passed', short: 'passed' };
+  if (notRun)
+    return {
+      headline: `${count(notRun, 'check')} not run`,
+      action: `Run ${count(notRun, 'skipped check')}`,
+    };
+  if (confidence.level !== 'high') return { headline: 'Needs review', action: 'Review checks' };
+  return { headline: 'All configured checks passed' };
 }
 
 export function evidenceHeadline(confidence: EvidenceConfidence, pkg?: EvidencePackage): string {

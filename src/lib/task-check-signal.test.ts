@@ -61,18 +61,48 @@ function evidencePackage(opts: {
 
 describe('taskCheckSignal', () => {
   it.each<[EvidenceConfidenceLevel, string, string]>([
-    ['checking', 'checking…', theme.fgMuted],
-    ['not-checked', 'outdated', theme.warning],
-    ['low', 'needs attention', theme.error],
-    ['medium', 'needs attention', theme.warning],
-    // Named, never a bare check mark: high confidence is not proof.
-    ['high', 'passed', theme.success],
-  ])('names evidence level %s as "%s"', (level, label, color) => {
+    ['not-checked', 'Re-run checks', theme.warning],
+    ['low', 'Review checks', theme.error],
+    ['medium', 'Review checks', theme.warning],
+  ])('names the next step for evidence level %s: "%s"', (level, label, color) => {
     const signal = taskCheckSignal({
       evidence: { level, reasons: [] },
       verifyCommandConfigured: true,
     });
     expect(signal).toMatchObject({ label, color });
+  });
+
+  // The header has room for what needs you; a pass or a run in progress asks nothing.
+  it.each<EvidenceConfidenceLevel>(['checking', 'high'])(
+    'shows nothing for evidence level %s',
+    (level) => {
+      expect(
+        taskCheckSignal({ evidence: { level, reasons: [] }, verifyCommandConfigured: true }),
+      ).toBeUndefined();
+    },
+  );
+
+  it('names the action for open flags', () => {
+    const flag = (id: string, category: EvidenceFlagCategory) => ({
+      id,
+      category,
+      rule: id,
+      file: `${id}.ts`,
+      detail: 'detail',
+    });
+    const label = (pkg: EvidencePackage) =>
+      taskCheckSignal({
+        evidence: { level: 'medium', reasons: [] },
+        evidencePackage: pkg,
+        verifyCommandConfigured: true,
+      })?.label;
+    const flagged = evidencePackage({
+      flags: [flag('a', 'needs-decision'), flag('b', 'needs-decision')],
+    });
+    expect(label(flagged)).toBe('Review 2 flagged changes');
+    const weakened = evidencePackage({ flags: [flag('w', 'test-weakened')] });
+    expect(label(weakened)).toBe('Review 1 weakened test');
+    // Failed and skipped checks: see evidence-display.test.ts.
   });
 
   it('lets evidence win over a failed verify run and lists its reasons on hover', () => {
@@ -82,7 +112,7 @@ describe('taskCheckSignal', () => {
       verifyCommandConfigured: true,
       headSha: HEAD,
     });
-    expect(signal?.label).toBe('outdated');
+    expect(signal?.label).toBe('Re-run checks');
     expect(signal?.title).toBe('Checks outdated\nNew commits.');
   });
 
@@ -128,15 +158,17 @@ describe('taskCheckSignal', () => {
   });
 
   it('falls back to the verify run without evidence', () => {
-    expect(runSignal({})?.label).toBe('verified');
-    expect(runSignal({ status: 'failed', exitCode: 1 })?.label).toBe('verify failed');
-    expect(runSignal({ status: 'running', finishedAt: undefined })?.label).toBe('verifying…');
-    expect(runSignal({}, 'b'.repeat(40))?.label).toBe('verify stale');
-    expect(runSignal({ dirty: true })?.label).toBe('verify (dirty)');
+    expect(runSignal({ status: 'failed', exitCode: 1 })?.label).toBe('Fix failing verify');
+    expect(runSignal({}, 'b'.repeat(40))?.label).toBe('Re-run verify');
+    expect(runSignal({ dirty: true })?.label).toBe('Re-run verify');
   });
 
-  it('keeps a pass quiet and points a failure at the last pass', () => {
-    expect(runSignal({})?.color).toBe(theme.fgMuted);
+  it('stays silent while verify runs or after it passed', () => {
+    expect(runSignal({})).toBeUndefined();
+    expect(runSignal({ status: 'running', finishedAt: undefined })).toBeUndefined();
+  });
+
+  it('points a failure at the last pass', () => {
     const signal = taskCheckSignal({
       verificationRun: run({ status: 'failed', exitCode: 1 }),
       verifyCommandConfigured: true,
@@ -157,7 +189,7 @@ describe('taskCheckSignal', () => {
       verifyCommandConfigured: false,
       headSha: HEAD,
     });
-    expect(signal?.label).toBe('verify failed');
+    expect(signal?.label).toBe('Fix failing verify');
   });
 
   it('uses the agent report only when no verify command or run exists', () => {
@@ -165,7 +197,7 @@ describe('taskCheckSignal', () => {
       checks: [{ name: 'Unit', command: 'npm test', result: 'blocked' as const, reason: 'no db' }],
     };
     expect(taskCheckSignal({ verification: blocked, verifyCommandConfigured: false })).toEqual({
-      label: 'verify blocked',
+      label: 'Review blocked verify',
       color: theme.warning,
       title: 'Unit: npm test\nno db',
     });
@@ -174,9 +206,9 @@ describe('taskCheckSignal', () => {
     ).toBeUndefined();
 
     const passed = { checks: [{ name: 'Unit', command: 'npm test', result: 'passed' as const }] };
-    expect(taskCheckSignal({ verification: passed, verifyCommandConfigured: false })?.label).toBe(
-      'verified',
-    );
+    expect(
+      taskCheckSignal({ verification: passed, verifyCommandConfigured: false }),
+    ).toBeUndefined();
   });
 
   it('shows nothing when there is nothing to report', () => {

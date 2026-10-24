@@ -9,7 +9,7 @@ import {
 } from '../store/store';
 import { stageFailedChecksPrompt } from '../store/github';
 import { sameDivergence } from '../lib/branch-divergence';
-import { badgeStyle } from '../lib/badgeStyle';
+import { badgeStyle, rowChipBox } from '../lib/badgeStyle';
 import { revealItemInDir, openInEditor } from '../lib/shell';
 import { InfoBar } from './InfoBar';
 import { ProjectSwatch } from './ProjectSwatch';
@@ -45,8 +45,7 @@ const prChipStyle: JSX.CSSProperties = {
 
 const warningChipStyle: JSX.CSSProperties = {
   ...badgeStyle(theme.warning),
-  'font-size': '11px',
-  padding: '1px 6px',
+  ...rowChipBox,
 };
 
 /** Red because a failed PR check is the kind of urgency the fill is reserved for. */
@@ -55,16 +54,13 @@ const fixCiBtnStyle: JSX.CSSProperties = {
   color: '#fff',
   border: 'none',
   'border-radius': 'var(--radius-xs)',
-  padding: '1px 8px',
+  ...rowChipBox,
   'margin-right': '8px',
   'font-family': 'inherit',
-  'font-size': '11px',
   'font-weight': '600',
   cursor: 'pointer',
   'white-space': 'nowrap',
   'flex-shrink': '0',
-  display: 'inline-flex',
-  'align-items': 'center',
   gap: '4px',
 };
 
@@ -113,6 +109,10 @@ interface TaskBranchInfoBarProps {
   onOpenPullRequest?: (prUrl: string) => void;
   /** Opens the finish dialog; without it there is no Merge shortcut. */
   onFinish?: () => void;
+  /** Attention items placed right after the project, ahead of the PR and branch. */
+  afterProject?: JSX.Element;
+  /** Routine items closing the row; the first to be cut when the column is narrow. */
+  trailing?: JSX.Element;
 }
 
 export function TaskBranchInfoBar(props: TaskBranchInfoBarProps) {
@@ -237,6 +237,7 @@ export function TaskBranchInfoBar(props: TaskBranchInfoBarProps) {
         )}
       </Show>
       <RemoveProjectConfirm projectId={confirmRemove()} onDone={() => setConfirmRemove(null)} />
+      {props.afterProject}
       <Show when={prLinkUrl()}>
         {(url) => {
           const pr = () => getPrChecks(props.task.id);
@@ -422,6 +423,7 @@ export function TaskBranchInfoBar(props: TaskBranchInfoBarProps) {
           Existing worktree
         </span>
       </Show>
+      {props.trailing}
     </InfoBar>
   );
 }

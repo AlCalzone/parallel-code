@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { reconcile } from 'solid-js/store';
 import { render } from 'solid-js/web';
 import { TaskTitleBar } from '../components/TaskTitleBar';
+import { TaskRoutineBadges } from '../components/TaskHeaderBadges';
 import { store, setStore } from './core';
 import { AGENT_HOOK_STALE_MS, applyAgentHookEvent, getAgentHookStatus } from './agentHookStatus';
 import { clearAgentActivity, getTaskAttentionState, markAgentBusy } from './taskStatus';
@@ -354,15 +355,18 @@ it('offers the action and a manual return in the task header', () => {
   document.body.append(container);
   const dispose = render(
     () => (
-      <TaskTitleBar
-        task={store.tasks.one}
-        isActive={store.activeTaskId === 'one'}
-        onClose={() => undefined}
-        onFinish={() => undefined}
-        pushing={false}
-        pushSuccess={false}
-        onTitleEditRef={() => undefined}
-      />
+      <>
+        <TaskTitleBar
+          task={store.tasks.one}
+          isActive={store.activeTaskId === 'one'}
+          onClose={() => undefined}
+          onFinish={() => undefined}
+          pushing={false}
+          pushSuccess={false}
+          onTitleEditRef={() => undefined}
+        />
+        <TaskRoutineBadges task={store.tasks.one} />
+      </>
     ),
     container,
   );
@@ -744,15 +748,18 @@ it('offers the CI snooze in the Later menu and shows it in the header', () => {
   document.body.append(container);
   const dispose = render(
     () => (
-      <TaskTitleBar
-        task={store.tasks.one}
-        isActive={store.activeTaskId === 'one'}
-        onClose={() => undefined}
-        onFinish={() => undefined}
-        pushing={false}
-        pushSuccess={false}
-        onTitleEditRef={() => undefined}
-      />
+      <>
+        <TaskTitleBar
+          task={store.tasks.one}
+          isActive={store.activeTaskId === 'one'}
+          onClose={() => undefined}
+          onFinish={() => undefined}
+          pushing={false}
+          pushSuccess={false}
+          onTitleEditRef={() => undefined}
+        />
+        <TaskRoutineBadges task={store.tasks.one} />
+      </>
     ),
     container,
   );
