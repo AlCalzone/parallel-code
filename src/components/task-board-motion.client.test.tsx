@@ -3,7 +3,10 @@ import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useCardMotion } from './task-board-motion';
 
-vi.mock('../lib/reducedMotion', () => ({ shouldAnimateTaskAppearance: () => true }));
+vi.mock('../lib/reducedMotion', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/reducedMotion')>()),
+  prefersMotion: () => true,
+}));
 
 let dispose: (() => void) | undefined;
 
