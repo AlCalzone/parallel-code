@@ -47,6 +47,15 @@
   --task-container-bg: #151e28;
   --task-panel-bg: #1c2630;
 
+  /* A thin line with a soft inner glow marks the focused pane without the
+     weight of a 2px frame. Both are inset shadows, so the pane's own clip
+     never cuts them, and the small radius keeps the corners from reading as
+     a box drawn on top. Square looks override both. */
+  --pane-focus-ring:
+    inset 0 0 0 1.5px var(--border-focus),
+    inset 0 0 14px -6px color-mix(in srgb, var(--border-focus) 55%, transparent);
+  --pane-focus-radius: 4px;
+
   --shadow-soft: 0 14px 30px rgba(0, 0, 0, 0.28);
   --shadow-pop:
     0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent),
@@ -207,7 +216,7 @@ body.font-smoothing {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xs);
   background: transparent;
-  color: var(--fg-muted);
+  color: var(--fg);
   font: inherit;
   font-size: 12px;
   font-weight: 500;
@@ -768,11 +777,6 @@ html[data-look='parallel-code'] :is(.prompt-textarea, .task-notes-body textarea)
   line-height: 1.65;
 }
 
-html[data-look='parallel-code'] :is(.prompt-textarea, .task-notes-body textarea)::placeholder {
-  color: var(--fg-subtle);
-  opacity: 1;
-}
-
 html[data-look='parallel-code'] :is(.info-bar, .changed-files-list-panel) {
   font-family: var(--font-ui) !important;
 }
@@ -794,75 +798,12 @@ html[data-look='parallel-code'] .task-branch-info-bar {
   border-color: var(--border-subtle);
 }
 
-/* The focused pane's ring already marks the active task; a column ring too
-   would double the signal. */
-html[data-look='parallel-code'] .task-column.active {
-  box-shadow: none;
-}
-
 html[data-look='parallel-code'] .task-notes-body textarea {
   padding: 10px 14px 32px !important;
 }
 
-/* Supporting information stays readable while another pane has keyboard focus. */
-html[data-look='parallel-code'] :is(.task-notes-body, .task-changed-files-section) {
-  opacity: 1;
-}
-
-/* Notes and files sit on the task surface; the heading rule already separates them. */
-html[data-look='parallel-code']
-  :is(
-    .task-notes-body,
-    .task-notes-body textarea,
-    .task-changed-files-section,
-    .changed-files-list-panel
-  ) {
-  background: transparent !important;
-}
-
-/* Tasks keep the same 6px gutter above the status bar as at the strip's edge,
-   so their bottom border doesn't sit on the bar's rule. */
-html[data-look='parallel-code'] .tiling-layout-strip {
-  padding-bottom: 6px;
-}
-
-/* Without pane fills, a centred rule on every divider gives each stacked pane an
-   edge, so the 6px handles read as separators rather than stray gaps. An image,
-   so the handle's hover colour still shows behind it. */
-html[data-look='parallel-code'] .task-column .resize-handle {
-  background-image: linear-gradient(var(--border-subtle), var(--border-subtle));
-  background-position: center;
-  background-repeat: no-repeat;
-}
-
-html[data-look='parallel-code'] .task-column .resize-handle-h {
-  background-size: 1px 100%;
-}
-
-/* Stacked panes meet edge to edge: the handle straddles the seam, keeping its
-   grab area while taking no layout space, so no strip of container shows
-   between panes. The flex absorber takes up the reclaimed pixels. */
-html[data-look='parallel-code'] .task-column .resize-handle-v {
-  background-size: 100% 1px;
-  margin: -3px 0;
-  position: relative;
-  z-index: 1;
-}
-
-/* The divider rule below already edges the toolbar; its own border would double it. */
-html[data-look='parallel-code'] .task-column .shell-toolbar-panel {
-  border-bottom: none;
-}
-
-/* Open shells take over that edge, like the agent terminal row's top border. */
-html[data-look='parallel-code'] .task-column .shell-terminals-row {
-  border-top: 1px solid var(--border);
-}
-
-/* Terminals keep the lighter fill as the working surface; the agent's
-   history bar above them belongs to the task chrome. */
-html[data-look='parallel-code'] .task-column .shell-terminal-container:has(> .info-bar) {
-  background: transparent !important;
+html[data-look='parallel-code'] .task-notes-body textarea::placeholder {
+  color: var(--fg-subtle);
 }
 
 /* Pane labels orient without competing with the notes and files beneath them. */
@@ -871,93 +812,8 @@ html[data-look='parallel-code'] .task-pane-heading {
   font-size: 12px !important;
 }
 
-html[data-look='parallel-code'] .shell-terminal-container .xterm {
-  opacity: 1;
-}
-
 html[data-look='parallel-code'] .task-title-bar {
   font-size: 17px;
-}
-
-html[data-look='parallel-code'] .task-finish-btn {
-  color: var(--fg);
-}
-
-/* The prompt sits flush under the agent terminal's rule, like the notes
-   textarea, instead of as a boxed field. */
-html[data-look='parallel-code'] .prompt-input-panel {
-  padding: 0 !important;
-  border-radius: 0 !important;
-}
-
-html[data-look='parallel-code'] .prompt-textarea,
-html[data-look='parallel-code'] .prompt-textarea:focus {
-  background: transparent !important;
-  border: none !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-}
-
-html[data-look='parallel-code'] .prompt-textarea {
-  padding: 10px 44px 10px 14px !important;
-}
-
-/* Without its own border, the textarea needs the panel-level focus ring back.
-   The prompt fills the task's bottom corners, so the ring follows the
-   island's curve just inside its 1px border. */
-html[data-look='parallel-code'] .prompt-input-panel:focus-within::after,
-html[data-look='parallel-code'] .prompt-input-panel[data-panel-focused='true']::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: none;
-  border-radius: 4px 4px calc(var(--island-radius) - 1px) calc(var(--island-radius) - 1px);
-  box-shadow: var(--pane-focus-ring);
-  pointer-events: none;
-  z-index: 10;
-}
-
-/* A thin line with a soft inner glow marks focus without the weight of a 2px
-   frame. Both are inset shadows, so the pane's own clip never cuts them, and
-   the small radius keeps the corners from reading as a box drawn on top. */
-html[data-look='parallel-code'] {
-  --pane-focus-ring:
-    inset 0 0 0 1.5px var(--border-focus),
-    inset 0 0 14px -6px color-mix(in srgb, var(--border-focus) 55%, transparent);
-}
-
-/* The title editor and board cards share the panes' focus ring. */
-html[data-look='parallel-code'] .task-title-bar .editable-text-input {
-  border-color: transparent !important;
-  border-radius: 4px !important;
-  box-shadow: var(--pane-focus-ring);
-}
-
-html[data-look='parallel-code'] .task-board-card:has(.task-board-title:focus) {
-  box-shadow: var(--pane-focus-ring);
-}
-
-html[data-look='parallel-code']
-  .task-column
-  .focusable-panel:not(.prompt-input-panel):is(:focus-within, [data-panel-focused='true'])::after {
-  border: none;
-  border-radius: 4px;
-  box-shadow: var(--pane-focus-ring);
-}
-
-html[data-look='parallel-code'] .prompt-send-btn {
-  background: var(--bg-input) !important;
-  color: var(--fg) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: var(--radius-sm) !important;
-}
-
-html[data-look='parallel-code'] .prompt-send-btn:disabled {
-  color: var(--fg-subtle) !important;
-}
-
-html[data-look='parallel-code'] .prompt-send-btn:hover:not(:disabled) {
-  background: var(--bg-hover) !important;
 }
 
 html[data-look='parallel-code'] :is(.prompt-textarea, .input-field, .project-select):focus {
@@ -1058,10 +914,6 @@ html[data-look='noir'] .task-column {
   box-shadow: none;
 }
 
-html[data-look='noir'] .task-column.active {
-  box-shadow: none;
-}
-
 html[data-look='noir'] .task-title-bar {
   background: var(--island-bg);
 }
@@ -1089,17 +941,16 @@ html[data-look='noir'] .info-bar button:not(:hover):not(:focus-visible) {
 
 html[data-look='noir'] .prompt-textarea {
   font-family: var(--font-ui) !important;
-  box-shadow: none !important;
 }
 
 /* One quiet focus halo for every text field, replacing the default glow. */
-html[data-look='noir'] :is(.prompt-textarea, .input-field, .project-select):focus {
+html[data-look='noir'] :is(.input-field, .project-select):focus {
   border-color: var(--border-focus) !important;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent) !important;
 }
 
 html[data-look='noir'] .task-notes-body textarea {
-  padding: 12px 14px !important;
+  padding: 12px 14px 32px !important;
   font-size: 13px !important;
   line-height: 1.65;
 }
@@ -1225,6 +1076,12 @@ html[data-look='obsidian-light'] {
   background: none;
 }
 
+/* Flat and square: the focus ring keeps its line but drops the glow. */
+html[data-look^='obsidian'] {
+  --pane-focus-ring: inset 0 0 0 1.5px var(--border-focus);
+  --pane-focus-radius: 0px;
+}
+
 html[data-look^='obsidian'] .sidebar-shell {
   padding: 0 4px 8px;
 }
@@ -1316,7 +1173,7 @@ html[data-look^='obsidian'] :is(.info-bar, .changed-files-list-panel, .task-note
 }
 
 html[data-look^='obsidian'] .task-notes-body textarea {
-  padding: 12px 14px !important;
+  padding: 12px 14px 32px !important;
   font-size: 13px !important;
   line-height: 1.65;
 }
@@ -1357,7 +1214,9 @@ html[data-look^='obsidian'] .info-bar button {
 html[data-look^='obsidian'] .focusable-panel[data-panel-focused='true']::after,
 html[data-look^='obsidian'] .prompt-input-panel:focus-within::after {
   content: '';
-  border-width: 2px;
+  border: none;
+  border-radius: 0;
+  box-shadow: var(--pane-focus-ring);
 }
 
 /* The file list sits inside an already outlined focusable section. */
@@ -1777,8 +1636,9 @@ html[data-look^='islands-'] .prompt-input-panel[data-panel-focused='true']::afte
   content: '';
   position: absolute;
   inset: 0;
+  border: none;
   border-radius: inherit;
-  border: 2px solid var(--border-focus);
+  box-shadow: var(--pane-focus-ring);
   pointer-events: none;
   z-index: 10;
 }
@@ -1837,7 +1697,7 @@ html[data-look^='islands-']
   position: absolute;
   inset: 0;
   border-radius: var(--radius-md);
-  border: 2px solid var(--border-focus);
+  box-shadow: var(--pane-focus-ring);
   pointer-events: none;
   z-index: 10;
 }
@@ -1976,6 +1836,9 @@ html[data-look='workbench'] {
      into the panel surface (islands-style). Only the 1px hairline reads. */
   --task-container-bg: #1f1f1f;
   --task-panel-bg: #1f1f1f;
+  /* VS Code's 1px focus border: square, without a glow. */
+  --pane-focus-ring: inset 0 0 0 1px var(--border-focus);
+  --pane-focus-radius: 0px;
 }
 
 .app-shell[data-look='workbench']::before {
@@ -2037,8 +1900,9 @@ html[data-look='workbench'] .prompt-input-panel[data-panel-focused='true']::afte
   content: '';
   position: absolute;
   inset: 0;
+  border: none;
   border-radius: 0;
-  border: 2px solid var(--border-focus);
+  box-shadow: var(--pane-focus-ring);
   pointer-events: none;
   z-index: 10;
 }
@@ -2090,6 +1954,141 @@ html[data-look='workbench'] .resize-handle-h::before {
 html[data-look='workbench'] .tiling-strip-handle::before,
 html[data-look^='islands-'] .tiling-strip-handle::before {
   bottom: -8px;
+}
+
+/* Pane layout first built for Parallel Code and shared by every look.
+   Obsidian, Islands and Workbench bring their own seams and composer, and
+   Noir's hairline dividers live with theirs.
+   Notes, files and the agent's history bar sit on the task surface; only
+   terminals keep the panel fill as the working surface. In looks where the
+   two differ, a stray strip of container would show in every 6px divider,
+   so these looks draw a rule there and let stacked panes meet edge to edge. */
+.task-column
+  :is(
+    .task-notes-body,
+    .task-notes-body textarea,
+    .task-changed-files-section,
+    .changed-files-list-panel,
+    .shell-terminal-container:has(> .info-bar)
+  ) {
+  background: transparent !important;
+}
+
+/* An image, so the handle's hover colour still shows behind the rule. */
+html:not(
+    [data-look^='obsidian'],
+    [data-look^='islands-'],
+    [data-look='workbench'],
+    [data-look='noir']
+  )
+  .task-column
+  .resize-handle {
+  background-image: linear-gradient(var(--border-subtle), var(--border-subtle));
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+html:not(
+    [data-look^='obsidian'],
+    [data-look^='islands-'],
+    [data-look='workbench'],
+    [data-look='noir']
+  )
+  .task-column
+  .resize-handle-h {
+  background-size: 1px 100%;
+}
+
+/* The handle straddles the seam, keeping its grab area while taking no layout
+   space. The flex absorber takes up the reclaimed pixels. */
+html:not(
+    [data-look^='obsidian'],
+    [data-look^='islands-'],
+    [data-look='workbench'],
+    [data-look='noir']
+  )
+  .task-column
+  .resize-handle-v {
+  background-size: 100% 1px;
+  margin: -3px 0;
+  position: relative;
+  z-index: 1;
+}
+
+/* The focused pane's ring already marks the active task; a column glow too
+   would double the signal. Shadowed looks keep their resting shadow. */
+html:not([data-look^='obsidian'], [data-look^='islands-'], [data-look='workbench'])
+  .task-column.active {
+  box-shadow: var(--task-column-shadow, none);
+}
+
+/* Tasks keep the same 6px gutter above the status bar as at the strip's edge,
+   so their bottom border doesn't sit on the bar's rule. Shadowed looks
+   keep their wider gutter. */
+html:not([data-look^='obsidian'], [data-look^='islands-'], [data-look='workbench'])
+  .tiling-layout-strip {
+  padding-bottom: max(6px, var(--task-shadow-gutter, 0px));
+}
+
+/* The prompt sits flush under the agent terminal's rule, like the notes
+   textarea, instead of as a boxed field. Islands, Obsidian and Workbench
+   style their own flush composer. */
+html:not([data-look^='obsidian'], [data-look^='islands-'], [data-look='workbench'])
+  .prompt-input-panel {
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+
+html:not([data-look^='obsidian'], [data-look^='islands-'], [data-look='workbench'])
+  :is(.prompt-textarea, .prompt-textarea:focus) {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+html:not([data-look^='obsidian'], [data-look^='islands-'], [data-look='workbench'])
+  .prompt-textarea {
+  padding: 10px 44px 10px 14px !important;
+}
+
+html:not([data-look='noir']) .prompt-textarea::placeholder {
+  color: var(--fg-subtle);
+  opacity: 1;
+}
+
+/* Without its own border, the textarea needs the panel-level focus ring back.
+   The prompt fills the task's bottom corners, so the ring follows the
+   task's curve just inside its 1px border. */
+html:not([data-look^='obsidian'], [data-look^='islands-'], [data-look='workbench'])
+  .prompt-input-panel:is(:focus-within, [data-panel-focused='true'])::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: none;
+  border-radius: var(--pane-focus-radius) var(--pane-focus-radius) calc(var(--radius-lg) - 1px)
+    calc(var(--radius-lg) - 1px);
+  box-shadow: var(--pane-focus-ring);
+  pointer-events: none;
+  z-index: 10;
+}
+
+html:not([data-look^='obsidian'], [data-look^='islands-'], [data-look='workbench'])
+  .prompt-send-btn {
+  background: var(--bg-input) !important;
+  color: var(--fg) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+html:not([data-look^='obsidian'], [data-look^='islands-'], [data-look='workbench'])
+  .prompt-send-btn:disabled {
+  color: var(--fg-subtle) !important;
+}
+
+html:not([data-look^='obsidian'], [data-look^='islands-'], [data-look='workbench'])
+  .prompt-send-btn:hover:not(:disabled) {
+  background: var(--bg-hover) !important;
 }
 
 * {
@@ -3186,18 +3185,15 @@ html:is(
   position: relative;
 }
 
-/* Match terminal dimming: actual keyboard/mouse focus brightens the panel,
-   independently of the setting that dims entire inactive task columns. */
-:is(.task-canvas-panel, .task-notes-body, .task-changed-files-section, .diff-task-notes) {
+/* Actual keyboard/mouse focus brightens the panel, independently of the
+   setting that dims entire inactive task columns. Notes, changed files and
+   terminals stay at full strength: supporting information must remain
+   readable while another pane has keyboard focus. */
+:is(.task-canvas-panel, .diff-task-notes) {
   opacity: 0.8;
 }
 
-:is(
-  .task-canvas-panel,
-  .task-notes-body,
-  .task-changed-files-section,
-  .diff-task-notes
-):focus-within,
+:is(.task-canvas-panel, .diff-task-notes):focus-within,
 .task-canvas-panel[data-panel-focused='true'] {
   opacity: 1;
 }
@@ -3382,6 +3378,24 @@ html:is(
   border: 2px solid var(--border-focus);
   pointer-events: none;
   z-index: 10;
+}
+
+.task-column
+  .focusable-panel:not(.prompt-input-panel):is(:focus-within, [data-panel-focused='true'])::after {
+  border: none;
+  border-radius: var(--pane-focus-radius);
+  box-shadow: var(--pane-focus-ring);
+}
+
+/* The title editor and board cards share the panes' focus ring. */
+.task-title-bar .editable-text-input {
+  border-color: transparent !important;
+  border-radius: var(--pane-focus-radius) !important;
+  box-shadow: var(--pane-focus-ring);
+}
+
+.task-board-card:has(.task-board-title:focus) {
+  box-shadow: var(--pane-focus-ring);
 }
 
 .agent-terminal-pane:focus-within::after {
@@ -3756,6 +3770,17 @@ body.dragging-task * {
   border-bottom: 1px solid var(--border);
 }
 
+/* Inside a task, the divider rule below already edges the toolbar; its own
+   border would double it. Open shells take over that edge instead, like the
+   agent terminal row's top border. */
+.task-column .shell-toolbar-panel {
+  border-bottom: none;
+}
+
+.task-column .shell-terminals-row {
+  border-top: 1px solid var(--border);
+}
+
 .shell-terminal-container.focusable-panel {
   box-sizing: border-box;
 }
@@ -3778,14 +3803,6 @@ body.dragging-task * {
 .shell-terminal-container:hover .shell-terminal-close {
   opacity: 1;
   pointer-events: auto;
-}
-
-.shell-terminal-container .xterm {
-  opacity: 0.8;
-}
-
-.shell-terminal-container:focus-within .xterm {
-  opacity: 1;
 }
 
 .prompt-textarea {
