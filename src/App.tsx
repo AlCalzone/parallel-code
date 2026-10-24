@@ -48,6 +48,7 @@ import { resolvePanelCloseTarget } from './store/close-target';
 import { Sidebar } from './components/Sidebar';
 import { TilingLayout } from './components/TilingLayout';
 import { HelpDialog } from './components/HelpDialog';
+import { IdeaDialog, toggleIdeaDialog } from './components/IdeaDialog';
 import { TaskSwitcher } from './components/TaskSwitcher';
 import { SettingsDialog } from './components/SettingsDialog';
 import { WorkspaceControls } from './components/WorkspaceControls';
@@ -775,6 +776,7 @@ function App() {
         if (!e.repeat) createTerminal();
       },
       newTask: () => withViewTransition(() => toggleNewTaskPanel(true)),
+      addIdea: () => toggleIdeaDialog(),
       toggleSidebar: () => toggleSidebar(),
       toggleFocusMode: () =>
         withViewTransition(() => setWorkspaceView(workspaceView() === 'focus' ? 'tiles' : 'focus')),
@@ -1068,6 +1070,7 @@ function App() {
         <Show when={!bare()}>
           <UsageStatusBar />
         </Show>
+        <IdeaDialog />
         <HelpDialog open={store.showHelpDialog} onClose={() => toggleHelpDialog(false)} />
         <TaskSwitcher open={taskSwitcherOpen()} onClose={() => setTaskSwitcherOpen(false)} />
         <SettingsDialog

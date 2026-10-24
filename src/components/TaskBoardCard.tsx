@@ -40,23 +40,30 @@ function CloseFailed(props: { task: Task }) {
   );
 }
 
+/** A card's project: its swatch and name, or nothing for no project. */
+export function BoardProjectLabel(props: { projectId: string | null | undefined }) {
+  const project = () => (props.projectId ? getProject(props.projectId) : undefined);
+  return (
+    <Show when={project()}>
+      {(p) => (
+        <span class="task-board-project" title={p().name}>
+          <Show
+            when={p().icon}
+            fallback={<i style={{ background: p().color }} aria-hidden="true" />}
+          >
+            {(icon) => <ProjectSwatch color={p().color} icon={icon()} size={8} />}
+          </Show>
+          <span>{p().name}</span>
+        </span>
+      )}
+    </Show>
+  );
+}
+
 function CardMeta(props: { task: Task; since: number | undefined; waiting: boolean }) {
-  const project = () => getProject(props.task.projectId);
   return (
     <div class="task-board-meta">
-      <Show when={project()}>
-        {(p) => (
-          <span class="task-board-project" title={p().name}>
-            <Show
-              when={p().icon}
-              fallback={<i style={{ background: p().color }} aria-hidden="true" />}
-            >
-              {(icon) => <ProjectSwatch color={p().color} icon={icon()} size={8} />}
-            </Show>
-            <span>{p().name}</span>
-          </span>
-        )}
-      </Show>
+      <BoardProjectLabel projectId={props.task.projectId} />
       {/* Names the cause of a stopped card's spinner in the agent's slot, so the row never reflows. */}
       <Show
         when={getTaskAttentionState(props.task.id) === 'shell_busy'}

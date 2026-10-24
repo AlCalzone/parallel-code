@@ -255,6 +255,22 @@ export function GitGraphIcon(props: IconProps): JSX.Element {
   );
 }
 
+/** A lightbulb: jot down an idea for a task. */
+export function IdeaIcon(props: IconProps): JSX.Element {
+  return (
+    <SvgIcon {...props}>
+      <path
+        d="M8 1.5a4.75 4.75 0 0 0-2.85 8.55c.55.41.85 1.03.85 1.7v.5h4v-.5c0-.67.3-1.29.85-1.7A4.75 4.75 0 0 0 8 1.5ZM6.5 14.5h3"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </SvgIcon>
+  );
+}
+
 export function BookmarkIcon(props: IconProps): JSX.Element {
   return (
     <SvgIcon {...props}>

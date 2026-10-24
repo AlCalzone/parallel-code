@@ -50,6 +50,8 @@ export function stepInGrid<T>(columns: T[][], current: T, move: BoardMove): T | 
 }
 
 const CARD = '.task-board-title';
+// Ideas aren't tasks: the keyboard and the side panel step past their lane.
+const LANE = '.task-board-lane:not(.lane-ideas)';
 
 function boardElement(): HTMLElement | null {
   return document.querySelector<HTMLElement>('.task-board');
@@ -71,7 +73,7 @@ function boardColumns(): HTMLElement[][] {
   if (!board) return [];
   return asShown(
     board,
-    [...board.querySelectorAll<HTMLElement>('.task-board-lane, .task-board-rail')]
+    [...board.querySelectorAll<HTMLElement>(`${LANE}, .task-board-rail`)]
       .map((col) =>
         col.matches('.task-board-rail') ? [col] : [...col.querySelectorAll<HTMLElement>(CARD)],
       )
@@ -88,7 +90,7 @@ function boardTaskColumns(): string[][] {
   if (!board) return [];
   return asShown(
     board,
-    [...board.querySelectorAll<HTMLElement>('.task-board-lane')]
+    [...board.querySelectorAll<HTMLElement>(LANE)]
       .map((lane) =>
         [...lane.querySelectorAll<HTMLElement>('[data-board-task-id]')]
           .map((card) => card.dataset.boardTaskId ?? '')

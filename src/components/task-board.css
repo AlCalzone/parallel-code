@@ -128,6 +128,151 @@
   background: var(--bg-hover);
   color: var(--fg);
 }
+/* Icon only, square like the bulb. */
+.task-board-github {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0 6px;
+}
+/* Dimmed like the disabled plan toggle beside it. */
+.task-board-github:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.task-board-github:disabled:hover {
+  background: transparent;
+  color: var(--fg-muted);
+}
+/* The bulb and the lane toggle join into one split button. */
+.task-board-ideas-group {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.task-board-ideas-group > .task-board-new {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+}
+.task-board-ideas-group > .task-board-new:not(:last-child) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.task-board-ideas-group > .task-board-new + .task-board-new {
+  margin-left: -1px;
+  padding: 0 8px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.task-board-idea-add[aria-expanded='true'],
+.task-board-ideas-toggle[aria-pressed='true'] {
+  background: var(--bg-hover);
+}
+/* Pressed: the count reads at full strength, like a primary label. */
+.task-board-ideas-toggle[aria-pressed='true'] .task-board-count {
+  color: var(--fg);
+}
+.task-board-ideas-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-popover);
+}
+.task-board-ideas-popover {
+  position: fixed;
+  width: 320px;
+  margin: 0;
+  padding: 5px;
+  box-sizing: border-box;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 22%);
+  font-size: 12px;
+}
+/* Grows with the idea up to a few lines, then scrolls. */
+.task-board-idea-input {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  max-height: 200px;
+  field-sizing: content;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  resize: none;
+  line-height: 17px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--fg);
+  font: inherit;
+  outline: none;
+}
+.task-board-idea-input:focus {
+  border-color: var(--border-focus);
+}
+.task-board-idea-project {
+  width: 100%;
+  margin-top: 5px;
+}
+/* Ideas are notes, not running work: an outline instead of a fill, and
+   regular-weight text. Two classes outrank the card's own rules, declared
+   later. */
+.task-board-card.task-board-idea {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 12%, transparent);
+}
+.task-board-card.task-board-idea:hover {
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+}
+.task-board-card.task-board-idea:has(.task-board-title:focus) {
+  box-shadow: inset 0 0 0 1px var(--border-focus);
+}
+.task-board-idea .task-board-title {
+  font-weight: 400;
+}
+.task-board-idea .task-board-name {
+  white-space: pre-line;
+  -webkit-line-clamp: 4;
+}
+.task-board-idea-ring {
+  width: 8px;
+  height: 8px;
+  box-sizing: border-box;
+  margin: 2px;
+  border: 1.5px solid var(--fg-subtle, var(--fg-muted));
+  border-radius: 50%;
+}
+/* The actions take the age's corner on hover or focus. Hidden, not removed,
+   so neither moves the card's text. Raised above the title's hit area. */
+.task-board-idea-actions {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  z-index: 1;
+  display: flex;
+  opacity: 0;
+}
+.task-board-idea:hover .task-board-age,
+.task-board-idea:focus-within .task-board-age {
+  visibility: hidden;
+}
+.task-board-idea:hover .task-board-idea-actions,
+.task-board-idea:focus-within .task-board-idea-actions {
+  opacity: 1;
+}
+.task-board-idea-action {
+  display: inline-flex;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-subtle, var(--fg-muted));
+  cursor: pointer;
+}
+.task-board-idea-action:hover {
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  color: var(--fg);
+}
 /* The sidebar's project filter, shown here while the sidebar is hidden. A
    fixed width holds the clear button's slot, so picking a project does not
    shift the centred controls. */

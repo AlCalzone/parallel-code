@@ -106,6 +106,8 @@ export const [store, setStore] = createStore<AppStore>({
   keybindingMigrationDismissed: false,
   featureHintsEnabled: true,
   seenFeatureHints: [],
+  taskIdeas: [],
+  lastIdeaProjectId: null,
   focusMode: false,
   boardView: false,
   boardPeek: false,

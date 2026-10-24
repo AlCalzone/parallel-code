@@ -1,4 +1,5 @@
 /** Renderer side of the GitHub integration: issue/PR lookups and PR actions for tasks. */
+import { createSignal } from 'solid-js';
 import { IPC } from '../../electron/ipc/channels';
 import { invoke } from '../lib/ipc';
 import { warn as logWarn } from '../lib/log';
@@ -111,6 +112,38 @@ export function openGitHubIssues(projectId: string | null): void {
 /** The project's github.com repository (`owner/name`) as the GitHub CLI resolves it. */
 export function resolveGitHubRepository(projectRoot: string): Promise<string> {
   return invoke<string>(IPC.ResolveGitHubRepository, { projectRoot });
+}
+
+// A failed check may be passing trouble (offline, gh logged out), so it is
+// asked again once this old, on the next read.
+const RECHECK_FAILED_MS = 60_000;
+// shortcut: a success is kept until restart, as a project's remote seldom
+// changes and each check runs gh — invalidate per project if remotes get edited in the app.
+// Per folder: true, or when its check last failed.
+const [repositoryChecks, setRepositoryChecks] = createSignal<Record<string, true | number>>({});
+const pendingRepositoryChecks = new Set<string>();
+
+function recordRepositoryCheck(projectRoot: string, result: true | number): void {
+  pendingRepositoryChecks.delete(projectRoot);
+  setRepositoryChecks((checks) => ({ ...checks, [projectRoot]: result }));
+}
+
+/**
+ * Whether the folder is a github.com repository, as gh answers; undefined
+ * while it is asked.
+ */
+export function isGitHubProject(projectRoot: string): boolean | undefined {
+  const known = repositoryChecks()[projectRoot];
+  if (known === true) return true;
+  if (pendingRepositoryChecks.has(projectRoot)) return known === undefined ? undefined : false;
+  if (known !== undefined && Date.now() - known < RECHECK_FAILED_MS) return false;
+  pendingRepositoryChecks.add(projectRoot);
+  // A failure is an answer too: no gh, no remote, offline, or not github.com.
+  void resolveGitHubRepository(projectRoot).then(
+    () => recordRepositoryCheck(projectRoot, true),
+    () => recordRepositoryCheck(projectRoot, Date.now()),
+  );
+  return known === undefined ? undefined : false;
 }
 
 export function browseGitHubIssues(

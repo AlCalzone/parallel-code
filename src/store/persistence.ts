@@ -75,6 +75,7 @@ import type {
   PersistedWindowState,
   Project,
   VerifyPassRecord,
+  TaskIdea,
 } from './types';
 import type { AgentDef } from '../ipc/types';
 import { inferDockerSource } from '../lib/docker';
@@ -293,6 +294,22 @@ function restoredPrBabysit(value: unknown): PrBabysit | undefined {
   };
 }
 
+function isTaskIdea(value: unknown): value is TaskIdea {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.id === 'string' &&
+    typeof v.text === 'string' &&
+    v.text.trim() !== '' &&
+    (v.projectId === null || typeof v.projectId === 'string') &&
+    typeof v.createdAt === 'number'
+  );
+}
+
+function restoreTaskIdeas(value: unknown): TaskIdea[] {
+  return Array.isArray(value) ? value.filter(isTaskIdea) : [];
+}
+
 function restoredSnoozedUntil(value: unknown): number | undefined {
   return typeof value === 'number' &&
     Number.isFinite(value) &&
@@ -474,6 +491,9 @@ export async function saveState(): Promise<void> {
     // Always stored: a missing value marks an install that predates the tips.
     featureHintsEnabled: store.featureHintsEnabled,
     seenFeatureHints: store.seenFeatureHints.length > 0 ? [...store.seenFeatureHints] : undefined,
+    taskIdeas:
+      store.taskIdeas.length > 0 ? store.taskIdeas.map((idea) => ({ ...idea })) : undefined,
+    lastIdeaProjectId: store.lastIdeaProjectId ?? undefined,
     focusMode: store.focusMode || undefined,
     boardView: store.boardView || undefined,
     boardSidePanelLeft: store.boardSidePanelLeft || undefined,
@@ -680,6 +700,8 @@ interface LegacyPersistedState {
   keybindingMigrationDismissed?: unknown;
   featureHintsEnabled?: unknown;
   seenFeatureHints?: unknown;
+  taskIdeas?: unknown;
+  lastIdeaProjectId?: unknown;
   focusMode?: unknown;
   boardView?: unknown;
   boardSidePanelLeft?: unknown;
@@ -1068,6 +1090,9 @@ export async function loadState(): Promise<void> {
       s.seenFeatureHints = Array.isArray(raw.seenFeatureHints)
         ? raw.seenFeatureHints.filter(isFeatureHintId)
         : [];
+      s.taskIdeas = restoreTaskIdeas(raw.taskIdeas);
+      s.lastIdeaProjectId =
+        typeof raw.lastIdeaProjectId === 'string' ? raw.lastIdeaProjectId : null;
 
       // Make custom agents findable during task restoration
       for (const ca of s.customAgents) {

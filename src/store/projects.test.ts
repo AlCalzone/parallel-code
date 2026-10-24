@@ -414,6 +414,18 @@ describe('quick edit projects', () => {
     expect(store.projects.some((p) => p.id === id)).toBe(false);
   });
 
+  it("keeps a removed project's ideas, no longer tied to it", () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+    setStore('projects', [{ id: 'gone', name: 'Gone', path: '/gone', color: '#000' }]);
+    setStore('taskIdeas', [{ id: 'i1', text: 'Dark mode', projectId: 'gone', createdAt: 1 }]);
+
+    removeProject('gone');
+
+    expect(store.taskIdeas).toEqual([
+      { id: 'i1', text: 'Dark mode', projectId: null, createdAt: 1 },
+    ]);
+  });
+
   it("forgets a removed project's block edits, so a re-added one starts clean", () => {
     vi.mocked(invoke).mockResolvedValue(undefined);
     const id = addQuickEditProject({

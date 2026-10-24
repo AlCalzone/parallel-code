@@ -2,6 +2,7 @@ import { For, Index, Show, createMemo, createSignal, onCleanup, onMount } from '
 import { mod } from '../lib/platform';
 import { isTypingTarget } from '../lib/tour-keys';
 import { store } from '../store/core';
+import { boardIdeas, ideasLaneShown } from '../store/ideas';
 import { setTaskProjectFilter, toggleNewTaskPanel } from '../store/navigation';
 import { markFeatureHintSeen } from '../store/onboarding';
 import { boardSidePanelOpen } from '../store/project-pages';
@@ -17,6 +18,7 @@ import { BoardLane, BoardRail } from './board/BoardLane';
 import { FeatureHint } from './FeatureHint';
 import { useBoardClock } from './board/task-state';
 import { TaskBoardCard } from './TaskBoardCard';
+import { IdeasLane } from './TaskBoardIdeasLane';
 import { forgetWorkingHolds } from './task-board-hold';
 import { BoardSearch, boardQuery, setBoardQuery } from './BoardSearch';
 import { useCardMotion } from './task-board-motion';
@@ -182,9 +184,11 @@ export function TaskBoard() {
   const tasks = createMemo(() => boardTasks(boardQuery()));
   const lanes = createMemo(() => boardLanes(tasks()));
   let lanesEl: HTMLDivElement | undefined;
+  // Ideas share the motion: adding or removing one, or showing their lane,
+  // fades cards in and out and glides the lanes beside them.
   useCardMotion(
     () => lanesEl,
-    () => lanes(),
+    () => [lanes(), ideasLaneShown() && boardIdeas(boardQuery())],
   );
   onCleanup(useBoardClock());
   onCleanup(forgetWorkingHolds);
@@ -212,6 +216,7 @@ export function TaskBoard() {
         <Show when={tasks().length === 0}>
           <BoardEmpty />
         </Show>
+        <IdeasLane query={boardQuery()} />
         {/* Index, not For: lanes are rebuilt on every change but keep their place,
             so a lane's cards and the snoozed rail's open state survive updates. */}
         <Index each={lanes()}>
@@ -227,7 +232,11 @@ export function TaskBoard() {
       <FeatureHint
         id="board-lanes"
         when={tasks().length > 0}
-        anchor={() => lanesEl?.querySelector<HTMLElement>('.task-board-lane-title') ?? undefined}
+        anchor={() =>
+          lanesEl?.querySelector<HTMLElement>(
+            '.task-board-lane:not(.lane-ideas) .task-board-lane-title',
+          ) ?? undefined
+        }
         title="Tasks sort themselves by what they need"
       >
         A card moves on its own: to Needs you when its agent asks something, fails or is ready for

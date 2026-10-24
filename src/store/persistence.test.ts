@@ -1758,6 +1758,19 @@ describe('feature tips persistence', () => {
     expect(store.seenFeatureHints).toEqual(['change-tour']);
     expect((await lastSaved()).seenFeatureHints).toEqual(['change-tour']);
   });
+
+  it('round-trips board ideas and drops malformed ones', async () => {
+    const idea = { id: 'i1', text: 'Dark mode', projectId: null, createdAt: 1 };
+    mockInvoke.mockResolvedValueOnce(
+      stateJson({ taskIdeas: [idea, { id: 'i2' }], lastIdeaProjectId: 'p1' }),
+    );
+    await loadState();
+    expect(store.taskIdeas).toEqual([idea]);
+    expect(store.lastIdeaProjectId).toBe('p1');
+    const saved = await lastSaved();
+    expect(saved.taskIdeas).toEqual([idea]);
+    expect(saved.lastIdeaProjectId).toBe('p1');
+  });
 });
 
 describe('code Q&A model persistence', () => {

@@ -351,6 +351,17 @@ export const DEFAULT_BINDINGS: KeyBinding[] = [
     global: true,
   },
   {
+    id: 'app.add-idea',
+    layer: 'app',
+    category: 'App',
+    description: 'Add an idea: a task to start later',
+    platform: 'both',
+    key: 'N',
+    modifiers: { cmdOrCtrl: true, shift: true },
+    action: 'addIdea',
+    global: true,
+  },
+  {
     id: 'app.toggle-sidebar',
     layer: 'app',
     category: 'App',

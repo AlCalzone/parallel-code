@@ -36,10 +36,13 @@ const FADE_MS = 160;
 
 type Card = { el: HTMLElement; rect: DOMRect };
 
+// Ideas animate like cards but keep their own marker: they aren't tasks to the keyboard.
+const ANIMATED = '[data-board-card], [data-board-idea]';
+
 function measureCards(container: HTMLElement): Map<string, Card> {
   const cards = new Map<string, Card>();
-  for (const el of container.querySelectorAll<HTMLElement>('[data-board-card]')) {
-    const id = el.dataset.boardCard;
+  for (const el of container.querySelectorAll<HTMLElement>(ANIMATED)) {
+    const id = el.dataset.boardCard ?? el.dataset.boardIdea;
     if (id) cards.set(id, { el, rect: el.getBoundingClientRect() });
   }
   return cards;
@@ -55,6 +58,7 @@ function fadeOutGhost(container: HTMLElement, card: Card): void {
   // No longer a card: keyboard and card lookups must not find it.
   delete ghost.dataset.boardCard;
   delete ghost.dataset.boardTaskId;
+  delete ghost.dataset.boardIdea;
   ghost.setAttribute('aria-hidden', 'true');
   ghost.inert = true;
   Object.assign(ghost.style, {
@@ -106,7 +110,7 @@ export function useCardMotion(container: () => HTMLElement | undefined, layout: 
         before = undefined;
         if (!root || !was || typeof root.animate !== 'function') return;
         // A card still gliding from the last change is measured where it will end.
-        for (const el of root.querySelectorAll<HTMLElement>('[data-board-card]')) {
+        for (const el of root.querySelectorAll<HTMLElement>(ANIMATED)) {
           moving.get(el)?.cancel();
         }
         const after = measureCards(root);

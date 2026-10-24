@@ -500,6 +500,15 @@ export interface PersistedWindowState {
   maximized: boolean;
 }
 
+/** A thought kept on the board until it is started as a task. */
+export interface TaskIdea {
+  id: string;
+  text: string;
+  /** Null for an idea not tied to any project. */
+  projectId: string | null;
+  createdAt: number;
+}
+
 export interface PersistedState {
   projects: Project[];
   lastProjectId: string | null;
@@ -550,6 +559,8 @@ export interface PersistedState {
   keybindingMigrationDismissed?: boolean;
   featureHintsEnabled?: boolean;
   seenFeatureHints?: FeatureHintId[];
+  taskIdeas?: TaskIdea[];
+  lastIdeaProjectId?: string | null;
   focusMode?: boolean;
   boardView?: boolean;
   boardSidePanelLeft?: boolean;
@@ -708,6 +719,8 @@ export interface AppStore {
     superProductivity?: SpNewTaskSource;
     /** Set when the form was opened from a Kanban card. */
     kanban?: KanbanNewTaskSource;
+    /** Set when the form was opened from a board idea; the idea goes once the task exists. */
+    ideaId?: string;
     /** Settings of a draft offered again after its creation failed. */
     agentId?: string;
     gitIsolation?: GitIsolationMode;
@@ -731,6 +744,10 @@ export interface AppStore {
   /** One-time feature tips; on for new installs, off for installs that predate them. */
   featureHintsEnabled: boolean;
   seenFeatureHints: FeatureHintId[];
+  /** Ideas waiting in the board's Ideas lane, newest first. */
+  taskIdeas: TaskIdea[];
+  /** The project the last idea went to; the add-idea dialog starts there. */
+  lastIdeaProjectId: string | null;
   focusMode: boolean;
   /** The all-tasks board covers the workspace; focusMode is kept for when it closes. */
   boardView: boolean;

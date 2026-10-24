@@ -3,6 +3,7 @@ import { createCanvasTask, validateCanvasTaskSource } from '../store/canvas-task
 import type { AppStore, KanbanNewTaskSource, SpNewTaskSource } from '../store/types';
 import { linkNewTaskToSp } from '../store/superProductivityOpen';
 import { linkNewTaskToKanbanCard } from '../store/kanban';
+import { removeTaskIdea } from '../store/ideas';
 import { nameTaskWithModel } from '../store/model-task-name';
 import { activeFeatureHint, markFeatureHintSeen } from '../store/onboarding';
 import { createTaskInBackground, registerOpenDraft } from '../store/task-creation';
@@ -407,6 +408,7 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
   const [canvasPrefill, setCanvasPrefill] = createSignal<AppStore['newTaskPrefillPrompt']>(null);
   const [spSource, setSpSource] = createSignal<SpNewTaskSource | null>(null);
   const [kanbanSource, setKanbanSource] = createSignal<KanbanNewTaskSource | null>(null);
+  const [ideaId, setIdeaId] = createSignal<string | null>(null);
   const [prompt, setPrompt] = createSignal('');
   const [githubPickerOpen, setGithubPickerOpen] = createSignal(false);
   /** Open PR the task will check out instead of branching from the base branch. */
@@ -630,6 +632,7 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
             const prefill = store.newTaskPrefillPrompt;
             setSpSource(prefill?.superProductivity ?? null);
             setKanbanSource(prefill?.kanban ?? null);
+            setIdeaId(prefill?.ideaId ?? null);
             if (prefill) {
               setPrompt(prefill.prompt);
               setName(prefill.name ?? 'Compare arena results');
@@ -1205,6 +1208,7 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
       };
       const source = spSource();
       const card = kanbanSource();
+      const idea = ideaId();
       // The panel closes before creation finishes so the next draft can start.
       void createTaskInBackground({
         name: n,
@@ -1216,6 +1220,7 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
           }
           if (source) linkNewTaskToSp(taskId, source, projectId);
           if (card) void linkNewTaskToKanbanCard(taskId, card, projectId);
+          if (idea) removeTaskIdea(idea);
           if (!manualName && p) void nameTaskWithModel(taskId, p);
         },
         draft: {

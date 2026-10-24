@@ -36,7 +36,9 @@ export function BoardSearch(props: { what: string }) {
             focusBoardCard(null);
           } else if (e.key === 'Enter') {
             e.preventDefault();
-            document.querySelector<HTMLElement>('.task-board-lane .task-board-title')?.click();
+            document
+              .querySelector<HTMLElement>('.task-board-lane:not(.lane-ideas) .task-board-title')
+              ?.click();
           }
         }}
       />

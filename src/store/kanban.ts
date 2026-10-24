@@ -50,8 +50,8 @@ export function openKanban(projectId: string | null): void {
 }
 
 /**
- * The project the Plan view shows: the selected project, which an open plan
- * always is. Null while all projects show, which disables the Plan tab.
+ * The project the Plan view shows: the selected project, which opening a plan
+ * selects. Null while all projects show, which hides the Plan toggle.
  */
 export function planViewProjectId(): string | null {
   const projectId = taskProjectFilter();

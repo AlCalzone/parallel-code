@@ -250,7 +250,6 @@ it('narrows the cards to the selected project without closing the board', () => 
 
 it('puts its actions in the title bar while it shows, and its filter on the board', () => {
   const controls = host.querySelector('.task-board-controls');
-  expect(controls?.textContent).toContain('Plan');
   expect(controls?.textContent).toContain('New task');
   expect(host.querySelector('.task-board')?.contains(controls ?? null)).toBe(false);
   expect(host.querySelector('.task-board .task-board-search')).not.toBeNull();

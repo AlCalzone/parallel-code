@@ -147,6 +147,8 @@ export function removeProject(projectId: string): void {
       // A stale id would keep task shortcuts disabled with no page shown.
       if (s.githubIssuesProjectId === projectId) s.githubIssuesProjectId = null;
       if (s.kanbanProjectId === projectId) s.kanbanProjectId = null;
+      // An idea outlives its project: it stays, belonging to none.
+      for (const idea of s.taskIdeas) if (idea.projectId === projectId) idea.projectId = null;
     }),
   );
   forgetGitHubLists(projectId);

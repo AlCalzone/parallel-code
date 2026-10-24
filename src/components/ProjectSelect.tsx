@@ -7,6 +7,8 @@ interface ProjectSelectProps {
   value: string | null;
   onChange: (projectId: string | null) => void;
   placeholder?: string;
+  /** Offers "no project" as a choice, under this label. */
+  emptyLabel?: string;
   class?: string;
   showPath?: boolean;
   id?: string;
@@ -30,6 +32,9 @@ export function ProjectSelect(props: ProjectSelectProps) {
         <option value="" disabled hidden>
           {props.placeholder}
         </option>
+      </Show>
+      <Show when={props.emptyLabel}>
+        <option value="">{props.emptyLabel}</option>
       </Show>
       <For each={codeProjects().sort((a, b) => a.name.localeCompare(b.name))}>
         {(project) => (

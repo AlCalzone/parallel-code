@@ -64,6 +64,8 @@ function structuralSnapshot(): string {
     coordinatorControlHintDismissed: store.coordinatorControlHintDismissed,
     featureHintsEnabled: store.featureHintsEnabled,
     seenFeatureHints: store.seenFeatureHints,
+    taskIdeas: store.taskIdeas,
+    lastIdeaProjectId: store.lastIdeaProjectId,
     autoStartRemoteAccess: store.autoStartRemoteAccess,
     shareDockerAgentAuth: store.shareDockerAgentAuth,
     appearanceMode: store.appearanceMode,
