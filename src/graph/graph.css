@@ -160,7 +160,7 @@
   height: 10px;
   color: var(--fg-muted);
   opacity: 0.18;
-  transition: opacity 160ms;
+  transition: opacity var(--motion-fast) var(--ease-out);
 }
 .mindmap-ownership {
   pointer-events: auto;

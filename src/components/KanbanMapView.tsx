@@ -1,7 +1,7 @@
 import { createMemo, createSignal, Show } from 'solid-js';
 import { GraphCanvas } from '../graph/GraphCanvas';
 import { visibleNodes } from '../graph/model';
-import { createReducedMotion } from '../graph/reducedMotion';
+import { createReducedMotion } from '../lib/reducedMotion';
 import { boardToMap, type KanbanMapGrouping } from '../lib/kanban-map';
 import type { KanbanBoard, KanbanCardRef } from '../lib/kanban';
 import { SparkleIcon } from './icons';

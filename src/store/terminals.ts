@@ -8,7 +8,7 @@ import { clearAgentActivity } from './taskStatus';
 import { triggerFocus, getTaskFocusedPanel } from './focused-panel';
 import type { Terminal } from './types';
 import { warn as logWarn } from '../lib/log';
-import { shouldAnimateTaskAppearance } from '../lib/reducedMotion';
+import { prefersMotion } from '../lib/reducedMotion';
 import { closeProjectPages } from './project-pages';
 
 let terminalCounter = 0;
@@ -17,7 +17,7 @@ let lastCreateTime = 0;
 // Matches the `.task-removing` and `.task-item-removing` animations in styles.css.
 const REMOVE_ANIMATION_MS = 160;
 // Under reduced motion nothing animates, so a closed task need not linger.
-const removeDelayMs = () => (shouldAnimateTaskAppearance() ? REMOVE_ANIMATION_MS : 0);
+const removeDelayMs = () => (prefersMotion() ? REMOVE_ANIMATION_MS : 0);
 
 export function createTerminal(): void {
   const now = Date.now();

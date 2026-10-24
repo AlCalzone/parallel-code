@@ -26,7 +26,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { unwrap } from 'solid-js/store';
 import { store } from '../store/core';
 import { createInlineEditing } from '../graph/inlineEditing';
-import { createReducedMotion } from '../graph/reducedMotion';
+import { createReducedMotion } from '../lib/reducedMotion';
 import { focusRecord } from '../graph/focus';
 import { branchAgentAction, type BranchRequest } from '../graph/agentActions';
 import { NodeContextMenu, type NodeAction } from '../graph/NodeContextMenu';

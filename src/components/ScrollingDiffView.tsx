@@ -11,7 +11,7 @@ import type { FileDiff, Hunk, DiffLine } from '../lib/unified-diff-parser';
 import { debug as logDebug, warn as logWarn } from '../lib/log';
 import type { FileDiffResult } from '../ipc/types';
 import { getDiffSelection } from '../lib/diff-selection';
-import { shouldAnimateTaskAppearance } from '../lib/reducedMotion';
+import { prefersMotion } from '../lib/reducedMotion';
 import { getContextGapLineCount, type ContextGapRange } from '../lib/diff-context-gaps';
 import { countFileSearchMatches, getInitialCollapsedFiles } from '../lib/diff-collapse';
 import { AskCodeCard } from './AskCodeCard';
@@ -886,7 +886,7 @@ export function ScrollingDiffView(props: ScrollingDiffViewProps) {
     const target = props.scrollToPath;
     if (!target) return;
     expandFile(target);
-    if (shouldAnimateTaskAppearance()) {
+    if (prefersMotion()) {
       setDimOthers(true);
       // Undim a frame after the dimmed state is painted, or there is nothing to fade from.
       let undimFrame = requestAnimationFrame(() => {

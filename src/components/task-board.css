@@ -785,7 +785,7 @@ main.board-panel-left > .plan-board-shell {
 ::view-transition-old(*),
 ::view-transition-new(*) {
   animation-duration: 220ms;
-  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  animation-timing-function: var(--ease-out);
 }
 ::view-transition-old(task-board),
 ::view-transition-new(task-board),
@@ -809,20 +809,22 @@ main.board-panel-left > .plan-board-shell {
 /* A view that comes or goes fades; the workspace also slides from the right
    edge, where the side panel lives. */
 /* The board arrives as the workspace leaves, so it waits until the workspace
-   has mostly faded rather than show both at once; leaving, it goes quickly. */
+   has mostly faded rather than show both at once; leaving, it goes quickly.
+   Delay plus fade ends with the workspace's 140ms exit, so returning to the
+   board never outlasts leaving the task. */
 ::view-transition-new(task-board):only-child {
-  animation: view-fade-in 180ms 60ms cubic-bezier(0.2, 0, 0, 1) backwards;
+  animation: view-fade-in 100ms 40ms var(--ease-out) backwards;
 }
 ::view-transition-old(task-board):only-child {
   opacity: 1;
-  animation: view-fade-out 90ms cubic-bezier(0.2, 0, 0, 1) forwards;
+  animation: view-fade-out 90ms var(--ease-out) forwards;
 }
 ::view-transition-new(task-workspace):only-child {
-  animation: board-side-panel-in 220ms cubic-bezier(0.2, 0, 0, 1);
+  animation: board-side-panel-in 220ms var(--ease-out);
 }
 ::view-transition-old(task-workspace):only-child {
   opacity: 1;
-  animation: board-side-panel-out 140ms cubic-bezier(0.2, 0, 0, 1) forwards;
+  animation: board-side-panel-out 140ms var(--ease-out) forwards;
 }
 /* The side panel instead pushes in from the window edge while the board's box
    narrows, on the group's curve and duration, so the panel's left edge tracks
@@ -831,10 +833,10 @@ main.board-panel-left > .plan-board-shell {
   view-transition-class: board-side-panel;
 }
 ::view-transition-new(task-workspace.board-side-panel):only-child {
-  animation: board-side-panel-push-in 220ms cubic-bezier(0.2, 0, 0, 1);
+  animation: board-side-panel-push-in 220ms var(--ease-out);
 }
 ::view-transition-old(task-workspace.board-side-panel):only-child {
-  animation: board-side-panel-push-out 220ms cubic-bezier(0.2, 0, 0, 1) forwards;
+  animation: board-side-panel-push-out 220ms var(--ease-out) forwards;
 }
 /* On the left the panel emerges from the sidebar's edge rather than sliding
    over the sidebar, so it is clipped to its own box. */
@@ -865,7 +867,7 @@ main.board-panel-left > .plan-board-shell {
   height: 100%;
   object-fit: none;
   object-position: left top;
-  animation: board-task-switch-in 140ms cubic-bezier(0.2, 0, 0, 1);
+  animation: board-task-switch-in 140ms var(--ease-out);
 }
 @keyframes board-task-switch-in {
   from {

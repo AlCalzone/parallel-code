@@ -61,7 +61,7 @@ import { abbreviateHomePath } from '../lib/path';
 import { invoke } from '../lib/ipc';
 import { IPC } from '../../electron/ipc/channels';
 import type { ImportableWorktree } from '../ipc/types';
-import { shouldAnimateTaskAppearance } from '../lib/reducedMotion';
+import { prefersMotion } from '../lib/reducedMotion';
 import { withViewTransition } from '../lib/viewTransition';
 import { isTaskBackgrounded } from '../store/background-tasks';
 
@@ -286,7 +286,7 @@ export function TaskRowShell(props: {
   children: JSX.Element;
 }) {
   const className = () =>
-    shouldAnimateTaskAppearance()
+    prefersMotion()
       ? props.class
       : props.class
           .split(/\s+/)

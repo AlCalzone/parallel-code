@@ -1,5 +1,5 @@
 import { debug, error } from './log';
-import { shouldAnimateTaskAppearance } from './reducedMotion';
+import { prefersMotion } from './reducedMotion';
 
 /**
  * Runs a workspace view change (focus, tiles, board, side panel) as a view
@@ -12,7 +12,7 @@ import { shouldAnimateTaskAppearance } from './reducedMotion';
  * `:active-view-transition-type()`.
  */
 export function withViewTransition(update: () => void, types: string[] = []): void {
-  if (!shouldAnimateTaskAppearance() || !('startViewTransition' in document)) {
+  if (!prefersMotion() || !('startViewTransition' in document)) {
     update();
     return;
   }

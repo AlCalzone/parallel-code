@@ -6,6 +6,10 @@
   --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-display: 'Sora', var(--font-ui);
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Motion tokens from src/styles.css, used by the shared chat view. */
+  --motion-fast: 120ms;
+  --motion-enter: 180ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --bg: #080c10;
   --bg-elevated: #161e26;
   --bg-input: #0c1218;

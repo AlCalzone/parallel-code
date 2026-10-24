@@ -42,7 +42,7 @@ import { markDirty } from '../lib/terminalFitManager';
 import { theme } from '../lib/theme';
 import { mod } from '../lib/platform';
 import { createCtrlShiftWheelResizeHandler } from '../lib/wheelZoom';
-import { shouldAnimateTaskAppearance } from '../lib/reducedMotion';
+import { prefersMotion } from '../lib/reducedMotion';
 import { TASK_TILE_DEFAULT_WIDTH, TASK_TILE_MIN_WIDTH } from '../lib/layout-sizes';
 import { SyncIcon } from './icons';
 
@@ -271,10 +271,7 @@ export function TilingLayout() {
       // The draft is opened at the far end of the strip. Returning across a
       // long task list must not turn a synchronous Cancel into a long pan.
       const behavior: ScrollBehavior =
-        isFirstActiveTaskScroll ||
-        returningFromNewTask ||
-        filterChanged ||
-        !shouldAnimateTaskAppearance()
+        isFirstActiveTaskScroll || returningFromNewTask || filterChanged || !prefersMotion()
           ? 'instant'
           : 'smooth';
       isFirstActiveTaskScroll = false;
@@ -340,7 +337,7 @@ export function TilingLayout() {
           content: () => {
             const task = store.tasks[panelId];
             const terminal = store.terminals[panelId];
-            const appearanceClass = shouldAnimateTaskAppearance() ? 'task-appearing' : undefined;
+            const appearanceClass = prefersMotion() ? 'task-appearing' : undefined;
             // eslint-disable-next-line solid/components-return-once
             if (!task && !terminal) return <div />;
             return (

@@ -1,5 +1,5 @@
 import { createComputed, createEffect, on } from 'solid-js';
-import { shouldAnimateTaskAppearance } from '../lib/reducedMotion';
+import { EASE_OUT, prefersMotion } from '../lib/reducedMotion';
 
 type Point = { left: number; top: number };
 
@@ -30,7 +30,6 @@ export function planCardMotion(
   return plan;
 }
 
-const EASING = 'cubic-bezier(0.2, 0, 0, 1)';
 const MOVE_MS = 220;
 const FADE_MS = 160;
 
@@ -74,7 +73,7 @@ function fadeOutGhost(container: HTMLElement, card: Card): void {
   ghost
     .animate([{ opacity: 1 }, { opacity: 0, transform: 'scale(0.97)' }], {
       duration: FADE_MS,
-      easing: EASING,
+      easing: EASE_OUT,
       fill: 'forwards',
     })
     .finished.then(
@@ -97,7 +96,7 @@ export function useCardMotion(container: () => HTMLElement | undefined, layout: 
   createComputed(
     on(layout, () => {
       const root = container();
-      before = root && shouldAnimateTaskAppearance() ? measureCards(root) : undefined;
+      before = root && prefersMotion() ? measureCards(root) : undefined;
     }),
   );
 
@@ -119,12 +118,12 @@ export function useCardMotion(container: () => HTMLElement | undefined, layout: 
           const el = after.get(id)?.el;
           if (!el) continue;
           const keyframes = [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }];
-          moving.set(el, el.animate(keyframes, { duration: MOVE_MS, easing: EASING }));
+          moving.set(el, el.animate(keyframes, { duration: MOVE_MS, easing: EASE_OUT }));
         }
         for (const id of plan.added) {
           after.get(id)?.el.animate([{ opacity: 0, transform: 'scale(0.97)' }, {}], {
             duration: FADE_MS,
-            easing: EASING,
+            easing: EASE_OUT,
           });
         }
         for (const id of plan.removed) {

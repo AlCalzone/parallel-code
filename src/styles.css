@@ -8,6 +8,12 @@
     'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
     monospace;
 
+  /* Motion timing; see the Motion section in AGENTS.md. Fast is direct
+     feedback (hover, press, focus); enter animates what appears. */
+  --motion-fast: 120ms;
+  --motion-enter: 180ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+
   --bg: radial-gradient(120% 120% at 20% 0%, #253848 0%, #151d26 55%, #101418 100%);
   --bg-elevated: #1c2630;
   --bg-input: #1a232e;
@@ -312,7 +318,7 @@ body.font-smoothing {
 /* Quiet the icon controls in columns you are not working in; pressed toggles
    stay full strength because they show state. */
 .task-title-bar .task-title-actions .icon-btn {
-  transition: opacity 0.12s ease;
+  transition: opacity var(--motion-fast) var(--ease-out);
 }
 
 .task-title-bar:not([data-active='true']):not(:hover):not(:focus-within)
@@ -669,7 +675,7 @@ body::after {
   pointer-events: none;
   z-index: 2147483647;
   border: 1px solid transparent;
-  transition: border-color 0.16s ease;
+  transition: border-color var(--motion-fast) var(--ease-out);
 }
 
 .app-shell::before {
@@ -2113,11 +2119,11 @@ html:not([data-look^='obsidian'], [data-look^='islands-'], [data-look='workbench
 button {
   font-family: inherit;
   transition:
-    background 0.16s ease,
-    border-color 0.16s ease,
-    color 0.16s ease,
-    transform 0.16s ease,
-    box-shadow 0.16s ease;
+    background var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out);
 }
 
 /* The change tour beside the diff: the understanding tour's card and threads,
@@ -2375,9 +2381,9 @@ textarea::placeholder {
      the 6px head gap each — so they start under the title text, not the dot. */
   --task-row-indent: 18px;
   transition:
-    background 0.13s ease,
-    color 0.13s ease,
-    border-color 0.13s ease;
+    background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out);
 }
 
 .task-item:hover:not([aria-current='true']) {
@@ -2509,7 +2515,7 @@ textarea::placeholder {
   padding-left: var(--task-row-indent);
   font-family: var(--font-mono);
   opacity: 0.6;
-  transition: opacity 0.13s ease;
+  transition: opacity var(--motion-fast) var(--ease-out);
 }
 
 /* The two status lines belong together — only the pair is offset from the title. */
@@ -2592,8 +2598,8 @@ textarea::placeholder {
 .projects-toggle {
   border-radius: var(--radius-xs);
   transition:
-    background-color 0.12s ease,
-    color 0.12s ease;
+    background-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
 }
 
 .projects-toggle:hover {
@@ -2607,7 +2613,7 @@ textarea::placeholder {
 }
 
 .project-row {
-  transition: background-color 0.12s ease;
+  transition: background-color var(--motion-fast) var(--ease-out);
 }
 
 .project-row:hover {
@@ -2653,7 +2659,7 @@ textarea::placeholder {
   opacity: 1;
   transition:
     grid-template-rows 0.18s ease,
-    opacity 0.15s ease;
+    opacity var(--motion-fast) var(--ease-out);
 }
 
 .projects-collapser.is-collapsed {
@@ -3009,7 +3015,7 @@ html:is(
 
 .project-select::picker-icon {
   color: var(--fg-muted);
-  transition: rotate 0.14s ease;
+  transition: rotate var(--motion-fast) var(--ease-out);
 }
 
 .project-select:open::picker-icon {
@@ -3098,11 +3104,11 @@ html:is(
 }
 
 .task-appearing {
-  animation: taskAppear 0.18s cubic-bezier(0.2, 0, 0, 1);
+  animation: taskAppear var(--motion-enter) var(--ease-out);
 }
 
 .new-task-appearing {
-  animation: taskAppear 0.16s cubic-bezier(0.2, 0, 0, 1);
+  animation: taskAppear 0.16s var(--ease-out);
 }
 
 /* No max-height here: rows whose name wraps to two lines are taller than any
@@ -3119,7 +3125,7 @@ html:is(
 }
 
 .task-item-appearing {
-  animation: taskItemAppear 0.18s cubic-bezier(0.2, 0, 0, 1);
+  animation: taskItemAppear var(--motion-enter) var(--ease-out);
 }
 
 @keyframes taskRemove {
@@ -3134,7 +3140,7 @@ html:is(
 }
 
 .task-removing {
-  animation: taskRemove 0.16s cubic-bezier(0.2, 0, 0, 1) forwards;
+  animation: taskRemove 0.16s var(--ease-out) forwards;
   pointer-events: none;
 }
 
@@ -3153,7 +3159,7 @@ html:is(
 }
 
 .task-item-removing {
-  animation: taskItemRemove 0.16s cubic-bezier(0.2, 0, 0, 1) forwards;
+  animation: taskItemRemove 0.16s var(--ease-out) forwards;
   overflow: hidden;
   pointer-events: none;
 }
@@ -3414,13 +3420,13 @@ html:is(
 }
 
 .dialog-overlay {
-  animation: fadeIn 0.12s ease-out;
+  animation: fadeIn var(--motion-fast) var(--ease-out);
   backdrop-filter: saturate(1.15);
 }
 
 .dialog-overlay > form,
 .dialog-overlay > .dialog-content {
-  animation: slideUp 0.16s cubic-bezier(0.2, 0, 0, 1);
+  animation: slideUp 0.16s var(--ease-out);
 }
 
 .new-task-panel-form {
@@ -3456,9 +3462,9 @@ html:is(
   opacity: 0;
   pointer-events: none;
   transition:
-    opacity 0.12s ease,
-    color 0.12s ease,
-    background 0.12s ease;
+    opacity var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out);
 }
 
 /* The canvas button sits left of the editor button when both are revealed;
@@ -3493,7 +3499,7 @@ html:is(
   transform: translateY(-50%);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.12s ease;
+  transition: opacity var(--motion-fast) var(--ease-out);
 }
 
 .file-row:has(.changed-files-open-editor-btn:not(:disabled)) .changed-files-understand-anchor,
@@ -3536,7 +3542,7 @@ html:is(
 
 /* A one-time tip fades in over the page; it never pushes content aside. */
 .feature-hint {
-  animation: fadeIn 0.18s ease;
+  animation: fadeIn var(--motion-enter) var(--ease-out);
 }
 
 @keyframes fadeIn {
@@ -3632,7 +3638,7 @@ html:is(
 
 .exit-badge {
   backdrop-filter: blur(10px);
-  animation: fadeIn 0.2s ease;
+  animation: fadeIn var(--motion-enter) var(--ease-out);
 }
 
 .empty-state {
@@ -3646,7 +3652,7 @@ html:is(
 .resize-handle {
   flex-shrink: 0;
   background: transparent;
-  transition: background 0.12s ease;
+  transition: background var(--motion-fast) var(--ease-out);
 }
 
 .resize-handle:hover,
@@ -3671,9 +3677,9 @@ html:is(
 
 .new-task-placeholder {
   transition:
-    border-color 0.15s ease,
-    color 0.15s ease,
-    background 0.15s ease;
+    border-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out);
 }
 
 .new-task-placeholder:hover {
@@ -3693,7 +3699,7 @@ html:is(
   left: 2px !important;
   border-radius: var(--radius-pill) !important;
   background: color-mix(in srgb, var(--fg-subtle) 50%, transparent) !important;
-  transition: background 120ms ease;
+  transition: background var(--motion-fast) var(--ease-out);
 }
 
 .xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider:hover,
@@ -3792,7 +3798,7 @@ html:not([data-look^='islands-']) .task-column .shell-terminals-row {
   z-index: 10;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s;
+  transition: opacity var(--motion-fast) var(--ease-out);
 }
 
 .shell-terminal-container:hover .shell-terminal-close {
@@ -3806,7 +3812,7 @@ html:not([data-look^='islands-']) .task-column .shell-terminals-row {
 
 .prompt-textarea::placeholder {
   opacity: 0.35;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--motion-fast) var(--ease-out);
 }
 
 .prompt-textarea:focus::placeholder {
@@ -3941,7 +3947,7 @@ html:not([data-look^='islands-']) .task-column .shell-terminals-row {
   background: transparent;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--motion-fast) var(--ease-out);
 }
 
 .window-titlebar.unfocused {
@@ -4014,8 +4020,8 @@ html[data-look='islands-light'] .window-title-icon {
   color: var(--fg-muted);
   cursor: pointer;
   transition:
-    background 0.12s ease,
-    color 0.12s ease;
+    background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
 }
 
 .window-control-btn:hover {
@@ -4076,10 +4082,10 @@ html[data-look='islands-light'] .window-title-icon {
      can't reach them and the drag region swallows the click. */
   -webkit-app-region: no-drag;
   transition:
-    background 0.15s ease,
-    color 0.15s ease,
-    border-color 0.15s ease,
-    opacity 0.15s ease;
+    background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out),
+    opacity var(--motion-fast) var(--ease-out);
 }
 
 .focus-mode-task-indicator-name {
@@ -4590,7 +4596,7 @@ html[data-look='islands-light'] .window-title-icon {
   color: var(--fg-muted);
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--motion-fast) var(--ease-out);
 }
 
 .mermaid-block:hover .mermaid-enlarge,
@@ -4892,8 +4898,8 @@ html[data-look='islands-light'] .window-title-icon {
   field-sizing: content;
   resize: none;
   transition:
-    border-color 120ms ease,
-    background 120ms ease;
+    border-color var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out);
 }
 
 /* Room in the bottom-right corner, so text never runs under the send button. */
@@ -4998,7 +5004,7 @@ button.tour-outline-twisty:hover {
 }
 
 .tour-outline-twisty svg {
-  transition: transform 120ms ease;
+  transition: transform var(--motion-fast) var(--ease-out);
 }
 
 .tour-outline-twisty:is([aria-expanded='true'], [data-open]) svg {
@@ -5133,7 +5139,7 @@ span.tour-outline-twisty[data-open] {
   min-width: 60px;
   gap: 4px;
   opacity: 0.35;
-  transition: opacity 120ms ease;
+  transition: opacity var(--motion-fast) var(--ease-out);
 }
 
 .understanding-segments:hover,
@@ -5245,7 +5251,7 @@ span.tour-outline-twisty[data-open] {
 .understanding-stack-item:not([aria-current]) {
   cursor: pointer;
   opacity: 0.5;
-  transition: opacity 120ms ease-out;
+  transition: opacity var(--motion-fast) var(--ease-out);
 }
 
 .understanding-stack-item:not([aria-current]):hover {

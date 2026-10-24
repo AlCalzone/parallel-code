@@ -24,7 +24,7 @@ import {
 import { createInlineEditing } from '../graph/inlineEditing';
 import type { BranchIntent, BranchRequest } from '../graph/agentActions';
 import { createEditHistory } from '../graph/editHistory';
-import { createReducedMotion } from '../graph/reducedMotion';
+import { createReducedMotion } from '../lib/reducedMotion';
 import { focusRecord } from '../graph/focus';
 import type { MapOrientation } from '../graph/layout';
 import { NodeContextMenu, type NodeAction } from '../graph/NodeContextMenu';
