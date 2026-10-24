@@ -493,6 +493,21 @@ textarea.mobile-input {
   pointer-events: none;
   height: 100%;
 }
+/* A plain-text copy of the terminal, so long-press selection and the system Copy menu work. */
+.mobile-terminal-text {
+  height: 100%;
+  margin: 0;
+  padding: 8px 12px;
+  overflow: auto;
+  overscroll-behavior-y: contain;
+  background: #080c10;
+  font-family: monospace;
+  line-height: 1.2;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+}
 .mobile-output-actions {
   position: absolute;
   bottom: 12px;

@@ -15,6 +15,7 @@ const terminalMocks = vi.hoisted(() => ({
   terminalSize: undefined as ((cols: number, rows: number) => void) | undefined,
   bufferType: 'normal' as 'normal' | 'alternate',
   element: undefined as HTMLElement | undefined,
+  lines: [] as string[],
 }));
 
 vi.mock('@xterm/xterm', () => ({
@@ -28,10 +29,17 @@ vi.mock('@xterm/xterm', () => ({
         get type() {
           return terminalMocks.bufferType;
         },
-        length: 0,
+        get length() {
+          return terminalMocks.lines.length;
+        },
         viewportY: 0,
         baseY: 0,
-        getLine: () => undefined,
+        getLine: (i: number) => {
+          const text = terminalMocks.lines[i];
+          return text === undefined
+            ? undefined
+            : { isWrapped: false, translateToString: () => text };
+        },
       },
     };
     get element() {
@@ -138,6 +146,7 @@ beforeEach(() => {
   terminalMocks.options.fontSize = 14;
   terminalMocks.bufferType = 'normal';
   terminalMocks.element = undefined;
+  terminalMocks.lines = [];
   localStorage.clear();
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
   host = document.createElement('div');
@@ -488,6 +497,25 @@ describe('phone terminal viewport', () => {
     // Fitting to the width alone would land near 4px per row and fit the pane exactly.
     expect(terminalMocks.options.fontSize).toBeGreaterThan(10);
     expect(parseFloat(content.style.width)).toBeGreaterThan(360);
+  });
+
+  it('shows terminal output as selectable text until Select is turned off', () => {
+    terminalMocks.lines = ['$ npm test', 'All 12 tests passed'];
+    mount();
+    const select = host.querySelector<HTMLButtonElement>('[aria-label="Select terminal text"]');
+    if (!select) throw new Error('Missing Select button');
+    expect(select.getAttribute('aria-pressed')).toBe('false');
+    select.click();
+    expect(select.getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('.mobile-terminal-text')?.textContent).toBe(
+      '$ npm test\nAll 12 tests passed',
+    );
+    expect(host.querySelector('.mobile-terminal-scroll')?.classList).toContain(
+      'mobile-terminal-hidden',
+    );
+    select.click();
+    expect(host.querySelector('.mobile-terminal-text')).toBeNull();
+    expect(host.querySelector('.mobile-terminal-hidden')).toBeNull();
   });
 
   it('opens Terminal with immediately usable keys even with the old Read preference', async () => {

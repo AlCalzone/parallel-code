@@ -9,7 +9,7 @@ import { TaskDiffView } from './TaskDiffView';
 import { TaskActionsDialog } from './TaskActionsDialog';
 import { clearPairedToken } from './auth';
 import { readLocal, writeLocal } from './storage';
-import { messageForTerminal } from './terminalText';
+import { messageForTerminal, terminalBufferText } from './terminalText';
 import { TaskHeader } from './TaskHeader';
 import { needsYou } from './attention';
 import { MAX_SCROLL_LINES } from '../../electron/remote/protocol';
@@ -45,6 +45,7 @@ export function AgentDetail(props: AgentDetailProps) {
   let termContainer: HTMLDivElement | undefined;
   let outputArea: HTMLDivElement | undefined;
   let terminalScroller: HTMLDivElement | undefined;
+  let textView: HTMLPreElement | undefined;
   let inputRef: HTMLTextAreaElement | undefined;
   let term: Terminal | undefined;
   let disposed = false;
@@ -68,6 +69,8 @@ export function AgentDetail(props: AgentDetailProps) {
   const [multilinePaste, setMultilinePaste] = createSignal(false);
   const [terminalBottom, setTerminalBottom] = createSignal(true);
   const [zoom, setZoom] = createSignal(1);
+  // xterm only selects with a mouse, so touch selection works on a plain-text copy.
+  const [selectableText, setSelectableText] = createSignal<string>();
   const fontSize = 14;
   let terminalLineHeight = fontSize * 1.2;
   const [notesText, setNotesText] = createSignal(readLocal(notesKey));
@@ -478,8 +481,22 @@ export function AgentDetail(props: AgentDetailProps) {
     setSent(false);
   }
 
+  function toggleTextSelection() {
+    if (selectableText() !== undefined || !term) {
+      setSelectableText(undefined);
+      fitTerminal();
+      return;
+    }
+    const buffer = term.buffer.active;
+    // Open where the terminal was showing; the copy wraps differently, so this is approximate.
+    const position = terminalBottom() ? 1 : buffer.viewportY / Math.max(1, buffer.length);
+    setSelectableText(terminalBufferText(buffer));
+    if (textView) textView.scrollTop = position * textView.scrollHeight;
+  }
+
   function selectView(next: 'terminal' | 'notes' | 'diff') {
     const wasDiff = view() === 'diff';
+    setSelectableText(undefined);
     setView(next);
     // Re-entering the diff tab refetches, so returning to it always shows the
     // agent's newest work rather than a snapshot from the first visit.
@@ -533,6 +550,14 @@ export function AgentDetail(props: AgentDetailProps) {
           <div class="mobile-text-size" role="group" aria-label="Terminal text size">
             <button
               class="mobile-button"
+              aria-label="Select terminal text"
+              aria-pressed={selectableText() !== undefined}
+              onClick={toggleTextSelection}
+            >
+              Select
+            </button>
+            <button
+              class="mobile-button"
               aria-label="Smaller terminal text"
               disabled={zoom() <= 0.5}
               onClick={() => {
@@ -561,11 +586,22 @@ export function AgentDetail(props: AgentDetailProps) {
           ref={terminalScroller}
           onScroll={updateTerminalBottom}
           class="mobile-terminal-scroll"
-          classList={{ 'mobile-terminal-hidden': view() !== 'terminal' }}
-          aria-hidden={view() !== 'terminal'}
+          classList={{
+            'mobile-terminal-hidden': view() !== 'terminal' || selectableText() !== undefined,
+          }}
+          aria-hidden={view() !== 'terminal' || selectableText() !== undefined}
         >
           <div ref={termContainer} class="mobile-terminal" />
         </div>
+        <Show when={selectableText() !== undefined}>
+          <pre
+            ref={textView}
+            class="mobile-terminal-text"
+            style={{ 'font-size': `${fontSize * zoom()}px` }}
+          >
+            {selectableText()}
+          </pre>
+        </Show>
         <Show when={view() === 'notes'}>
           <div class="mobile-scroll mobile-notes">
             <Show when={notesError()}>
@@ -605,7 +641,7 @@ export function AgentDetail(props: AgentDetailProps) {
             </Show>
           </div>
         </Show>
-        <Show when={view() === 'terminal'}>
+        <Show when={view() === 'terminal' && selectableText() === undefined}>
           <div class="mobile-output-actions">
             <Show when={nextAttentionTask()}>
               {(next) => (
