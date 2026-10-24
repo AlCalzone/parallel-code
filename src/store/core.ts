@@ -61,6 +61,7 @@ export const [store, setStore] = createStore<AppStore>({
   darkThemePreset: defaultPresetForTone('dark'),
   darkThemeCustomId: null,
   showPromptInput: true,
+  shellLayoutOverride: null,
   fontSmoothing: true,
   windowState: null,
   autoTrustFolders: false,
@@ -113,6 +114,7 @@ export const [store, setStore] = createStore<AppStore>({
   boardPeek: false,
   boardSidePanelLeft: false,
   taskSplitMode: {},
+  taskShellAutoLayout: {},
   verboseLogging: false,
   mcpOrchestrationEnabled: true,
   documentWorkspacesEnabled: false,
@@ -133,7 +135,12 @@ export const [store, setStore] = createStore<AppStore>({
 
 type CleanupPanelStore = Pick<
   AppStore,
-  'focusedPanel' | 'panelUserSize' | 'taskOrder' | 'collapsedTaskOrder' | 'taskSplitMode'
+  | 'focusedPanel'
+  | 'panelUserSize'
+  | 'taskOrder'
+  | 'collapsedTaskOrder'
+  | 'taskSplitMode'
+  | 'taskShellAutoLayout'
 >;
 
 /** Remove panelUserSize, focusedPanel, and taskOrder entries for a given ID.
@@ -148,6 +155,7 @@ export function cleanupPanelEntries(s: CleanupPanelStore, id: string): number {
   const idx = s.taskOrder.indexOf(id);
   delete s.focusedPanel[id];
   delete s.taskSplitMode[id];
+  delete s.taskShellAutoLayout[id];
   const prefixes = [id, `task:${id}`, `tiling:${id}`];
   for (const key of Object.keys(s.panelUserSize)) {
     if (prefixes.some((p) => key === p || key.startsWith(`${p}:`))) {

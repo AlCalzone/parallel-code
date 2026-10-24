@@ -218,6 +218,7 @@ export {
 } from './taskStatus';
 export type { TaskAttentionState, TaskDotStatus } from './taskStatus';
 export type { WorkspaceView } from './ui';
+export { setShellLayoutOverride, setTaskShellAutoLayout, getTaskShellLayout } from './shell-layout';
 export { getTaskAgentHookStatus, isTaskUnread, noteAgentTerminalInput } from './agentHookStatus';
 export type { TaskAgentHookStatus } from './agentHookStatus';
 export { showNotification, clearNotification } from './notification';

@@ -5,10 +5,19 @@ import { TaskShellSection } from './TaskShellSection';
 import { editAsDocument } from '../documents/store';
 import { store } from '../store/store';
 
-const { terminalProps } = vi.hoisted(() => ({ terminalProps: [] as Record<string, unknown>[] }));
+const { terminalProps, setShellLayoutOverride } = vi.hoisted(() => ({
+  terminalProps: [] as Record<string, unknown>[],
+  setShellLayoutOverride: vi.fn(),
+}));
 
 vi.mock('../store/store', () => ({
-  store: { focusMode: false, taskSplitMode: {}, documentWorkspacesEnabled: true },
+  store: {
+    focusMode: false,
+    taskSplitMode: {},
+    documentWorkspacesEnabled: true,
+    shellLayoutOverride: null,
+    taskShellAutoLayout: {},
+  },
   getProject: () => ({
     terminalBookmarks: [
       { id: 'test', command: 'npm test' },
@@ -28,6 +37,9 @@ vi.mock('../store/store', () => ({
   shellPanelId: (index: number) => `shell:${index}`,
   isPanelFocused: () => false,
   isPanelFocusedPrefix: () => false,
+  getTaskShellLayout: () => store.shellLayoutOverride ?? 'row',
+  setTaskShellAutoLayout: vi.fn(),
+  setShellLayoutOverride,
 }));
 
 vi.mock('./TerminalView', () => ({
@@ -42,6 +54,7 @@ const disposers: Array<() => void> = [];
 
 afterEach(() => {
   store.taskSplitMode = {};
+  store.shellLayoutOverride = null;
   while (disposers.length > 0) disposers.pop()?.();
   document.body.replaceChildren();
   terminalProps.length = 0;
@@ -97,5 +110,56 @@ describe('TaskShellSection', () => {
     );
 
     expect((container.firstElementChild as HTMLElement).style.minHeight).toBe('0');
+  });
+
+  it('offers the layout menu only once two shells are open', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    disposers.push(
+      render(() => <TaskShellSection task={makeTask(['shell-1'])} isActive />, container),
+    );
+
+    expect(container.querySelector('.shell-layout-button')).toBeNull();
+  });
+
+  it('stacks shells in one column when Column is pinned', () => {
+    store.shellLayoutOverride = 'column';
+    const container = document.createElement('div');
+    document.body.append(container);
+    disposers.push(
+      render(
+        () => <TaskShellSection task={makeTask(['shell-1', 'shell-2'])} isActive />,
+        container,
+      ),
+    );
+
+    const area = container.querySelector<HTMLElement>('.shell-terminals-row');
+    expect(area?.style.gridTemplateColumns).toBe('repeat(1, minmax(0, 1fr))');
+    const button = container.querySelector('.shell-layout-button');
+    expect(button?.getAttribute('aria-label')).toBe('Terminal layout: Column');
+  });
+
+  it('pins a layout from the menu and returns to automatic', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    disposers.push(
+      render(
+        () => <TaskShellSection task={makeTask(['shell-1', 'shell-2'])} isActive />,
+        container,
+      ),
+    );
+    const choose = (label: string) => {
+      container.querySelector<HTMLButtonElement>('.shell-layout-button')?.click();
+      const items = document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]');
+      Array.from(items)
+        .find((item) => item.textContent === label)
+        ?.click();
+    };
+
+    choose('Square grid');
+    expect(setShellLayoutOverride).toHaveBeenLastCalledWith('grid');
+
+    choose('Automatic (Row)');
+    expect(setShellLayoutOverride).toHaveBeenLastCalledWith(null);
   });
 });

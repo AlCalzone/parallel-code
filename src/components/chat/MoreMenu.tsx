@@ -259,6 +259,8 @@ export function MoreMenu(props: {
   items: MoreMenuItem[];
   label?: string;
   icon?: JSX.Element;
+  /** Show only the icon; the label becomes the button's tooltip and name. */
+  iconOnly?: boolean;
   class?: string;
 }) {
   let button: HTMLButtonElement | undefined;
@@ -278,6 +280,7 @@ export function MoreMenu(props: {
         type="button"
         class={props.class ?? 'chat-more'}
         aria-label={props.label ?? 'More actions'}
+        title={props.iconOnly ? props.label : undefined}
         aria-haspopup="menu"
         aria-expanded={open()}
         onClick={(event) => {
@@ -285,9 +288,11 @@ export function MoreMenu(props: {
           setOpen(!open());
         }}
       >
-        <Show when={props.label} fallback={<KebabIcon size={14} />}>
-          {props.icon}
-          {props.label}
+        <Show when={!props.iconOnly} fallback={props.icon}>
+          <Show when={props.label} fallback={<KebabIcon size={14} />}>
+            {props.icon}
+            {props.label}
+          </Show>
         </Show>
       </button>
       <Show when={open()}>

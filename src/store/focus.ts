@@ -9,6 +9,8 @@ import { uncollapseTask } from './tasks';
 import { isTaskCanvasVisible } from '../lib/canvas-tabs';
 import { boardShown, boardSidePanelOpen, towardBoard } from './project-pages';
 import type { PendingAction } from './types';
+import { getTaskShellLayout } from './shell-layout';
+import { shellColumns } from '../lib/shellLayout';
 import {
   AI_TERMINAL_PANEL,
   aiTerminalPanels,
@@ -109,6 +111,18 @@ function isLeftColumnPanel(panel: string): boolean {
   );
 }
 
+/** Shell panel ids split into the visual rows of the task's shell layout. */
+function shellRows(taskId: string, shellCount: number): string[][] {
+  const cols = shellColumns(getTaskShellLayout(taskId), shellCount);
+  const rows: string[][] = [];
+  for (let i = 0; i < shellCount; i += cols) {
+    rows.push(
+      Array.from({ length: Math.min(cols, shellCount - i) }, (_, j) => shellPanelId(i + j)),
+    );
+  }
+  return rows;
+}
+
 function buildGrid(panelId: string): string[][] {
   const grid = buildMainGrid(panelId);
   const task = store.tasks[panelId];
@@ -132,14 +146,18 @@ function buildMainGrid(panelId: string): string[][] {
 
       // Pair the bottom-left (prompt or first AI pane if prompt hidden) with
       // whatever's at the bottom-right, so → from prompt jumps into the shell
-      // section instead of falling off to the next task.
-      const hasShells = task.shellAgentIds.length > 0;
+      // section instead of falling off to the next task. Left cells are padded
+      // to the AI pane count so the right column keeps one column index.
       const leftBottom = store.showPromptInput ? 'prompt' : aiCols[0];
-      if (hasShells) {
+      const bottomCols = aiCols.map(() => leftBottom);
+      const rows = shellRows(panelId, task.shellAgentIds.length);
+      if (rows.length > 0) {
         grid.push([...aiCols, ...toolbarCols]);
-        grid.push([leftBottom, ...task.shellAgentIds.map((_, i) => shellPanelId(i))]);
+        rows.forEach((row, i) => {
+          grid.push([...(i === rows.length - 1 ? bottomCols : aiCols), ...row]);
+        });
       } else {
-        grid.push([leftBottom, ...toolbarCols]);
+        grid.push([...bottomCols, ...toolbarCols]);
       }
       return grid;
     }
@@ -147,9 +165,7 @@ function buildMainGrid(panelId: string): string[][] {
     const grid: string[][] = [['title']];
     grid.push(['notes', 'changed-files']);
     grid.push(toolbarCols);
-    if (task.shellAgentIds.length > 0) {
-      grid.push(task.shellAgentIds.map((_, i) => shellPanelId(i)));
-    }
+    grid.push(...shellRows(panelId, task.shellAgentIds.length));
     grid.push(aiCols);
     if (store.showPromptInput) {
       grid.push(['prompt']);
@@ -482,7 +498,10 @@ export function navigateColumn(direction: 'left' | 'right'): void {
   if (navigateAiTerminalColumn(taskId, current, direction)) return;
 
   const row = grid[pos.row];
-  const nextCol = direction === 'left' ? pos.col - 1 : pos.col + 1;
+  const step = direction === 'left' ? -1 : 1;
+  let nextCol = pos.col + step;
+  // Split mode repeats the bottom-left cell across the AI pane columns.
+  while (row[nextCol] === current) nextCol += step;
   if (nextCol >= 0 && nextCol < row.length) {
     setTaskFocusedPanel(taskId, row[nextCol]);
     return;

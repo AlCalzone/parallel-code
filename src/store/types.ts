@@ -34,6 +34,7 @@ import type {
 } from '../../electron/shared/evidence';
 import type { DockerSource } from '../lib/docker';
 import type { LookPreset, AppearanceMode } from '../lib/look';
+import type { ShellLayoutMode } from '../lib/shellLayout';
 import type { KeyBinding } from '../lib/keybindings';
 import type { FeatureHintId } from '../lib/feature-hints';
 import type { CustomTheme } from '../lib/custom-theme';
@@ -533,6 +534,7 @@ export interface PersistedState {
   terminalScreenReaderMode?: boolean;
   themePreset?: LookPreset;
   showPromptInput?: boolean;
+  shellLayoutOverride?: ShellLayoutMode;
   fontSmoothing?: boolean;
   windowState?: PersistedWindowState;
   autoTrustFolders?: boolean;
@@ -673,6 +675,8 @@ export interface AppStore {
   terminalScreenReaderMode: boolean;
   themePreset: LookPreset;
   showPromptInput: boolean;
+  /** Shell arrangement the user pinned; null lets each task pick by size. */
+  shellLayoutOverride: ShellLayoutMode | null;
   fontSmoothing: boolean;
   windowState: PersistedWindowState | null;
   autoTrustFolders: boolean;
@@ -757,6 +761,8 @@ export interface AppStore {
   boardPeek: boolean;
   /** Per-task flag: true when the task is rendering its focus-mode two-column layout. */
   taskSplitMode: Record<string, boolean>;
+  /** Per-task shell arrangement picked from the available size; never persisted. */
+  taskShellAutoLayout: Record<string, ShellLayoutMode>;
   verboseLogging: boolean;
   customThemes: Record<string, CustomTheme>;
   activeCustomThemeId: string | null;

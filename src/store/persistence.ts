@@ -31,6 +31,7 @@ import { markAgentSpawned } from './taskStatus';
 import { clampCoordinatorConcurrentTasks } from '../lib/coordinator-limits';
 import { MAX_PROMPT_HISTORY } from '../lib/prompt-history';
 import { isFeatureHintId } from '../lib/feature-hints';
+import { isShellLayoutMode } from '../lib/shellLayout';
 import { normalizeReasoningProfile } from '../investigation/profiles';
 import { restoreReasoningWorkspaces } from '../investigation/editing';
 import { isValidSpId } from '../../electron/shared/super-productivity';
@@ -460,6 +461,7 @@ export async function saveState(): Promise<void> {
     terminalScreenReaderMode: store.terminalScreenReaderMode || undefined,
     themePreset: store.themePreset,
     showPromptInput: store.showPromptInput,
+    shellLayoutOverride: store.shellLayoutOverride ?? undefined,
     fontSmoothing: store.fontSmoothing,
     windowState: store.windowState ? { ...store.windowState } : undefined,
     autoTrustFolders: store.autoTrustFolders,
@@ -673,6 +675,7 @@ interface LegacyPersistedState {
   terminalScreenReaderMode?: unknown;
   themePreset?: unknown;
   showPromptInput?: unknown;
+  shellLayoutOverride?: unknown;
   fontSmoothing?: unknown;
   windowState?: unknown;
   autoTrustFolders?: unknown;
@@ -934,6 +937,9 @@ export async function loadState(): Promise<void> {
         typeof raw.terminalScreenReaderMode === 'boolean' ? raw.terminalScreenReaderMode : false;
       s.themePreset = isLookPreset(raw.themePreset) ? raw.themePreset : 'minimal';
       s.showPromptInput = typeof raw.showPromptInput === 'boolean' ? raw.showPromptInput : true;
+      s.shellLayoutOverride = isShellLayoutMode(raw.shellLayoutOverride)
+        ? raw.shellLayoutOverride
+        : null;
       s.fontSmoothing = typeof raw.fontSmoothing === 'boolean' ? raw.fontSmoothing : true;
       s.windowState = parsePersistedWindowState(raw.windowState);
       s.autoTrustFolders = typeof raw.autoTrustFolders === 'boolean' ? raw.autoTrustFolders : false;

@@ -3232,6 +3232,29 @@ html:is(
   color: var(--fg) !important;
 }
 
+/* Matches the toolbar's outlined launchers; the right margin mirrors the toolbar's padding. */
+.shell-layout-button {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  box-sizing: border-box;
+  width: 26px;
+  height: 26px;
+  margin-right: 5px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.shell-layout-button[aria-expanded='true'] {
+  border-color: var(--border-focus);
+  color: var(--fg);
+}
+
 .shell-toolbar-panel::-webkit-scrollbar {
   display: none;
 }
@@ -3836,8 +3859,7 @@ html:not([data-look^='islands-']) .task-column .shell-terminals-row {
   box-sizing: border-box;
 }
 
-.agent-terminal-row:not(.agent-terminal-row-tabs) > .agent-terminal-pane + .agent-terminal-pane,
-.shell-terminals-row > .shell-terminal-container + .shell-terminal-container {
+.agent-terminal-row:not(.agent-terminal-row-tabs) > .agent-terminal-pane + .agent-terminal-pane {
   border-left: 1px solid var(--border);
 }
 
