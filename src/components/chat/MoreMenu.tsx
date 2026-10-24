@@ -1,6 +1,6 @@
 import { For, Show, createSignal, onCleanup, onMount, type JSX } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { ChevronRightIcon, KebabIcon } from '../icons';
+import { CheckIcon, ChevronRightIcon, KebabIcon } from '../icons';
 import './MoreMenu.css';
 import { createAnchorEffect, placeBelow, type BelowAnchor } from '../../lib/floating';
 
@@ -13,6 +13,8 @@ interface MenuEntry {
   disabled?: boolean;
   /** Items sharing a group are listed under it as a heading. */
   group?: string;
+  /** Makes the entry one of a set of choices; the chosen one shows a check. */
+  checked?: boolean;
 }
 
 export type MenuAction = MenuEntry & { run: () => void; children?: never };
@@ -36,7 +38,8 @@ function MenuButtons(props: {
           </Show>
           <button
             type="button"
-            role="menuitem"
+            role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
+            aria-checked={item.checked}
             title={item.title}
             disabled={item.disabled}
             aria-haspopup={item.children ? 'menu' : undefined}
@@ -64,6 +67,9 @@ function MenuButtons(props: {
             >
               <ChevronRightIcon size={12} />
             </Show>
+            <Show when={item.checked}>
+              <CheckIcon size={12} />
+            </Show>
           </button>
         </>
       )}
@@ -88,7 +94,9 @@ function MenuList(props: {
   const [branchPosition, setBranchPosition] = createSignal({ top: 0, left: 0, maxHeight: 0 });
   const entries = (panel = menu) =>
     Array.from(
-      panel?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ?? [],
+      panel?.querySelectorAll<HTMLButtonElement>(
+        ':is([role="menuitem"], [role="menuitemradio"]):not(:disabled)',
+      ) ?? [],
     );
 
   createAnchorEffect(

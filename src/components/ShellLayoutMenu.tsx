@@ -1,7 +1,7 @@
 import { store, setShellLayoutOverride } from '../store/store';
 import { SHELL_LAYOUT_MODES, type ShellLayoutMode } from '../lib/shellLayout';
 import { MoreMenu, type MoreMenuItem } from './chat/MoreMenu';
-import { CheckIcon } from './icons';
+import { SparkleIcon } from './icons';
 
 const LABELS: Record<ShellLayoutMode, string> = {
   row: 'Row',
@@ -25,9 +25,6 @@ function LayoutIcon(props: { mode: ShellLayoutMode; pinned: boolean }) {
   );
 }
 
-// Unchecked entries keep the check's slot so labels stay aligned.
-const checkSlot = (checked: boolean) => (checked ? <CheckIcon size={14} /> : <span />);
-
 /** One button for how a task's shells are arranged. It shows the layout in
  *  use; the menu pins a layout for every task or hands the choice back to the
  *  size-based pick. Kept out of the toolbar's arrow-key cells: it is a
@@ -40,12 +37,14 @@ export function ShellLayoutMenu(props: { taskId: string; mode: ShellLayoutMode }
       {
         label: `Automatic (${LABELS[auto]})`,
         title: 'Choose by the available width',
-        icon: checkSlot(pinned === null),
+        icon: <SparkleIcon size={14} />,
+        checked: pinned === null,
         run: () => setShellLayoutOverride(null),
       },
       ...SHELL_LAYOUT_MODES.map((mode) => ({
         label: LABELS[mode],
-        icon: checkSlot(pinned === mode),
+        icon: <LayoutIcon mode={mode} pinned={false} />,
+        checked: pinned === mode,
         run: () => setShellLayoutOverride(mode),
       })),
     ];

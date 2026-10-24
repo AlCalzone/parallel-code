@@ -150,7 +150,7 @@ describe('TaskShellSection', () => {
     );
     const choose = (label: string) => {
       container.querySelector<HTMLButtonElement>('.shell-layout-button')?.click();
-      const items = document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]');
+      const items = document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]');
       Array.from(items)
         .find((item) => item.textContent === label)
         ?.click();

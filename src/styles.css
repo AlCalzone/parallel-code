@@ -3232,10 +3232,11 @@ html:is(
   color: var(--fg) !important;
 }
 
-/* Matches the toolbar's outlined launchers; the right margin mirrors the toolbar's padding. */
+/* A setting, not a launcher: no outline, unlike the toolbar's terminal buttons.
+   The right margin mirrors the toolbar's padding. */
 .shell-layout-button {
   background: transparent;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   color: var(--fg-muted);
   cursor: pointer;
   border-radius: var(--radius-sm);
@@ -3251,7 +3252,7 @@ html:is(
 }
 
 .shell-layout-button[aria-expanded='true'] {
-  border-color: var(--border-focus);
+  background: var(--bg-hover);
   color: var(--fg);
 }
 
