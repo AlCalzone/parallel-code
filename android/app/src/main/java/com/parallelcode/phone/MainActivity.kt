@@ -587,6 +587,7 @@ private fun PhoneApp(model: PhoneViewModel, onDemo: () -> Unit) {
             )
             Screen.NewTask -> NewTaskScreen(
                 client = model.client,
+                settings = model.settingsStore,
                 onDone = { screenKey = "agents" },
                 onNeedsPairing = { screenKey = "pair" },
             )

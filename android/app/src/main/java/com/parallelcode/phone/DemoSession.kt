@@ -118,8 +118,8 @@ internal class DemoSession : PhoneClient {
     }
 
     override suspend fun fetchProjects() = listOf(
-        MobileProject("demo-project", "Sample project", "Demo chat agent"),
-        MobileProject("demo-docs", "Sample documentation", "Demo terminal agent"),
+        MobileProject("demo-project", "Sample project", "Demo chat agent", color = "hsl(210, 70%, 60%)"),
+        MobileProject("demo-docs", "Sample documentation", "Demo terminal agent", color = "hsl(150, 55%, 50%)"),
     )
 
     override suspend fun fetchAgentChoices() = listOf(

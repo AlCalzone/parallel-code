@@ -60,7 +60,25 @@ private const val SLOW_REQUEST_SECONDS = 130L
 /** [json] is the error reply's body, for routes that explain a refusal (e.g. close warnings). */
 class ApiException(message: String, val status: Int = 0, val json: JSONObject? = null) : IOException(message)
 
-data class MobileProject(val id: String, val name: String, val agentName: String?)
+/** A project the New task screen can target; [lastUsed] marks the desktop's last-used project. */
+data class MobileProject(
+    val id: String,
+    val name: String,
+    val agentName: String?,
+    val color: String? = null,
+    val icon: String? = null,
+    val lastUsed: Boolean = false,
+)
+
+/**
+ * Which project New task starts on: the [current] choice if it is still listed, else the one
+ * this phone last created a task in, else the desktop's last-used project, else the first.
+ */
+fun initialProjectId(projects: List<MobileProject>, current: String, remembered: String?): String {
+    val ids = projects.map { it.id }
+    return listOf(current, remembered).firstOrNull { it in ids }
+        ?: (projects.find { it.lastUsed } ?: projects.firstOrNull())?.id.orEmpty()
+}
 
 /** What another saved computer reported in the last poll, under the name the phone shows for it. */
 data class ComputerSnapshot(val label: String, val agents: List<RemoteAgent>, val usage: List<ProviderUsage>)
@@ -354,7 +372,14 @@ class RemoteClient(
         val list = JSONArray(apiRaw("GET", "/api/mobile/projects", null, pairedTokenOrThrow()))
         return List(list.length()) { i ->
             val p = list.getJSONObject(i)
-            MobileProject(p.getString("id"), p.getString("name"), p.optString("agentName").ifEmpty { null })
+            MobileProject(
+                p.getString("id"),
+                p.getString("name"),
+                p.optString("agentName").ifEmpty { null },
+                color = if (p.isNull("color")) null else p.optString("color").ifBlank { null },
+                icon = if (p.isNull("icon")) null else p.optString("icon").ifBlank { null },
+                lastUsed = p.optBoolean("lastUsed"),
+            )
         }
     }
 

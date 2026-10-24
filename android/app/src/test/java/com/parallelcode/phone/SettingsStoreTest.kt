@@ -35,6 +35,15 @@ class SettingsStoreTest {
     }
 
     @Test
+    fun remembersTheLastProject() {
+        assertEquals(null, store.lastProjectId)
+        store.lastProjectId = "p1"
+        assertEquals("p1", SettingsStore(prefs).lastProjectId)
+        store.lastProjectId = null
+        assertFalse(prefs.contains(SettingsStore.KEY_LAST_PROJECT))
+    }
+
+    @Test
     fun defaultsToWaitForVpnDisabled() {
         assertFalse(store.waitForVpn)
     }
