@@ -489,6 +489,25 @@ it('folds minimized and snoozed tasks into one lane unless they need you', () =>
   }
 });
 
+it('collapses the snoozed lane back to its rail', () => {
+  snoozed.add('pr');
+  setStore('taskOrder', ['review', 'pr', 'idle']);
+  try {
+    host.querySelector<HTMLButtonElement>('.task-board-rail')?.click();
+    const collapse = host.querySelector<HTMLButtonElement>(
+      '[aria-label="Collapse snoozed and minimized tasks"]',
+    );
+    expect(collapse?.getAttribute('aria-expanded')).toBe('true');
+    collapse?.click();
+    expect(host.querySelector('.lane-snoozed')).toBeNull();
+    const rail = host.querySelector<HTMLButtonElement>('.task-board-rail');
+    expect(rail?.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(rail);
+  } finally {
+    snoozed.clear();
+  }
+});
+
 it('closes the side panel from its edge and keeps the board', () => {
   host.querySelector<HTMLButtonElement>('.lane-pr .task-board-title')?.click();
   const bar = document.createElement('div');

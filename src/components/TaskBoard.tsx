@@ -1,4 +1,4 @@
-import { For, Index, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { For, Index, Show, createMemo, createSignal, onCleanup, onMount, type JSX } from 'solid-js';
 import { mod } from '../lib/platform';
 import { isTypingTarget } from '../lib/tour-keys';
 import { store } from '../store/core';
@@ -16,6 +16,7 @@ import {
 } from '../store/store';
 import { BoardLane, BoardRail } from './board/BoardLane';
 import { FeatureHint } from './FeatureHint';
+import { ChevronDownIcon } from './icons';
 import { useBoardClock } from './board/task-state';
 import { TaskBoardCard } from './TaskBoardCard';
 import { IdeasLane } from './TaskBoardIdeasLane';
@@ -42,7 +43,7 @@ import {
 } from './task-board-keys';
 import './task-board.css';
 
-function Lane(props: { lane: LaneData }) {
+function Lane(props: { lane: LaneData; tools?: JSX.Element }) {
   const headingId = () => `task-board-lane-${props.lane.id}`;
   return (
     <BoardLane
@@ -51,6 +52,7 @@ function Lane(props: { lane: LaneData }) {
       headingId={headingId()}
       title={props.lane.title}
       count={props.lane.tasks.length}
+      tools={props.tools}
     >
       <For each={props.lane.tasks}>
         {(task, index) => (
@@ -81,7 +83,10 @@ function SubtaskHeading(props: { parentId: string }) {
   );
 }
 
-/** Snoozed and minimized work stays out of the way: a narrow rail until asked for. */
+/**
+ * Snoozed and minimized work stays out of the way: a narrow rail until asked
+ * for. Stacked in one column it is a collapsible section that folds back.
+ */
 function SnoozedLane(props: { lane: LaneData }) {
   const [open, setOpen] = createSignal(false);
   return (
@@ -90,6 +95,7 @@ function SnoozedLane(props: { lane: LaneData }) {
       fallback={
         <BoardRail
           title="Show snoozed and minimized tasks"
+          aria-expanded={false}
           label={props.lane.title}
           count={props.lane.tasks.length}
           onClick={(e) => {
@@ -101,7 +107,26 @@ function SnoozedLane(props: { lane: LaneData }) {
         />
       }
     >
-      <Lane lane={props.lane} />
+      <Lane
+        lane={props.lane}
+        tools={
+          <button
+            type="button"
+            class="task-board-lane-collapse"
+            aria-expanded={true}
+            title="Collapse snoozed and minimized tasks"
+            aria-label="Collapse snoozed and minimized tasks"
+            onClick={(e) => {
+              const lanes = e.currentTarget.closest('.task-board-lanes');
+              setOpen(false);
+              // The lane is gone; hand the keyboard back to the rail.
+              lanes?.querySelector<HTMLElement>('.task-board-rail')?.focus();
+            }}
+          >
+            <ChevronDownIcon size={12} />
+          </button>
+        }
+      />
     </Show>
   );
 }

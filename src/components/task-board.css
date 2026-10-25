@@ -419,6 +419,34 @@ html[data-look^='islands-'] .task-board {
 .task-board-rail-title {
   writing-mode: vertical-rl;
 }
+/* Side by side, the rail is how the snoozed lane folds; stacked in one
+   column, this chevron at the end of its title row folds it back. */
+.lane-snoozed {
+  position: relative;
+}
+.lane-snoozed .task-board-lane-tools {
+  position: absolute;
+  top: -3px;
+  right: 0;
+  display: none;
+}
+.task-board-lane-collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.task-board-lane-collapse:hover {
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+  color: var(--fg);
+}
 
 /* A plain terminal's card: dashed, unfilled and square-cornered like a
    terminal pane, so it reads as a different kind of thing from a task. */
@@ -446,6 +474,19 @@ html[data-look^='islands-'] .task-board {
   }
   .task-board-rail-title {
     writing-mode: horizontal-tb;
+  }
+  /* kanban.css hides lane tools until a plan lane is hovered; this one is
+     the only way to fold the lane, so it always shows. It spans the title
+     row, so the whole line folds it, with the chevron at the end. */
+  .lane-snoozed .task-board-lane-tools {
+    left: 0;
+    display: flex;
+    visibility: visible;
+  }
+  .lane-snoozed .task-board-lane-collapse {
+    width: 100%;
+    justify-content: flex-end;
+    padding-right: 6px;
   }
 }
 
