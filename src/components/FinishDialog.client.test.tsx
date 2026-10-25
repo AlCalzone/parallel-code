@@ -530,6 +530,55 @@ describe('FinishDialog base sync', () => {
       'rebase on main branch and resolve the conflicts in src/a.ts, src/b.ts',
     );
   });
+
+  it('offers a way out when a rebase stops on conflicts the merge check did not predict', async () => {
+    mockInvoke((channel) => {
+      if (channel === IPC.GetBranchLog) return '';
+      if (channel === IPC.CheckMergeStatus) return { conflicting_files: [], main_ahead_count: 1 };
+      if (channel === IPC.RebaseTask)
+        throw new Error(
+          "Error invoking remote method 'rebase_task': Error: Rebase stopped on conflicts in src/a.ts and was undone; the branch is unchanged.",
+        );
+      return { current_branch: 'task/parent', has_committed_changes: true };
+    });
+    vi.mocked(sendPrompt).mockResolvedValue(undefined);
+    store.agents = { agent: { status: 'running' } } as unknown as typeof store.agents;
+    onTestFinished(() => {
+      store.agents = {};
+    });
+    mount({ task: task({ baseBranch: 'main', agentIds: ['agent'] }) });
+    await flush();
+    button('Rebase onto main')?.click();
+    await flush();
+    const text = document.body.textContent ?? '';
+    expect(text).toContain(
+      'Rebase stopped on conflicts in src/a.ts and was undone; the branch is unchanged.',
+    );
+    expect(text).not.toContain('Error invoking remote method');
+    // Replaying commit by commit can conflict where a single merge does not.
+    expect(text).toContain('Merge main into the branch instead, or rebase with AI.');
+    button('Rebase with AI')?.click();
+    expect(sendPrompt).toHaveBeenCalledWith(
+      'parent',
+      'agent',
+      'rebase on main branch and resolve the conflicts',
+    );
+  });
+
+  it('offers no merge instead when a rebase fails for another reason', async () => {
+    mockInvoke((channel) => {
+      if (channel === IPC.GetBranchLog) return '';
+      if (channel === IPC.CheckMergeStatus) return { conflicting_files: [], main_ahead_count: 1 };
+      if (channel === IPC.RebaseTask) throw new Error('Rebase failed: index.lock exists');
+      return { current_branch: 'task/parent', has_committed_changes: true };
+    });
+    mount({ task: task({ baseBranch: 'main' }) });
+    await flush();
+    button('Rebase onto main')?.click();
+    await flush();
+    expect(document.body.textContent).toContain('Rebase failed: index.lock exists');
+    expect(document.body.textContent).not.toContain('instead');
+  });
 });
 
 describe('FinishDialog merge blocker', () => {

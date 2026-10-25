@@ -20,7 +20,8 @@ const buttonStyle = (primary: boolean, disabled = false) => ({
 
 /**
  * Base moved on: offers to bring it in by rebase, by a merge commit, or by
- * asking the agent. With conflicts the agent is the suggested route.
+ * asking the agent. With conflicts, or after an attempt stopped on them, the agent is
+ * the suggested route.
  */
 export function MergeConflictBanner(props: { task: Task; state: MergeState; onDone: () => void }) {
   const base = () => props.state.baseBranchName();
@@ -32,13 +33,19 @@ export function MergeConflictBanner(props: { task: Task; state: MergeState; onDo
   const agentRunning = () =>
     props.task.agentIds.length > 0 &&
     store.agents[props.state.selectedAgentId()]?.status === 'running';
+  const agentSuggested = () => props.state.hasConflicts() || props.state.syncConflict() !== null;
+  // The merge check found no conflicts, so a single merge commit should go through
+  // where replaying the branch commit by commit did not.
+  const mergeInstead = () => props.state.syncConflict() === 'rebase' && !props.state.hasConflicts();
   const askAgent = () => {
     const agentId = props.state.selectedAgentId();
     props.onDone();
     const conflicts = props.state.mergeStatus()?.conflicting_files ?? [];
     const prompt = conflicts.length
       ? `rebase on ${base()} branch and resolve the conflicts in ${conflicts.join(', ')}`
-      : `rebase on ${base()} branch`;
+      : props.state.syncConflict()
+        ? `rebase on ${base()} branch and resolve the conflicts`
+        : `rebase on ${base()} branch`;
     sendPrompt(props.task.id, agentId, prompt).catch((err) => {
       console.error('Failed to send rebase prompt:', err);
     });
@@ -111,7 +118,7 @@ export function MergeConflictBanner(props: { task: Task; state: MergeState; onDo
                 disabled={blocked()}
                 onClick={() => void props.state.syncWithBase('rebase')}
                 title={blockedTitle('rebase') ?? `Replay this branch's commits on top of ${base()}`}
-                style={buttonStyle(!props.state.hasConflicts(), blocked())}
+                style={buttonStyle(!agentSuggested(), blocked())}
               >
                 <GitBranchIcon size={12} />
                 {props.state.syncing() === 'rebase' ? 'Rebasing…' : `Rebase onto ${base()}`}
@@ -136,7 +143,7 @@ export function MergeConflictBanner(props: { task: Task; state: MergeState; onDo
                   type="button"
                   onClick={askAgent}
                   title="Close the dialog and ask the agent to rebase"
-                  style={buttonStyle(props.state.hasConflicts())}
+                  style={buttonStyle(agentSuggested())}
                 >
                   <SparkleIcon size={12} />
                   Rebase with AI
@@ -146,6 +153,9 @@ export function MergeConflictBanner(props: { task: Task; state: MergeState; onDo
             <Show when={props.state.syncError()}>
               <div style={{ 'margin-top': '6px', color: theme.error }}>
                 {props.state.syncError()}
+                <Show when={mergeInstead()}>
+                  {` Merge ${base()} into the branch instead${agentRunning() ? ', or rebase with AI' : ''}.`}
+                </Show>
               </div>
             </Show>
           </div>

@@ -40,6 +40,8 @@ export function createMergeState(props: MergeStateProps) {
   const [syncing, setSyncing] = createSignal<BaseSync | null>(null);
   const [syncError, setSyncError] = createSignal('');
   const [syncDone, setSyncDone] = createSignal<BaseSync | null>(null);
+  // Which sync stopped on conflicts, for the banner to offer another route.
+  const [syncConflict, setSyncConflict] = createSignal<BaseSync | null>(null);
   const [coverageComparison, setCoverageComparison] = createSignal<CoverageComparison | null>(null);
   const requiresSeparateClose = () =>
     Boolean(props.task.delegationParent || props.task.coordinatorMode);
@@ -166,6 +168,7 @@ export function createMergeState(props: MergeStateProps) {
       setMergeError('');
       setSyncError('');
       setSyncDone(null);
+      setSyncConflict(null);
       setMerging(false);
       setSyncing(null);
       setCoverageComparison(null);
@@ -189,6 +192,7 @@ export function createMergeState(props: MergeStateProps) {
     setSyncing(kind);
     setSyncError('');
     setSyncDone(null);
+    setSyncConflict(null);
     try {
       await invoke(kind === 'merge' ? IPC.MergeBaseIntoTask : IPC.RebaseTask, {
         worktreePath: props.task.worktreePath,
@@ -204,7 +208,13 @@ export function createMergeState(props: MergeStateProps) {
         });
       }
     } catch (err) {
-      setSyncError(errMessage(err));
+      const message = errMessage(err).replace(
+        /^Error invoking remote method '[^']+': (?:Error: )?/,
+        '',
+      );
+      setSyncError(message);
+      // Worded by `syncWithBase` in electron/ipc/git.ts; other failures are not conflicts.
+      if (message.includes('stopped on conflicts')) setSyncConflict(kind);
     } finally {
       setSyncing(null);
     }
@@ -279,6 +289,7 @@ export function createMergeState(props: MergeStateProps) {
     setCleanupAfterMerge,
     syncing,
     syncError,
+    syncConflict,
     syncDone,
     syncWithBase,
     setCoverageComparison,
