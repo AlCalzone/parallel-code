@@ -59,7 +59,7 @@ export function RetroButton(props: { task: Task; onSent: () => void }) {
     <Show
       when={confirming()}
       fallback={
-        <div class="finish-followup">
+        <div class="finish-followup finish-followup-quiet">
           <div class="change-tour-row">
             <button
               ref={retroRef}

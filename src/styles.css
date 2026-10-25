@@ -2562,6 +2562,19 @@ button {
   color: var(--fg);
 }
 
+/* An optional extra about the session, not the change, so it sits a step below
+   the steps that check the work; hover brings it to full strength. */
+.finish-followup-quiet {
+  border-style: dashed;
+  border-color: var(--border-subtle);
+  background: transparent;
+}
+
+.finish-followup-quiet .change-tour-action {
+  color: var(--fg-subtle);
+  font-weight: 400;
+}
+
 .screens-progress {
   display: block;
   overflow: hidden;
