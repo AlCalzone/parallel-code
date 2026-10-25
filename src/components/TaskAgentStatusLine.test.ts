@@ -43,6 +43,10 @@ describe('describeAgentStatus', () => {
         status({ state: 'done', event: 'Stop', lastAssistantMessage: 'Shipped' }),
       ),
     ).toMatchObject({ label: 'Turn finished', text: 'Shipped' });
+    const background = { detail: 'background: Dev server', lastAssistantMessage: 'Started' };
+    expect(describeAgentStatus(status({ state: 'done', event: 'Stop', ...background })).text).toBe(
+      'background: Dev server · Started',
+    );
     expect(describeAgentStatus(status({ state: 'done', event: 'Interrupt' })).label).toBe(
       'Interrupted',
     );
@@ -57,6 +61,10 @@ describe('describeAgentStatus', () => {
       label: 'Ready for input',
       text: '',
     });
+    const background = { detail: 'background: Dev server', lastAssistantMessage: 'Started' };
+    expect(
+      describeAgentStatus(status({ state: 'done', event: 'Notification', ...background })),
+    ).toMatchObject({ label: 'Ready for input', text: 'background: Dev server' });
     expect(
       describeAgentStatus(status({ state: 'done', event: 'StopFailure', detail: 'Agent error' })),
     ).toMatchObject({ label: 'Turn failed', text: 'Agent error' });

@@ -129,6 +129,15 @@ describe('agentHookStatus', () => {
     expect(getAgentHookStatus('a1')?.lastAssistantMessage).toBeUndefined();
   });
 
+  it('keeps naming a background command when an idle-prompt notification follows Stop', () => {
+    const detail = 'background: Dev server';
+    applyAgentHookEvent(event({ state: 'done', event: 'Stop', detail }));
+    applyAgentHookEvent(event({ state: 'done', event: 'Notification', at: Date.now() + 60_000 }));
+    expect(getAgentHookStatus('a1')?.detail).toBe(detail);
+    applyAgentHookEvent(event({ state: 'working', at: Date.now() + 70_000 }));
+    expect(getAgentHookStatus('a1')?.detail).toBeUndefined();
+  });
+
   it('marks a finished turn unread only when its task is not on screen', () => {
     applyAgentHookEvent(event({ state: 'done', event: 'Stop' }));
     expect(isTaskUnread('t1')).toBe(false);

@@ -40,7 +40,7 @@ export interface AgentHookStatus {
   unread: boolean;
   launchId?: string;
   source?: 'hook' | 'terminal';
-  /** A background sub-agent runs while the lead sits at its prompt. */
+  /** A background sub-agent or workflow runs while the lead sits at its prompt. */
   background?: boolean;
 }
 

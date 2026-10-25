@@ -42,7 +42,8 @@ export function describeAgentStatus(status: TaskAgentHookStatus): AgentStatusDes
   if (status.event === 'Stop') {
     return {
       label: 'Turn finished',
-      text: status.lastAssistantMessage ?? '',
+      // A background command outlives the turn, so it leads the final message.
+      text: [status.detail, status.lastAssistantMessage].filter(Boolean).join(' · '),
       color: theme.fgMuted,
     };
   }
