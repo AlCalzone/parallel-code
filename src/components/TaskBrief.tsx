@@ -5,6 +5,7 @@ import { sf } from '../lib/fontScale';
 import { createAnchorEffect, placeBelow } from '../lib/floating';
 import { formatRelativeAge } from '../lib/relativeAge';
 import { refreshTaskBrief } from '../store/task-brief';
+import { isTaskWorking } from '../store/taskStatus';
 import type { Task } from '../store/types';
 
 const CARD_WIDTH = 480;
@@ -28,6 +29,16 @@ const cardButton: JSX.CSSProperties = {
   'font-family': 'inherit',
   cursor: 'pointer',
 };
+
+/**
+ * The brief's question for the user, or '' once the agent is working again:
+ * briefs are only rewritten after a turn, so the last one still asks a
+ * question the user may have just answered.
+ */
+function needsYouNow(task: Task): string {
+  const needsYou = task.brief?.brief.needsYou;
+  return needsYou && !isTaskWorking(task.id) ? needsYou : '';
+}
 
 interface TaskBriefBarProps {
   task: Task;
@@ -92,18 +103,18 @@ export function TaskBriefBar(props: TaskBriefBarProps) {
     document.removeEventListener('keydown', onKeyDown, true);
   });
   // Routine briefs stay quiet; an agent waiting on the user needs a look now.
-  const urgent = () => !!props.task.brief?.brief.needsYou;
+  const urgent = () => needsYouNow(props.task) !== '';
 
   const headline = () => {
     const brief = props.task.brief?.brief;
-    if (brief) return brief.needsYou || brief.goal || brief.now;
+    if (brief) return needsYouNow(props.task) || brief.goal || brief.now;
     if (props.task.briefStatus?.state === 'generating') return 'Writing the brief…';
     return 'The brief appears after the agent finishes a turn';
   };
   const headlineLabel = () => {
     const brief = props.task.brief?.brief;
     if (!brief) return '';
-    return brief.needsYou ? 'Needs you' : brief.goal ? 'Goal' : 'Now';
+    return urgent() ? 'Needs you' : brief.goal ? 'Goal' : 'Now';
   };
   const statusNote = () => {
     const status = props.task.briefStatus;
@@ -277,7 +288,7 @@ function TaskBriefCard(props: {
             >
               <BriefRow label="Goal" text={b().goal} />
               <BriefRow label="Now" text={b().now} />
-              <BriefRow label="Needs you" text={b().needsYou} color={theme.warning} />
+              <BriefRow label="Needs you" text={needsYouNow(props.task)} color={theme.warning} />
             </dl>
           )}
         </Show>
@@ -339,7 +350,7 @@ function BriefRow(props: { label: string; text: string | undefined; color?: stri
 export function TaskBriefLine(props: { task: Task }) {
   const line = () => {
     const brief = props.task.brief?.brief;
-    return brief?.needsYou || brief?.goal || brief?.now;
+    return needsYouNow(props.task) || brief?.goal || brief?.now;
   };
   return (
     <Show when={line()}>

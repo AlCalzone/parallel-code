@@ -1,8 +1,11 @@
+import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import { createStore, type SetStoreFunction } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../store/task-brief', () => ({ refreshTaskBrief: vi.fn() }));
+const [working, setWorking] = createSignal(false);
+vi.mock('../store/taskStatus', () => ({ isTaskWorking: () => working() }));
 
 import type { Task } from '../store/types';
 import { TaskBriefBar, TaskBriefLine } from './TaskBrief';
@@ -12,6 +15,7 @@ let lastSetState: SetStoreFunction<Task> | undefined;
 afterEach(() => {
   dispose?.();
   document.body.replaceChildren();
+  setWorking(false);
   vi.clearAllMocks();
 });
 
@@ -101,6 +105,18 @@ describe('TaskBriefBar', () => {
     bar.click();
     const terms = Array.from(card()?.querySelectorAll('dt') ?? []).map((dt) => dt.textContent);
     expect(terms).toEqual(['Goal', 'Now', 'Needs you']);
+  });
+
+  it('drops a question the agent has moved past while it works on the answer', () => {
+    const { bar } = mount(baseTask());
+    lastSetState?.('brief', 'brief', 'needsYou', 'Deduplicate by event ID or invoice ID?');
+    setWorking(true);
+    expect(bar.hasAttribute('data-urgent')).toBe(false);
+    expect(bar.textContent).not.toContain('Needs you');
+    expect(bar.textContent).toContain('Stop webhook timeouts.');
+    bar.click();
+    const terms = Array.from(card()?.querySelectorAll('dt') ?? []).map((dt) => dt.textContent);
+    expect(terms).toEqual(['Goal', 'Now']);
   });
 
   it('closes on Escape', () => {
