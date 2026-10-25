@@ -948,6 +948,11 @@ textarea.mobile-input {
   }
 }
 
+/* History shifts the drawn rows by part of a row; clip them to the grid so the
+   shift cannot grow the pane's scroll range and fight the next swipe. */
+.mobile-terminal .xterm {
+  overflow: hidden;
+}
 .mobile-terminal .xterm-helper-textarea,
 .mobile-terminal .xterm-composition-view {
   pointer-events: none;

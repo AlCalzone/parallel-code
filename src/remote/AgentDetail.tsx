@@ -73,6 +73,28 @@ export function AgentDetail(props: AgentDetailProps) {
   const [selectableText, setSelectableText] = createSignal<string>();
   const fontSize = 14;
   let terminalLineHeight = fontSize * 1.2;
+  // xterm draws history only at whole rows, so a swipe stepped it a row at a time
+  // while the grid around it panned by the pixel. The pixels short of the next row
+  // shift the drawn rows instead, so history follows the finger like the grid does.
+  let historyOffset = 0;
+  // xterm draws scrolled rows on its next frame. Shifting them sooner moved the
+  // old rows by the new amount for a frame, so a fling juddered at each row.
+  let awaitingRows = false;
+  const shiftRows = () => {
+    const screen = term?.element?.querySelector<HTMLElement>('.xterm-screen');
+    if (screen) screen.style.transform = historyOffset ? `translateY(${-historyOffset}px)` : '';
+  };
+  /** Shift the drawn rows by `offset`, once xterm has drawn any rows that moved. */
+  const setHistoryOffset = (offset: number, rowsMoved: boolean) => {
+    historyOffset = offset;
+    awaitingRows ||= rowsMoved;
+    if (!awaitingRows) shiftRows();
+  };
+  const resetHistoryOffset = () => {
+    historyOffset = 0;
+    awaitingRows = false;
+    shiftRows();
+  };
   const [notesText, setNotesText] = createSignal(readLocal(notesKey));
   const [notesDirty, setNotesDirty] = createSignal(readLocal(`${notesKey}:dirty`) === 'true');
   const [notesLoading, setNotesLoading] = createSignal(false);
@@ -155,6 +177,8 @@ export function AgentDetail(props: AgentDetailProps) {
       termContainer.style.width = `${width + 24}px`;
       termContainer.style.height = `${height + 8}px`;
       terminalLineHeight = height / term.rows;
+      // An offset measured in the old row height would misplace the rows.
+      resetHistoryOffset();
       // Repaint once the task's visible layout has settled, including a return from Notes.
       term.refresh(0, term.rows - 1);
       if (followTerminal && view() === 'terminal') jumpToLatest();
@@ -173,6 +197,7 @@ export function AgentDetail(props: AgentDetailProps) {
 
   function jumpToLatest() {
     term?.scrollToBottom();
+    resetHistoryOffset();
     if (terminalScroller) terminalScroller.scrollTop = terminalScroller.scrollHeight;
     setTerminalBottom(true);
   }
@@ -198,14 +223,35 @@ export function AgentDetail(props: AgentDetailProps) {
     const updateOutput = () => {
       if (term) setMultilinePaste(term.modes.bracketedPasteMode);
     };
-    const scrollListener = term.onScroll(updateTerminalBottom);
+    // Set while a swipe moves history, so its own row steps are not mistaken for output.
+    let scrollingHistory = false;
+    const scrollListener = term.onScroll(() => {
+      // A swipe that stops just short of the latest row leaves it partly hidden, and
+      // output then follows with it hidden. Rows are moving anyway: take up the slack.
+      if (
+        !scrollingHistory &&
+        historyOffset < 0 &&
+        term?.buffer.active.viewportY === term?.buffer.active.baseY
+      ) {
+        setHistoryOffset(0, true);
+      }
+      updateTerminalBottom();
+    });
+    const renderListener = term.onRender(() => {
+      if (!awaitingRows) return;
+      awaitingRows = false;
+      shiftRows();
+    });
     const parsedListener = term.onWriteParsed(updateOutput);
+    // A full-screen agent draws its own screen, which must not inherit history's part-row shift.
+    const bufferListener = term.buffer.onBufferChange(resetHistoryOffset);
     // eslint-disable-next-line solid/reactivity -- socket callbacks read the latest layout settings
     const cleanupScrollback = onScrollback(props.agentId, (data, cols, rows) => {
       if (!term) return;
       const followTerminal = terminalBottom();
       // Reset parser and screen so reconnecting cannot duplicate an old frame.
       term.reset();
+      resetHistoryOffset();
       term.resize(Math.max(1, cols || 80), Math.max(1, rows || 24));
       fitTerminal();
       term.write(base64ToUint8Array(data), () => {
@@ -237,7 +283,7 @@ export function AgentDetail(props: AgentDetailProps) {
     let touchId: number | undefined;
     // Lock each swipe to its first direction so history scrolling never drifts sideways.
     let touchAxis: 'x' | 'y' | undefined;
-    let historyPixels = 0;
+    let wheelPixels = 0;
     // A full-screen agent UI keeps its transcript out of the terminal history:
     // turn the wheel over the cell under the finger, as the desktop pane does.
     const scrollFullScreen = (lines: number, x: number, y: number) => {
@@ -265,48 +311,54 @@ export function AgentDetail(props: AgentDetailProps) {
       );
       return dy - (terminalScroller.scrollTop - previousTop);
     };
-    const scrollHistory = (dy: number, x: number, y: number) => {
-      if (!term) return;
-      historyPixels += dy;
-      const lines = Math.trunc(historyPixels / terminalLineHeight);
+    // The agent redraws its own screen, so it can only move by whole wheel lines.
+    const turnWheel = (dy: number, x: number, y: number) => {
+      wheelPixels += dy;
+      const lines = Math.trunc(wheelPixels / terminalLineHeight);
       if (!lines) return;
-      if (term.buffer.active.type === 'alternate') scrollFullScreen(lines, x, y);
-      else term.scrollLines(lines);
-      historyPixels -= lines * terminalLineHeight;
+      scrollFullScreen(lines, x, y);
+      wheelPixels -= lines * terminalLineHeight;
     };
+    const scrollHistory = (dy: number, x: number, y: number) => {
+      // Nothing to move, and redrawing from the other row would flip the blank strip's edge.
+      if (!term || !dy) return;
+      const buffer = term.buffer.active;
+      if (buffer.type === 'alternate') return turnWheel(dy, x, y);
+      const top = Math.max(
+        0,
+        Math.min(
+          buffer.baseY * terminalLineHeight,
+          buffer.viewportY * terminalLineHeight + historyOffset + dy,
+        ),
+      );
+      const rows = top / terminalLineHeight;
+      // Float error must not turn a whole-row scroll into a row and a sliver.
+      const whole = Math.abs(rows - Math.round(rows)) < 1e-6;
+      // xterm draws no row past either edge, so one edge shows a blank strip of
+      // up to a row. Put it where rows leave, so the rows coming in slide in whole.
+      const line = whole ? Math.round(rows) : (dy > 0 ? Math.ceil : Math.floor)(rows);
+      const rowsMoved = line !== buffer.viewportY;
+      // Set first, so the draw the scroll triggers applies the new shift.
+      setHistoryOffset(whole ? 0 : top - line * terminalLineHeight, rowsMoved);
+      scrollingHistory = true;
+      if (rowsMoved) term.scrollLines(line - buffer.viewportY);
+      scrollingHistory = false;
+    };
+    // Grid and history chain as one scroller: a swipe or flick that runs out of
+    // grid carries on into history instead of stopping at the edge.
     const scrollTerminal = (dx: number, dy: number, x: number, y: number) => {
       const rest = scrollPane(dx, dy);
       if (Math.abs(dy) >= Math.abs(dx)) scrollHistory(rest, x, y);
       updateTerminalBottom();
     };
-    // A swipe that runs out of grid would otherwise jump from smooth panning to
-    // line steps mid-gesture. Like nested native scrollers, history waits for a
-    // fresh swipe unless this one starts with the grid already at its edge.
-    let swipeTarget: 'pane' | 'history' | undefined;
-    const paneCanScroll = (dy: number) => {
-      if (!terminalScroller) return false;
-      const room = terminalScroller.scrollHeight - terminalScroller.clientHeight;
-      // Fractional scroll offsets can sit a pixel short of the edge.
-      return dy < 0 ? terminalScroller.scrollTop >= 1 : terminalScroller.scrollTop <= room - 1;
-    };
-    const scrollSwipe = (dx: number, dy: number, x: number, y: number) => {
-      if (touchAxis === 'x') scrollPane(dx, 0);
-      else {
-        swipeTarget ??= paneCanScroll(dy) ? 'pane' : 'history';
-        if (swipeTarget === 'pane') scrollPane(0, dy);
-        else scrollHistory(dy, x, y);
-      }
-      updateTerminalBottom();
-    };
     // Coasts over the cell where the swipe left off.
-    const fling = createFling((dx, dy) => scrollSwipe(dx, dy, touchX, touchY));
+    const fling = createFling((dx, dy) => scrollTerminal(dx, dy, touchX, touchY));
     const touchStart = (e: TouchEvent) => {
       e.stopPropagation();
       fling.stop();
-      historyPixels = 0;
+      wheelPixels = 0;
       touchId = undefined;
       touchAxis = undefined;
-      swipeTarget = undefined;
       if (e.touches.length === 1) {
         touchId = e.touches[0].identifier;
         touchX = e.touches[0].clientX;
@@ -333,7 +385,7 @@ export function AgentDetail(props: AgentDetailProps) {
       if (!touchAxis && Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
       touchAxis ??= Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
       const [moveX, moveY] = touchAxis === 'x' ? [dx, 0] : [0, dy];
-      scrollSwipe(moveX, moveY, touch.clientX, touch.clientY);
+      scrollTerminal(moveX, moveY, touch.clientX, touch.clientY);
       fling.track(moveX, moveY);
       touchX = touch.clientX;
       touchY = touch.clientY;
@@ -342,7 +394,7 @@ export function AgentDetail(props: AgentDetailProps) {
       e.stopPropagation();
       const lifted = touchId !== undefined && e.type === 'touchend' && e.touches.length === 0;
       touchId = undefined;
-      historyPixels = 0;
+      wheelPixels = 0;
       if (lifted) fling.release();
       else fling.stop();
     };
@@ -380,7 +432,9 @@ export function AgentDetail(props: AgentDetailProps) {
       cleanupOutput();
       cleanupSize();
       scrollListener.dispose();
+      renderListener.dispose();
       parsedListener.dispose();
+      bufferListener.dispose();
       term?.dispose();
       term = undefined;
     });

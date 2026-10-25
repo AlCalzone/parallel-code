@@ -16,6 +16,13 @@ const terminalMocks = vi.hoisted(() => ({
   bufferType: 'normal' as 'normal' | 'alternate',
   element: undefined as HTMLElement | undefined,
   lines: [] as string[],
+  viewportY: 100,
+  baseY: 100,
+  bufferChange: undefined as (() => void) | undefined,
+  scrolled: undefined as (() => void) | undefined,
+  rendered: undefined as (() => void) | undefined,
+  // xterm draws scrolled rows on its next frame; hold the draw to see what shows meanwhile.
+  holdRender: false,
 }));
 
 vi.mock('@xterm/xterm', () => ({
@@ -32,14 +39,22 @@ vi.mock('@xterm/xterm', () => ({
         get length() {
           return terminalMocks.lines.length;
         },
-        viewportY: 0,
-        baseY: 0,
+        get viewportY() {
+          return terminalMocks.viewportY;
+        },
+        get baseY() {
+          return terminalMocks.baseY;
+        },
         getLine: (i: number) => {
           const text = terminalMocks.lines[i];
           return text === undefined
             ? undefined
             : { isWrapped: false, translateToString: () => text };
         },
+      },
+      onBufferChange: (listener: () => void) => {
+        terminalMocks.bufferChange = listener;
+        return { dispose() {} };
       },
     };
     get element() {
@@ -53,7 +68,12 @@ vi.mock('@xterm/xterm', () => ({
       this.cols = cols;
       this.rows = rows;
     }
-    onScroll() {
+    onScroll(listener: () => void) {
+      terminalMocks.scrolled = listener;
+      return { dispose() {} };
+    }
+    onRender(listener: () => void) {
+      terminalMocks.rendered = listener;
       return { dispose() {} };
     }
     onWriteParsed() {
@@ -66,9 +86,16 @@ vi.mock('@xterm/xterm', () => ({
     }
     scrollLines(lines: number) {
       terminalMocks.scrollLines(lines);
+      terminalMocks.viewportY = Math.max(
+        0,
+        Math.min(terminalMocks.baseY, terminalMocks.viewportY + lines),
+      );
+      terminalMocks.scrolled?.();
+      if (!terminalMocks.holdRender) terminalMocks.rendered?.();
     }
     scrollToBottom() {
       terminalMocks.scrollToBottom();
+      terminalMocks.viewportY = terminalMocks.baseY;
     }
   },
 }));
@@ -147,6 +174,9 @@ beforeEach(() => {
   terminalMocks.bufferType = 'normal';
   terminalMocks.element = undefined;
   terminalMocks.lines = [];
+  terminalMocks.viewportY = 100;
+  terminalMocks.baseY = 100;
+  terminalMocks.holdRender = false;
   localStorage.clear();
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
   host = document.createElement('div');
@@ -417,6 +447,19 @@ describe('phone terminal viewport', () => {
       },
     });
     return { scroller, content };
+  }
+  function xtermScreen() {
+    const element = document.createElement('div');
+    const screen = document.createElement('div');
+    screen.className = 'xterm-screen';
+    element.append(screen);
+    terminalMocks.element = element;
+    return screen;
+  }
+  /** The drawn rows' vertical shift in pixels; negative moves them up. */
+  function shift(screen: HTMLElement) {
+    const match = /translateY\((-?[\d.e-]+)px\)/.exec(screen.style.transform);
+    return match ? Number(match[1]) : 0;
   }
   function touch(target: HTMLElement, type: string, x: number, y: number, count = 1) {
     const event = new Event(type, { bubbles: true, cancelable: true });
@@ -788,30 +831,137 @@ describe('phone terminal viewport', () => {
       expect(xtermGesture).not.toHaveBeenCalled();
       touch(content, 'touchend', 0, 0, 0);
       scroller.scrollTop = 900;
+      terminalMocks.viewportY = 50;
       touch(content, 'touchstart', 100, 100);
       touch(content, 'touchmove', 90, 50);
-      expect(terminalMocks.scrollLines).toHaveBeenCalledWith(2);
+      // 50px of 16.8px rows: the third row is sliding in at the bottom.
+      expect(terminalMocks.scrollLines).toHaveBeenCalledWith(3);
       expect(touch(content, 'touchmove', 50, 0, 2).defaultPrevented).toBe(false);
     } finally {
       document.removeEventListener('touchmove', xtermGesture);
     }
   });
 
-  it('keeps a swipe that reaches the grid edge off history until the next swipe', () => {
+  it('carries a swipe that reaches the grid edge on into history, as one scroller', () => {
     mount();
     const { scroller } = viewport();
+    const screen = xtermScreen();
     scroller.scrollTop = 40;
     touch(scroller, 'touchstart', 100, 100);
     touch(scroller, 'touchmove', 100, 300);
     expect(scroller.scrollTop).toBe(0);
-    expect(terminalMocks.scrollLines).not.toHaveBeenCalled();
-    touch(scroller, 'touchend', 0, 0, 0);
-    touch(scroller, 'touchstart', 100, 100);
-    touch(scroller, 'touchmove', 100, 160);
-    expect(terminalMocks.scrollLines).toHaveBeenCalledWith(-3);
+    // The 160px the grid had no room for: 9 rows and 8.8px of the tenth, drawn from its top.
+    expect(terminalMocks.scrollLines).toHaveBeenCalledWith(-10);
+    expect(shift(screen)).toBeCloseTo(-8);
   });
 
-  it('stops a flick at the grid edge instead of coasting into history', () => {
+  it('moves history with the finger by the pixel, not a row at a time', () => {
+    mount();
+    const { scroller } = viewport(300);
+    const screen = xtermScreen();
+    touch(scroller, 'touchstart', 100, 100);
+    // 10px down reveals 10px of the row above; xterm draws from that row.
+    touch(scroller, 'touchmove', 100, 110);
+    expect(terminalMocks.scrollLines).toHaveBeenCalledWith(-1);
+    expect(shift(screen)).toBeCloseTo(-6.8);
+    touch(scroller, 'touchmove', 100, 115);
+    expect(terminalMocks.scrollLines).toHaveBeenCalledTimes(1);
+    expect(shift(screen)).toBeCloseTo(-1.8);
+    // Turning back draws from the row below, so the rows coming in at the bottom slide in whole.
+    touch(scroller, 'touchmove', 100, 105);
+    expect(terminalMocks.scrollLines).toHaveBeenLastCalledWith(1);
+    expect(shift(screen)).toBeCloseTo(5);
+    touch(scroller, 'touchmove', 100, 100);
+    expect(shift(screen)).toBe(0);
+  });
+
+  it('shifts the rows only once xterm has drawn the rows a swipe moved to', () => {
+    mount();
+    const { scroller } = viewport(300);
+    const screen = xtermScreen();
+    terminalMocks.holdRender = true;
+    touch(scroller, 'touchstart', 100, 100);
+    touch(scroller, 'touchmove', 100, 110);
+    expect(terminalMocks.scrollLines).toHaveBeenCalledWith(-1);
+    // The old rows are still on screen: shifting them now would show them a row off.
+    expect(shift(screen)).toBe(0);
+    touch(scroller, 'touchmove', 100, 112);
+    expect(shift(screen)).toBe(0);
+    terminalMocks.rendered?.();
+    expect(shift(screen)).toBeCloseTo(-4.8);
+    // Within the drawn row, the shift follows at once.
+    touch(scroller, 'touchmove', 100, 114);
+    expect(shift(screen)).toBeCloseTo(-2.8);
+  });
+
+  it('shows the latest row whole once output arrives after a swipe stopped just short of it', () => {
+    mount();
+    const { scroller } = viewport(300);
+    const screen = xtermScreen();
+    terminalMocks.viewportY = 98;
+    touch(scroller, 'touchstart', 100, 100);
+    touch(scroller, 'touchmove', 100, 70);
+    touch(scroller, 'touchend', 0, 0, 0);
+    expect(terminalMocks.viewportY).toBe(100);
+    expect(shift(screen)).toBeCloseTo(3.6);
+    // The agent prints a line; xterm follows it down a row.
+    terminalMocks.baseY = 101;
+    terminalMocks.viewportY = 101;
+    terminalMocks.scrolled?.();
+    terminalMocks.rendered?.();
+    expect(shift(screen)).toBe(0);
+  });
+
+  it('keeps the drawn rows in place while the grid takes the whole move', () => {
+    mount();
+    const { scroller } = viewport();
+    const screen = xtermScreen();
+    scroller.scrollTop = 900;
+    terminalMocks.viewportY = 50;
+    touch(scroller, 'touchstart', 100, 100);
+    touch(scroller, 'touchmove', 100, 90);
+    expect(shift(screen)).toBeCloseTo(6.8);
+    // Back down: the grid has room above, so history gets nothing to move.
+    touch(scroller, 'touchmove', 100, 95);
+    expect(scroller.scrollTop).toBe(895);
+    expect(shift(screen)).toBeCloseTo(6.8);
+  });
+
+  it('drops a part-row shift when the view jumps or the screen is replaced', async () => {
+    vi.mocked(sendInput).mockResolvedValue(undefined);
+    localStorage.setItem('parallel-mobile:output-view', 'terminal');
+    mount();
+    const { scroller } = viewport(300);
+    const screen = xtermScreen();
+    // Let the open-at-latest fit settle, so only the jumps under test clear the shift.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    const scrollMidRow = () => {
+      touch(scroller, 'touchstart', 100, 100);
+      touch(scroller, 'touchmove', 100, 110);
+      touch(scroller, 'touchend', 0, 0, 0);
+      expect(shift(screen)).not.toBe(0);
+    };
+    scrollMidRow();
+    // A full-screen agent draws its own screen, which must not inherit the shift.
+    terminalMocks.bufferChange?.();
+    expect(shift(screen)).toBe(0);
+    scrollMidRow();
+    terminalMocks.scrollback?.('', 80, 24);
+    expect(shift(screen)).toBe(0);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    scrollMidRow();
+    // The desktop resized: rows refit to a new height, so the old shift no longer fits them.
+    terminalMocks.terminalSize?.(100, 30);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    expect(shift(screen)).toBe(0);
+    scrollMidRow();
+    type('Looks good');
+    click('Send');
+    await vi.waitFor(() => expect(terminalMocks.scrollToBottom).toHaveBeenCalled());
+    expect(shift(screen)).toBe(0);
+  });
+
+  it('coasts a flick from the grid edge on into history', () => {
     vi.useFakeTimers();
     try {
       mount();
@@ -827,7 +977,8 @@ describe('phone terminal viewport', () => {
       touch(scroller, 'touchend', 0, 0, 0);
       vi.advanceTimersByTime(1000);
       expect(scroller.scrollTop).toBe(0);
-      expect(terminalMocks.scrollLines).not.toHaveBeenCalled();
+      expect(terminalMocks.scrollLines).toHaveBeenCalled();
+      expect(terminalMocks.scrollLines.mock.calls.every(([lines]) => lines < 0)).toBe(true);
     } finally {
       vi.useRealTimers();
     }
@@ -866,6 +1017,9 @@ describe('phone terminal viewport', () => {
     try {
       mount();
       const { scroller } = viewport(300);
+      // Let the open-at-latest fit settle before scrolling the reader back.
+      vi.advanceTimersByTime(16);
+      terminalMocks.viewportY = 50;
       touch(scroller, 'touchstart', 100, 300);
       vi.advanceTimersByTime(16);
       touch(scroller, 'touchmove', 100, 240);
@@ -909,7 +1063,8 @@ describe('phone terminal viewport', () => {
     const { scroller } = viewport(300);
     touch(scroller, 'touchstart', 100, 200);
     const move = touch(scroller, 'touchmove', 100, 260);
-    expect(terminalMocks.scrollLines).toHaveBeenCalledWith(-3);
+    // 60px is 3 rows and part of the fourth, which xterm now draws.
+    expect(terminalMocks.scrollLines).toHaveBeenCalledWith(-4);
     expect(move.defaultPrevented).toBe(true);
     expect(sendInput).not.toHaveBeenCalled();
   });
@@ -974,7 +1129,7 @@ describe('phone terminal viewport', () => {
     touch(scroller, 'touchmove', 100, 500);
     expect(terminalMocks.scrollLines).not.toHaveBeenCalled();
     touch(scroller, 'touchmove', 100, 560);
-    expect(terminalMocks.scrollLines).toHaveBeenCalledWith(-3);
+    expect(terminalMocks.scrollLines).toHaveBeenCalledWith(-4);
   });
 
   it('opens a task at the latest rows without yanking a scrolled reader on reconnect', async () => {
