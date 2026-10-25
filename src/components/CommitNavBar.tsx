@@ -27,6 +27,8 @@ interface CommitNavBarProps {
   onNavigate: (selection: CommitSelection) => void;
   compact?: boolean;
   showMessage?: boolean;
+  /** Files with uncommitted changes; null or omitted when the current view cannot tell. */
+  uncommittedCount?: number | null;
 }
 
 export function CommitNavBar(props: CommitNavBarProps) {
@@ -81,6 +83,12 @@ export function CommitNavBar(props: CommitNavBarProps) {
       props.onNavigate(UNCOMMITTED_SELECTION);
     }
   }
+
+  const uncommittedTitle = () => {
+    const count = props.uncommittedCount;
+    if (typeof count !== 'number') return 'Uncommitted changes only';
+    return `Uncommitted changes only (${count} file${count === 1 ? '' : 's'})`;
+  };
 
   const compact = () => props.compact ?? false;
   const btnSize = () => (compact() ? '18px' : '22px');
@@ -178,10 +186,16 @@ export function CommitNavBar(props: CommitNavBarProps) {
           e.stopPropagation();
           props.onNavigate(UNCOMMITTED_SELECTION);
         }}
-        title="Uncommitted changes only"
-        style={pillStyle(isUncommittedOnly())}
+        title={uncommittedTitle()}
+        style={{ ...pillStyle(isUncommittedOnly()), gap: '3px' }}
       >
         U
+        <Show when={typeof props.uncommittedCount === 'number'}>
+          {/* Zero stays visible but quiet: "all committed" is a state, not an alert. */}
+          <span style={{ color: props.uncommittedCount === 0 ? theme.fgSubtle : theme.fg }}>
+            {props.uncommittedCount}
+          </span>
+        </Show>
       </button>
 
       {/* All Changes button */}

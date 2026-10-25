@@ -494,7 +494,10 @@ describe('ChangedFilesList commit state', () => {
     { path: 'docs/notes.md', status: 'A', lines_added: 4, lines_removed: 0, committed: true },
   ];
 
-  async function mountRows(selectedCommit?: string): Promise<Element[]> {
+  async function mountRows(
+    selectedCommit?: string,
+    onUncommittedCountChange?: (count: number | null) => void,
+  ): Promise<Element[]> {
     vi.mocked(invoke).mockImplementation(((channel: string) => {
       if (channel === IPC.GetChangedFiles) return Promise.resolve(files);
       if (channel === IPC.GetCommitChangedFiles) return Promise.resolve(files);
@@ -508,7 +511,14 @@ describe('ChangedFilesList commit state', () => {
     document.body.append(container);
     disposers.push(
       render(
-        () => <ChangedFilesList worktreePath="/task" isActive selectedCommit={selectedCommit} />,
+        () => (
+          <ChangedFilesList
+            worktreePath="/task"
+            isActive
+            selectedCommit={selectedCommit}
+            onUncommittedCountChange={onUncommittedCountChange}
+          />
+        ),
         container,
       ),
     );
@@ -544,5 +554,16 @@ describe('ChangedFilesList commit state', () => {
       expect(hasMark(row)).toBe(false);
       expect((row as HTMLElement).style.opacity).toBe('1');
     }
+  });
+
+  it.each([
+    ['all changes', undefined, 1],
+    ['uncommitted changes only', UNCOMMITTED_SELECTION, 3],
+    ['a single commit', 'abc1234', null],
+  ])('reports the uncommitted count for %s', async (_label, selection, expected) => {
+    const onUncommittedCountChange = vi.fn();
+    await mountRows(selection, onUncommittedCountChange);
+
+    expect(onUncommittedCountChange).toHaveBeenLastCalledWith(expected);
   });
 });

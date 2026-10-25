@@ -54,6 +54,8 @@ interface ChangedFilesListProps {
   onCoverageComparisonChange?: (comparison: CoverageComparison | null) => void;
   /** Reports the number of listed files whenever the list refreshes. */
   onFileCountChange?: (count: number) => void;
+  /** Files with uncommitted changes, or null when the current view carries no working-tree state. */
+  onUncommittedCountChange?: (count: number | null) => void;
   /** Reports added/removed line totals whenever the list refreshes. */
   onTotalsChange?: (totals: { added: number; removed: number }) => void;
   /** Drop the +/- totals from the footer when the owner shows them elsewhere. */
@@ -487,12 +489,17 @@ export function ChangedFilesList(props: ChangedFilesListProps) {
 
   const tree = createMemo(() => buildFileTree(files()));
   const visibleRows = createMemo(() => flattenVisibleTree(tree(), collapsed()));
-  // Only the all-changes view mixes committed and uncommitted files. Commit and tour inventories
-  // carry no working-tree state, and the uncommitted-only view would mark every row.
+  // Commit and tour inventories carry no working-tree state. Only the all-changes view mixes
+  // committed and uncommitted files; the uncommitted-only view would mark every row.
+  const hasWorkingTreeState = () =>
+    !props.filesOverride && !isCommitHashSelection(props.selectedCommit);
   const showCommitState = () =>
-    !props.filesOverride &&
-    !isCommitHashSelection(props.selectedCommit) &&
-    !isUncommittedSelection(props.selectedCommit);
+    hasWorkingTreeState() && !isUncommittedSelection(props.selectedCommit);
+  createEffect(() =>
+    props.onUncommittedCountChange?.(
+      hasWorkingTreeState() ? files().filter((file) => !file.committed).length : null,
+    ),
+  );
   const coverageFiles = createMemo(() => coverage()?.files ?? {});
   const hasCoverageArtifact = createMemo(() => coverage() !== null);
   const hasBaseCoverageArtifact = createMemo(() => baseCoverage() !== null);

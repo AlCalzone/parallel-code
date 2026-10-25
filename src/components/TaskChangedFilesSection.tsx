@@ -83,6 +83,7 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
   // The heading carries the summary, so the list drops its own totals footer.
   const [fileCount, setFileCount] = createSignal(0);
   const [totals, setTotals] = createSignal({ added: 0, removed: 0 });
+  const [uncommittedCount, setUncommittedCount] = createSignal<number | null>(null);
   const headingLabel = () => {
     const count = fileCount();
     if (count === 0) return 'No changes yet';
@@ -150,6 +151,7 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
               selectedCommitHash={props.selectedCommit}
               onNavigate={props.onCommitNavigate}
               compact={true}
+              uncommittedCount={uncommittedCount()}
             />
           </div>
         </Show>
@@ -221,6 +223,7 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
             props.onFileCountChange?.(count);
           }}
           onTotalsChange={setTotals}
+          onUncommittedCountChange={setUncommittedCount}
           hideTotals
           onOpenInEditorClick={focusChangedFilesPanel}
           onOpenMarkdownClick={openMarkdownInCanvas}
