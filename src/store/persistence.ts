@@ -454,6 +454,7 @@ export async function saveState(): Promise<void> {
   const persisted: PersistedState = {
     projects: store.projects.map((p) => ({ ...p })),
     lastProjectId: store.lastProjectId,
+    lastTeleportProjectId: store.lastTeleportProjectId,
     lastAgentId: store.lastAgentId,
     taskOrder: [...store.taskOrder],
     collapsedTaskOrder: [...store.collapsedTaskOrder],
@@ -668,6 +669,7 @@ interface LegacyPersistedState {
   projectRoot?: string;
   projects?: Project[];
   lastProjectId?: string | null;
+  lastTeleportProjectId?: string | null;
   lastAgentId?: string | null;
   taskOrder: string[];
   collapsedTaskOrder?: string[];
@@ -917,6 +919,7 @@ export async function loadState(): Promise<void> {
       s.projects = projects;
       sortProjects(s.projects);
       s.lastProjectId = lastProjectId;
+      s.lastTeleportProjectId = raw.lastTeleportProjectId ?? null;
       s.lastAgentId = lastAgentId;
       s.taskOrder = raw.taskOrder;
       s.activeTaskId = raw.activeTaskId;

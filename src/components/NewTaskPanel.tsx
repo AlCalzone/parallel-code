@@ -60,6 +60,8 @@ import { SegmentedButtons } from './SegmentedButtons';
 import { autoTaskNameFromPrompt, nextDefaultTaskName } from '../lib/clean-task-name';
 import { isAgentInstalled, pickDefaultAgent } from '../lib/default-agent';
 import { extractGitHubUrl } from '../lib/github-url';
+import { parseClaudeSessionUrl } from '../lib/claude-session-url';
+import { sessionAgentForCommand } from '../../electron/shared/session-record';
 import { buildIssuePrompt, buildPrTaskPrompt, workItemTaskName } from '../lib/github-prompts';
 import { getGitHubIssue } from '../store/github';
 import { GitHubItemPicker } from './GitHubItemPicker';
@@ -157,6 +159,28 @@ interface ProjectDockerfileInfo {
   dockerfilePath: string;
   imageTag: string;
   buildContext: string;
+}
+
+const isClaudeCommand = (command: string) => sessionAgentForCommand(command) === 'claude';
+
+const isInstalledClaude = (agent: AgentDef) =>
+  isAgentInstalled(agent) && isClaudeCommand(agent.command);
+
+/**
+ * Project of the last teleport, if it still exists. A Claude link doesn't name
+ * its repo, so with no remembered project the user picks one rather than
+ * teleporting into whatever project happened to be last.
+ */
+function teleportProjectId(): string | null {
+  return codeProjects().some((p) => p.id === store.lastTeleportProjectId)
+    ? store.lastTeleportProjectId
+    : null;
+}
+
+/** `session_011CUabcd…` → "Teleport 011CUabc": short, and the branch is
+ *  replaced by the session's own once teleport checks it out. */
+function teleportTaskName(sessionId: string): string {
+  return `Teleport ${sessionId.replace(/^session_/, '').slice(0, 8)}`;
 }
 
 function DockerTaskOptions(props: {
@@ -613,6 +637,32 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
     ),
   );
 
+  // A link dropped while the panel is already open: the open effect below ran
+  // before it arrived, and reopening is a no-op. Fill only the text that is
+  // still empty so a drop never discards what the user typed. A teleport does
+  // replace the project and agent: it only runs in Claude, and a project chosen
+  // for an unrelated draft would teleport into the wrong repo.
+  createEffect(
+    on(
+      () => store.newTaskDropUrl,
+      (dropUrl) => {
+        if (!dropUrl || !untrack(() => props.open)) return;
+        untrack(() => {
+          const teleportId = parseClaudeSessionUrl(dropUrl);
+          const defaults = teleportId ? null : getGitHubDropDefaults(dropUrl);
+          if (!teleportId && !prompt().trim()) setPrompt(`review ${dropUrl}`);
+          const dropName = teleportId ? teleportTaskName(teleportId) : defaults?.name;
+          if (dropName && !name().trim()) setName(dropName);
+          if (teleportId) setSelectedProjectId(teleportProjectId());
+          else if (defaults?.projectId) setSelectedProjectId(defaults.projectId);
+          const claude = teleportId ? store.availableAgents.find(isInstalledClaude) : undefined;
+          if (claude) setSelectedAgent(claude);
+        });
+      },
+      { defer: true },
+    ),
+  );
+
   // Initialize remaining state each time the panel opens.  Same on()+untrack
   // guard as the effect above: fire only on the props.open *transition* and
   // untrack the body, so no store read — nor the prompt/name snapshot below —
@@ -668,11 +718,15 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
               targets.find((p) => p.id === store.lastProjectId)?.id ??
               targets[0]?.id ??
               null;
-            const defaults = dropUrl ? getGitHubDropDefaults(dropUrl) : null;
+            const teleportId = dropUrl ? parseClaudeSessionUrl(dropUrl) : null;
+            const defaults = dropUrl && !teleportId ? getGitHubDropDefaults(dropUrl) : null;
 
-            if (dropUrl) setPrompt(`review ${dropUrl}`);
+            if (dropUrl && !teleportId) setPrompt(`review ${dropUrl}`);
             if (defaults) setName(defaults.name);
-            setSelectedProjectId(defaults?.projectId ?? fallbackProjectId);
+            if (teleportId) setName(teleportTaskName(teleportId));
+            setSelectedProjectId(
+              teleportId ? teleportProjectId() : (defaults?.projectId ?? fallbackProjectId),
+            );
 
             // Pre-fill from an arena comparison or canvas branch.
             const prefill = store.newTaskPrefillPrompt;
@@ -704,6 +758,7 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
             if (cancelled) return;
             setSelectedAgent(
               store.availableAgents.find((a) => a.id === prefill?.agentId) ??
+                (teleportId ? store.availableAgents.find(isInstalledClaude) : undefined) ??
                 pickDefaultAgent(store.availableAgents, store.lastAgentId),
             );
           })().catch((err) => {
@@ -994,6 +1049,10 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
   const resolvedName = () =>
     effectiveName() || nextDefaultTaskName(Object.values(store.tasks).map((t) => t.name));
 
+  /** Web session a dropped claude.ai link teleports into this task, if any. */
+  const teleportSessionId = () =>
+    store.newTaskDropUrl ? parseClaudeSessionUrl(store.newTaskDropUrl) : null;
+
   /** A same-repo PR is checked out on its own head branch; forks get a prefixed branch. */
   const prUsesHeadBranch = () => !!githubPr() && !githubPr()?.isCrossRepository;
 
@@ -1166,6 +1225,11 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
 
     const p = prompt().trim() || undefined;
     const isFromDrop = !!store.newTaskDropUrl;
+    const teleportId = teleportSessionId() ?? undefined;
+    if (teleportId && !isClaudeCommand(agent.command)) {
+      setError('Teleporting a web session needs Claude Code');
+      return;
+    }
     const prefix = sanitizeBranchPrefix(branchPrefix());
     const prefixConflict = branchPrefixConflict();
     if (prefixConflict) {
@@ -1180,7 +1244,8 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
         ? prefill.projectId === projectId
           ? (prefill.githubUrl ?? undefined)
           : undefined
-        : ((p ? extractGitHubUrl(p) : null) ?? store.newTaskDropUrl ?? undefined);
+        : ((p ? extractGitHubUrl(p) : null) ??
+          (teleportId ? undefined : (store.newTaskDropUrl ?? undefined)));
 
     setLoading(true);
     setError('');
@@ -1230,6 +1295,7 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
         initialPrompt: isFromDrop ? undefined : p,
         githubUrl: ghUrl,
         pullRequestNumber: githubPr()?.number,
+        teleportSessionId: teleportId,
         skipPermissions: agentSupportsSkipPermissions() && skipPermissions(),
         dockerMode: dockerMode() || undefined,
         dockerSource: dockerMode()
@@ -1491,6 +1557,38 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
                       }}
                     >
                       Don't check out
+                    </button>
+                  </span>
+                </InlineBanner>
+              )}
+            </Show>
+            <Show when={teleportSessionId()}>
+              {(id) => (
+                <InlineBanner color={theme.accent}>
+                  <span style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
+                    <span style={{ flex: '1' }}>
+                      Teleports Claude web session {id()}: Claude Code continues it here and checks
+                      out its branch.
+                    </span>
+                    <button
+                      type="button"
+                      class="btn-secondary"
+                      onClick={() => {
+                        // The generated name describes the teleport; one the user typed stays.
+                        if (name() === teleportTaskName(id())) setName('');
+                        setStore('newTaskDropUrl', null);
+                      }}
+                      style={{
+                        padding: '2px 8px',
+                        background: 'transparent',
+                        border: `1px solid ${theme.border}`,
+                        'border-radius': 'var(--radius-sm)',
+                        color: theme.fgMuted,
+                        'font-size': '12px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Don't teleport
                     </button>
                   </span>
                 </InlineBanner>

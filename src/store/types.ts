@@ -247,6 +247,10 @@ export interface Task {
    *  is to reattach the right conversation after a restart instead of taking
    *  whichever session in the worktree happens to be newest. */
   agentSessionIds?: Record<string, string>;
+  /** Claude web session the first pane teleports on its first launch
+   *  (`claude --teleport <id>`); see buildTaskAgentArgs. Not persisted: after a
+   *  restart the pane resumes instead. */
+  teleportSessionId?: string;
   selectedAgentId?: string;
   /** Layout for a task's AI terminals when it has more than one agent.
    *  'split' (default) tiles them side by side; 'tabs' shows only the selected
@@ -522,6 +526,8 @@ export interface TaskIdea {
 export interface PersistedState {
   projects: Project[];
   lastProjectId: string | null;
+  /** Project of the last teleported web session; Claude links do not name their repo. */
+  lastTeleportProjectId?: string | null;
   lastAgentId: string | null;
   taskOrder: string[];
   collapsedTaskOrder?: string[];
@@ -643,6 +649,7 @@ export interface RemoteAccess {
 export interface AppStore {
   projects: Project[];
   lastProjectId: string | null;
+  lastTeleportProjectId: string | null;
   lastAgentId: string | null;
   taskOrder: string[];
   collapsedTaskOrder: string[];

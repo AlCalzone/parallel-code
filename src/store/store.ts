@@ -99,6 +99,7 @@ export {
   moveActiveTask,
   jumpToTask,
   toggleNewTaskPanel,
+  retryTeleportInRepo,
   startProjectTask,
 } from './navigation';
 export {

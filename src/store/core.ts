@@ -21,6 +21,7 @@ const EMPTY_USAGE: UsageState = {
 export const [store, setStore] = createStore<AppStore>({
   projects: [],
   lastProjectId: null,
+  lastTeleportProjectId: null,
   lastAgentId: null,
   taskOrder: [],
   collapsedTaskOrder: [],

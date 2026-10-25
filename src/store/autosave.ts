@@ -18,6 +18,7 @@ function structuralSnapshot(): string {
   return JSON.stringify({
     projects: store.projects,
     lastProjectId: store.lastProjectId,
+    lastTeleportProjectId: store.lastTeleportProjectId,
     lastAgentId: store.lastAgentId,
     taskOrder: store.taskOrder,
     collapsedTaskOrder: store.collapsedTaskOrder,

@@ -169,7 +169,8 @@ function initTaskInStore(
       // Without this it launches with the positional default, and once a second
       // pane exists that default means "the newest session in this worktree" —
       // the second pane's — so pane one comes back with the wrong conversation.
-      assignFreshSessionId(s, taskId, agent.id, agent.def.command);
+      // A teleported pane is the exception: `--teleport` picks the session.
+      if (!task.teleportSessionId) assignFreshSessionId(s, taskId, agent.id, agent.def.command);
       s.taskOrder.push(taskId);
       if (opts.activate) {
         if (s.taskProjectFilter && s.taskProjectFilter !== task.projectId)
@@ -180,6 +181,7 @@ function initTaskInStore(
         if (s.boardView) s.boardPeek = true;
       }
       s.lastProjectId = task.projectId;
+      if (task.teleportSessionId) s.lastTeleportProjectId = task.projectId;
       if (opts.agentDef) s.lastAgentId = opts.agentDef.id;
     }),
   );
@@ -257,6 +259,8 @@ export interface CreateTaskOptions {
   githubUrl?: string;
   /** Check out this open pull request instead of branching from baseBranch. */
   pullRequestNumber?: number;
+  /** Claude web session to `--teleport` into on the agent's first launch. */
+  teleportSessionId?: string;
   skipPermissions?: boolean;
   dockerMode?: boolean;
   dockerSource?: DockerSource;
@@ -396,6 +400,9 @@ export async function createTask(opts: CreateTaskOptions): Promise<string> {
     }),
     initialPrompt: initialPrompt ?? undefined,
     savedInitialPrompt: initialPrompt ?? undefined,
+    teleportSessionId: opts.teleportSessionId,
+    // `--teleport` is a terminal launch flag; the chat view's launch would drop it.
+    ...(opts.teleportSessionId && { mainAgentView: 'terminal' as const }),
     skipPermissions: skipPermissions ?? undefined,
     dockerMode: dockerMode ?? undefined,
     dockerSource: dockerSource ?? undefined,
@@ -1211,7 +1218,7 @@ export function uncollapseTask(taskId: string, options: { activate?: boolean } =
 // --- GitHub drop-to-create helpers ---
 
 /** Find best matching project by comparing repo name to project directory basenames. */
-function matchProject(repoName: string): string | null {
+export function matchProject(repoName: string): string | null {
   const lower = repoName.toLowerCase();
   for (const project of store.projects) {
     const basename = project.path.split('/').pop() ?? '';

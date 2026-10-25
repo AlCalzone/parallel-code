@@ -1,3 +1,4 @@
+import { claudeSessionUrl } from '../lib/claude-session-url';
 import { matchesTaskProjectFilter } from './task-project-filter';
 import { batch } from 'solid-js';
 import { documentAgentTaskId, isProjectPageAgentTaskId } from '../documents/task-id';
@@ -11,7 +12,7 @@ import {
 } from './focused-panel';
 import { showNotification } from './notification';
 import { isPlannableProject, pickAndAddProject } from './projects';
-import { reorderTask } from './tasks';
+import { matchProject, reorderTask } from './tasks';
 import { closeProjectPages } from './project-pages';
 import { restoreFailedDraft } from './task-creation';
 
@@ -160,6 +161,18 @@ export function toggleNewTaskPanel(show?: boolean): void {
   }
   setStore('showNewTaskPanel', shouldShow);
   if (shouldShow) triggerFocus('new-task');
+}
+
+/**
+ * Reopens the new-task form for a web session that `claude --teleport` refused
+ * because it belongs to another repository. Preselects the project whose folder
+ * matches that repository, or none so the user picks one.
+ */
+export function retryTeleportInRepo(sessionId: string, repo: string): void {
+  // Cleared first so an open panel still holding this link applies the project.
+  setStore({ lastTeleportProjectId: matchProject(repo), newTaskDropUrl: null });
+  setStore('newTaskDropUrl', claudeSessionUrl(sessionId));
+  toggleNewTaskPanel(true);
 }
 
 /**

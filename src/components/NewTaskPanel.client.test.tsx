@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { IPC } from '../../electron/ipc/channels';
 import { invoke } from '../lib/ipc';
 import { setStore, store } from '../store/core';
-import { toggleNewTaskPanel } from '../store/navigation';
+import { retryTeleportInRepo, toggleNewTaskPanel } from '../store/navigation';
 import { clearNotification } from '../store/notification';
 import { openBeside } from './board/TaskStatus';
 import { NewTaskPanel } from './NewTaskPanel';
@@ -27,6 +27,7 @@ beforeEach(() => {
   setStore('tasks', reconcile({}));
   setStore({
     newTaskPrefillPrompt: null,
+    lastTeleportProjectId: null,
     mcpOrchestrationEnabled: true,
     projects: [{ id: 'project', name: 'Project', path: '/project', color: '#abc' }],
     availableAgents: [
@@ -949,4 +950,162 @@ it('reports dropped files it cannot attach', async () => {
   } finally {
     Reflect.set(window, 'electron', electron);
   }
+});
+
+it('teleports a dropped Claude web session into the new task', async () => {
+  dispose();
+  // UI mode would open the chat view, whose launch cannot teleport.
+  setStore({
+    newTaskDropUrl: 'https://claude.ai/code/session_011CUabcXYZ',
+    preferUiMode: true,
+    lastTeleportProjectId: 'project',
+  });
+  const originalInvoke = vi.mocked(invoke).getMockImplementation();
+  vi.mocked(invoke).mockImplementation((channel, args) => {
+    if (channel === IPC.CreateTask)
+      return Promise.resolve({
+        id: 'teleported',
+        branch_name: 'task/teleport',
+        worktree_path: '/project/.worktrees/teleport',
+      });
+    return Promise.resolve(originalInvoke?.(channel, args));
+  });
+  try {
+    dispose = render(() => <NewTaskPanel open={true} onClose={vi.fn()} />, host);
+    const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]');
+    await vi.waitFor(() => expect(submit?.disabled).toBe(false));
+    expect(host.querySelector('textarea')?.value).toBe('');
+    expect(host.textContent).toContain('Teleports Claude web session session_011CUabcXYZ');
+    host
+      .querySelector('form')
+      ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(store.tasks.teleported).toBeDefined());
+    const task = store.tasks.teleported;
+    expect(task.name).toBe('Teleport 011CUabc');
+    expect(task.teleportSessionId).toBe('session_011CUabcXYZ');
+    expect(task.githubUrl).toBeUndefined();
+    // No minted id: the first launch must teleport, not start a new session.
+    expect(task.agentSessionIds?.[task.agentIds[0]]).toBeUndefined();
+    expect(task.mainAgentView).toBe('terminal');
+    expect(task.projectId).toBe('project');
+  } finally {
+    setStore({ newTaskDropUrl: null, preferUiMode: false });
+  }
+});
+
+it('takes a Claude web session link dropped while the panel is already open', async () => {
+  const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]');
+  await vi.waitFor(() => expect(submit?.disabled).toBe(false));
+  const originalInvoke = vi.mocked(invoke).getMockImplementation();
+  vi.mocked(invoke).mockImplementation((channel, args) => {
+    if (channel === IPC.CreateTask)
+      return Promise.resolve({
+        id: 'late-drop',
+        branch_name: 'task/late',
+        worktree_path: '/project/.worktrees/late',
+      });
+    return Promise.resolve(originalInvoke?.(channel, args));
+  });
+  try {
+    setStore({
+      lastTeleportProjectId: 'project',
+      newTaskDropUrl: 'https://claude.ai/code/session_011CUabcXYZ',
+    });
+    host
+      .querySelector('form')
+      ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(store.tasks['late-drop']).toBeDefined());
+    expect(store.tasks['late-drop'].teleportSessionId).toBe('session_011CUabcXYZ');
+    expect(store.tasks['late-drop'].name).toBe('Teleport 011CUabc');
+  } finally {
+    setStore('newTaskDropUrl', null);
+  }
+});
+
+it('leaves the project for the user to pick when no teleport project is remembered', async () => {
+  const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]');
+  await vi.waitFor(() => expect(submit?.disabled).toBe(false));
+  try {
+    // A deleted project counts as none.
+    setStore({
+      lastTeleportProjectId: 'gone',
+      newTaskDropUrl: 'https://claude.ai/code/session_011CUabcXYZ',
+    });
+    host
+      .querySelector('form')
+      ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(host.textContent).toContain('Select a project'));
+    expect(Object.keys(store.tasks)).toEqual([]);
+  } finally {
+    setStore('newTaskDropUrl', null);
+  }
+});
+
+it('retries a refused teleport in the project matching the session repo', async () => {
+  const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]');
+  await vi.waitFor(() => expect(submit?.disabled).toBe(false));
+  const originalInvoke = vi.mocked(invoke).getMockImplementation();
+  vi.mocked(invoke).mockImplementation((channel, args) => {
+    if (channel === IPC.CreateTask)
+      return Promise.resolve({
+        id: 'retried',
+        branch_name: 'task/retried',
+        worktree_path: '/code/web-app/.worktrees/retried',
+      });
+    return Promise.resolve(originalInvoke?.(channel, args));
+  });
+  const url = 'https://claude.ai/code/session_011CUabcXYZ';
+  setStore({
+    projects: [
+      { id: 'project', name: 'Project', path: '/project', color: '#abc' },
+      { id: 'web', name: 'Web', path: '/code/Web-App', color: '#def' },
+    ],
+    lastTeleportProjectId: 'project',
+    newTaskDropUrl: url,
+  });
+  try {
+    // The panel still holds the same link, so only the project changes.
+    retryTeleportInRepo('session_011CUabcXYZ', 'web-app');
+    expect(store.newTaskDropUrl).toBe(url);
+    expect(host.querySelector('select')?.value).toBe('web');
+    await vi.waitFor(() => expect(submit?.disabled).toBe(false));
+    host
+      .querySelector('form')
+      ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(store.tasks.retried, host.textContent ?? '').toBeDefined());
+    expect(store.tasks.retried.projectId).toBe('web');
+    expect(store.tasks.retried.teleportSessionId).toBe('session_011CUabcXYZ');
+  } finally {
+    setStore('newTaskDropUrl', null);
+  }
+});
+
+it('creates an ordinary task when the user declines the teleport', async () => {
+  const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]');
+  await vi.waitFor(() => expect(submit?.disabled).toBe(false));
+  const originalInvoke = vi.mocked(invoke).getMockImplementation();
+  vi.mocked(invoke).mockImplementation((channel, args) => {
+    if (channel === IPC.CreateTask)
+      return Promise.resolve({
+        id: 'declined',
+        branch_name: 'task/declined',
+        worktree_path: '/project/.worktrees/declined',
+      });
+    return Promise.resolve(originalInvoke?.(channel, args));
+  });
+  setStore({
+    lastTeleportProjectId: 'project',
+    newTaskDropUrl: 'https://claude.ai/code/session_011CUabcXYZ',
+  });
+  const decline = [...host.querySelectorAll('button')].find(
+    (b) => b.textContent === "Don't teleport",
+  );
+  decline?.click();
+  expect(host.textContent).not.toContain('Teleports Claude web session');
+  expect(host.querySelector<HTMLInputElement>('input[value^="Teleport "]')).toBeNull();
+  host
+    .querySelector('form')
+    ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await vi.waitFor(() => expect(store.tasks.declined).toBeDefined());
+  expect(store.tasks.declined.teleportSessionId).toBeUndefined();
 });

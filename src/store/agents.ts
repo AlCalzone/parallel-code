@@ -11,6 +11,9 @@ import { refreshUsage, usageProviderForAgent } from './usage';
 import { assignFreshSessionId } from './session-ids';
 import { widenTaskColumnForAgentPanes } from './task-column';
 import { forgetAgentPrompts } from '../lib/prompt-history';
+import { canAssignSessionId } from '../../electron/shared/session-resume';
+import { sessionAgentForCommand, type SessionRecord } from '../../electron/shared/session-record';
+import { warn as logWarn, errMessage } from '../lib/log';
 
 const [agentsLoaded, setAgentsLoaded] = createSignal(false);
 const [agentsLoadFailed, setAgentsLoadFailed] = createSignal(false);
@@ -34,7 +37,31 @@ export async function loadAgents(): Promise<void> {
   }
 }
 
+/**
+ * Pin a first pane that has no session id (a teleported one, where
+ * `--teleport` picked its session, or one from before ids were minted) to the
+ * newest session in the worktree, which is still its own. Its resume is otherwise positional — "the newest session here" —
+ * and would take over the conversation of the pane being added.
+ */
+async function pinIdlessFirstPane(taskId: string): Promise<void> {
+  const task = store.tasks[taskId];
+  const first = task?.agentIds[0] ? store.agents[task.agentIds[0]] : undefined;
+  if (!task || !first || task.agentSessionIds?.[first.id]) return;
+  if (!canAssignSessionId(first.def.command)) return;
+  const agent = sessionAgentForCommand(first.def.command);
+  try {
+    const sessions = await invoke<SessionRecord[]>(IPC.ListSessions, { cwd: task.worktreePath });
+    const newest = sessions.find((session) => session.agent === agent);
+    if (!newest || !store.tasks[taskId] || store.tasks[taskId].agentSessionIds?.[first.id]) return;
+    setStore('tasks', taskId, 'agentSessionIds', (ids) => ({ ...ids, [first.id]: newest.id }));
+  } catch (err) {
+    logWarn('agents', 'failed to pin the first pane session', { taskId, error: errMessage(err) });
+  }
+}
+
 export async function addAgentToTask(taskId: string, agentDef: AgentDef): Promise<string | null> {
+  if (!store.tasks[taskId]) return null;
+  await pinIdlessFirstPane(taskId);
   const task = store.tasks[taskId];
   if (!task) return null;
 

@@ -19,6 +19,7 @@ import {
   addAgentToTask,
   closeAgentInTask,
   showNotification,
+  retryTeleportInRepo,
   toggleAITerminalLayout,
 } from '../store/store';
 import { markDirty } from '../lib/terminalFitManager';
@@ -31,6 +32,7 @@ import { PromptHistory } from './PromptHistory';
 import { TerminalView } from './TerminalView';
 import { fileLinkMenu, type ChangesLink, type FileLinkMenu } from './file-link-menu';
 import { findBareFile } from '../lib/find-bare-file';
+import { parseTeleportRepoMismatch } from '../lib/claude-session-url';
 import { createMarkdownViewer } from './MarkdownViewerDialog';
 import { SessionPicker } from './SessionPicker';
 import { AgentChatView } from './AgentChatView';
@@ -962,6 +964,19 @@ function AgentTerminalPane(props: {
                         showNotification(
                           'Resume failed. Your existing conversation was not replaced; review the terminal error before retrying.',
                         );
+                      const teleportId = props.task.teleportSessionId;
+                      const teleportRepo =
+                        teleportId && props.task.agentIds[0] === a().id && !a().resumed
+                          ? parseTeleportRepoMismatch(code.last_output)
+                          : null;
+                      if (teleportId && teleportRepo) {
+                        // Claude links don't name their repo, so the first try can
+                        // land in the wrong project; the CLI's refusal names it.
+                        retryTeleportInRepo(teleportId, teleportRepo);
+                        showNotification(
+                          `This web session belongs to ${teleportRepo}. Choose its project to teleport it.`,
+                        );
+                      }
                       markAgentExited(a().id, code);
                     }}
                     onData={(data) => markAgentOutput(a().id, data, props.task.id)}
