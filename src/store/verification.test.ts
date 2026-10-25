@@ -40,6 +40,7 @@ import {
   getBackgroundVerifyHold,
   getVerificationOutput,
   getVerifyCommand,
+  isUserVerifyRunning,
   runBackgroundVerify,
   runTaskVerification,
   sendVerificationFailureToAgent,
@@ -427,5 +428,26 @@ describe('cancelBackgroundVerify', () => {
     expect(mockInvoke).not.toHaveBeenCalledWith(IPC.CancelTaskVerification, expect.anything());
     finish(finishedRun());
     await pending;
+  });
+});
+
+describe('isUserVerifyRunning', () => {
+  it('counts a run the user started while it is in flight, not a background one', async () => {
+    let finish: (run: VerificationRun) => void = () => {};
+    mockBackground(scan(), new Promise<VerificationRun>((resolve) => (finish = resolve)));
+    const background = runBackgroundVerify('t1');
+    await flush();
+    expect(store.tasks.t1.verificationRun?.status).toBe('running');
+    expect(isUserVerifyRunning('t1')).toBe(false);
+    finish(finishedRun());
+    await background;
+
+    mockInvoke.mockReturnValueOnce(new Promise<VerificationRun>((resolve) => (finish = resolve)));
+    const clicked = runTaskVerification('t1');
+    await flush();
+    expect(isUserVerifyRunning('t1')).toBe(true);
+    finish(finishedRun());
+    await clicked;
+    expect(isUserVerifyRunning('t1')).toBe(false);
   });
 });

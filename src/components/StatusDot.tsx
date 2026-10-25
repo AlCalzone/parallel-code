@@ -128,11 +128,18 @@ export function StatusDot(props: {
   taskId?: string;
   /** False when the host shows its own hover label; the aria-label stays either way. */
   nativeTitle?: boolean;
+  /** A running check to show instead, as a review-coloured spinner; the host
+   *  decides when it outranks the task's own state. */
+  checking?: string;
 }) {
   const size = () => props.size ?? 'sm';
   const ci = () => (props.taskId ? getCiGlyphState(props.taskId) : undefined);
-  const glyph = () => getStatusGlyph(props.status, props.attention, ci()?.state);
+  const glyph = (): StatusGlyph =>
+    props.checking ? 'spinner' : getStatusGlyph(props.status, props.attention, ci()?.state);
+  const tooltip = () =>
+    props.checking || getDotTooltip(props.status, props.attention, props.taskId);
   const color = () => {
+    if (props.checking) return REVIEW_COLOR;
     if (glyph() === 'ci_failed') return theme.error;
     // A failed check turns the pie red before the whole run finishes.
     if (glyph() === 'ci_running') return ci()?.failing ? theme.error : theme.warning;
@@ -159,14 +166,11 @@ export function StatusDot(props: {
     <span
       class="status-glyph"
       role="img"
-      aria-label={getDotTooltip(props.status, props.attention, props.taskId)}
+      aria-label={tooltip()}
       title={
         props.nativeTitle === false
           ? undefined
-          : [
-              getDotTooltip(props.status, props.attention, props.taskId),
-              props.taskId ? getTaskActivityTooltip(props.taskId) : undefined,
-            ]
+          : [tooltip(), props.taskId ? getTaskActivityTooltip(props.taskId) : undefined]
               .filter(Boolean)
               .join('\n')
       }

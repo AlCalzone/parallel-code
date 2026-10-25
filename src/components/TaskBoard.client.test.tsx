@@ -184,6 +184,34 @@ it('says why a stopped card spins when only its terminal is busy', () => {
   expect(meta()).toContain('Terminal busy');
 });
 
+it('moves a card into Working while a Finish check runs, with its own spinner', () => {
+  setStore('tasks', 'review', 'reviewStatus', { state: 'running', startedAt: 1 });
+  expect(cardNames('Working')).toEqual(['Fix login redirect']);
+  const card = lane('Working')?.querySelector('.task-board-card');
+  expect(card?.querySelector('.task-board-meta')?.textContent).toContain('Reviewing');
+  const glyph = card?.querySelector<HTMLElement>('.task-board-glyph .status-glyph');
+  expect(glyph?.querySelector('.status-glyph-spinner')).not.toBeNull();
+  expect(glyph?.title).toContain('Reviewing');
+  setStore('tasks', 'review', 'reviewStatus', undefined);
+  expect(cardNames('Needs you')).toEqual(['Fix login redirect']);
+});
+
+it('keeps a closing card out of Working while its review runs', () => {
+  setStore('tasks', 'idle', { reviewStatus: { state: 'running', startedAt: 1 } });
+  setStore('tasks', 'idle', 'closingStatus', 'closing');
+  expect(cardNames('Working')).toEqual([]);
+  expect(cardNames('Stopped')).toEqual(['Update docs']);
+});
+
+it('leaves a card that asks a question in Needs you while its checks run', () => {
+  attention.force({ review: 'needs_input' });
+  setStore('tasks', 'review', 'reviewStatus', { state: 'running', startedAt: 1 });
+  expect(cardNames('Needs you')).toEqual(['Fix login redirect']);
+  expect(lane('Needs you')?.querySelector('.task-board-meta')?.textContent).not.toContain(
+    'Reviewing',
+  );
+});
+
 it('marks each card with the status glyph the title-bar pills use', () => {
   const glyph = lane('Needs you')?.querySelector<HTMLElement>('.task-board-title .status-glyph');
   expect(glyph?.title).toContain('Ready for review');

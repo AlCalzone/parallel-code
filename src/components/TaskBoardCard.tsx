@@ -11,7 +11,7 @@ import type { Task } from '../store/types';
 import { activityLine, agentName, boardNow, stateLabel } from './board/task-state';
 import { ASK_ACTION, AskRow, TaskGlyph, TaskPr, openBeside } from './board/TaskStatus';
 import { focusBoardCard } from './task-board-keys';
-import { boardTaskState, type BoardLaneId } from './task-board-lanes';
+import { boardCheckLabel, boardTaskState, type BoardLaneId } from './task-board-lanes';
 import { createTaskContextMenu } from './task-context-menu';
 
 /** Why the card is set aside: when its snooze ends, or that it is minimized. */
@@ -65,18 +65,25 @@ function parentTask(task: Task): Task | undefined {
   return task.coordinatedBy ? store.tasks[task.coordinatedBy] : undefined;
 }
 
-function CardMeta(props: { task: Task; since: number | undefined; waiting: boolean }) {
+function CardMeta(props: {
+  task: Task;
+  since: number | undefined;
+  waiting: boolean;
+  checking: string;
+}) {
+  const busy = () =>
+    props.checking ||
+    (getTaskAttentionState(props.task.id) === 'shell_busy' ? 'Terminal busy' : '');
   return (
     <div class="task-board-meta">
       <BoardProjectLabel projectId={props.task.projectId} />
-      {/* Names the cause of a stopped card's spinner in the agent's slot, so the row never reflows. */}
-      <Show
-        when={getTaskAttentionState(props.task.id) === 'shell_busy'}
-        fallback={<span class="task-board-agent">{agentName(props.task)}</span>}
-      >
-        <span class="task-board-agent busy" title={agentName(props.task)}>
-          Terminal busy
-        </span>
+      {/* Names the cause of a card's spinner in the agent's slot, so the row never reflows. */}
+      <Show when={busy()} fallback={<span class="task-board-agent">{agentName(props.task)}</span>}>
+        {(label) => (
+          <span class="task-board-agent busy" title={agentName(props.task)}>
+            {label()}
+          </span>
+        )}
       </Show>
       <Show when={props.since}>
         {(since) => (
@@ -93,6 +100,7 @@ function CardMeta(props: { task: Task; since: number | undefined; waiting: boole
 /** One task on the all-tasks board; clicking anywhere opens it beside the board. */
 export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
   const state = createMemo(() => boardTaskState(props.task));
+  const checking = createMemo(() => boardCheckLabel(props.task));
   const activity = createMemo(() => activityLine(props.task));
   // activityLine falls back to the agent's name, which the meta row already
   // shows; the branch says more and keeps the line from standing empty.
@@ -149,13 +157,14 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
         title={props.task.name}
         onClick={() => openBeside(props.task)}
       >
-        <TaskGlyph taskId={props.task.id} />
+        <TaskGlyph taskId={props.task.id} checking={checking()} />
         <span class="task-board-name">{props.task.name}</span>
       </button>
       <CardMeta
         task={props.task}
         since={question()?.since ?? activity().since}
         waiting={question() !== null}
+        checking={checking()}
       />
       {/* Always rendered so a task starting or stopping never changes the card's height. */}
       <p

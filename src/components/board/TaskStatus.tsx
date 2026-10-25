@@ -50,7 +50,7 @@ export function openBeside(task: Task, otherSide = false, panel?: string | null)
 }
 
 /** The task's status dot, the same glyph as the title-bar pills, which the board hides. */
-export function TaskGlyph(props: { taskId: string }) {
+export function TaskGlyph(props: { taskId: string; checking?: string }) {
   return (
     <span class="task-board-glyph" aria-hidden="true">
       <StatusDot
@@ -58,6 +58,7 @@ export function TaskGlyph(props: { taskId: string }) {
         taskId={props.taskId}
         size="sm"
         attention={getTaskAttentionState(props.taskId)}
+        checking={props.checking}
       />
     </span>
   );

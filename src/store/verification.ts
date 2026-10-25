@@ -31,8 +31,11 @@ const [liveOutput, setLiveOutput] = createStore<Record<string, string>>({});
 // run still resolves, and its late result must not overwrite the newer run.
 const generations = new Map<string, number>();
 // The generation of each task's background run, so only those are cancelled
-// when the agent starts working again.
-const backgroundGenerations = new Map<string, number>();
+// when the agent starts working again. A store, so the board can tell a run
+// the user started from a background one.
+const [backgroundGenerations, setBackgroundGenerations] = createStore<
+  Record<string, number | undefined>
+>({});
 // Background runs between their start and the command: a cancel lands here.
 const scanning = new Map<string, symbol>();
 
@@ -132,8 +135,7 @@ export async function runTaskVerification(
   if (!task || !command) return undefined;
   const generation = (generations.get(taskId) ?? 0) + 1;
   generations.set(taskId, generation);
-  if (options.background) backgroundGenerations.set(taskId, generation);
-  else backgroundGenerations.delete(taskId);
+  setBackgroundGenerations(taskId, options.background ? generation : undefined);
   const isCurrent = () => generations.get(taskId) === generation;
   // A copy: the store merges the pending run into the same object.
   const previous = task.verificationRun && { ...task.verificationRun };
@@ -148,13 +150,21 @@ export async function runTaskVerification(
 
   const run = await invokeRun(task, pending, channel, options);
   if (!isCurrent()) return run;
-  backgroundGenerations.delete(taskId);
+  setBackgroundGenerations(taskId, undefined);
   clearLiveOutput(taskId);
   // A background run that was held or stopped says nothing about the code.
   setRun(taskId, options.background && run.status === 'cancelled' ? previous : run);
   showVerificationInCheckSuite(taskId);
   void saveState();
   return run;
+}
+
+/** Whether a verify run the user started, not a background one, is in flight. */
+export function isUserVerifyRunning(taskId: string): boolean {
+  return (
+    store.tasks[taskId]?.verificationRun?.status === 'running' &&
+    backgroundGenerations[taskId] === undefined
+  );
 }
 
 /** Background runs follow the project setting; unset means on. */
@@ -233,7 +243,7 @@ export async function runBackgroundVerify(
  *  a clicked run keeps going. */
 export async function cancelBackgroundVerify(taskId: string): Promise<void> {
   scanning.delete(taskId);
-  const generation = backgroundGenerations.get(taskId);
+  const generation = backgroundGenerations[taskId];
   if (generation === undefined || generation !== generations.get(taskId)) return;
   if (store.tasks[taskId]?.verificationRun?.status !== 'running') return;
   await cancelTaskVerification(taskId);

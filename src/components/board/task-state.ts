@@ -1,9 +1,11 @@
 import { createSignal } from 'solid-js';
 import { store } from '../../store/core';
 import { getAgentHookStatus } from '../../store/agentHookStatus';
+import { isCheckSuiteBusy } from '../../store/check-suite-state';
 import { computeAttentionEntries, jumpToWaitingTask } from '../../store/sidebar-attention';
 import { getReadyLabel, getTaskAttentionState } from '../../store/taskStatus';
 import type { Task } from '../../store/types';
+import { isUserVerifyRunning } from '../../store/verification';
 
 /** How a linked task is doing, from the card's point of view. */
 export type CardTaskState = 'needs_input' | 'error' | 'review' | 'active' | 'ready' | 'idle';
@@ -34,6 +36,18 @@ export function cardTaskState(task: Task): CardTaskState {
   }
   if (task.signalDoneReceived || task.landingState === 'landed_pending_review') return 'review';
   return state === 'ready' ? 'ready' : 'idle';
+}
+
+/**
+ * What a check started from Finish is doing, or '' when none runs. The
+ * verify command's background run after each turn doesn't count: it would
+ * hold every finished task back from Needs you until its tests end.
+ */
+export function finishCheckLabel(task: Task): string {
+  if (task.reviewStatus?.state === 'running') return 'Reviewing';
+  if (task.evidence && isCheckSuiteBusy(task.evidence)) return 'Running checks';
+  if (isUserVerifyRunning(task.id)) return 'Running verify';
+  return '';
 }
 
 export function stateLabel(task: Task, state: CardTaskState): string {

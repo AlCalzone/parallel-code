@@ -5,7 +5,7 @@ import { getProject } from '../store/projects';
 import { matchesTaskProjectFilter } from '../store/task-project-filter';
 import { getTaskOpenQuestion } from '../store/taskStatus';
 import type { Task } from '../store/types';
-import { cardTaskState, type CardTaskState } from './board/task-state';
+import { cardTaskState, finishCheckLabel, type CardTaskState } from './board/task-state';
 import { holdWorking } from './task-board-hold';
 
 export type BoardLaneId = 'needs' | 'working' | 'stopped' | 'pr' | 'snoozed';
@@ -33,6 +33,15 @@ export function boardTaskState(task: Task): CardTaskState {
   return holdWorking(task.id, cardTaskState(task));
 }
 
+/** The Finish check the card names, while no agent works or asks; '' otherwise.
+ *  A closing task's checks end with it, so they are no work in progress. */
+export function boardCheckLabel(task: Task): string {
+  if (task.closingStatus) return '';
+  const state = boardTaskState(task);
+  if (state === 'active' || state === 'needs_input' || state === 'error') return '';
+  return finishCheckLabel(task);
+}
+
 /** Where a task sits on the board: the first of these checks that claims it. */
 export function boardLaneOf(task: Task): BoardLaneId {
   // A close that failed leaves a worktree behind until someone retries.
@@ -40,11 +49,15 @@ export function boardLaneOf(task: Task): BoardLaneId {
   // Snoozed tasks wake on their own when they need attention.
   if (isTaskBackgrounded(task.id)) return 'snoozed';
   const state = boardTaskState(task);
-  if (state === 'needs_input' || state === 'error' || state === 'review') return 'needs';
+  if (state === 'needs_input' || state === 'error') return 'needs';
+  // A review or check started from Finish is still work in progress: the
+  // task needs you again once it has a result.
+  const checking = boardCheckLabel(task) !== '';
+  if (state === 'review' && !checking) return 'needs';
   // Minimized tasks never wake, so they join the snoozed ones only while
   // nothing needs you; otherwise a question would wait unseen in the rail.
   if (task.collapsed) return 'snoozed';
-  if (state === 'active') return 'working';
+  if (state === 'active' || checking) return 'working';
   if (task.prUrl) return 'pr';
   // Ready vs idle hinges on whether the agent committed, not on what you do
   // next, so they share a lane and the card's label tells them apart.
