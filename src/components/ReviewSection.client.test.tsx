@@ -429,9 +429,12 @@ describe('ReviewSection', () => {
     expect(root.querySelector('[aria-label="Confidence"]')).not.toBeNull();
   });
 
-  it('opens a review of the code as it is now, and folds it on request', () => {
+  it('folds a review of the code as it is now until asked, then folds it on request', () => {
     const { root } = mount(baseTask({ codeFingerprint: { fingerprint: 'same', at: 4_000 } }), true);
-    expect(heading(root)).toBe('Review · Verify failed · 50% · 1 open');
+    // The readiness row above says verify failed, so the review's line does not repeat it.
+    expect(heading(root)).toBe('Review · 50% · 1 open');
+    expect(toggle(root).getAttribute('aria-expanded')).toBe('false');
+    toggle(root).click();
     expect(toggle(root).getAttribute('aria-expanded')).toBe('true');
     expect(root.textContent).toContain('Asked Send people back after sign-in.');
     // The weakest score stands for the whole; every score keeps its reason.
@@ -463,20 +466,10 @@ describe('ReviewSection', () => {
     };
   }
 
-  it('waits for a read of the code before opening a rating it cannot place', async () => {
-    // After a restart nothing says what code the rating saw until the diff is read again.
+  it('stays folded when the code read confirms the rating is current', async () => {
     const settle = pendingCodeRead();
     const { root, setState } = mount(baseTask());
-    expect(toggle(root).getAttribute('aria-expanded')).toBe('false');
     setState('codeFingerprint', { fingerprint: 'same', at: 4_000 });
-    await settle();
-    expect(toggle(root).getAttribute('aria-expanded')).toBe('true');
-  });
-
-  it('stays folded when the read finds newer code', async () => {
-    const settle = pendingCodeRead();
-    const { root, setState } = mount(baseTask());
-    setState('codeFingerprint', { fingerprint: 'newer', at: 4_000 });
     await settle();
     expect(toggle(root).getAttribute('aria-expanded')).toBe('false');
   });

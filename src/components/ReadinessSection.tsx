@@ -43,6 +43,9 @@ const toggleStyle = {
   color: theme.fgMuted,
   cursor: 'pointer',
   'font-size': '13px',
+  // It shares the status row, which the detail text may fill.
+  'white-space': 'nowrap',
+  'flex-shrink': '0',
 };
 const rowStyle = {
   display: 'flex',
@@ -135,7 +138,7 @@ export function ReadinessSection(props: ReadinessSectionProps) {
     })[next];
 
   return (
-    <section aria-label="Readiness and checks" style={{ margin: '20px 0', 'font-size': '13px' }}>
+    <section aria-label="Readiness and checks" style={{ margin: '0 0 6px', 'font-size': '13px' }}>
       <div style={rowStyle}>
         {/* Only the outcome is announced, not ages and button labels as they tick. */}
         <span
@@ -166,6 +169,15 @@ export function ReadinessSection(props: ReadinessSectionProps) {
             </button>
           )}
         </Show>
+        <button
+          type="button"
+          aria-expanded={open()}
+          aria-controls={bodyId}
+          style={toggleStyle}
+          onClick={() => setOpen(!open())}
+        >
+          <span aria-hidden="true">{open() ? '▾' : '▸'}</span> Details
+        </button>
       </div>
       <Show when={otherFailures().length > 0}>
         <div style={rowStyle}>
@@ -210,15 +222,6 @@ export function ReadinessSection(props: ReadinessSectionProps) {
           </div>
         )}
       </For>
-      <button
-        type="button"
-        aria-expanded={open()}
-        aria-controls={bodyId}
-        style={toggleStyle}
-        onClick={() => setOpen(!open())}
-      >
-        <span aria-hidden="true">{open() ? '▾' : '▸'}</span> Details
-      </button>
       {/* Hidden rather than unmounted, so folding keeps the panel's local state. */}
       <div id={bodyId} hidden={!open()} style={{ 'margin-top': '8px' }}>
         {props.children}

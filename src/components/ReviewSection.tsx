@@ -167,6 +167,8 @@ export function ReviewSection(props: {
   verifyFailed: boolean;
   /** Follow-ups that share the review's row, such as the change tour. */
   companion?: JSX.Element;
+  /** Shown above the follow-ups row, such as the verify result. */
+  lead?: JSX.Element;
   /** Called once a rework prompt is staged, so the dialog can close. */
   onReworkStaged: () => void;
   /** Opens a changed file at a line, above the dialog. */
@@ -197,15 +199,14 @@ export function ReviewSection(props: {
     const status = props.task.reviewStatus;
     return status?.state === 'failed' ? status.message : undefined;
   };
-  // A review of the code as it is now, or an urgent one, opens as the dialog
-  // opens; later changes leave it as the user set it, so nothing collapses under them.
-  // Without a read of the code this session (say after a restart) a rating
-  // can't be placed, so it waits for the read below.
+  // Folded by default, so the merge controls stay in reach: the button's verdict
+  // says enough. Only an urgent review opens as the dialog opens; later changes
+  // leave it as the user set it, so nothing collapses under them.
   const current = () => {
     const scores = summary().scores;
     return !!scores && !scores.stale && !!props.task.codeFingerprint;
   };
-  const [open, setOpenSignal] = createSignal(untrack(() => urgent() || current()));
+  const [open, setOpenSignal] = createSignal(untrack(urgent));
   let userToggled = false;
   const setOpen = (next: boolean | ((prev: boolean) => boolean)) => {
     userToggled = true;
@@ -231,7 +232,7 @@ export function ReviewSection(props: {
   onMount(() => {
     // A rating is judged against the code as it is now, not as the last brief saw it.
     if (props.task.confidence)
-      refreshCodeFingerprint(props.task.id).then(openUnlessToggled, (error: unknown) =>
+      refreshCodeFingerprint(props.task.id).catch((error: unknown) =>
         logWarn('review', 'Reading the code failed', { error: errMessage(error) }),
       );
   });
@@ -291,7 +292,7 @@ export function ReviewSection(props: {
   const actionToggles = () => (hasResult() || picking()) && !running();
   const actionLabel = () => {
     if (running()) return `Reviewing with ${reviewerName(props.task.id)}`;
-    if (hasResult()) return `Review · ${reviewVerdict(summary(), props.verifyFailed)}`;
+    if (hasResult()) return `Review · ${reviewVerdict(summary())}`;
     return failure() ? 'Retry review' : 'Run review';
   };
   const actionTitle = () => {
@@ -300,7 +301,8 @@ export function ReviewSection(props: {
     if (hasResult()) return open() ? 'Hide the review' : 'Show the review';
     return `Checks the work against what you asked, with ${reviewerName(props.task.id)}`;
   };
-  const warn = () => hasResult() && !running() && (urgent() || props.verifyFailed);
+  // A verify failure is said by the readiness row above, so only the review's own urgency warns here.
+  const warn = () => hasResult() && !running() && urgent();
 
   const failedChecks = () => {
     const names = checkRows()
@@ -605,6 +607,7 @@ export function ReviewSection(props: {
 
   return (
     <FollowUps
+      lead={props.lead}
       below={
         // Eases the dialog to the new height as the review or the picker opens and closes.
         <div ref={(element) => createHeightTransition(element)} class="review-below">

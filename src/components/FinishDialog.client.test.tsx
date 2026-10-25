@@ -85,15 +85,25 @@ vi.mock('./ChangedFilesList', () => ({ ChangedFilesList: () => null }));
 // Covered by its own tests; its store imports reach past this file's mocks.
 const reviewProps = vi.hoisted(() => ({
   current: undefined as
-    | { verifyFailed: boolean; companion?: JSX.Element; onReworkStaged: () => void }
+    | {
+        verifyFailed: boolean;
+        companion?: JSX.Element;
+        lead?: JSX.Element;
+        onReworkStaged: () => void;
+      }
     | undefined,
 }));
 vi.mock('./ReviewSection', () => ({
   ReviewSection: (props: NonNullable<typeof reviewProps.current>) => {
     // eslint-disable-next-line solid/reactivity -- keeps the live props proxy for the test to read
     reviewProps.current = props;
-    // The tour shares the review's row, so it arrives here.
-    return <>{props.companion}</>;
+    // The verify result leads the section and the tour shares the review's row, so both arrive here.
+    return (
+      <>
+        {props.lead}
+        {props.companion}
+      </>
+    );
   },
 }));
 vi.mock('./MergeReadinessPanel', () => ({
@@ -1095,5 +1105,29 @@ describe('FinishDialog review', () => {
     } finally {
       setStore('finishReview', true);
     }
+  });
+
+  it('leads "Before you merge" with the verify result, with or without the review', async () => {
+    vi.mocked(getTaskChecks).mockReturnValue([
+      { id: 'lint', name: 'Lint', kind: 'custom', command: 'npm run lint', run: 'on-demand' },
+    ]);
+    onTestFinished(() => {
+      vi.mocked(getTaskChecks).mockReturnValue([]);
+      setStore('finishReview', true);
+    });
+    const readinessInSection = () =>
+      document
+        .querySelector('[aria-label="Readiness and checks"]')
+        ?.closest('section[aria-labelledby]')
+        ?.querySelector('h3')?.textContent;
+    mount({ task: task() });
+    await flush();
+    // With the review on, the line reaches the page only through the review's lead slot.
+    expect(document.querySelector('[aria-label="Readiness and checks"]')).not.toBeNull();
+    dispose?.();
+    setStore('finishReview', false);
+    mount({ task: task() });
+    await flush();
+    expect(readinessInSection()).toBe('Before you merge');
   });
 });

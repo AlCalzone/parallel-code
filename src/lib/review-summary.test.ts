@@ -147,34 +147,28 @@ describe('buildReviewSummary', () => {
 });
 
 describe('reviewVerdict', () => {
-  it('gives the weakest score and the open count, led by a failed verify', () => {
+  it('gives the weakest score and the open count', () => {
     const summary = buildReviewSummary({ brief, confidence });
-    expect(reviewVerdict(summary, false)).toBe('50% · 3 open');
-    expect(reviewVerdict(summary, true)).toBe('Verify failed · 50% · 3 open');
+    expect(reviewVerdict(summary)).toBe('50% · 3 open');
   });
 
   it('says when nothing has reviewed the task yet', () => {
-    expect(reviewVerdict(buildReviewSummary({}), false)).toBe('Not reviewed yet');
-    expect(reviewVerdict(buildReviewSummary({}), true)).toBe('Verify failed');
+    expect(reviewVerdict(buildReviewSummary({}))).toBe('Not reviewed yet');
   });
 
   it('reads as clear when nothing is open', () => {
     const summary = buildReviewSummary({ confidence: { ...confidence, findings: [] } });
-    expect(reviewVerdict(summary, false)).toBe('50% · nothing open');
-    expect(reviewVerdict(summary, true)).toBe('Verify failed · 50% · nothing open');
+    expect(reviewVerdict(summary)).toBe('50% · nothing open');
     const unscored = buildReviewSummary({
       confidence: { ...confidence, scores: [], findings: [] },
     });
-    expect(reviewVerdict(unscored, false)).toBe('No open risks');
+    expect(reviewVerdict(unscored)).toBe('No open risks');
   });
 
   it('does not read as clear before anything rated the task', () => {
     const quiet = { ...brief, brief: { ...brief.brief, unbacked: [], open: [] } };
-    expect(reviewVerdict(buildReviewSummary({ brief: quiet }), false)).toBe('Not rated yet');
-    expect(reviewVerdict(buildReviewSummary({ brief: quiet }), true)).toBe(
-      'Verify failed · not rated yet',
-    );
-    expect(reviewVerdict(buildReviewSummary({ brief }), false)).toBe('2 open risks');
+    expect(reviewVerdict(buildReviewSummary({ brief: quiet }))).toBe('Not rated yet');
+    expect(reviewVerdict(buildReviewSummary({ brief }))).toBe('2 open risks');
   });
 });
 

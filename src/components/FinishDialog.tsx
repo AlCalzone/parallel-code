@@ -55,8 +55,8 @@ const SHOWN_ELSEWHERE = new Set(['Merge safety', 'Verify command', 'Evidence', '
 
 /**
  * One place to wrap up a task. Reads top to bottom: what blocks the merge,
- * the changed files, whether the checks back it, an optional review, then how
- * to merge. Merge and push are both footer actions, since pushing does not
+ * the changed files, then "Before you merge" (whether the checks back it,
+ * then the optional tour and review), then how to merge. Merge and push are both footer actions, since pushing does not
  * exclude merging later.
  */
 export function FinishDialog(props: FinishDialogProps) {
@@ -243,6 +243,42 @@ export function FinishDialog(props: FinishDialogProps) {
     </div>
   );
 
+  // The verify result, which leads "Before you merge". Opening its details or
+  // running a check there is taking the tip.
+  const readiness = () => (
+    <Show when={showReadiness()}>
+      <div ref={readinessAnchor} onClick={() => markFeatureHintSeen('finish-review')}>
+        <ReadinessSection
+          task={props.task}
+          headSha={merge.worktreeStatus()?.head_sha}
+          // Reading an errored resource throws; the line then omits "N commits ago".
+          branchCommits={
+            merge.branchCommits.error
+              ? undefined
+              : merge.branchCommits()?.map((commit) => commit.hash)
+          }
+          onConfigure={() => props.onConfigureChecks()}
+          onStaged={() => {
+            showNotification('Fix prompt staged in the task input. Review it, then send.');
+            props.onClose();
+          }}
+          onReviewFile={(file, line, side) => setReviewLocation({ file, line, side })}
+        >
+          <EvidencePanel
+            task={props.task}
+            agentId={merge.selectedAgentId()}
+            headSha={merge.worktreeStatus()?.head_sha}
+            dirty={merge.worktreeStatus()?.has_uncommitted_changes}
+            onConfigure={() => props.onConfigureChecks()}
+            onReviewFile={(file, line, side) => setReviewLocation({ file, line, side })}
+          >
+            <MergeReadinessPanel checks={readinessRows()} />
+          </EvidencePanel>
+        </ReadinessSection>
+      </div>
+    </Show>
+  );
+
   return (
     <>
       <ConfirmDialog
@@ -278,38 +314,6 @@ export function FinishDialog(props: FinishDialogProps) {
                 />
               </details>
             </Show>
-            {/* Opening the section or running a check there is taking the tip. */}
-            <Show when={showReadiness()}>
-              <div ref={readinessAnchor} onClick={() => markFeatureHintSeen('finish-review')}>
-                <ReadinessSection
-                  task={props.task}
-                  headSha={merge.worktreeStatus()?.head_sha}
-                  // Reading an errored resource throws; the line then omits "N commits ago".
-                  branchCommits={
-                    merge.branchCommits.error
-                      ? undefined
-                      : merge.branchCommits()?.map((commit) => commit.hash)
-                  }
-                  onConfigure={() => props.onConfigureChecks()}
-                  onStaged={() => {
-                    showNotification('Fix prompt staged in the task input. Review it, then send.');
-                    props.onClose();
-                  }}
-                  onReviewFile={(file, line, side) => setReviewLocation({ file, line, side })}
-                >
-                  <EvidencePanel
-                    task={props.task}
-                    agentId={merge.selectedAgentId()}
-                    headSha={merge.worktreeStatus()?.head_sha}
-                    dirty={merge.worktreeStatus()?.has_uncommitted_changes}
-                    onConfigure={() => props.onConfigureChecks()}
-                    onReviewFile={(file, line, side) => setReviewLocation({ file, line, side })}
-                  >
-                    <MergeReadinessPanel checks={readinessRows()} />
-                  </EvidencePanel>
-                </ReadinessSection>
-              </div>
-            </Show>
             <FeatureHint
               id="finish-review"
               when={props.open && showReadiness()}
@@ -330,18 +334,21 @@ export function FinishDialog(props: FinishDialogProps) {
               </Show>
               <Show when={!hasChecks()}> Add a verify command to have your tests run.</Show>
             </FeatureHint>
-            {/* Optional steps before merging; the review's result opens below them. */}
+            {/* The verify result leads the optional steps; the review's result opens below them. */}
             <Show
               when={store.finishReview}
               fallback={
-                <Show when={tourShown()}>
-                  <FollowUps>{tourBox()}</FollowUps>
+                <Show when={showReadiness() || tourShown()}>
+                  <FollowUps lead={readiness()}>
+                    <Show when={tourShown()}>{tourBox()}</Show>
+                  </FollowUps>
                 </Show>
               }
             >
               <ReviewSection
                 task={props.task}
                 verifyFailed={verifyFailed()}
+                lead={readiness()}
                 companion={<Show when={tourShown()}>{tourBox()}</Show>}
                 onReworkStaged={() => {
                   showNotification('Rework prompt staged in the task input. Review it, then send.');

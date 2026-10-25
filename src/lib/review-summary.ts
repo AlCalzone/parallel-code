@@ -231,11 +231,8 @@ function verdictHead(summary: ReviewSummary): string {
 }
 
 /** The one line that heads the review. */
-export function reviewVerdict(summary: ReviewSummary, verifyFailed: boolean): string {
-  const failed = verifyFailed ? 'Verify failed' : '';
-  if (!hasReviewContent(summary)) return failed || 'Not reviewed yet';
-  const head = verdictHead(summary);
-  return failed ? `${failed} · ${head.charAt(0).toLowerCase()}${head.slice(1)}` : head;
+export function reviewVerdict(summary: ReviewSummary): string {
+  return hasReviewContent(summary) ? verdictHead(summary) : 'Not reviewed yet';
 }
 
 /** One line per selected item. */
