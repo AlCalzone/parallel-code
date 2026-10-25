@@ -78,11 +78,11 @@ export function PullRequestDialog(props: PullRequestDialogProps) {
     setConfirmingMerge(false);
     const outcome = await actions.merge();
     if (outcome === 'failed') return;
-    showNotification(
-      outcome === 'merged'
-        ? `Merged PR #${number}`
-        : `Merge requested for PR #${number}; GitHub has not merged it yet (it may be in a merge queue).`,
-    );
+    if (outcome === 'merged') showNotification(`Merged PR #${number}`, { tone: 'success' });
+    else
+      showNotification(
+        `Merge requested for PR #${number}; GitHub has not merged it yet (it may be in a merge queue).`,
+      );
     // Closing avoids showing the pre-merge details (and merge button) until
     // a refetch lands; the PR chip updates from the checks watcher.
     props.onClose();

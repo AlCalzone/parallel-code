@@ -152,7 +152,7 @@ import { startAgentHookStatusListener } from './store/agentHookStatus';
 import { applyPlanContent } from './store/canvas';
 import { startBackgroundChecks } from './store/evidence-auto';
 import type { PlanContentMessage } from './store/canvas';
-import { SyncIcon } from './components/icons';
+import { CircleCheckIcon, SyncIcon } from './components/icons';
 
 const ThinkingSpace = lazy(() =>
   import('./components/thinking/ThinkingSpace').then((m) => ({ default: m.ThinkingSpace })),
@@ -1112,6 +1112,7 @@ function App() {
         <div role="status" aria-live="polite">
           <Show when={store.notification}>
             <div
+              class="app-notice"
               onClick={() => clearNotification()}
               style={{
                 position: 'fixed',
@@ -1134,6 +1135,11 @@ function App() {
             >
               <Show when={store.notificationBusy}>
                 <span class="inline-spinner" aria-hidden="true" />
+              </Show>
+              <Show when={store.notificationTone === 'success'}>
+                <span class="app-notice-check" aria-hidden="true">
+                  <CircleCheckIcon size={16} />
+                </span>
               </Show>
               {store.notification}
             </div>

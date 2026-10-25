@@ -96,7 +96,10 @@ it('does not claim a merge GitHub has not confirmed', async () => {
       expect.stringContaining('GitHub has not merged it yet'),
     ),
   );
-  expect(showNotification).not.toHaveBeenCalledWith('Merged PR #5');
+  // Compares messages only, so the check holds whatever options the notice takes.
+  expect(vi.mocked(showNotification).mock.calls.map(([message]) => message)).not.toContain(
+    'Merged PR #5',
+  );
 });
 
 it('notes failing optional checks in the merge confirmation', async () => {

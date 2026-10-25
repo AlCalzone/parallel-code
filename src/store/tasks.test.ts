@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { IPC } from '../../electron/ipc/channels';
 import { CANVAS_INSTRUCTIONS } from '../../electron/shared/canvas-view';
 import { expectDefined, type MockStoreHarness } from './test-helpers';
+import { showNotification } from './notification';
 
 // Hoisted so these refs are available both in vi.mock() factories and in test bodies.
 const { mockInvoke, mockIsAgentBracketedPasteEnabled, mockSaveState } = vi.hoisted(() => ({
@@ -46,6 +47,7 @@ const ipcHandlers = new Map<string, (data: unknown) => void>();
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
 vi.mock('../lib/ipc', () => ({ Channel: vi.fn(), invoke: mockInvoke }));
+vi.mock('./notification', () => ({ showNotification: vi.fn() }));
 
 vi.mock('./core', async () => {
   const { createMockStoreHarness } = await import('./test-helpers');
@@ -1936,6 +1938,21 @@ describe('Super Productivity completion wiring', () => {
     await mergeTask('task-1', { cleanup: true });
     // Otherwise the killed agents' signal exits show the card as failed.
     expect(statusAtKill).toEqual(['closing']);
+  });
+
+  it('confirms a merge with its target branch and line counts', async () => {
+    mockTasks['task-1'] = { ...worktreeTask(), name: 'Add forecast' };
+    mockInvoke.mockImplementation((channel: string) =>
+      Promise.resolve(
+        channel === IPC.MergeTask
+          ? { main_branch: 'main', lines_added: 10, lines_removed: 2 }
+          : undefined,
+      ),
+    );
+    await mergeTask('task-1', { cleanup: true });
+    expect(showNotification).toHaveBeenCalledWith('Merged “Add forecast” into main · +10 −2', {
+      tone: 'success',
+    });
   });
 
   it('does not complete anything for a merge that keeps the task', async () => {

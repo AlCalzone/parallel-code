@@ -47,6 +47,7 @@ export const [store, setStore] = createStore<AppStore>({
   pendingAction: null,
   notification: null,
   notificationBusy: false,
+  notificationTone: null,
   completedTaskDate: getLocalDateKey(),
   completedTaskCount: 0,
   countedMergedPrs: [],

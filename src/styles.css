@@ -174,8 +174,9 @@ body.font-smoothing {
 /* One row: status icon, title, grouped actions. Status text, badges and the
    branch share the branch bar below, so the header is two rows in all. */
 .task-title-bar {
+  position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   height: 100%;
   grid-template-rows: 30px;
@@ -194,14 +195,46 @@ body.font-smoothing {
   letter-spacing: -0.025em;
 }
 
+/* Overlaid rather than a grid column, so columns you are not working in show
+   the whole title. They appear on the active column, on hover and on keyboard
+   focus; nothing moves, the title's end fades out beneath them instead. */
 .task-title-actions {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 1px 2px;
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--bg-input) 65%, transparent);
-  grid-column: 3;
+  transition: opacity var(--motion-fast) var(--ease-out);
+}
+
+/* Transparent rather than hidden: Tab still reaches the buttons, and focusing
+   one reveals the group through :focus-within. */
+.task-title-bar:not([data-active='true']):not([data-actions-pinned='true']):not(:hover):not(
+    :focus-within
+  ):not(:has([aria-expanded='true']))
+  .task-title-actions {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.task-title-bar:is(
+    [data-active='true'],
+    [data-actions-pinned='true'],
+    :hover,
+    :focus-within,
+    :has([aria-expanded='true'])
+  )
+  > .editable-text {
+  mask-image: linear-gradient(
+    to left,
+    transparent calc(var(--title-actions-width, 0px) + 8px),
+    #000 calc(var(--title-actions-width, 0px) + 32px)
+  );
 }
 
 .task-action-group {
@@ -330,18 +363,6 @@ body.font-smoothing {
 
 .task-title-bar .task-title-actions .icon-btn:not(:hover) {
   border-color: transparent !important;
-}
-
-/* Quiet the icon controls in columns you are not working in; pressed toggles
-   stay full strength because they show state. */
-.task-title-bar .task-title-actions .icon-btn {
-  transition: opacity var(--motion-fast) var(--ease-out);
-}
-
-.task-title-bar:not([data-active='true']):not(:hover):not(:focus-within)
-  .task-title-actions
-  .icon-btn:not([aria-pressed='true']) {
-  opacity: 0.45;
 }
 
 .task-title-bar .task-title-actions .icon-btn[aria-pressed='true'] {
@@ -576,8 +597,7 @@ body.font-smoothing {
 
 .task-branch-project-label,
 .task-branch-source-label,
-.task-branch-name-label,
-.task-branch-path-label {
+.task-branch-name-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -604,8 +624,8 @@ body.font-smoothing {
 }
 
 .task-branch-path {
-  flex: 1 1 auto;
-  min-width: 0;
+  flex: 0 0 auto;
+  margin-right: auto;
 }
 
 .task-branch-existing-worktree {
@@ -646,6 +666,11 @@ body.font-smoothing {
 
   .task-branch-project-compact-label {
     display: inline;
+  }
+
+  /* With one project the initials tell nothing apart, so the name gives its room to the branch. */
+  .task-branch-info-bar--single-project .task-branch-project {
+    display: none;
   }
 }
 
@@ -3155,6 +3180,32 @@ html:is(
 
 .task-item-appearing {
   animation: taskItemAppear var(--motion-enter) var(--ease-out);
+}
+
+/* Notices rise in so a confirmation is noticed; `translate` leaves the inline
+   centring transform alone. */
+@keyframes noticeEnter {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+.app-notice {
+  animation: noticeEnter var(--motion-enter) var(--ease-out);
+}
+
+/* A finished merge earns a brief success colour; the check settles as the notice lands. */
+@keyframes noticeCheck {
+  from {
+    scale: 0.6;
+  }
+}
+
+.app-notice-check {
+  display: inline-flex;
+  color: var(--success);
+  animation: noticeCheck var(--motion-enter) var(--ease-out);
 }
 
 @keyframes taskRemove {
@@ -6080,6 +6131,8 @@ button.tour-save-state:not(:disabled):hover {
     animation: none;
   }
 
+  .app-notice,
+  .app-notice-check,
   .task-appearing,
   .new-task-appearing,
   .task-item-appearing,

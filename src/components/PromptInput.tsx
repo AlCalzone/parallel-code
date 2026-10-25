@@ -996,7 +996,7 @@ export function PromptInput(props: PromptInputProps) {
           placeholder={
             questionActive()
               ? 'Agent is waiting for input in terminal…'
-              : 'Send a prompt... (Enter to send, Shift+Enter for newline)'
+              : `Message ${store.agents[props.agentId]?.def?.name ?? 'agent'}…`
           }
           style={{
             flex: '1',

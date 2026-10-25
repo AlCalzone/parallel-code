@@ -8,9 +8,12 @@ export const NOTIFICATION_DEFAULT_MS = 3000;
 /** Errors the user must act on stay up longer than a passing status message. */
 export const NOTIFICATION_ERROR_MS = 10_000;
 
-export function showNotification(message: string, opts?: { durationMs?: number }): void {
+export function showNotification(
+  message: string,
+  opts?: { durationMs?: number; tone?: 'success' },
+): void {
   if (notificationTimer) clearTimeout(notificationTimer);
-  setNotice(message, false);
+  setNotice(message, false, opts?.tone ?? null);
   notificationTimer = setTimeout(() => {
     setNotice(progressMessage, progressMessage !== null);
     notificationTimer = null;
@@ -33,7 +36,8 @@ export function clearNotification(): void {
 }
 
 /** `busy` marks ongoing work, so the notice shows a spinner. */
-function setNotice(message: string | null, busy: boolean): void {
+function setNotice(message: string | null, busy: boolean, tone: 'success' | null = null): void {
   setStore('notification', message);
   setStore('notificationBusy', busy);
+  setStore('notificationTone', tone);
 }

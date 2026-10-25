@@ -1,4 +1,4 @@
-import { Show, createSignal } from 'solid-js';
+import { Show, createSignal, onCleanup, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import {
   store,
@@ -61,6 +61,21 @@ export function TaskTitleBar(props: TaskTitleBarProps) {
     return props.pushing ? 'Pushing… (open to see output)' : `Finish: merge into ${base} or push`;
   };
 
+  // The actions overlay the title's end so inactive columns can show the whole
+  // title; the title fades out under them by their measured width.
+  let barRef: HTMLDivElement | undefined;
+  let actionsRef: HTMLDivElement | undefined;
+  onMount(() => {
+    if (typeof ResizeObserver === 'undefined' || !barRef || !actionsRef) return;
+    const bar = barRef;
+    const actions = actionsRef;
+    const observer = new ResizeObserver(() =>
+      bar.style.setProperty('--title-actions-width', `${actions.offsetWidth}px`),
+    );
+    observer.observe(actions);
+    onCleanup(() => observer.disconnect());
+  });
+
   function handleTitleMouseDown(e: MouseEvent) {
     handleDragReorder(e, {
       itemId: props.task.id,
@@ -71,7 +86,14 @@ export function TaskTitleBar(props: TaskTitleBarProps) {
   }
 
   return (
-    <div class="task-title-bar" data-active={props.isActive} onMouseDown={handleTitleMouseDown}>
+    <div
+      ref={barRef}
+      class="task-title-bar"
+      data-active={props.isActive}
+      // A push in progress or just done stays visible in every column.
+      data-actions-pinned={props.pushing || props.pushSuccess}
+      onMouseDown={handleTitleMouseDown}
+    >
       <TaskStatusGlyph taskId={props.task.id} />
       <EditableText
         value={titleLabel()}
@@ -80,7 +102,7 @@ export function TaskTitleBar(props: TaskTitleBarProps) {
         title={props.task.savedInitialPrompt || titleLabel()}
         ref={(h) => props.onTitleEditRef(h)}
       />
-      <div class="task-title-actions">
+      <div ref={actionsRef} class="task-title-actions">
         <div class="task-action-group" role="group" aria-label="Task actions">
           <Show when={canFinish()}>
             <button

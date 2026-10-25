@@ -34,6 +34,7 @@ import {
   rescheduleTaskStatusPolling,
 } from './taskStatus';
 import { recordMergedLines, recordTaskMerged } from './completion';
+import { showNotification } from './notification';
 import { warn as logWarn } from '../lib/log';
 import { cleanTaskName } from '../lib/clean-task-name';
 import { prefersMotion } from '../lib/reducedMotion';
@@ -680,6 +681,10 @@ export async function mergeTask(
     message: options?.message,
     cleanup,
   });
+  showNotification(
+    `Merged “${task.name}” into ${mergeResult.main_branch} · +${mergeResult.lines_added} −${mergeResult.lines_removed}`,
+    { tone: 'success' },
+  );
 
   if (cleanup) {
     recordMergedLines(mergeResult.lines_added, mergeResult.lines_removed);

@@ -23,6 +23,7 @@ import { GitMergeIcon, ToolsIcon } from './icons';
 import { PrChip } from './PrChip';
 import { menuPointFor, ProjectMenu } from './project-menu';
 import { RemoveProjectConfirm } from './RemoveProjectConfirm';
+import { codeProjects } from '../store/projects';
 import { BabysitButton } from './BabysitButton';
 import { extraPrWatchId, getTaskExtraPrs, isPrReadyToMerge } from '../store/pr-checks-state';
 
@@ -194,7 +195,10 @@ export function TaskBranchInfoBar(props: TaskBranchInfoBarProps) {
   };
 
   return (
-    <InfoBar class="task-branch-info-bar" style={projectStripe()}>
+    <InfoBar
+      class={`task-branch-info-bar${codeProjects().length === 1 ? ' task-branch-info-bar--single-project' : ''}`}
+      style={projectStripe()}
+    >
       <Show when={project()}>
         {(p) => (
           <>
@@ -388,7 +392,9 @@ export function TaskBranchInfoBar(props: TaskBranchInfoBarProps) {
         class="task-branch-info-button task-branch-path"
         title={worktreeTitle()}
         onClick={handleOpenInEditor}
-        style={{ ...infoBarBtnStyle, opacity: 0.6, 'min-width': '0', overflow: 'hidden' }}
+        // The branch already names the worktree; the full path is in the tooltip.
+        aria-label={`Worktree folder: ${abbreviateHomePath(props.task.worktreePath)}`}
+        style={{ ...infoBarBtnStyle, opacity: 0.6 }}
       >
         <svg
           width="12"
@@ -399,17 +405,6 @@ export function TaskBranchInfoBar(props: TaskBranchInfoBarProps) {
         >
           <path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z" />
         </svg>
-        <span
-          class="task-branch-path-label"
-          style={{
-            overflow: 'hidden',
-            'text-overflow': 'ellipsis',
-            'white-space': 'nowrap',
-            'min-width': '0',
-          }}
-        >
-          {abbreviateHomePath(props.task.worktreePath)}
-        </span>
       </button>
       <Show when={props.task.externalWorktree}>
         <span

@@ -127,7 +127,8 @@ export function Composer(props: ComposerProps) {
     ].filter(Boolean);
   const placeholder = () => {
     if (c.shellMode()) return 'Command to run in this worktree… Backspace to leave';
-    const lead = working() ? 'Add a follow-up' : `Message ${props.agentName}`;
+    // Same lead while working: the send button already says the message queues.
+    const lead = `Message ${props.agentName}`;
     const hints = placeholderHints();
     return hints.length ? `${lead}… ${hints.join(' · ')}` : `${lead}…`;
   };

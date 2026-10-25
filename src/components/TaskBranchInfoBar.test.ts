@@ -275,12 +275,19 @@ describe('TaskBranchInfoBar responsive styles', () => {
     );
   });
 
-  it('keeps the project visible as initials at 480px', () => {
+  // Several projects make a branch name ambiguous, so only a lone project may hide.
+  it('keeps the project visible as initials at 480px when there are several projects', () => {
     expect(css).not.toMatch(
-      /@container\s+task-branch-info\s+\(max-width:\s*480px\)[\s\S]*?\.task-branch-project\s*{[^}]*display:\s*none/,
+      /@container\s+task-branch-info\s+\(max-width:\s*480px\)[\s\S]*?(?<!--single-project\s)\.task-branch-project\s*{[^}]*display:\s*none/,
     );
     expect(css).toMatch(
       /@container\s+task-branch-info\s+\(max-width:\s*480px\)[\s\S]*?\.task-branch-project-compact-label\s*{[^}]*display:\s*inline/,
+    );
+  });
+
+  it('drops the project initials at 480px when there is only one project', () => {
+    expect(css).toMatch(
+      /@container\s+task-branch-info\s+\(max-width:\s*480px\)[\s\S]*?\.task-branch-info-bar--single-project\s+\.task-branch-project\s*{[^}]*display:\s*none/,
     );
   });
 

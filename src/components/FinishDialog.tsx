@@ -148,7 +148,7 @@ export function FinishDialog(props: FinishDialogProps) {
       props.onClose();
       return;
     }
-    showNotification(`Merged PR #${number}`);
+    showNotification(`Merged PR #${number}`, { tone: 'success' });
     if (!merge.requiresSeparateClose() && closeAfterPrMerge()) {
       const { id, worktreePath } = props.task;
       props.onClose();

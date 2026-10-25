@@ -666,6 +666,8 @@ export interface AppStore {
   notification: string | null;
   /** The notice describes ongoing work (see showProgressNotification). */
   notificationBusy: boolean;
+  /** A success notice confirms finished work with a check, e.g. a merge. */
+  notificationTone: 'success' | null;
   completedTaskDate: string;
   completedTaskCount: number;
   countedMergedPrs: string[];

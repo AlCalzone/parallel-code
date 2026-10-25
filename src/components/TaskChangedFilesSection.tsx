@@ -86,7 +86,8 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
   const headingLabel = () => {
     const count = fileCount();
     if (count === 0) return 'No changes yet';
-    return `${count} changed file${count === 1 ? '' : 's'}`;
+    // The pane is the changed-files pane, so "changed" only cost room in narrow columns.
+    return `${count} file${count === 1 ? '' : 's'}`;
   };
 
   return (
