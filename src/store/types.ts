@@ -13,6 +13,7 @@ import type {
   SessionCapabilities,
 } from '../../electron/shared/delegation-types';
 import type { AgentTourPayload } from '../../electron/shared/agent-tour';
+import type { CanvasView } from '../../electron/shared/canvas-view';
 import type { CanvasTaskLink, CanvasTaskSource } from '../lib/canvas-task-links';
 import type {
   AgentDef,
@@ -316,6 +317,8 @@ export interface Task {
   reasoningProfile?: ReasoningProfile;
   /** Runtime-only: bypass setup when this agent session opens the graph from chat. */
   reasoningCanvasRequest?: { agentId: string; generation: number };
+  /** Runtime-only: the node an agent pointed at; seq lets the same node be shown again. */
+  canvasFocusRequest?: { view: CanvasView; nodeId: string; seq: number };
   /**
    * The tour the agent last published through `tour_publish`. The revision
    * bumps on every publish so the panel opens the viewer again even when the

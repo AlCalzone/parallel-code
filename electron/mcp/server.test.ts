@@ -654,12 +654,20 @@ describe('mind map tools', () => {
     expect(
       await handleMCPToolCall(context, 'canvas_open', { view: 'reasoning', taskId: 'other' }),
     ).not.toHaveProperty('isError');
-    expect(client.openCanvas).toHaveBeenCalledWith('own-task', 'reasoning');
+    expect(client.openCanvas).toHaveBeenCalledWith('own-task', { view: 'reasoning' });
+    await handleMCPToolCall(context, 'canvas_open', { view: 'mindmap', focusId: 'n3' });
+    expect(client.openCanvas).toHaveBeenLastCalledWith('own-task', {
+      view: 'mindmap',
+      focusId: 'n3',
+    });
     expect(await handleMCPToolCall(context, 'canvas_open', { view: 'browser' })).toMatchObject({
       isError: true,
       content: [{ text: expect.stringContaining('mindmap, reasoning') }],
     });
-    expect(client.openCanvas).toHaveBeenCalledTimes(1);
+    expect(
+      await handleMCPToolCall(context, 'canvas_open', { view: 'mindmap', focusId: 3 }),
+    ).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('focusId') }] });
+    expect(client.openCanvas).toHaveBeenCalledTimes(2);
   });
   it('publishes a tour for the session task and rejects a malformed one before transport', async () => {
     const client = {

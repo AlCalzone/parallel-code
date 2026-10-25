@@ -145,11 +145,14 @@ export const CANVAS_VIEW_TOOLS: ToolDef[] = [
   {
     name: 'canvas_open',
     description:
-      'Open or focus this task’s Mind map or Reasoning graph canvas for the user. Use it when the user asks to see, open, or create a map or graph, before or after publishing with mindmap_update or reasoning_update. Idempotent; it changes no content.',
+      'Open or focus this task’s Mind map or Reasoning graph canvas for the user. Use it when the user asks to see, open, or create a map or graph, before or after publishing with mindmap_update or reasoning_update. Idempotent; it changes no content. Pass focusId to point the user at one node while you explain it: the canvas opens its branch, selects it and scrolls to it without taking keyboard focus. An unknown id is an error; read the graph first.',
     inputSchema: {
       type: 'object',
       required: ['view'],
-      properties: { view: { enum: [...canvasViews] } },
+      properties: {
+        view: { enum: [...canvasViews] },
+        focusId: { type: 'string', minLength: 1, maxLength: 128 },
+      },
     },
   },
 ];

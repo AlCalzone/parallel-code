@@ -202,10 +202,15 @@ it('explains the canvases to every session that advertises canvas tools', () => 
   expect(CANVAS_INSTRUCTIONS).toContain('Shape the graph to the question');
 });
 
-it('canvas_open takes exactly one of the two canvas views', () => {
+it('canvas_open takes exactly one of the two canvas views and an optional node', () => {
   const tool = CANVAS_VIEW_TOOLS.find((t) => t.name === 'canvas_open');
   expect(tool?.inputSchema.required).toEqual(['view']);
   expect(tool?.inputSchema.properties.view).toEqual({ enum: ['mindmap', 'reasoning'] });
+  expect(tool?.inputSchema.properties.focusId).toEqual({
+    type: 'string',
+    minLength: 1,
+    maxLength: 128,
+  });
 });
 
 it('describes tour_publish with the caps the validator enforces', () => {

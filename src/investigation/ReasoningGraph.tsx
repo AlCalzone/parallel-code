@@ -81,6 +81,8 @@ interface Props {
   loading?: boolean;
   /** Live session activity overrides saved activeId; standalone examples may omit it. */
   sessionWorking?: boolean;
+  /** A note the agent pointed at; each new seq shows it once. */
+  focusRequest?: { nodeId: string; seq: number };
   /** The agent is still writing its first report; the map is shown grayed out. */
   drafting?: boolean;
   onReference?: (node: InvestigationRecord, revision: number) => void;
@@ -775,10 +777,10 @@ export function ReasoningGraph(props: Props) {
     select(id);
     setLocateRequest((value) => value + 1);
   }
-  /** Opens the way to a note found by search, leaving a focused branch if it lies outside. */
-  function reveal(id: string) {
+  /** Opens the way to a note, leaving a focused branch if it lies outside. */
+  function openTrail(id: string): boolean {
     const view = projected();
-    if (!view) return;
+    if (!view) return false;
     const trail = nodeTrail(view.records, id);
     setCollapsed((old) => {
       const next = new Set(old);
@@ -788,8 +790,31 @@ export function ReasoningGraph(props: Props) {
     const rootId = focusRoot();
     if (rootId && !trail.some((step) => step.id === rootId)) setFocusRoot(undefined);
     setMessage('');
-    focusNode(id, true);
+    return true;
   }
+  /** A note found by search takes keyboard focus. */
+  function reveal(id: string) {
+    if (openTrail(id)) focusNode(id, true);
+  }
+  let shownFocus = 0;
+  createEffect(() => {
+    const request = props.focusRequest;
+    if (!request || request.seq === shownFocus) return;
+    // The feed may still be loading, or not yet hold the agent's latest update.
+    if (!latest()?.records.some((record) => record.id === request.nodeId)) return;
+    shownFocus = request.seq;
+    untrack(() => {
+      const has = (snapshot?: Snapshot) =>
+        !!snapshot?.records.some((record) => record.id === request.nodeId);
+      // Only a stale or hidden view is moved on, so a rename in progress survives.
+      if (!has(displayed())) returnToCurrent();
+      setComparisonOpen(false);
+      // Selected and centred only: the user may be typing in the chat beside the graph.
+      if (!openTrail(request.nodeId)) return;
+      setSelected(request.nodeId);
+      setLocateRequest((value) => value + 1);
+    });
+  });
   function findCurrent() {
     const snapshot = displayed();
     const activeId = snapshot?.activeId;

@@ -2,7 +2,7 @@
 // Used by the MCP server to delegate tool calls to the Electron app.
 
 import type { MindMapDocument, MindMapUpdate } from '../shared/mindmap.js';
-import type { CanvasView } from '../shared/canvas-view.js';
+import type { CanvasRequest } from '../shared/canvas-view.js';
 import type { AgentTourPayload } from '../shared/agent-tour.js';
 import type { ConfidencePayload } from '../shared/task-confidence.js';
 import type { GitHubCustomList } from '../shared/github-list.js';
@@ -164,8 +164,8 @@ export class MCPClient {
     return this.taskOwnerRequest('POST', `/api/mindmaps/${encodeURIComponent(taskId)}`, update);
   }
 
-  async openCanvas(taskId: string, view: CanvasView): Promise<{ ok: true; view: CanvasView }> {
-    return this.taskOwnerRequest('POST', `/api/canvas/${encodeURIComponent(taskId)}`, { view });
+  async openCanvas(taskId: string, request: CanvasRequest): Promise<{ ok: true } & CanvasRequest> {
+    return this.taskOwnerRequest('POST', `/api/canvas/${encodeURIComponent(taskId)}`, request);
   }
 
   async publishTour(

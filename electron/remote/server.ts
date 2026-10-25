@@ -43,7 +43,7 @@ import {
 } from './chat-bridge.js';
 import { parseMindMapUpdate, type MindMapDocument, type MindMapUpdate } from '../shared/mindmap.js';
 import { parseReasoningUpdate } from '../shared/reasoning-feed.js';
-import { parseCanvasView, type CanvasView } from '../shared/canvas-view.js';
+import { parseCanvasRequest, type CanvasRequest } from '../shared/canvas-view.js';
 import { parseAgentTourPayload, type AgentTourPayload } from '../shared/agent-tour.js';
 import {
   CONFIDENCE_LIMITS,
@@ -471,9 +471,9 @@ async function canvasRequest(
   if (route === 'canvas') {
     if (req.method !== 'POST') throw httpError(405, 'Method not allowed');
     if (!ops.openCanvas) throw httpError(503, 'Canvas unavailable');
-    const view = parseCanvasView(await readJsonBody(req));
-    await ops.openCanvas(taskId, view);
-    return { ok: true, view };
+    const request = parseCanvasRequest(await readJsonBody(req));
+    await ops.openCanvas(taskId, request);
+    return { ok: true, ...request };
   }
   if (route === 'tours') {
     if (req.method !== 'POST') throw httpError(405, 'Method not allowed');
@@ -1005,8 +1005,8 @@ export function startRemoteServer(opts: {
   readReasoning?: (taskId: string) => Promise<ReasoningDocument>;
   updateReasoning?: (taskId: string, update: ReasoningUpdate) => Promise<ReasoningDocument>;
   updateMindMap?: (taskId: string, update: MindMapUpdate) => Promise<MindMapDocument>;
-  /** Open or focus a canvas view for the agent's own task (renderer-backed). */
-  openCanvas?: (taskId: string, view: CanvasView) => Promise<void>;
+  /** Open or focus a canvas view for the agent's own task, optionally at a node (renderer-backed). */
+  openCanvas?: (taskId: string, request: CanvasRequest) => Promise<void>;
   /** Show a tour the agent wrote for its own task (renderer-backed). */
   publishTour?: (taskId: string, payload: AgentTourPayload) => Promise<unknown>;
   /** Show a confidence rating the agent published for its own task (renderer-backed). */

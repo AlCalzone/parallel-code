@@ -447,6 +447,10 @@ export function TaskReasoningGraphHost(props: Props) {
     });
   }
 
+  const focusRequest = () => {
+    const request = store.tasks[props.taskId]?.canvasFocusRequest;
+    return request?.view === 'reasoning' ? request : undefined;
+  };
   const openedByAgent = () => {
     const request = store.tasks[props.taskId]?.reasoningCanvasRequest;
     return (
@@ -710,6 +714,7 @@ export function TaskReasoningGraphHost(props: Props) {
         snapshot={live.snapshot()}
         sessionWorking={sessionWorking()}
         drafting={draftingInitial()}
+        focusRequest={focusRequest()}
         visible={props.visible}
       />
       <ConfirmDialog

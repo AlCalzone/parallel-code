@@ -7,7 +7,8 @@
 import { publishAgentTour } from './agent-tour';
 import { publishTaskConfidence } from './task-brief';
 import { publishGitHubList } from './github-lists';
-import { getTaskMindMap, openCanvasViewFromAgent, updateTaskMindMapFromAgent } from './canvas';
+import { getTaskMindMap, updateTaskMindMapFromAgent } from './canvas';
+import { openCanvasViewFromAgent } from './canvas-agent';
 import { getTaskReasoning, updateTaskReasoningFromAgent } from './reasoning';
 import { store } from './core';
 import { delegationRequest } from './delegation';
@@ -615,12 +616,10 @@ export function startRemoteTaskHandlers(): () => void {
     (data: unknown) => {
       if (!data || typeof data !== 'object') return;
       const req = data as GetNotesRequest & { view: unknown };
-      try {
-        openCanvasViewFromAgent(req.taskId, req);
-        reply(req.reqId, true, { ok: true });
-      } catch (error) {
-        reply(req.reqId, false, undefined, errMessage(error));
-      }
+      void openCanvasViewFromAgent(req.taskId, req).then(
+        () => reply(req.reqId, true, { ok: true }),
+        (error: unknown) => reply(req.reqId, false, undefined, errMessage(error)),
+      );
     },
   );
   const offPublishTour = window.electron.ipcRenderer.on(

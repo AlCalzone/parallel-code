@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import { MCPClient } from './client.js';
 import { parseMindMapUpdate } from '../shared/mindmap.js';
 import { parseReasoningUpdate } from '../shared/reasoning-feed.js';
-import { parseCanvasView } from '../shared/canvas-view.js';
+import { parseCanvasRequest } from '../shared/canvas-view.js';
 import { parseAgentTourPayload } from '../shared/agent-tour.js';
 import { parseConfidencePayload } from '../shared/task-confidence.js';
 import { isGitHubAgentTaskId, parseGitHubList } from '../shared/github-list.js';
@@ -173,7 +173,7 @@ export async function handleMCPToolCall(
       case 'canvas_open': {
         const id = taskId || coordinatorId;
         if (!id) throw new Error('A task-scoped MCP session is required.');
-        const result = await client.openCanvas(id, parseCanvasView(params));
+        const result = await client.openCanvas(id, parseCanvasRequest(params));
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
       case 'tour_publish': {

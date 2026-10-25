@@ -101,7 +101,7 @@ import {
   removeCanvasConfig,
 } from '../mcp/canvas-config.js';
 import type { MindMapDocument, MindMapUpdate } from '../shared/mindmap.js';
-import type { CanvasView } from '../shared/canvas-view.js';
+import type { CanvasRequest } from '../shared/canvas-view.js';
 import type { AgentTourPayload } from '../shared/agent-tour.js';
 import type { ConfidencePayload } from '../shared/task-confidence.js';
 import type { GitHubCustomList } from '../shared/github-list.js';
@@ -1849,8 +1849,10 @@ export function registerAllHandlers(win: BrowserWindow): void {
       callRenderer<MindMapDocument>(IPC.MCP_ReadMindMapRequest, { taskId }),
     updateMindMap: (taskId: string, update: MindMapUpdate) =>
       callRenderer<MindMapDocument>(IPC.MCP_UpdateMindMapRequest, { taskId, update }),
-    openCanvas: (taskId: string, view: CanvasView) =>
-      callRenderer<{ ok: boolean }>(IPC.MCP_OpenCanvasRequest, { taskId, view }).then(() => {}),
+    openCanvas: (taskId: string, request: CanvasRequest) =>
+      callRenderer<{ ok: boolean }>(IPC.MCP_OpenCanvasRequest, { taskId, ...request }).then(
+        () => {},
+      ),
     publishTour: (taskId: string, payload: AgentTourPayload) =>
       callRenderer<{ ok: boolean }>(IPC.MCP_PublishTourRequest, { taskId, payload }),
     publishConfidence: (taskId: string, payload: ConfidencePayload) =>
