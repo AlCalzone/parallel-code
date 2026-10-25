@@ -32,7 +32,7 @@ vi.mock('./tasks', () => ({ sendPrompt: mockSendPrompt }));
 vi.mock('./staged-prompt', () => ({ stageTaskPrompt: mockStagePrompt }));
 
 import { setStore, store } from './core';
-import type { EvidenceScan } from '../../electron/shared/evidence';
+import type { ChangeScan } from '../../electron/shared/checks';
 import { HELD_RUN_MESSAGE } from '../../electron/shared/verification-run';
 import type { Project } from './types';
 import {
@@ -255,24 +255,22 @@ describe('last pass', () => {
   });
 });
 
-function scan(overrides: Partial<EvidenceScan> = {}): EvidenceScan {
+function scan(overrides: Partial<ChangeScan> = {}): ChangeScan {
   return {
     headSha: 'head',
     baseSha: 'base',
     dirty: false,
-    files: [{ path: 'src/a.ts', status: 'M', added: 1, removed: 0, role: 'source' }],
+    files: [{ path: 'src/a.ts', status: 'M', role: 'source' }],
     flags: [],
-    tests: [],
-    coveringTests: [],
-    sourceWithoutTests: [],
+
     ...overrides,
   };
 }
 
 /** Answers the evidence scan, and the verify run with `run` (or holds it open). */
-function mockBackground(next: EvidenceScan, run?: VerificationRun | Promise<VerificationRun>) {
+function mockBackground(next: ChangeScan, run?: VerificationRun | Promise<VerificationRun>) {
   mockInvoke.mockImplementation((channel: string) => {
-    if (channel === IPC.GetEvidenceScan) return Promise.resolve(next);
+    if (channel === IPC.GetChangeScan) return Promise.resolve(next);
     if (channel === IPC.RunTaskVerification) return Promise.resolve(run ?? finishedRun());
     return Promise.resolve(true);
   });
@@ -321,7 +319,6 @@ describe('runBackgroundVerify', () => {
   it('holds a change to how checks run until the reviewer accepts it', async () => {
     const flag = {
       id: 'surface-1',
-      category: 'needs-decision' as const,
       rule: 'execution-surface-changed',
       file: 'package.json',
       detail: 'changed',
@@ -344,7 +341,7 @@ describe('runBackgroundVerify', () => {
   it('asks again whether the agent is idle once the scan is back', async () => {
     let idle = true;
     mockInvoke.mockImplementation((channel: string) => {
-      if (channel !== IPC.GetEvidenceScan) return Promise.resolve(finishedRun());
+      if (channel !== IPC.GetChangeScan) return Promise.resolve(finishedRun());
       idle = false;
       return Promise.resolve(scan());
     });
@@ -403,10 +400,10 @@ describe('cancelBackgroundVerify', () => {
   });
 
   it('keeps a run from starting when cancelled during the scan', async () => {
-    let answer: (value: EvidenceScan) => void = () => {};
+    let answer: (value: ChangeScan) => void = () => {};
     mockInvoke.mockImplementation((channel: string) =>
-      channel === IPC.GetEvidenceScan
-        ? new Promise<EvidenceScan>((resolve) => (answer = resolve))
+      channel === IPC.GetChangeScan
+        ? new Promise<ChangeScan>((resolve) => (answer = resolve))
         : Promise.resolve(finishedRun()),
     );
     const pending = runBackgroundVerify('t1');

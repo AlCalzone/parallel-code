@@ -150,7 +150,7 @@ import { startRemoteTaskHandlers } from './store/remoteTaskHandler';
 import { startRemoteStatusSync } from './store/remoteStatusSync';
 import { startAgentHookStatusListener } from './store/agentHookStatus';
 import { applyPlanContent } from './store/canvas';
-import { startBackgroundChecks } from './store/evidence-auto';
+import { startBackgroundChecks } from './store/background-checks';
 import type { PlanContentMessage } from './store/canvas';
 import { CircleCheckIcon, SyncIcon } from './components/icons';
 

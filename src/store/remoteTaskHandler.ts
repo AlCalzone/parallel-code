@@ -8,7 +8,6 @@ import { publishAgentTour } from './agent-tour';
 import { publishTaskConfidence } from './task-brief';
 import { publishGitHubList } from './github-lists';
 import { getTaskMindMap, openCanvasViewFromAgent, updateTaskMindMapFromAgent } from './canvas';
-import { getEvidenceForAgent, submitEvidence } from './evidence';
 import { getTaskReasoning, updateTaskReasoningFromAgent } from './reasoning';
 import { store } from './core';
 import { delegationRequest } from './delegation';
@@ -26,7 +25,6 @@ import { getVerifyCommand } from './verification';
 import { getPrChecks } from './pr-checks-state';
 import { loadFailedChecksPrompt } from './github';
 import { advanceKanbanCard } from './kanban';
-import { getEvidenceConfidence } from './evidence-state';
 import { buildMergeReadiness, type MergeReadinessCheck } from '../components/merge-readiness';
 import { taskPrUrl } from '../components/pr-actions';
 import { parseGitHubUrl } from '../lib/github-url';
@@ -34,7 +32,6 @@ import { invoke } from '../lib/ipc';
 import { errMessage } from '../lib/log';
 import { getTaskDiffBaseBranch, loadTaskDiff } from '../lib/load-task-diff';
 import { IPC } from '../../electron/ipc/channels';
-import { parseEvidenceSubmission } from '../../electron/shared/evidence';
 import { resolveSkipPermissionsArgs } from '../../electron/shared/skip-permissions';
 import {
   ASK_CODE_CLAUDE_MODELS,
@@ -428,7 +425,6 @@ async function handleGetMergeReadiness(req: GetTaskDiffRequest): Promise<void> {
       // Coverage comparison needs a base report the phone has no way to read;
       // the check reports "no task coverage report" instead of guessing.
       coverage: null,
-      evidence: getEvidenceConfidence(task, worktreeStatus),
     });
     const overall = summarizeReadiness(readiness.checks);
     reply(req.reqId, true, {
@@ -665,34 +661,7 @@ export function startRemoteTaskHandlers(): () => void {
       );
     },
   );
-  const offSubmitEvidence = window.electron.ipcRenderer.on(
-    IPC.MCP_SubmitEvidenceRequest,
-    (data: unknown) => {
-      if (!data || typeof data !== 'object') return;
-      const req = data as GetNotesRequest & { payload: unknown };
-      try {
-        // Validated again here: the renderer is the boundary that stores it.
-        reply(req.reqId, true, submitEvidence(req.taskId, parseEvidenceSubmission(req.payload)));
-      } catch (error) {
-        reply(req.reqId, false, undefined, errMessage(error));
-      }
-    },
-  );
-  const offGetEvidence = window.electron.ipcRenderer.on(
-    IPC.MCP_GetEvidenceRequest,
-    (data: unknown) => {
-      if (!data || typeof data !== 'object') return;
-      const req = data as GetNotesRequest;
-      try {
-        reply(req.reqId, true, getEvidenceForAgent(req.taskId));
-      } catch (error) {
-        reply(req.reqId, false, undefined, errMessage(error));
-      }
-    },
-  );
   return () => {
-    offSubmitEvidence();
-    offGetEvidence();
     offReadReasoning();
     offUpdateReasoning();
     offReadMap();

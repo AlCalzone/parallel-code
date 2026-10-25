@@ -53,7 +53,7 @@ export function changedDuringRun(run: VerificationRun): boolean {
 }
 
 /** Pure read model shared by the merge-readiness row, the title bar and the
- *  evidence check list, so they never disagree about what a run means. */
+ *  readiness line, so they never disagree about what a run means. */
 export function summarizeVerificationRun(
   run: VerificationRun | undefined,
   currentHeadSha?: string | null,

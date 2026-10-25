@@ -1,15 +1,12 @@
 import { createSignal, onCleanup, Show } from 'solid-js';
 import { IPC } from '../../electron/ipc/channels';
-import type { CheckSource, EvidenceModelSettings } from '../../electron/shared/evidence';
+import type { CheckSource, CheckModelSettings } from '../../electron/shared/checks';
 import {
   buildCheckSuggestionPrompt,
   parseCheckSuggestion,
   type CheckSuggestion,
 } from '../lib/check-suggestion';
-import {
-  startEvidenceModelRequest,
-  type EvidenceModelRequest,
-} from '../lib/evidence-model-request';
+import { startModelRequest, type ModelRequest } from '../lib/model-request';
 import { invoke } from '../lib/ipc';
 import { errMessage } from '../lib/log';
 import { theme } from '../lib/theme';
@@ -18,8 +15,8 @@ import { SparkleIcon } from './icons';
 
 interface SuggestChecksButtonProps {
   projectRoot: string;
-  /** The review model the dialog currently shows, saved or not. */
-  model: EvidenceModelSettings;
+  /** The reviewer model, which also suggests checks. */
+  model: CheckModelSettings;
   onSuggest: (suggestion: CheckSuggestion) => void;
   /** Defaults to "Suggest with AI". */
   label?: string;
@@ -28,13 +25,13 @@ interface SuggestChecksButtonProps {
 }
 
 /**
- * Asks the review model to fill the verify command and evidence checks from
+ * Asks the review model to fill the verify command and project checks from
  * the project's manifests. Only fills the form; nothing is saved until Save.
  */
 export function SuggestChecksButton(props: SuggestChecksButtonProps) {
   const [running, setRunning] = createSignal(false);
   const [status, setStatus] = createSignal<{ text: string; error?: boolean }>();
-  let request: EvidenceModelRequest | undefined;
+  let request: ModelRequest | undefined;
   let disposed = false;
   onCleanup(() => {
     disposed = true;
@@ -51,7 +48,7 @@ export function SuggestChecksButton(props: SuggestChecksButtonProps) {
       // A closed dialog must not start a paid model call nobody can cancel.
       if (disposed) return;
       if (sources.length === 0) throw new Error('No build or test files found in the project.');
-      request = startEvidenceModelRequest({
+      request = startModelRequest({
         prompt: buildCheckSuggestionPrompt(sources),
         cwd: props.projectRoot,
         settings: props.model,
@@ -81,7 +78,7 @@ export function SuggestChecksButton(props: SuggestChecksButtonProps) {
         type="button"
         disabled={running()}
         onClick={() => void suggest()}
-        title="Reads package.json, Makefile, CI workflows and similar files and asks the evidence review model for commands"
+        title="Reads package.json, Makefile, CI workflows and similar files and asks the review model for commands"
         style={{
           padding: '3px 10px',
           background: theme.bgInput,

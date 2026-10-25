@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { finalizeChecks } from './EvidenceSettingsFields';
+import { finalizeChecks } from './ProjectChecksFields';
 
 describe('finalizeChecks', () => {
   it('names checks after their kind, keeps existing ids and drops rows without a command', () => {

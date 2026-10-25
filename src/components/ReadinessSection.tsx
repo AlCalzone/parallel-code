@@ -1,21 +1,19 @@
-import { For, Show, createSignal, createUniqueId, onCleanup, onMount, type JSX } from 'solid-js';
-import { VERIFY_CHECK_ID } from '../../electron/shared/evidence';
-import { openEvidenceFlags } from '../lib/evidence-display';
+import { Show, createSignal, createUniqueId, onCleanup, onMount, type JSX } from 'solid-js';
+import { VERIFY_CHECK_ID } from '../../electron/shared/checks';
 import { readinessLine, type ReadinessAction } from '../lib/readiness-line';
 import { theme } from '../lib/theme';
 import {
   backgroundVerifyEnabled,
   cancelTaskVerification,
   getBackgroundVerifyHold,
-  getEvidenceUiState,
-  getProject,
+  getCheckSuiteUiState,
   getTaskChecks,
-  isEvidenceBusy,
+  isCheckSuiteBusy,
   runTaskVerification,
+  stageCheckFailurePrompt,
   stageVerificationFailurePrompt,
 } from '../store/store';
 import type { Task } from '../store/types';
-import { evidenceButtonStyle } from './EvidenceDetails';
 import { PlayIcon } from './icons';
 
 interface ReadinessSectionProps {
@@ -27,8 +25,9 @@ interface ReadinessSectionProps {
   onConfigure?: () => void;
   /** After a fix prompt was staged in the task's input. */
   onStaged?: () => void;
-  onReviewFile?: (file: string, line?: number, side?: 'old' | 'new') => void;
-  /** The evidence panel: every check, flag and review, behind Details. */
+  /** Whether `children` has rows to show; Details is hidden without them. */
+  hasDetails: boolean;
+  /** The remaining readiness rows, such as coverage, behind Details. */
   children: JSX.Element;
 }
 
@@ -36,6 +35,15 @@ const FAILED = new Set(['failed', 'timed_out', 'error']);
 // Ages read "4m ago"; a refresh this often keeps them honest without churn.
 const NOW_REFRESH_MS = 30_000;
 
+const buttonStyle = {
+  padding: '4px 10px',
+  background: theme.bgInput,
+  border: `1px solid ${theme.border}`,
+  'border-radius': '6px',
+  color: theme.fg,
+  cursor: 'pointer',
+  'font-size': '13px',
+};
 const toggleStyle = {
   background: 'none',
   border: 'none',
@@ -74,8 +82,8 @@ const ACTION_LABEL: Record<ReadinessAction, string> = {
 /**
  * One line that says whether the verify command passed on this commit, who ran
  * it and when, with the one action that fits. Checks run in the background
- * after agent turns, so usually the result is already here. Everything else
- * the evidence panel holds sits behind Details.
+ * after agent turns, so usually the result is already here. The remaining
+ * readiness rows sit behind Details.
  */
 export function ReadinessSection(props: ReadinessSectionProps) {
   const [open, setOpen] = createSignal(false);
@@ -96,32 +104,26 @@ export function ReadinessSection(props: ReadinessSectionProps) {
       hold: getBackgroundVerifyHold(props.task.id),
       lastPass: props.task.lastVerifyPass,
       branchCommits: props.branchCommits,
-      autoRun:
-        backgroundVerifyEnabled(props.task.id) ||
-        Boolean(getProject(props.task.projectId)?.evidenceAutoBuild),
+      autoRun: backgroundVerifyEnabled(props.task.id),
       now: now(),
     });
-  // A build restarts verify itself, so a click would only cancel its run.
-  const evidenceBusy = () => {
+  // A review's check run restarts verify itself, so a click would only cancel its run.
+  const suiteBusy = () => {
     const pkg = props.task.evidence;
     return (
-      Boolean(getEvidenceUiState(props.task.id).scanning) || Boolean(pkg && isEvidenceBusy(pkg))
+      Boolean(getCheckSuiteUiState(props.task.id).scanning) || Boolean(pkg && isCheckSuiteBusy(pkg))
     );
   };
   const action = () => {
     const next = line().action;
     if (next === 'configure' && !props.onConfigure) return undefined;
-    if ((next === 'run' || next === 'rerun') && evidenceBusy()) return undefined;
+    if ((next === 'run' || next === 'rerun') && suiteBusy()) return undefined;
     return next;
   };
   const otherFailures = () =>
     (props.task.evidence?.checks ?? []).filter(
       (check) => check.checkId !== VERIFY_CHECK_ID && FAILED.has(check.status),
     );
-  const weakened = () =>
-    props.task.evidence
-      ? openEvidenceFlags(props.task.evidence).filter((flag) => flag.category === 'test-weakened')
-      : [];
   const run = (next: ReadinessAction) => {
     if (next === 'run' || next === 'rerun') void runTaskVerification(props.task.id);
     if (next === 'cancel') void cancelTaskVerification(props.task.id);
@@ -158,7 +160,7 @@ export function ReadinessSection(props: ReadinessSectionProps) {
             <button
               type="button"
               class="btn-with-icon"
-              style={evidenceButtonStyle}
+              style={buttonStyle}
               title={actionTitle(next())}
               onClick={() => run(next())}
             >
@@ -169,15 +171,17 @@ export function ReadinessSection(props: ReadinessSectionProps) {
             </button>
           )}
         </Show>
-        <button
-          type="button"
-          aria-expanded={open()}
-          aria-controls={bodyId}
-          style={toggleStyle}
-          onClick={() => setOpen(!open())}
-        >
-          <span aria-hidden="true">{open() ? '▾' : '▸'}</span> Details
-        </button>
+        <Show when={props.hasDetails}>
+          <button
+            type="button"
+            aria-expanded={open()}
+            aria-controls={bodyId}
+            style={toggleStyle}
+            onClick={() => setOpen(!open())}
+          >
+            <span aria-hidden="true">{open() ? '▾' : '▸'}</span> Details
+          </button>
+        </Show>
       </div>
       <Show when={otherFailures().length > 0}>
         <div style={rowStyle}>
@@ -187,45 +191,32 @@ export function ReadinessSection(props: ReadinessSectionProps) {
               .join(', ')}{' '}
             failed
           </span>
-          <span style={detailStyle}>in the latest evidence build</span>
-          <button type="button" style={evidenceButtonStyle} onClick={() => setOpen(true)}>
-            Show
+          <span style={detailStyle}>in the review's check run</span>
+          <button
+            type="button"
+            style={buttonStyle}
+            title="Put the failures in the agent's prompt input for you to review and send"
+            onClick={() => {
+              if (stageCheckFailurePrompt(props.task.id)) props.onStaged?.();
+            }}
+          >
+            Stage fix prompt
           </button>
         </div>
       </Show>
-      <For each={weakened().slice(0, 1)}>
-        {(flag) => (
-          <div style={rowStyle}>
-            <span style={{ color: theme.warning, 'white-space': 'nowrap' }}>
-              {weakened().length === 1
-                ? 'A test was weakened'
-                : `${weakened().length} tests were weakened`}
-            </span>
-            <span style={detailStyle} title={`${flag.file}: ${flag.detail}`}>
-              {flag.file}: {flag.detail}
-            </span>
-            <Show when={props.onReviewFile}>
-              <button
-                type="button"
-                style={evidenceButtonStyle}
-                onClick={() =>
-                  props.onReviewFile?.(
-                    flag.file,
-                    flag.line,
-                    flag.rule === 'test-removed' ? 'old' : 'new',
-                  )
-                }
-              >
-                Review
-              </button>
-            </Show>
+      <Show when={getCheckSuiteUiState(props.task.id).error}>
+        {(error) => (
+          <div role="alert" style={{ ...rowStyle, color: theme.error }}>
+            {error()}
           </div>
         )}
-      </For>
-      {/* Hidden rather than unmounted, so folding keeps the panel's local state. */}
-      <div id={bodyId} hidden={!open()} style={{ 'margin-top': '8px' }}>
-        {props.children}
-      </div>
+      </Show>
+      <Show when={props.hasDetails}>
+        {/* Hidden rather than unmounted, so folding keeps the rows' local state. */}
+        <div id={bodyId} hidden={!open()} style={{ 'margin-top': '8px' }}>
+          {props.children}
+        </div>
+      </Show>
     </section>
   );
 }

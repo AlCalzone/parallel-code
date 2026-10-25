@@ -170,8 +170,6 @@ export function updateProject(
       | 'coverageReportPath'
       | 'verifyCommand'
       | 'evidenceChecks'
-      | 'evidenceModel'
-      | 'evidenceAutoBuild'
       | 'verifyAutoRun'
       | 'reviewChecks'
       | 'terminalBookmarks'
@@ -212,10 +210,6 @@ export function updateProject(
         s.projects[idx].verifyCommand = updates.verifyCommand;
       if (Object.prototype.hasOwnProperty.call(updates, 'evidenceChecks'))
         s.projects[idx].evidenceChecks = updates.evidenceChecks;
-      if (Object.prototype.hasOwnProperty.call(updates, 'evidenceModel'))
-        s.projects[idx].evidenceModel = updates.evidenceModel;
-      if (updates.evidenceAutoBuild !== undefined)
-        s.projects[idx].evidenceAutoBuild = updates.evidenceAutoBuild;
       // Stored only when off, matching how persistence normalizes it.
       if (updates.verifyAutoRun !== undefined)
         s.projects[idx].verifyAutoRun = updates.verifyAutoRun ? undefined : false;

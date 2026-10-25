@@ -13,7 +13,6 @@ import { parseCanvasView } from '../shared/canvas-view.js';
 import { parseAgentTourPayload } from '../shared/agent-tour.js';
 import { parseConfidencePayload } from '../shared/task-confidence.js';
 import { isGitHubAgentTaskId, parseGitHubList } from '../shared/github-list.js';
-import { parseEvidenceSubmission } from '../shared/evidence.js';
 import {
   LEGACY_WAIT_DEFAULT_MS,
   LEGACY_WAIT_MAX_MS,
@@ -108,8 +107,6 @@ export async function handleMCPToolCall(
     'tour_publish',
     'confidence_publish',
     'github_list_publish',
-    'submit_evidence',
-    'get_evidence',
   ].includes(name);
   if (
     sessionCapabilities &&
@@ -195,16 +192,6 @@ export async function handleMCPToolCall(
         const id = taskId || coordinatorId;
         if (!id) throw new Error('A task-scoped MCP session is required.');
         const result = await client.publishGitHubList(id, parseGitHubList(params).list);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-      }
-      case 'submit_evidence':
-      case 'get_evidence': {
-        const id = taskId || coordinatorId;
-        if (!id) throw new Error('A task-scoped MCP session is required.');
-        const result =
-          name === 'get_evidence'
-            ? await client.getEvidence(id)
-            : await client.submitEvidence(id, parseEvidenceSubmission(params));
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
       case 'mindmap_read':

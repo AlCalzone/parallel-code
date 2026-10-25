@@ -135,11 +135,9 @@ export function MergeBlockers(props: MergeSectionProps) {
               ? `Merged ${props.state.baseBranchName()} into this branch.`
               : `Rebased onto ${props.state.baseBranchName()}.`}
             <Show when={getTaskChecks(props.task.id).length > 0}>
-              {getProject(props.task.projectId)?.evidenceAutoBuild
-                ? ' Re-running the checks.'
-                : backgroundVerifyEnabled(props.task.id)
-                  ? ' Verify runs again in the background.'
-                  : ' Refresh the checks to cover the new commits.'}
+              {backgroundVerifyEnabled(props.task.id)
+                ? ' Verify runs again in the background.'
+                : ' Refresh the checks to cover the new commits.'}
             </Show>
           </div>
         )}

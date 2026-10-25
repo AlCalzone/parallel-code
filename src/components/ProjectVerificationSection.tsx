@@ -1,5 +1,6 @@
 import { keepCheckIds } from '../lib/check-suggestion';
-import { EvidenceSettingsFields } from './EvidenceSettingsFields';
+import { store } from '../store/store';
+import { ProjectChecksFields } from './ProjectChecksFields';
 import { SuggestChecksButton } from './SuggestChecksButton';
 import { ProjectCheckbox, ProjectField, projectMonoInputStyle } from './ProjectDialogParts';
 import type { ProjectSettingsForm } from './project-settings-form';
@@ -11,7 +12,7 @@ interface ProjectVerificationSectionProps {
   verifyRef: (el: HTMLInputElement) => void;
 }
 
-/** Verify command, evidence checks and coverage: what proves a task's change works. */
+/** Verify command, project checks and coverage: what proves a task's change works. */
 export function ProjectVerificationSection(props: ProjectVerificationSectionProps) {
   const form = () => props.form;
   return (
@@ -48,8 +49,7 @@ export function ProjectVerificationSection(props: ProjectVerificationSectionProp
           <>
             Once an agent goes idle with a new commit, the app runs the command at low priority, so
             the Finish dialog already has the result. It skips Docker tasks, uncommitted changes and
-            changes to how checks run, and stops when the agent starts working again. Background
-            evidence builds, when on, run it as part of the build instead.
+            changes to how checks run, and stops when the agent starts working again.
           </>
         }
         checked={form().verifyAutoRun()}
@@ -57,7 +57,7 @@ export function ProjectVerificationSection(props: ProjectVerificationSectionProp
       />
       <SuggestChecksButton
         projectRoot={props.projectRoot}
-        model={form().evidenceModel()}
+        model={store.reviewModel}
         onSuggest={(suggestion) => {
           // Keep what the user has when the model has nothing for a field.
           if (suggestion.verifyCommand) form().setVerifyCommand(suggestion.verifyCommand);
@@ -66,13 +66,9 @@ export function ProjectVerificationSection(props: ProjectVerificationSectionProp
         }}
       />
 
-      <EvidenceSettingsFields
+      <ProjectChecksFields
         checks={form().evidenceChecks()}
         onChecksChange={(checks) => form().setEvidenceChecks(checks)}
-        model={form().evidenceModel()}
-        onModelChange={(model) => form().setEvidenceModel(model)}
-        autoBuild={form().evidenceAutoBuild()}
-        onAutoBuildChange={(autoBuild) => form().setEvidenceAutoBuild(autoBuild)}
       />
 
       <ProjectField

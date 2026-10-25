@@ -3,7 +3,7 @@ import {
   buildTaskNamePrompt,
   parseModelTaskName,
 } from '../../electron/shared/task-name-model';
-import { startEvidenceModelRequest } from '../lib/evidence-model-request';
+import { startModelRequest } from '../lib/model-request';
 import { warn as logWarn } from '../lib/log';
 import { store } from './core';
 import { updateTaskName } from './tasks';
@@ -23,7 +23,7 @@ export async function nameTaskWithModel(taskId: string, prompt: string): Promise
   if (!store.modelTaskNames || !prompt.trim() || !task?.worktreePath) return;
   if (task.superProductivity) return;
   try {
-    const reply = await startEvidenceModelRequest({
+    const reply = await startModelRequest({
       prompt: buildTaskNamePrompt(prompt),
       cwd: task.worktreePath,
       settings: TASK_NAME_MODELS[store.taskNameModel],

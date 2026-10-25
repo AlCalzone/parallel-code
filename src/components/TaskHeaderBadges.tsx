@@ -5,7 +5,6 @@ import {
   getTaskAttentionState,
   clearTaskLandingReview,
   getVerifyCommand,
-  getEvidenceConfidence,
 } from '../store/store';
 import { theme } from '../lib/theme';
 import { badgeStyle, neutralBadgeStyle, rowChipBox } from '../lib/badgeStyle';
@@ -70,8 +69,6 @@ export function TaskAttentionBadges(props: {
       return undefined;
     const git = store.taskGitStatus[props.task.id];
     return taskCheckSignal({
-      evidence: getEvidenceConfidence(props.task, git),
-      evidencePackage: props.task.evidence,
       verificationRun: props.task.verificationRun,
       verification: props.task.verification,
       verifyCommandConfigured: Boolean(getVerifyCommand(props.task.id)),

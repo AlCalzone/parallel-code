@@ -10,7 +10,7 @@ const { mockStartRequest, mockLoadTaskDiff, mockSendPrompt, mockIsTaskWorking, h
   }),
 );
 
-vi.mock('../lib/evidence-model-request', () => ({ startEvidenceModelRequest: mockStartRequest }));
+vi.mock('../lib/model-request', () => ({ startModelRequest: mockStartRequest }));
 vi.mock('../lib/load-task-diff', () => ({
   loadTaskDiff: mockLoadTaskDiff,
   getTaskDiffBaseBranch: (_mode: string, base?: string) => base,

@@ -1,11 +1,6 @@
 import { createEffect, createRoot, onCleanup, untrack } from 'solid-js';
-import { computeEvidenceConfidence } from '../../electron/shared/evidence-confidence';
-import { EVIDENCE_LEVEL } from '../lib/evidence-display';
 import { store } from './core';
-import { buildEvidence } from './evidence';
-import { isLandedTaskState } from './landing';
 import { NOTIFICATION_ERROR_MS, showNotification } from './notification';
-import { getProject } from './projects';
 import { getTaskDotStatus } from './taskStatus';
 import {
   backgroundVerifyEnabled,
@@ -16,28 +11,10 @@ import {
 /** How long a task must stay idle first: agents pause between tool calls. */
 export const AUTO_BUILD_SETTLE_MS = 15_000;
 
-const FAILED = new Set(['failed', 'timed_out', 'error']);
-
-// shortcut: one global queue, one build at a time — a per-project limit if
-// machines with many cores want parallel background builds.
+// shortcut: one global queue, one run at a time — a per-project limit if
+// machines with many cores want parallel background runs.
 const queue: string[] = [];
 let draining = false;
-
-function autoBuildEnabled(taskId: string): boolean {
-  const task = store.tasks[taskId];
-  return Boolean(
-    task &&
-    task.gitIsolation === 'worktree' &&
-    !isLandedTaskState(task.landingState) &&
-    getProject(task.projectId)?.evidenceAutoBuild,
-  );
-}
-
-/** A full evidence build, which runs verify first, or verify on its own. */
-function backgroundWork(taskId: string): 'evidence' | 'verify' | undefined {
-  if (autoBuildEnabled(taskId)) return 'evidence';
-  return backgroundVerifyEnabled(taskId) ? 'verify' : undefined;
-}
 
 /** A failed background verify is worth a note; the title bar shows the rest. */
 async function verifyInBackground(taskId: string): Promise<void> {
@@ -50,42 +27,14 @@ async function verifyInBackground(taskId: string): Promise<void> {
   });
 }
 
-/**
- * Speaks up only when the background build it just made found a failing check
- * or a weakened test. "Nothing ran" is routine here (no checks, or all held
- * back), and a note after every turn would teach people to ignore it.
- */
-function reportProblems(taskId: string, previousId: string | undefined): void {
-  const task = store.tasks[taskId];
-  const pkg = task?.evidence;
-  if (!task || !pkg || pkg.id === previousId || pkg.trigger !== 'auto') return;
-  const failed = pkg.checks.some((run) => FAILED.has(run.status));
-  const weakened = pkg.scan.flags.some(
-    (flag) => flag.category === 'test-weakened' && !(flag.id in pkg.acceptedFlags),
-  );
-  if (!failed && !weakened) return;
-  const confidence = computeEvidenceConfidence(pkg, pkg.scan.headSha);
-  const reason = confidence.reasons[0]?.text;
-  showNotification(
-    `${task.name}: ${EVIDENCE_LEVEL[confidence.level].label}${reason ? ` · ${reason}` : ''}`,
-    { durationMs: NOTIFICATION_ERROR_MS },
-  );
-}
-
 async function drain(): Promise<void> {
   if (draining) return;
   draining = true;
   try {
     for (let taskId = queue.shift(); taskId !== undefined; taskId = queue.shift()) {
-      const work = backgroundWork(taskId);
-      if (!work || getTaskDotStatus(taskId) === 'busy') continue;
-      const previousId = store.tasks[taskId]?.evidence?.id;
+      if (!backgroundVerifyEnabled(taskId) || getTaskDotStatus(taskId) === 'busy') continue;
       try {
-        if (work === 'verify') await verifyInBackground(taskId);
-        else {
-          await buildEvidence(taskId, { trigger: 'auto' });
-          reportProblems(taskId, previousId);
-        }
+        await verifyInBackground(taskId);
       } catch (err) {
         console.error('Background check failed:', err);
       }
@@ -101,9 +50,8 @@ function queueBuild(taskId: string): void {
 }
 
 /**
- * Checks each task in the background once an agent's turn ends: a full
- * evidence build for projects that turned it on, otherwise the verify command
- * unless the project turned that off. Both skip commits they already covered.
+ * Runs the verify command in the background once an agent's turn ends, unless
+ * the project turned that off. It skips commits it already covered.
  */
 export function startBackgroundChecks(): () => void {
   return createRoot((dispose) => {

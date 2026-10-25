@@ -1,7 +1,7 @@
 import { createEffect, createRoot } from 'solid-js';
 import { produce } from 'solid-js/store';
 import { modelToRun } from '../lib/ask-code-model';
-import { startEvidenceModelRequest } from '../lib/evidence-model-request';
+import { startModelRequest } from '../lib/model-request';
 import { errMessage, info as logInfo, warn as logWarn } from '../lib/log';
 import { diffFingerprint } from '../lib/task-brief';
 import {
@@ -94,7 +94,7 @@ export async function startTaskReview(
     const settings = taskReviewModel(taskId);
     const model = modelToRun(settings.provider, settings.model ?? '');
     const reviewer = reviewerName(taskId);
-    const request = startEvidenceModelRequest({
+    const request = startModelRequest({
       prompt: buildTaskReviewPrompt({
         taskName: task.name,
         prompts: promptsSince(task, 0),

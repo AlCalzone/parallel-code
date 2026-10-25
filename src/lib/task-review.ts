@@ -1,10 +1,10 @@
-import type { EvidenceModelSettings } from '../../electron/shared/evidence';
+import type { CheckModelSettings } from '../../electron/shared/checks';
 import {
   CONFIDENCE_LIMITS,
   parseConfidencePayload,
   type ConfidencePayload,
 } from '../../electron/shared/task-confidence';
-import { repoContent } from './evidence-review';
+import { repoContent } from './repo-content';
 import { withReviewNotes, type ReviewDismissal } from './review-summary';
 import { fencePrompts, prepareDiffForBrief } from './task-brief';
 import { readSingleJsonObject } from './tour-json';
@@ -17,8 +17,8 @@ import { readSingleJsonObject } from './tour-json';
  * publish with `confidence_publish`.
  */
 
-/** Which model reviews; the same fields the evidence review model takes. */
-export type ReviewModelSettings = Pick<EvidenceModelSettings, 'provider' | 'model' | 'effort'>;
+/** Which model reviews: provider, model and reasoning effort. */
+export type ReviewModelSettings = Pick<CheckModelSettings, 'provider' | 'model' | 'effort'>;
 
 /** A review reads a whole diff against every request, so it runs on a strong model. */
 export const DEFAULT_REVIEW_MODEL: ReviewModelSettings = { provider: 'claude', model: 'opus' };

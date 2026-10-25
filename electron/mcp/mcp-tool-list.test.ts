@@ -16,7 +16,6 @@ import {
   TOUR_TOOLS,
   CONFIDENCE_TOOLS,
   GITHUB_LIST_TOOLS,
-  EVIDENCE_TOOLS,
   hasCanvasTools,
   APP_TASK_INSTRUCTIONS,
   serverInstructions,
@@ -35,7 +34,6 @@ describe('selectTools — role-based tool list', () => {
       ...CANVAS_VIEW_TOOLS,
       ...TOUR_TOOLS,
       ...CONFIDENCE_TOOLS,
-      ...EVIDENCE_TOOLS,
     ]);
     expect(tools.map((t: ToolDef) => t.name)).toStrictEqual([
       'land_self',
@@ -47,8 +45,6 @@ describe('selectTools — role-based tool list', () => {
       'canvas_open',
       'tour_publish',
       'confidence_publish',
-      'submit_evidence',
-      'get_evidence',
     ]);
   });
 
@@ -61,7 +57,6 @@ describe('selectTools — role-based tool list', () => {
       ...CANVAS_VIEW_TOOLS,
       ...TOUR_TOOLS,
       ...CONFIDENCE_TOOLS,
-      ...EVIDENCE_TOOLS,
     ]);
   });
 
@@ -160,7 +155,6 @@ it('ordinary canvas sessions advertise only map tools', () => {
     ...CANVAS_VIEW_TOOLS,
     ...TOUR_TOOLS,
     ...CONFIDENCE_TOOLS,
-    ...EVIDENCE_TOOLS,
   ]);
 });
 
@@ -172,7 +166,6 @@ it('offers github_list_publish only to the GitHub page agent', () => {
     ...TOUR_TOOLS,
     ...CONFIDENCE_TOOLS,
     ...GITHUB_LIST_TOOLS,
-    ...EVIDENCE_TOOLS,
   ]);
 });
 
@@ -193,7 +186,6 @@ it('gives a page agent only independent task creation besides its page tools', (
       ...TOUR_TOOLS,
       ...CONFIDENCE_TOOLS,
       ...GITHUB_LIST_TOOLS,
-      ...EVIDENCE_TOOLS,
     ].map((tool) => tool.name),
     'create_task',
   ]);
@@ -276,8 +268,6 @@ describe('session capability tool sets', () => {
     'canvas_open',
     'tour_publish',
     'confidence_publish',
-    'submit_evidence',
-    'get_evidence',
   ];
   const supervision = [
     'list_tasks',

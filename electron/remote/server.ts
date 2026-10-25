@@ -51,11 +51,6 @@ import {
   type ConfidencePayload,
 } from '../shared/task-confidence.js';
 import { parseGitHubList, type GitHubCustomList } from '../shared/github-list.js';
-import {
-  EVIDENCE_LIMITS,
-  parseEvidenceSubmission,
-  type EvidenceSubmission,
-} from '../shared/evidence.js';
 import type { SessionCaller, SessionCapabilities } from '../shared/delegation-types.js';
 import type { ReasoningDocument } from '../shared/reasoning.js';
 import type { ReasoningUpdate } from '../shared/reasoning-state.js';
@@ -439,17 +434,8 @@ type CanvasOps = Pick<
   | 'publishTour'
   | 'publishConfidence'
   | 'publishGitHubList'
-  | 'submitEvidence'
-  | 'getEvidence'
 >;
-type CanvasRoute =
-  | 'mindmaps'
-  | 'reasoning'
-  | 'canvas'
-  | 'tours'
-  | 'confidence'
-  | 'github-lists'
-  | 'evidence';
+type CanvasRoute = 'mindmaps' | 'reasoning' | 'canvas' | 'tours' | 'confidence' | 'github-lists';
 /** A published tour inlines its own context; the shared parser caps it again. */
 const TOUR_MAX_BODY_BYTES = 256 * 1024;
 /** 100 items with full-length titles and reasons, plus JSON overhead. */
@@ -474,20 +460,6 @@ function canvasErrorStatus(err: unknown): number {
   if (message.includes('Body too large')) return 413;
   if (CANVAS_CONFLICT.test(message)) return 409;
   return CANVAS_UNAVAILABLE.test(message) ? 503 : 400;
-}
-
-async function evidenceRequest(
-  ops: CanvasOps,
-  req: IncomingMessage,
-  taskId: string,
-): Promise<unknown> {
-  if (req.method === 'GET') {
-    if (!ops.getEvidence) throw httpError(503, 'Evidence unavailable');
-    return ops.getEvidence(taskId);
-  }
-  if (!ops.submitEvidence) throw httpError(503, 'Evidence unavailable');
-  const body = await readJsonBody(req, EVIDENCE_LIMITS.submissionBytes * 2);
-  return ops.submitEvidence(taskId, parseEvidenceSubmission(body));
 }
 
 async function canvasRequest(
@@ -524,7 +496,6 @@ async function canvasRequest(
     await ops.publishGitHubList(taskId, list);
     return { ok: true, name: list.name };
   }
-  if (route === 'evidence') return evidenceRequest(ops, req, taskId);
   const reasoning = route === 'reasoning';
   if (req.method === 'GET') {
     const read = reasoning ? ops.readReasoning : ops.readMindMap;
@@ -1042,10 +1013,6 @@ export function startRemoteServer(opts: {
   publishConfidence?: (taskId: string, payload: ConfidencePayload) => Promise<unknown>;
   /** Show an issue list the agent ordered and grouped on its project's GitHub page. */
   publishGitHubList?: (taskId: string, list: GitHubCustomList) => Promise<unknown>;
-  /** Record the agent's handoff claim and start building evidence (renderer-backed). */
-  submitEvidence?: (taskId: string, submission: EvidenceSubmission) => Promise<unknown>;
-  /** The app's evidence status for the agent's own task (renderer-backed). */
-  getEvidence?: (taskId: string) => Promise<unknown>;
   /** Read a task's notes (renderer-backed). */
   getTaskNotes?: (taskId: string) => Promise<string>;
   /** Read merge readiness for the phone's merge dialog (renderer-backed). */
@@ -1342,7 +1309,7 @@ export function startRemoteServer(opts: {
       };
 
       const mapMatch = url.pathname.match(
-        /^\/api\/(mindmaps|reasoning|canvas|tours|confidence|github-lists|evidence)\/([^/]+)$/,
+        /^\/api\/(mindmaps|reasoning|canvas|tours|confidence|github-lists)\/([^/]+)$/,
       );
       if (mapMatch) {
         const route = mapMatch[1] as CanvasRoute;

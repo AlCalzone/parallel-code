@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  checkIdFor,
-  effectiveChecks,
-  parseEvidenceModelSettings,
-  parseProjectChecks,
-} from './evidence-settings.js';
+import { checkIdFor, effectiveChecks, parseProjectChecks } from './check-settings.js';
 
 describe('parseProjectChecks', () => {
   it('keeps valid checks and drops malformed, reserved and duplicate ones', () => {
@@ -26,19 +21,6 @@ describe('parseProjectChecks', () => {
   it('returns undefined for a missing or empty list', () => {
     expect(parseProjectChecks(undefined)).toBeUndefined();
     expect(parseProjectChecks([{}])).toBeUndefined();
-  });
-});
-
-describe('parseEvidenceModelSettings', () => {
-  it('normalizes unknown values to safe defaults', () => {
-    expect(parseEvidenceModelSettings({ when: 'always', provider: 'x', model: ' ' })).toEqual({
-      when: 'off',
-      provider: 'claude',
-    });
-    expect(
-      parseEvidenceModelSettings({ when: 'risky', provider: 'codex', effort: 'high', model: 'm' }),
-    ).toEqual({ when: 'risky', provider: 'codex', effort: 'high', model: 'm' });
-    expect(parseEvidenceModelSettings(null)).toBeUndefined();
   });
 });
 

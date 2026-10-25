@@ -376,6 +376,61 @@ describe('background verify persistence', () => {
     await loadState();
     expect(store.projects[0].verifyAutoRun).toBe(loaded);
   });
+
+  it('loads a package saved with the removed claim, review and flag fields, then drops them', async () => {
+    const def = agentDef();
+    const run = {
+      checkId: 'verify',
+      name: 'Verify',
+      kind: 'custom',
+      command: 'npm test',
+      status: 'running',
+      exitCode: null,
+      headSha: 'a'.repeat(40),
+      dirty: false,
+      startedAt: '2026-09-03T10:00:00Z',
+      outputTail: 'ok',
+    };
+    const legacy = {
+      id: 'pkg-1',
+      createdAt: '2026-09-03T10:00:00Z',
+      trigger: 'agent',
+      assembling: true,
+      scan: { headSha: 'a'.repeat(40), baseSha: 'b'.repeat(40), dirty: false, files: [] },
+      checks: [run],
+      skipped: [],
+      claim: { summary: 'Done', submittedAt: '2026-09-03T10:00:00Z' },
+      review: { status: 'running', provider: 'claude', headSha: 'a'.repeat(40), findings: [] },
+      acceptedFlags: { 'flag-1': 'fine' },
+      dismissedFindings: ['f1'],
+      sentToAgent: ['r1'],
+    };
+    mockInvoke.mockResolvedValueOnce(
+      stateWith(
+        { evidenceAutoBuild: true, evidenceModel: { when: 'risky', provider: 'codex' } },
+        { 'task-1': { ...persistedTask(def), evidence: legacy } },
+      ),
+    );
+    await loadState();
+    const pkg = store.tasks['task-1'].evidence;
+    expect(pkg).toMatchObject({ id: 'pkg-1', assembling: false, skipped: [] });
+    expect(pkg?.checks[0]).toMatchObject({ checkId: 'verify', status: 'cancelled' });
+    expect(store.projects[0]).not.toHaveProperty('evidenceModel');
+    expect(store.projects[0]).not.toHaveProperty('evidenceAutoBuild');
+
+    mockInvoke.mockResolvedValueOnce(undefined);
+    await saveState();
+    const lastCall = mockInvoke.mock.calls[mockInvoke.mock.calls.length - 1];
+    const saved = JSON.parse(lastCall[1].json);
+    expect(Object.keys(saved.tasks['task-1'].evidence).sort()).toEqual([
+      'assembling',
+      'checks',
+      'id',
+      'scan',
+      'skipped',
+    ]);
+    expect(saved.projects[0]).not.toHaveProperty('evidenceAutoBuild');
+  });
 });
 
 describe('completion report persistence', () => {

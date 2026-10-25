@@ -25,7 +25,6 @@ const {
 vi.mock('../store/task-brief', () => ({ refreshCodeFingerprint: mockRefreshCode }));
 
 vi.mock('../store/task-review', () => ({
-  cancelTaskReview: mockCancel,
   reviewerName: () => 'opus',
   taskReviewModel: () => ({ provider: 'claude', model: 'opus' }),
   setTaskReviewModel: mockSetModel,
@@ -57,7 +56,11 @@ vi.mock('./SuggestChecksButton', () => ({
   ),
 }));
 
-vi.mock('../store/review-run', () => ({ startReview: mockRate, setReviewChecks: mockSetChecks }));
+vi.mock('../store/review-run', () => ({
+  cancelReview: mockCancel,
+  startReview: mockRate,
+  setReviewChecks: mockSetChecks,
+}));
 
 vi.mock('../store/review', () => ({
   dismissReviewItem: mockDismiss,

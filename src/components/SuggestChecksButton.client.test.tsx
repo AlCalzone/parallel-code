@@ -2,11 +2,11 @@ import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SuggestChecksButton } from './SuggestChecksButton';
 import { invoke } from '../lib/ipc';
-import { startEvidenceModelRequest } from '../lib/evidence-model-request';
+import { startModelRequest } from '../lib/model-request';
 import type { CheckSuggestion } from '../lib/check-suggestion';
 
 vi.mock('../lib/ipc', () => ({ invoke: vi.fn() }));
-vi.mock('../lib/evidence-model-request', () => ({ startEvidenceModelRequest: vi.fn() }));
+vi.mock('../lib/model-request', () => ({ startModelRequest: vi.fn() }));
 vi.mock('../store/core', () => ({ store: { agentEnvFiles: {} } }));
 
 let dispose: (() => void) | undefined;
@@ -14,7 +14,7 @@ afterEach(() => {
   dispose?.();
   document.body.innerHTML = '';
   vi.mocked(invoke).mockReset();
-  vi.mocked(startEvidenceModelRequest).mockReset();
+  vi.mocked(startModelRequest).mockReset();
 });
 
 function mount(onSuggest: (suggestion: CheckSuggestion) => void): HTMLButtonElement {
@@ -24,7 +24,7 @@ function mount(onSuggest: (suggestion: CheckSuggestion) => void): HTMLButtonElem
     () => (
       <SuggestChecksButton
         projectRoot="/repo"
-        model={{ when: 'off', provider: 'claude' }}
+        model={{ provider: 'claude' }}
         onSuggest={onSuggest}
       />
     ),
@@ -36,7 +36,7 @@ function mount(onSuggest: (suggestion: CheckSuggestion) => void): HTMLButtonElem
 }
 
 function answer(response: string): void {
-  vi.mocked(startEvidenceModelRequest).mockReturnValue({
+  vi.mocked(startModelRequest).mockReturnValue({
     result: Promise.resolve(response),
     cancel: vi.fn(),
   });
@@ -56,7 +56,7 @@ describe('SuggestChecksButton', () => {
       checks: [],
       reason: 'From package.json.',
     });
-    expect(vi.mocked(startEvidenceModelRequest).mock.calls[0][0]).toMatchObject({
+    expect(vi.mocked(startModelRequest).mock.calls[0][0]).toMatchObject({
       cwd: '/repo',
       purpose: 'checks',
     });
@@ -86,7 +86,7 @@ describe('SuggestChecksButton', () => {
     finishRead([{ path: 'package.json', text: '{}' }]);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(startEvidenceModelRequest).not.toHaveBeenCalled();
+    expect(startModelRequest).not.toHaveBeenCalled();
   });
 
   it('does not ask the model when the project has no build files', async () => {
@@ -97,6 +97,6 @@ describe('SuggestChecksButton', () => {
     await vi.waitFor(() =>
       expect(document.querySelector('[role="alert"]')?.textContent).toContain('No build'),
     );
-    expect(startEvidenceModelRequest).not.toHaveBeenCalled();
+    expect(startModelRequest).not.toHaveBeenCalled();
   });
 });

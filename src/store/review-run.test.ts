@@ -1,16 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockBuild, mockReview } = vi.hoisted(() => ({
+const { mockBuild, mockReview, mockStop, mockCancel } = vi.hoisted(() => ({
   mockBuild: vi.fn(() => Promise.resolve()),
   mockReview: vi.fn(() => Promise.resolve()),
+  mockStop: vi.fn(() => Promise.resolve()),
+  mockCancel: vi.fn(),
 }));
 
-vi.mock('./evidence', () => ({ buildEvidence: mockBuild }));
-vi.mock('./task-review', () => ({ startTaskReview: mockReview }));
+vi.mock('./check-suite', () => ({ runCheckSuite: mockBuild, stopCheckSuite: mockStop }));
+vi.mock('./task-review', () => ({ startTaskReview: mockReview, cancelTaskReview: mockCancel }));
 
 import { setStore, store } from './core';
 import type { Project, Task } from './types';
-import { setReviewChecks, startReview } from './review-run';
+import { cancelReview, setReviewChecks, startReview } from './review-run';
 
 function setup(reviewChecks: string[] | undefined, task: Partial<Task> = {}) {
   setStore('projects', [
@@ -44,7 +46,7 @@ describe('startReview', () => {
       return Promise.resolve();
     });
     startReview('t1');
-    expect(mockBuild).toHaveBeenCalledWith('t1', { trigger: 'manual', only: ['verify', 'e2e'] });
+    expect(mockBuild).toHaveBeenCalledWith('t1', { only: ['verify', 'e2e'] });
     const checks = (mockReview.mock.calls[0] as unknown[])[1] as Promise<unknown>;
     await expect(checks).resolves.toEqual([
       { name: 'E2E', result: 'failed' },
@@ -85,6 +87,22 @@ describe('startReview', () => {
     startReview('t1');
     expect(mockBuild).not.toHaveBeenCalled();
     expect(mockReview).not.toHaveBeenCalled();
+  });
+});
+
+describe('cancelReview', () => {
+  it('stops the check run along with the reviewer', () => {
+    setup(['e2e'], { evidence: { assembling: true, checks: [] } as never });
+    cancelReview('t1');
+    expect(mockCancel).toHaveBeenCalledWith('t1');
+    expect(mockStop).toHaveBeenCalledWith('t1');
+  });
+
+  it('leaves finished checks alone', () => {
+    setup(['e2e'], { evidence: { assembling: false, checks: [] } as never });
+    cancelReview('t1');
+    expect(mockCancel).toHaveBeenCalledWith('t1');
+    expect(mockStop).not.toHaveBeenCalled();
   });
 });
 

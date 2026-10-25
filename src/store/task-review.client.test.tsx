@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockStartRequest } = vi.hoisted(() => ({ mockStartRequest: vi.fn() }));
 
-vi.mock('../lib/evidence-model-request', () => ({ startEvidenceModelRequest: mockStartRequest }));
+vi.mock('../lib/model-request', () => ({ startModelRequest: mockStartRequest }));
 vi.mock('../lib/load-task-diff', () => ({
   loadTaskDiff: () => Promise.resolve({ rawDiff: '+change', cwd: '/wt' }),
   getTaskDiffBaseBranch: (_mode: string, base?: string) => base,

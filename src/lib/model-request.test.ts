@@ -19,10 +19,10 @@ vi.mock('./ipc', () => ({
   },
 }));
 
-import { startEvidenceModelRequest } from './evidence-model-request';
+import { startModelRequest } from './model-request';
 
 function start() {
-  const request = startEvidenceModelRequest({
+  const request = startModelRequest({
     prompt: 'p',
     cwd: '/tmp',
     settings: { provider: 'claude', model: 'haiku' },
@@ -38,7 +38,7 @@ afterEach(() => {
   channels.length = 0;
 });
 
-describe('startEvidenceModelRequest', () => {
+describe('startModelRequest', () => {
   it('resolves with the streamed response on success', async () => {
     const { request, send } = start();
     send({ type: 'chunk', text: '{"a":' });

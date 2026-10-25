@@ -25,27 +25,6 @@ const task: Task = {
   baseBranch: 'main',
 };
 
-const evidence: NonNullable<Task['evidence']> = {
-  id: 'p1',
-  createdAt: '2026-10-06T10:00:00.000Z',
-  trigger: 'agent',
-  assembling: false,
-  scan: {
-    headSha: 'a'.repeat(40),
-    baseSha: 'b'.repeat(40),
-    dirty: false,
-    files: [],
-    flags: [],
-    tests: [],
-    coveringTests: [],
-    sourceWithoutTests: [],
-  },
-  checks: [],
-  skipped: [],
-  acceptedFlags: {},
-  dismissedFindings: [],
-};
-
 let container: HTMLDivElement;
 let dispose: () => void;
 const onFinish = vi.fn();
@@ -77,21 +56,6 @@ afterEach(() => {
   container.remove();
 });
 
-it('opens Finish from the check summary so open flags can be reviewed', () => {
-  setStore('tasks', 'one', 'evidence', evidence);
-  const summary = container.querySelector<HTMLButtonElement>('button.task-check-signal');
-  expect(summary?.textContent).toMatch(/^\S/);
-  summary?.click();
-  expect(onFinish).toHaveBeenCalledOnce();
-});
-
-it('keeps the check summary as plain text once the task cannot be finished', () => {
-  setStore('tasks', 'one', 'evidence', evidence);
-  setCanFinish(false);
-  expect(container.querySelector('button.task-check-signal')).toBeNull();
-  expect(container.querySelector('.task-header-badges')?.textContent).toMatch(/^\S/);
-});
-
 const verifyRun = (overrides: Partial<VerificationRun>): VerificationRun => ({
   command: 'npm test',
   headSha: 'a'.repeat(40),
@@ -112,6 +76,13 @@ it('marks a failing verify run as a chip that still opens Finish', () => {
   expect(signal?.style.height).not.toBe('');
   signal?.click();
   expect(onFinish).toHaveBeenCalledOnce();
+});
+
+it('keeps the check summary as plain text once the task cannot be finished', () => {
+  setStore('tasks', 'one', 'verificationRun', verifyRun({}));
+  setCanFinish(false);
+  expect(container.querySelector('button.task-check-signal')).toBeNull();
+  expect(container.querySelector('.task-header-badges')?.textContent).toBe('Verify failed');
 });
 
 it('keeps a verify warning as plain status text', () => {

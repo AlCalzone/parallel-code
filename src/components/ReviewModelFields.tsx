@@ -4,11 +4,11 @@ import {
   ASK_CODE_MODELS,
   askCodeEfforts,
 } from '../../electron/shared/ask-code-models';
-import type { EvidenceModelSettings } from '../../electron/shared/evidence';
+import type { CheckModelSettings } from '../../electron/shared/checks';
 import { effortToRun, modelToRun } from '../lib/ask-code-model';
 import { theme } from '../lib/theme';
 
-type ModelChoice = Pick<EvidenceModelSettings, 'provider' | 'model' | 'effort'>;
+type ModelChoice = Pick<CheckModelSettings, 'provider' | 'model' | 'effort'>;
 
 // Same height and corners as the dialog's text inputs, so a check row lines up with them.
 export const fieldStyle: JSX.CSSProperties = {

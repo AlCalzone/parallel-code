@@ -30,9 +30,8 @@ vi.mock('../store/store', () => ({
   getPrChecks: vi.fn(() => undefined),
   getVerifyCommand: () => undefined,
   getTaskChecks: vi.fn(() => []),
-  buildEvidence: vi.fn(async () => {}),
-  getEvidenceUiState: () => ({}),
-  isEvidenceBusy: () => false,
+  getCheckSuiteUiState: () => ({}),
+  isCheckSuiteBusy: () => false,
   mergeTask: vi.fn(async () => {}),
   pushTask: vi.fn(async () => {}),
   sendPrompt: vi.fn(),
@@ -90,6 +89,7 @@ const reviewProps = vi.hoisted(() => ({
         companion?: JSX.Element;
         lead?: JSX.Element;
         onReworkStaged: () => void;
+        onOpenFile: (file: string, line?: number) => void;
       }
     | undefined,
 }));
@@ -102,19 +102,13 @@ vi.mock('./ReviewSection', () => ({
       <>
         {props.lead}
         {props.companion}
+        <button onClick={() => props.onOpenFile('test.ts', 7)}>Open review finding</button>
       </>
     );
   },
 }));
 vi.mock('./MergeReadinessPanel', () => ({
   MergeReadinessPanel: (props: { children?: JSX.Element }) => <div>{props.children}</div>,
-}));
-vi.mock('./EvidencePanel', () => ({
-  EvidencePanel: (props: {
-    onReviewFile: (file: string, line?: number, side?: 'old' | 'new') => void;
-  }) => (
-    <button onClick={() => props.onReviewFile('test.ts', 7, 'old')}>Open evidence finding</button>
-  ),
 }));
 vi.mock('../store/tasks', () => ({ sendPrompt: vi.fn() }));
 vi.mock('./CloseTaskDialog', () => ({ closeTaskNow: vi.fn() }));
@@ -166,7 +160,7 @@ vi.mock('./DiffViewerDialog', async () => {
       <ReviewProvider open={props.scrollToFile !== null} compilePrompt={() => ''}>
         <Show when={props.scrollToFile !== null}>
           <div
-            data-testid="evidence-diff"
+            data-testid="finding-diff"
             data-file={props.scrollToFile}
             data-line={props.scrollToLine}
             data-side={props.scrollToSide}
@@ -605,26 +599,26 @@ describe('FinishDialog tour', () => {
 
 it('opens the cited side and line above the finish dialog and returns without closing it', () => {
   const handlers = mount({ task: reported() });
-  button('Open evidence finding')?.click();
-  const diff = document.querySelector<HTMLElement>('[data-testid="evidence-diff"]');
-  expect(diff?.dataset).toMatchObject({ file: 'test.ts', line: '7', side: 'old' });
+  button('Open review finding')?.click();
+  const diff = document.querySelector<HTMLElement>('[data-testid="finding-diff"]');
+  expect(diff?.dataset).toMatchObject({ file: 'test.ts', line: '7', side: 'new' });
   expect(handlers.onClose).not.toHaveBeenCalled();
-  button('Back to evidence')?.click();
-  expect(document.querySelector('[data-testid="evidence-diff"]')).toBeNull();
-  expect(button('Open evidence finding')).toBeDefined();
+  button('Back to Finish')?.click();
+  expect(document.querySelector('[data-testid="finding-diff"]')).toBeNull();
+  expect(button('Open review finding')).toBeDefined();
   expect(handlers.onClose).not.toHaveBeenCalled();
 });
 
-it('preserves unsent diff comments when returning to evidence and reopening a finding', () => {
+it('preserves unsent diff comments when returning to Finish and reopening a finding', () => {
   mount({ task: reported() });
-  button('Open evidence finding')?.click();
+  button('Open review finding')?.click();
   button('Add review comment')?.click();
   expect(document.querySelector('[data-testid="review-comments"]')?.textContent).toBe(
     'Keep this review comment',
   );
-  button('Back to evidence')?.click();
-  expect(document.querySelector('[data-testid="evidence-diff"]')).toBeNull();
-  button('Open evidence finding')?.click();
+  button('Back to Finish')?.click();
+  expect(document.querySelector('[data-testid="finding-diff"]')).toBeNull();
+  button('Open review finding')?.click();
   expect(document.querySelector('[data-testid="review-comments"]')?.textContent).toBe(
     'Keep this review comment',
   );

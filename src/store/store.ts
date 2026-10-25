@@ -238,26 +238,8 @@ export {
   stageVerificationFailurePrompt,
 } from './verification';
 export type { BackgroundVerifyHold } from './verification';
-export {
-  buildEvidence,
-  cancelEvidenceChecks,
-  getEvidenceForAgent,
-  runEvidenceCheck,
-  sendEvidenceToAgent,
-  stopEvidence,
-  submitEvidence,
-} from './evidence';
-export { runEvidenceReview } from './evidence-review';
-export {
-  acceptEvidenceFlag,
-  dismissEvidenceFinding,
-  restoreEvidenceFinding,
-  reopenEvidenceFlag,
-  getEvidenceConfidence,
-  getEvidenceUiState,
-  getTaskChecks,
-  isEvidenceBusy,
-} from './evidence-state';
+export { stageCheckFailurePrompt } from './check-suite';
+export { getCheckSuiteUiState, getTaskChecks, isCheckSuiteBusy } from './check-suite-state';
 export { getMergedTasksTodayCount } from './completion';
 export {
   createTerminal,

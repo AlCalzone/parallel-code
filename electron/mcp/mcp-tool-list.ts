@@ -4,7 +4,6 @@ import { CANVAS_INSTRUCTIONS, canvasViews } from '../shared/canvas-view.js';
 import { AGENT_TOUR_LIMITS } from '../shared/agent-tour.js';
 import { CONFIDENCE_LIMITS } from '../shared/task-confidence.js';
 import { GITHUB_LIST_LIMITS, isGitHubAgentTaskId } from '../shared/github-list.js';
-import { EVIDENCE_LIMITS } from '../shared/evidence.js';
 import { TOUR_CARD_LIMITS, TOUR_FORMS, TOUR_TONES } from '../shared/understanding-limits.js';
 import { semanticNodeKinds, reasoningStatuses } from '../shared/graph.js';
 import type { ReasoningUpdate } from '../shared/reasoning-state.js';
@@ -290,46 +289,6 @@ export const GITHUB_LIST_TOOLS: ToolDef[] = [
       },
       required: ['name', 'groups'],
     },
-  },
-];
-
-const evidenceText = { type: 'string', maxLength: EVIDENCE_LIMITS.stringBytes };
-
-export const EVIDENCE_TOOLS: ToolDef[] = [
-  {
-    name: 'submit_evidence',
-    description:
-      'Hand off your work for review. Call it once, after committing, when you believe the task is done. ' +
-      "The app re-runs the project's checks and inspects test changes itself, so report only what it cannot observe: a short summary, what you did not verify, and risks. " +
-      'If a test cannot be made to pass, say so in notVerified; never modify, skip or weaken a test to make it pass. ' +
-      'checkResults is optional; use the check ids get_evidence lists. Returns immediately while the app builds the evidence.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        summary: { type: 'string', maxLength: EVIDENCE_LIMITS.summaryBytes },
-        notVerified: { type: 'array', maxItems: EVIDENCE_LIMITS.maxItems, items: evidenceText },
-        risks: { type: 'array', maxItems: EVIDENCE_LIMITS.maxItems, items: evidenceText },
-        checkResults: {
-          type: 'array',
-          maxItems: EVIDENCE_LIMITS.maxCheckResults,
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            required: ['checkId', 'result'],
-            properties: {
-              checkId: { type: 'string' },
-              result: { enum: ['passed', 'failed', 'not-run'] },
-            },
-          },
-        },
-      },
-    },
-  },
-  {
-    name: 'get_evidence',
-    description:
-      "Read the app's evidence status for this task: the configured check ids, the latest results, open flags on test changes, and why confidence is not high. Use it before submit_evidence to learn the check ids, or after it to see what needs fixing.",
-    inputSchema: { type: 'object', properties: {} },
   },
 ];
 
@@ -703,7 +662,6 @@ export function selectTools(
     ...CONFIDENCE_TOOLS,
     // Publishing opens the GitHub page's list picker; other tasks have no page to publish to.
     ...(isGitHubAgentTaskId(taskId) ? GITHUB_LIST_TOOLS : []),
-    ...EVIDENCE_TOOLS,
   ];
   if (capabilities) {
     const taskTools =

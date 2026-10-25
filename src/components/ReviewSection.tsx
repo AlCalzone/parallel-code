@@ -28,13 +28,8 @@ import {
 } from '../store/review';
 import { refreshCodeFingerprint } from '../store/task-brief';
 import { getProject } from '../store/projects';
-import { startReview } from '../store/review-run';
-import {
-  cancelTaskReview,
-  reviewerName,
-  setTaskReviewModel,
-  taskReviewModel,
-} from '../store/task-review';
+import { cancelReview, startReview } from '../store/review-run';
+import { reviewerName, setTaskReviewModel, taskReviewModel } from '../store/task-review';
 import type { Task } from '../store/types';
 import { CheckIcon, PlusIcon, ReviewIcon } from './icons';
 import { createHeightTransition } from './understanding/create-height-transition';
@@ -604,7 +599,7 @@ export function ReviewSection(props: {
             aria-controls={actionToggles() && !picking() ? bodyId : undefined}
             title={actionTitle()}
             onClick={() => {
-              if (running()) cancelTaskReview(props.task.id);
+              if (running()) cancelReview(props.task.id);
               else if (picking()) setPicking(false);
               else if (hasResult()) setOpen((v) => !v);
               else rate();

@@ -1,8 +1,5 @@
 import type { SubtaskVerification } from '../../electron/shared/completion-report';
-import type { EvidenceConfidence } from '../../electron/shared/evidence-confidence';
 import type { VerificationRun } from '../ipc/types';
-import type { EvidencePackage } from '../../electron/shared/evidence';
-import { EVIDENCE_LEVEL, evidenceSummary, openEvidenceFlags } from './evidence-display';
 import { theme } from './theme';
 import type { VerifyPassRecord } from '../store/types';
 import {
@@ -22,17 +19,12 @@ export interface CheckSignal {
 }
 
 export interface CheckSignalInput {
-  evidence?: EvidenceConfidence;
-  evidencePackage?: EvidencePackage;
   verificationRun?: VerificationRun;
   verification?: SubtaskVerification;
   verifyCommandConfigured: boolean;
   headSha?: string | null;
   lastVerifyPass?: VerifyPassRecord;
 }
-
-// A native tooltip; the Finish dialog lists every flag.
-const MAX_TITLE_FLAGS = 5;
 
 // Kinds without an entry stay silent: running or passed asks nothing of you, a
 // configured-but-never-run command on every task would be noise, and cancelled
@@ -55,30 +47,8 @@ function reportedSignal(verification?: SubtaskVerification): CheckSignal | undef
   };
 }
 
-/**
- * Evidence already includes the verify check, so it wins when a package exists.
- * Without one, the same precedence as the Finish dialog's readiness row applies.
- */
+/** The same precedence as the Finish dialog's readiness row. */
 export function taskCheckSignal(input: CheckSignalInput): CheckSignal | undefined {
-  if (input.evidence) {
-    const { level, reasons } = input.evidence;
-    const summary = evidenceSummary(input.evidence, input.evidencePackage);
-    if (!summary.action) return undefined;
-    const flags = input.evidencePackage ? openEvidenceFlags(input.evidencePackage) : [];
-    const title = [
-      EVIDENCE_LEVEL[level].label,
-      ...reasons.map((reason) => reason.text),
-      ...flags.slice(0, MAX_TITLE_FLAGS).map((flag) => `${flag.file}: ${flag.detail}`),
-    ];
-    if (flags.length > MAX_TITLE_FLAGS) title.push(`…and ${flags.length - MAX_TITLE_FLAGS} more`);
-    return {
-      label: summary.action,
-      // A failed check already makes the level low, so the colour follows the level.
-      color: EVIDENCE_LEVEL[level].color,
-      title: title.join('\n'),
-      urgent: level === 'low',
-    };
-  }
   if (!usesVerificationRun(input.verificationRun, input.verifyCommandConfigured))
     return reportedSignal(input.verification);
   const summary = summarizeVerificationRun(input.verificationRun, input.headSha);

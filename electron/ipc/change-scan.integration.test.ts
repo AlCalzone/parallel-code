@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { scanEvidence } from './evidence-scan.js';
+import { scanChange } from './change-scan.js';
 
 const directories: string[] = [];
 
@@ -26,7 +26,7 @@ function commit(root: string, message: string): void {
 }
 
 function fixture(): string {
-  const root = mkdtempSync(join(tmpdir(), 'evidence-scan-'));
+  const root = mkdtempSync(join(tmpdir(), 'change-scan-'));
   directories.push(root);
   git(root, 'init', '-b', 'main');
   git(root, 'config', 'user.email', 'test@example.test');
@@ -51,22 +51,16 @@ afterEach(() => {
     rmSync(directory, { recursive: true, force: true });
 });
 
-describe('scanEvidence', () => {
-  it('reports the committed change, flags, tests and covering tests', async () => {
+describe('scanChange', () => {
+  it('reports the committed change and flags the execution surface', async () => {
     const root = fixture();
     write(root, 'package.json', '{"name":"x","scripts":{}}\n');
     write(root, 'src/calc.ts', 'export const add = (a: number, b: number) => b + a;\n');
-    write(root, 'src/fresh.ts', 'export const fresh = 1;\n');
     write(root, 'src/fresh.test.ts', "it('is fresh', () => {});\n");
-    write(
-      root,
-      'src/util.test.ts',
-      "import { id } from './util';\nit('returns input', () => {\n  expect(id(1)).toBe(1);\n});\n",
-    );
     commit(root, 'change');
     write(root, 'uncommitted.txt', 'x\n');
 
-    const scan = await scanEvidence(root, 'main');
+    const scan = await scanChange(root, 'main');
 
     expect(scan.headSha).toBe(git(root, 'rev-parse', 'HEAD'));
     expect(scan.baseSha).toBe(git(root, 'rev-parse', 'main'));
@@ -75,21 +69,10 @@ describe('scanEvidence', () => {
       ['package.json', 'M', 'execution-surface'],
       ['src/calc.ts', 'M', 'source'],
       ['src/fresh.test.ts', 'A', 'test'],
-      ['src/fresh.ts', 'A', 'source'],
-      ['src/util.test.ts', 'M', 'test'],
     ]);
     expect(scan.flags.map((f) => [f.rule, f.file])).toEqual([
-      ['test-removed', 'src/util.test.ts'],
       ['execution-surface-changed', 'package.json'],
     ]);
-    expect(scan.tests).toEqual(
-      expect.arrayContaining([
-        { file: 'src/fresh.test.ts', kind: 'unit', title: 'is fresh', change: 'added' },
-        { file: 'src/util.test.ts', kind: 'unit', title: 'keeps type', change: 'removed' },
-      ]),
-    );
-    expect(scan.coveringTests).toEqual(['src/other.test.ts']);
-    expect(scan.sourceWithoutTests).toEqual([]);
   });
 
   it('reports a clean tree and handles deleted and renamed files', async () => {
@@ -98,13 +81,13 @@ describe('scanEvidence', () => {
     git(root, 'mv', 'src/util.test.ts', 'src/util2.test.ts');
     commit(root, 'change');
 
-    const scan = await scanEvidence(root, 'main');
+    const scan = await scanChange(root, 'main');
 
     expect(scan.dirty).toBe(false);
     expect(scan.files.find((f) => f.status === 'R')).toMatchObject({
       path: 'src/util2.test.ts',
       oldPath: 'src/util.test.ts',
     });
-    expect(scan.flags.map((f) => f.rule)).toEqual(['test-file-deleted']);
+    expect(scan.flags).toEqual([]);
   });
 });

@@ -5,7 +5,7 @@ const { mockStartRequest, mockUpdateTaskName } = vi.hoisted(() => ({
   mockUpdateTaskName: vi.fn(),
 }));
 
-vi.mock('../lib/evidence-model-request', () => ({ startEvidenceModelRequest: mockStartRequest }));
+vi.mock('../lib/model-request', () => ({ startModelRequest: mockStartRequest }));
 vi.mock('./tasks', () => ({ updateTaskName: mockUpdateTaskName }));
 
 import { setStore } from './core';

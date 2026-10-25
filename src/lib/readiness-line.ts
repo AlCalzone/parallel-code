@@ -1,8 +1,8 @@
-import type { EvidenceSkipReason } from '../../electron/shared/evidence';
+import type { CheckSkipReason } from '../../electron/shared/checks';
 import type { SubtaskVerification } from '../../electron/shared/completion-report';
 import type { VerificationRun } from '../ipc/types';
 import type { VerifyPassRecord } from '../store/types';
-import { skipReasonText } from './evidence-plan';
+import { skipReasonText } from './check-plan';
 import { formatRelativeAge } from './relativeAge';
 import {
   earlierPass,
@@ -29,12 +29,11 @@ export interface ReadinessLineInput {
   verification?: SubtaskVerification;
   headSha?: string | null;
   /** Why the background run skipped the current commit. */
-  hold?: { headSha: string; reason: EvidenceSkipReason };
+  hold?: { headSha: string; reason: CheckSkipReason };
   lastPass?: VerifyPassRecord;
   /** Full hashes of the branch's commits, oldest first. */
   branchCommits?: readonly string[];
-  /** Whether verify runs in the background after agent turns, on its own or
-   *  as part of a background evidence build. */
+  /** Whether verify runs in the background after agent turns. */
   autoRun: boolean;
   now: number;
 }

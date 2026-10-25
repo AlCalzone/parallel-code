@@ -1,9 +1,6 @@
 import { IPC } from '../../electron/ipc/channels';
 import { askCodeEnvFile } from '../../electron/shared/ask-code-models';
-import {
-  EVIDENCE_MODEL_TIMEOUT_MS,
-  type EvidenceModelSettings,
-} from '../../electron/shared/evidence';
+import { MODEL_REQUEST_TIMEOUT_MS, type CheckModelSettings } from '../../electron/shared/checks';
 import { Channel, invoke } from './ipc';
 import { warn as logWarn } from './log';
 import { PROVIDER_ERROR_CHARS, providerFailureMessage } from './provider-error';
@@ -17,26 +14,26 @@ interface AskMessage {
 /** A review is a short summary and a handful of findings. */
 const MAX_RESPONSE_CHARS = 60_000;
 
-export interface EvidenceModelRequest {
+export interface ModelRequest {
   result: Promise<string>;
   cancel: () => void;
 }
 
 /**
  * One structured call with the project's provider, model and reasoning level:
- * an evidence review, (`purpose: 'checks'`) a suggested check setup, or
- * (`purpose: 'task-name'`) a short task title, (`purpose: 'brief'`) a task brief,
- * or (`purpose: 'review'`) an independent rating of a task's work.
+ * (`purpose: 'checks'`) a suggested check setup, (`purpose: 'task-name'`) a
+ * short task title, (`purpose: 'brief'`) a task brief, or (`purpose: 'review'`)
+ * an independent rating of a task's work.
  * Resolves with the response text; rejects on provider failure, a runaway
  * response, or the client deadline.
  */
-export function startEvidenceModelRequest(options: {
+export function startModelRequest(options: {
   prompt: string;
   cwd: string;
-  settings: Pick<EvidenceModelSettings, 'provider' | 'model' | 'effort'>;
+  settings: Pick<CheckModelSettings, 'provider' | 'model' | 'effort'>;
   agentEnvFiles: Record<string, string>;
-  purpose?: 'evidence' | 'checks' | 'task-name' | 'brief' | 'review';
-}): EvidenceModelRequest {
+  purpose: 'checks' | 'task-name' | 'brief' | 'review';
+}): ModelRequest {
   const requestId = crypto.randomUUID();
   const channel = new Channel<AskMessage>();
   let active = true;
@@ -49,7 +46,7 @@ export function startEvidenceModelRequest(options: {
   // Let the backend's own timeout report first, and cover lost IPC events.
   const deadline = setTimeout(
     () => stop(new Error('The model did not finish in time.')),
-    EVIDENCE_MODEL_TIMEOUT_MS + 5000,
+    MODEL_REQUEST_TIMEOUT_MS + 5000,
   );
 
   function end(): boolean {
@@ -63,7 +60,7 @@ export function startEvidenceModelRequest(options: {
     if (!end()) return;
     settle.reject(error);
     void invoke(IPC.CancelAskAboutCode, { requestId }).catch((cancelError: unknown) =>
-      logWarn('evidence', 'Could not cancel the model request', { error: cancelError }),
+      logWarn('model', 'Could not cancel the model request', { error: cancelError }),
     );
   }
 
@@ -86,7 +83,7 @@ export function startEvidenceModelRequest(options: {
   const { provider, model, effort } = options.settings;
   void invoke(IPC.AskAboutCode, {
     requestId,
-    purpose: options.purpose ?? 'evidence',
+    purpose: options.purpose,
     prompt: options.prompt,
     cwd: options.cwd,
     onOutput: channel,

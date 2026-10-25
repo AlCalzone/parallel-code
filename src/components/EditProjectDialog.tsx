@@ -26,7 +26,7 @@ import { DialogTabs, dialogTabId, dialogTabPanelId, type DialogTab } from './Dia
 
 interface EditProjectDialogProps {
   project: Project | null;
-  /** Opens on the verify command and evidence checks instead of the name. */
+  /** Opens on the verify command and project checks instead of the name. */
   focusChecks?: boolean;
   onClose: () => void;
 }

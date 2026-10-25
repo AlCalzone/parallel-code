@@ -21,7 +21,7 @@ export interface VerifyRequest {
   key: string;
   worktreePath: string;
   command: string;
-  /** Automatic evidence checks require this HEAD and a clean tree at execution time. */
+  /** Automatic suite checks require this HEAD and a clean tree at execution time. */
   expectedHeadSha?: string;
   /** Extra variables visible to the command (task id, branch, …). */
   env?: Record<string, string>;
@@ -41,7 +41,7 @@ export interface VerifyRunnerDeps {
 export interface VerificationRunner {
   start(request: VerifyRequest): Promise<VerificationRun>;
   cancel(key: string): boolean;
-  /** Stops every run whose key starts with `prefix`, e.g. all of a task's evidence checks. */
+  /** Stops every run whose key starts with `prefix`, e.g. all of a task's suite checks. */
   cancelPrefix(prefix: string): boolean;
   /** Stops every running and queued run, e.g. when the app quits. */
   cancelAll(): void;

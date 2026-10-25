@@ -1,9 +1,9 @@
-import { CHECK_ID_PATTERN } from '../../electron/shared/evidence';
+import { CHECK_ID_PATTERN } from '../../electron/shared/checks';
 
 /**
  * Which project checks a review runs besides the reviewer.
  * The choice is saved per project as check ids; the results are the task's
- * evidence package, so the gate that holds risky checks back still applies.
+ * check suite, so the gate that holds risky checks back still applies.
  */
 
 const MAX_REVIEW_CHECKS = 32;

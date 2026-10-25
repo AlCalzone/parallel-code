@@ -1,25 +1,20 @@
 import { For, Show, createSignal, untrack, type JSX } from 'solid-js';
-import {
-  VERIFY_CHECK_ID,
-  type EvidenceCheckKind,
-  type ProjectCheck,
-} from '../../electron/shared/evidence';
-import { DEFAULT_EVIDENCE_MODEL } from '../../electron/shared/evidence-settings';
+import { VERIFY_CHECK_ID, type CheckKind, type ProjectCheck } from '../../electron/shared/checks';
 import type { CheckSuggestion } from '../lib/check-suggestion';
 import { dialogButtonStyle, theme } from '../lib/theme';
 import { sf } from '../lib/fontScale';
-import { getProjectChecks } from '../store/evidence-state';
+import { getProjectChecks } from '../store/check-suite-state';
 import { getProject } from '../store/projects';
 import { setReviewChecks } from '../store/review-run';
 import { setTaskReviewModel, taskReviewModel } from '../store/task-review';
 import type { Task } from '../store/types';
-import { finalizeChecks } from './EvidenceSettingsFields';
+import { finalizeChecks } from './ProjectChecksFields';
 import { PlayIcon } from './icons';
 import { ReviewerMenu } from './ReviewerMenu';
 import { SuggestChecksButton } from './SuggestChecksButton';
 
 // Kinds most projects have; while one is missing, the list offers to set checks up.
-const COMMON_KINDS: readonly EvidenceCheckKind[] = ['static', 'unit', 'e2e'];
+const COMMON_KINDS: readonly CheckKind[] = ['static', 'unit', 'e2e'];
 
 /** The suggested checks the project does not have yet, named and with ids as Save would give them. */
 function newSuggestedChecks(
@@ -183,7 +178,7 @@ export function ReviewChecksPicker(props: {
           <span />
           <SuggestChecksButton
             projectRoot={project()?.path ?? ''}
-            model={project()?.evidenceModel ?? DEFAULT_EVIDENCE_MODEL}
+            model={taskReviewModel(props.task.id)}
             label="Set up checks with AI"
             doneHint="Tick the ones to run; they are saved for the project when the review starts."
             onSuggest={(suggestion) => setSuggested(newSuggestedChecks(checks(), suggestion))}

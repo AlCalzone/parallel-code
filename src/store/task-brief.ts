@@ -2,7 +2,7 @@ import { createEffect, createRoot, untrack } from 'solid-js';
 import { produce } from 'solid-js/store';
 import { TASK_NAME_MODELS } from '../../electron/shared/task-name-model';
 import { parseConfidencePayload } from '../../electron/shared/task-confidence';
-import { startEvidenceModelRequest } from '../lib/evidence-model-request';
+import { startModelRequest } from '../lib/model-request';
 import { getTaskDiffBaseBranch, loadTaskDiff } from '../lib/load-task-diff';
 import { errMessage, info as logInfo, warn as logWarn } from '../lib/log';
 import {
@@ -160,7 +160,7 @@ export async function refreshTaskBrief(
     // Only a worktree's diff shows all of its work: direct tasks on main lose their
     // commits to the merge base, and tasks without git have no diff at all.
     const claimCheck = task.gitIsolation === 'worktree';
-    const request = startEvidenceModelRequest({
+    const request = startModelRequest({
       prompt: buildTaskBriefPrompt({
         taskName: task.name,
         prompts,

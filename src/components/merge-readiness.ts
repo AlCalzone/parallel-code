@@ -5,11 +5,6 @@ import {
   MATERIAL_COVERAGE_DELTA,
   type CoverageComparison,
 } from '../lib/coverage-comparison';
-import type {
-  EvidenceConfidence,
-  EvidenceConfidenceLevel,
-} from '../../electron/shared/evidence-confidence';
-import { EVIDENCE_LEVEL } from '../lib/evidence-display';
 import type { SubtaskVerification } from '../store/types';
 import {
   summarizeVerificationRun,
@@ -37,8 +32,6 @@ interface PrReadinessState {
 }
 
 export interface MergeReadinessInput {
-  /** Confidence of the task's evidence package; advisory, never blocks. */
-  evidence?: EvidenceConfidence;
   expectedBranch: string;
   mergeStatus?: MergeStatus;
   mergeStatusLoading: boolean;
@@ -168,28 +161,6 @@ function reportedVerificationCheck(verification?: SubtaskVerification): MergeRea
   };
 }
 
-// Medium is the usual state of a reviewed change, so only low or outdated
-// evidence asks for attention.
-const EVIDENCE_STATUS: Record<EvidenceConfidenceLevel, MergeReadinessCheckStatus> = {
-  checking: 'checking',
-  'not-checked': 'warning',
-  low: 'warning',
-  medium: 'neutral',
-  high: 'pass',
-};
-
-function evidenceCheck(confidence?: EvidenceConfidence): MergeReadinessCheck {
-  if (!confidence) {
-    return { label: 'Evidence', status: 'neutral', detail: 'No evidence package yet.' };
-  }
-  const reason = confidence.reasons[0]?.text;
-  return {
-    label: 'Evidence',
-    status: EVIDENCE_STATUS[confidence.level],
-    detail: `${EVIDENCE_LEVEL[confidence.level].label}.${reason ? ` ${reason}` : ''}`,
-  };
-}
-
 function prCheck(prChecks?: PrReadinessState): MergeReadinessCheck {
   if (!prChecks || prChecks.overall === 'none') {
     return { label: 'PR checks', status: 'neutral', detail: 'No PR checks available.' };
@@ -311,7 +282,6 @@ export function buildMergeReadiness(input: MergeReadinessInput): MergeReadiness 
     verificationCheck(input),
     coverageCheck(input.coverage, input.mergeStatus),
     prCheck(input.prChecks),
-    evidenceCheck(input.evidence),
   ];
   return { checks };
 }

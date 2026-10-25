@@ -1,4 +1,4 @@
-import type { EvidenceFileRole, EvidenceTestKind } from '../shared/evidence.js';
+import type { ScanFileRole } from '../shared/checks.js';
 
 const SOURCE_EXT =
   /\.(?:[cm]?[jt]sx?|py|go|rs|java|kt|rb|php|cs|swift|vue|svelte|c|cc|cpp|h|hpp|scala|dart|ex|exs)$/;
@@ -45,7 +45,7 @@ const EXEC_NAME = [
 
 const EXEC_DIR = /(?:^|\/)(?:__mocks__|__fixtures__|fixtures|tests?|e2e)\//;
 
-export function isSnapshotPath(path: string): boolean {
+function isSnapshotPath(path: string): boolean {
   return path.endsWith('.snap') || path.includes('__snapshots__/');
 }
 
@@ -54,8 +54,8 @@ function basename(path: string): string {
 }
 
 /** Classifies a repo-relative path by how it can influence a check run. */
-export function classifyPath(path: string): EvidenceFileRole {
-  // Snapshots have their own rule; treating them as execution surface too would double-flag.
+export function classifyPath(path: string): ScanFileRole {
+  // Snapshots are recorded output, not something that changes how checks run.
   if (isSnapshotPath(path)) return 'other';
   if (TEST_NAME.some((pattern) => pattern.test(path))) return 'test';
   const name = basename(path);
@@ -68,17 +68,4 @@ export function classifyPath(path: string): EvidenceFileRole {
   )
     return 'execution-surface';
   return SOURCE_EXT.test(name) ? 'source' : 'other';
-}
-
-export function testKind(path: string): EvidenceTestKind {
-  return /(?:^|\/)e2e(?:\/|$)|playwright|\.e2e\.|cypress/i.test(path) ? 'e2e' : 'unit';
-}
-
-/** `foo.test.ts`, `foo_test.go`, `test_foo.py` and `foo.tsx` all map to `foo`. */
-export function subjectBase(path: string): string {
-  return basename(path)
-    .replace(/\.[^.]+$/, '')
-    .replace(/\.(?:test|spec|e2e)$/, '')
-    .replace(/_test$/, '')
-    .replace(/^test_/, '');
 }

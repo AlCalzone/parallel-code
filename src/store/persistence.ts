@@ -1,14 +1,11 @@
 import { parseCompletionRecord } from '../../electron/shared/completion-report';
-import { persistedEvidence, restoredEvidence } from '../lib/evidence-package';
+import { persistedCheckSuite, restoredCheckSuite } from '../lib/check-suite-storage';
 import { restoreTaskBriefRecord } from '../lib/task-brief';
 import { restoreReviewChecks } from '../lib/review-checks';
 import { restoreTaskConfidence } from '../lib/task-confidence';
 import { restoreReviewDismissed } from '../lib/review-summary';
 import type { PrBabysit } from '../lib/pr-babysit';
-import {
-  parseEvidenceModelSettings,
-  parseProjectChecks,
-} from '../../electron/shared/evidence-settings';
+import { parseProjectChecks } from '../../electron/shared/check-settings';
 import { delegationRequest, taskAuthorityInput } from './delegation';
 import { restoreCanvasTaskLinks } from '../lib/canvas-task-links';
 import { restoreMindMap } from '../graph/model';
@@ -408,7 +405,7 @@ function toPersistedTask(task: Task, agentDefs: AgentDef[], collapsed?: boolean)
     verification: task.verification,
     verificationRun: task.verificationRun,
     lastVerifyPass: task.lastVerifyPass,
-    evidence: persistedEvidence(task.evidence),
+    evidence: persistedCheckSuite(task.evidence),
     brief: task.brief,
     confidence: task.confidence,
     reviewDismissed: task.reviewDismissed,
@@ -795,8 +792,10 @@ export async function loadState(): Promise<void> {
     p.tasksCollapsed = typeof p.tasksCollapsed === 'boolean' ? p.tasksCollapsed : undefined;
     p.quickEditSource = typeof p.quickEditSource === 'string' ? p.quickEditSource : undefined;
     p.evidenceChecks = parseProjectChecks(p.evidenceChecks);
-    p.evidenceModel = parseEvidenceModelSettings(p.evidenceModel);
-    p.evidenceAutoBuild = p.evidenceAutoBuild === true ? true : undefined;
+    // Background evidence builds and the evidence review model are gone; drop
+    // their old settings. Check suggestions use the review model instead.
+    delete (p as unknown as Record<string, unknown>).evidenceAutoBuild;
+    delete (p as unknown as Record<string, unknown>).evidenceModel;
     p.verifyAutoRun = p.verifyAutoRun === false ? false : undefined;
     p.reviewChecks = restoreReviewChecks(p.reviewChecks);
     p.superProductivityProjectId = isValidSpId(p.superProductivityProjectId)
@@ -1242,7 +1241,7 @@ export async function loadState(): Promise<void> {
           verification: pt.verification,
           verificationRun: restoredVerificationRun(pt.verificationRun),
           lastVerifyPass: restoredVerifyPass(pt.lastVerifyPass),
-          evidence: restoredEvidence(pt.evidence),
+          evidence: restoredCheckSuite(pt.evidence),
           brief: restoreTaskBriefRecord(pt.brief),
           confidence: restoreTaskConfidence(pt.confidence),
           reviewDismissed: restoreReviewDismissed(pt.reviewDismissed),
@@ -1401,7 +1400,7 @@ export async function loadState(): Promise<void> {
           verification: pt.verification,
           verificationRun: restoredVerificationRun(pt.verificationRun),
           lastVerifyPass: restoredVerifyPass(pt.lastVerifyPass),
-          evidence: restoredEvidence(pt.evidence),
+          evidence: restoredCheckSuite(pt.evidence),
           brief: restoreTaskBriefRecord(pt.brief),
           confidence: restoreTaskConfidence(pt.confidence),
           reviewDismissed: restoreReviewDismissed(pt.reviewDismissed),

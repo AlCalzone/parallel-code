@@ -558,7 +558,7 @@ it.each([
     expect(reply.ok).toBe(true);
     expect(['ready', 'attention']).toContain(reply.data.readiness.overall);
     expect(reply.data.canMerge).toBe(true);
-    expect(reply.data.readiness.checks.map((c) => c.label)).toContain('Evidence');
+    expect(reply.data.readiness.checks.map((c) => c.label)).toContain('Merge safety');
     expect(reply.data.deleteBranchOnClose).toBe(expected);
   },
 );

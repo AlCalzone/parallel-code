@@ -1,28 +1,24 @@
 import { For, Index, Show, type JSX } from 'solid-js';
-import type {
-  EvidenceCheckKind,
-  EvidenceModelSettings,
-  ProjectCheck,
-} from '../../electron/shared/evidence';
+import type { CheckKind, ProjectCheck } from '../../electron/shared/checks';
 import {
   MAX_PROJECT_CHECKS,
   checkIdFor,
   parseProjectChecks,
-} from '../../electron/shared/evidence-settings';
+} from '../../electron/shared/check-settings';
 import { sectionLabelStyle, theme } from '../lib/theme';
 import { CloseIcon, PlusIcon } from './icons';
-import { fieldStyle, ReviewModelFields } from './ReviewModelFields';
+import { fieldStyle } from './ReviewModelFields';
 
 /** A check being edited; the name follows the kind and new rows get their id when saved. */
 export type CheckDraft = Omit<ProjectCheck, 'id' | 'name'> & { id?: string };
 
-const KIND_NAMES: Record<EvidenceCheckKind, string> = {
+const KIND_NAMES: Record<CheckKind, string> = {
   unit: 'Unit tests',
   e2e: 'E2E tests',
   static: 'Static checks',
   custom: 'Custom check',
 };
-const KINDS = Object.keys(KIND_NAMES) as EvidenceCheckKind[];
+const KINDS = Object.keys(KIND_NAMES) as CheckKind[];
 
 /**
  * Drops rows without a command, names each check after its kind ("Unit tests 2"
@@ -30,7 +26,7 @@ const KINDS = Object.keys(KIND_NAMES) as EvidenceCheckKind[];
  */
 export function finalizeChecks(drafts: CheckDraft[]): ProjectCheck[] | undefined {
   const taken = drafts.flatMap((draft) => (draft.id ? [draft.id] : []));
-  const seen: Partial<Record<EvidenceCheckKind, number>> = {};
+  const seen: Partial<Record<CheckKind, number>> = {};
   const checks = drafts
     .filter((draft) => draft.command.trim())
     .map((draft) => {
@@ -45,36 +41,23 @@ export function finalizeChecks(drafts: CheckDraft[]): ProjectCheck[] | undefined
   return parseProjectChecks(checks);
 }
 
-const WHEN_LABELS: Record<EvidenceModelSettings['when'], string> = {
-  off: 'Off',
-  manual: 'Only when I click Run AI review',
-  handoff: 'On every agent handoff',
-  risky: 'On handoffs with flags, untested code or large diffs',
-};
-const hintStyle = { 'font-size': '12px', color: theme.fgSubtle, 'line-height': '1.45' };
 // A floated legend lays out as an ordinary grid item, so it takes the fieldset's
 // gap and none of the default legend padding that indents it past the fields.
 const legendStyle: JSX.CSSProperties = { ...sectionLabelStyle, float: 'left', padding: '0' };
 
-interface EvidenceSettingsFieldsProps {
+interface ProjectChecksFieldsProps {
   checks: CheckDraft[];
   onChecksChange: (checks: CheckDraft[]) => void;
-  model: EvidenceModelSettings;
-  onModelChange: (model: EvidenceModelSettings) => void;
-  autoBuild: boolean;
-  onAutoBuildChange: (autoBuild: boolean) => void;
 }
 
-/** Project settings for evidence packages: extra checks and the review model. */
-export function EvidenceSettingsFields(props: EvidenceSettingsFieldsProps) {
+/** Project settings for the extra checks a review can run. */
+export function ProjectChecksFields(props: ProjectChecksFieldsProps) {
   const edit = (index: number, change: Partial<CheckDraft>) =>
     props.onChecksChange(props.checks.map((c, i) => (i === index ? { ...c, ...change } : c)));
-  const setModel = (change: Partial<EvidenceModelSettings>) =>
-    props.onModelChange({ ...props.model, ...change });
 
   return (
     <fieldset style={{ border: 'none', padding: '0', margin: '0', display: 'grid', gap: '8px' }}>
-      <legend style={legendStyle}>Evidence checks</legend>
+      <legend style={legendStyle}>Checks</legend>
       {/* Index keeps each row's inputs while its draft object is replaced on every keystroke. */}
       <Index each={props.checks}>
         {(check, index) => (
@@ -90,7 +73,7 @@ export function EvidenceSettingsFields(props: EvidenceSettingsFieldsProps) {
             <select
               aria-label="Check kind"
               value={check().kind}
-              onChange={(e) => edit(index, { kind: e.currentTarget.value as EvidenceCheckKind })}
+              onChange={(e) => edit(index, { kind: e.currentTarget.value as CheckKind })}
               style={fieldStyle}
             >
               <For each={KINDS}>{(kind) => <option value={kind}>{KIND_NAMES[kind]}</option>}</For>
@@ -145,66 +128,6 @@ export function EvidenceSettingsFields(props: EvidenceSettingsFieldsProps) {
           Add check
         </button>
       </Show>
-      <label
-        style={{
-          display: 'flex',
-          gap: '10px',
-          'align-items': 'flex-start',
-          'margin-top': '6px',
-          cursor: 'pointer',
-          'font-size': '14px',
-          color: theme.fg,
-        }}
-      >
-        <input
-          type="checkbox"
-          checked={props.autoBuild}
-          onChange={(e) => props.onAutoBuildChange(e.currentTarget.checked)}
-          style={{ margin: '2px 0 0', cursor: 'pointer', 'accent-color': theme.accent }}
-        />
-        Build evidence in the background when an agent finishes a turn with new commits
-      </label>
-      <div style={hintStyle}>
-        The verify command always runs first. Auto checks run when an agent hands off with{' '}
-        <code>submit_evidence</code>, when you build evidence, or in a background build, one task at
-        a time. Docker tasks and changes to how checks run wait for a click. Background builds never
-        call the review model. Checks run on this machine.
-      </div>
-
-      <label style={{ ...sectionLabelStyle, 'margin-top': '14px' }} for="evidence-model-when">
-        Evidence review model
-      </label>
-      <div style={{ display: 'flex', gap: '6px', 'flex-wrap': 'wrap' }}>
-        <select
-          id="evidence-model-when"
-          value={props.model.when}
-          onChange={(e) =>
-            setModel({ when: e.currentTarget.value as EvidenceModelSettings['when'] })
-          }
-          style={fieldStyle}
-        >
-          <For each={Object.entries(WHEN_LABELS)}>
-            {([value, label]) => <option value={value}>{label}</option>}
-          </For>
-        </select>
-        <Show when={props.model.when !== 'off'}>
-          <ReviewModelFields value={props.model} onChange={setModel} />
-        </Show>
-      </div>
-      <Show when={props.model.when !== 'off'}>
-        <textarea
-          aria-label="Review guidance"
-          placeholder="Optional guidance for the reviewer, e.g. what matters in this codebase"
-          value={props.model.guidance ?? ''}
-          onInput={(e) => setModel({ guidance: e.currentTarget.value || undefined })}
-          rows={2}
-          style={{ ...fieldStyle, resize: 'vertical' }}
-        />
-      </Show>
-      <div style={hintStyle}>
-        The model writes a test summary and up to five cited findings. It can lower confidence,
-        never raise it.
-      </div>
     </fieldset>
   );
 }

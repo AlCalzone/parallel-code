@@ -8,13 +8,10 @@ function checkHelp(label: string): string | undefined {
     return 'Checks the task branch for conflicts with its base branch, branch mismatch, committed changes, and local uncommitted changes.';
   }
   if (label === 'Verify command') {
-    return "Runs the project's verify command in the task worktree when you click Run or build evidence, when land_self is called, or when the coordinator merges. Agents and the coordinator must pass it to land; for your own merge it is advisory. The result is pinned to the commit it ran at; opening the dialog never runs commands.";
+    return "Runs the project's verify command in the task worktree when you click Run, when land_self is called, or when the coordinator merges. Agents and the coordinator must pass it to land; for your own merge it is advisory. The result is pinned to the commit it ran at; opening the dialog never runs commands.";
   }
   if (label === 'Agent report') {
     return 'What the agent reported when it called land_self. Set a verify command in the project settings so the app runs the check itself.';
-  }
-  if (label === 'Evidence') {
-    return 'Confidence of the evidence package for this commit: checks, test changes and flags. Advisory; it never blocks a merge.';
   }
   if (label === 'PR checks') {
     return 'Uses checks reported for a detected GitHub pull request. Pull requests are optional, and unavailable check data is neutral.';

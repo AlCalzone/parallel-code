@@ -237,15 +237,15 @@ describe('verification runner', () => {
     expect(r.isRunning('b')).toBe(false);
   });
 
-  it("cancelPrefix stops one task's evidence checks and leaves other runs alone", async () => {
+  it("cancelPrefix stops one task's suite checks and leaves other runs alone", async () => {
     const r = runner();
-    const unit = r.start({ key: 't1:evidence:unit', worktreePath: tmpDir(), command: 'sleep 30' });
-    const e2e = r.start({ key: 't1:evidence:e2e', worktreePath: tmpDir(), command: 'sleep 30' });
+    const unit = r.start({ key: 't1:suite:unit', worktreePath: tmpDir(), command: 'sleep 30' });
+    const e2e = r.start({ key: 't1:suite:e2e', worktreePath: tmpDir(), command: 'sleep 30' });
     await sleep(100);
-    expect(r.isRunning('t1:evidence:e2e')).toBe(true);
+    expect(r.isRunning('t1:suite:e2e')).toBe(true);
 
-    expect(r.cancelPrefix('t1:evidence:')).toBe(true);
-    expect(r.cancelPrefix('t1:evidence:')).toBe(false);
+    expect(r.cancelPrefix('t1:suite:')).toBe(true);
+    expect(r.cancelPrefix('t1:suite:')).toBe(false);
 
     const runs = await Promise.all([unit, e2e]);
     expect(runs.map((run) => run.status)).toEqual(['cancelled', 'cancelled']);

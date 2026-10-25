@@ -9,13 +9,13 @@ import {
 import { HELD_RUN_MESSAGE, pendingVerificationRun } from '../../electron/shared/verification-run';
 import {
   VERIFY_CHECK_ID,
-  type EvidenceScan,
-  type EvidenceSkipReason,
-} from '../../electron/shared/evidence';
-import { planChecks, reusableVerifyRun } from '../lib/evidence-plan';
+  type ChangeScan,
+  type CheckSkipReason,
+} from '../../electron/shared/checks';
+import { planChecks, reusableVerifyRun } from '../lib/check-plan';
 import type { VerificationRun } from '../ipc/types';
 import { setStore, store } from './core';
-import { getTaskChecks, isEvidenceBusy, putCheck } from './evidence-state';
+import { getTaskChecks, isCheckSuiteBusy, putCheck } from './check-suite-state';
 import { isLandedTaskState } from './landing';
 import { saveState } from './persistence';
 import { getProject } from './projects';
@@ -39,7 +39,7 @@ const scanning = new Map<string, symbol>();
 /** Why the background run skipped the task's current commit. */
 export interface BackgroundVerifyHold {
   headSha: string;
-  reason: EvidenceSkipReason;
+  reason: CheckSkipReason;
 }
 const [holds, setHolds] = createStore<Record<string, BackgroundVerifyHold | undefined>>({});
 
@@ -152,7 +152,7 @@ export async function runTaskVerification(
   clearLiveOutput(taskId);
   // A background run that was held or stopped says nothing about the code.
   setRun(taskId, options.background && run.status === 'cancelled' ? previous : run);
-  showVerificationInEvidence(taskId);
+  showVerificationInCheckSuite(taskId);
   void saveState();
   return run;
 }
@@ -173,7 +173,7 @@ export function backgroundVerifyEnabled(taskId: string): boolean {
 
 /**
  * Runs the verify command once per commit after an agent turn, through the
- * same execution gate as evidence builds. Resolves with the finished run, or
+ * same execution gate as check-suite runs. Resolves with the finished run, or
  * undefined when nothing ran: no new commit, already covered, held, or busy.
  * `stillIdle` is asked again right before the command starts, since the agent
  * may pick work back up while the change is scanned.
@@ -190,14 +190,14 @@ export async function runBackgroundVerify(
     return (
       stillIdle() &&
       current?.verificationRun?.status !== 'running' &&
-      !(current?.evidence && isEvidenceBusy(current.evidence))
+      !(current?.evidence && isCheckSuiteBusy(current.evidence))
     );
   };
   if (!idle()) return undefined;
   // Claimed before the scan, so cancelling during it stops the run from starting.
   const claim = Symbol('background verify');
   scanning.set(taskId, claim);
-  const scan = await invoke<EvidenceScan>(IPC.GetEvidenceScan, {
+  const scan = await invoke<ChangeScan>(IPC.GetChangeScan, {
     worktreePath: task.worktreePath,
     baseBranch: task.baseBranch,
   }).catch(() => undefined);
@@ -215,7 +215,6 @@ export async function runBackgroundVerify(
     dirty: scan.dirty,
     truncated: scan.truncated,
     flags: scan.flags,
-    acceptedFlags: current.evidence?.acceptedFlags ?? {},
   });
   const held = plan.skipped[0];
   setHolds(taskId, held ? { headSha: scan.headSha, reason: held.reason } : undefined);
@@ -240,20 +239,20 @@ export async function cancelBackgroundVerify(taskId: string): Promise<void> {
   await cancelTaskVerification(taskId);
 }
 
-/** Puts a manual run into the evidence package of the same commit, so the
- *  package and the verify status agree. Busy builds reconcile when they finish. */
-export function showVerificationInEvidence(taskId: string): void {
+/** Puts a manual run into the check suite of the same commit, so the suite
+ *  and the verify status agree. Busy suites reconcile when they finish. */
+export function showVerificationInCheckSuite(taskId: string): void {
   const run = store.tasks[taskId]?.verificationRun;
   const pkg = store.tasks[taskId]?.evidence;
   const check = getTaskChecks(taskId).find((c) => c.id === VERIFY_CHECK_ID);
-  if (!pkg || !check || !run || isEvidenceBusy(pkg)) return;
+  if (!pkg || !check || !run || isCheckSuiteBusy(pkg)) return;
   const previous = pkg.checks.find((result) => result.checkId === VERIFY_CHECK_ID);
   if (previous && previous.startedAt > run.startedAt) return;
   const reused = reusableVerifyRun(run, check, pkg.scan.headSha);
   if (reused) putCheck(taskId, pkg.id, reused);
 }
 
-/** Takes over a verify run an evidence build made. A manual run still in
+/** Takes over a verify run a check-suite run made. A manual run still in
  *  flight, or one started later, is newer and wins. */
 export function adoptVerificationRun(taskId: string, run: VerificationRun): void {
   const current = store.tasks[taskId]?.verificationRun;

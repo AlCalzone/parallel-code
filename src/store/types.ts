@@ -29,11 +29,7 @@ import type { TaskBriefRecord } from '../lib/task-brief';
 import type { TaskConfidence } from '../lib/task-confidence';
 import type { ReviewDismissal } from '../lib/review-summary';
 import type { ReviewModelSettings } from '../lib/task-review';
-import type {
-  EvidenceModelSettings,
-  EvidencePackage,
-  ProjectCheck,
-} from '../../electron/shared/evidence';
+import type { CheckSuite, ProjectCheck } from '../../electron/shared/checks';
 import type { DockerSource } from '../lib/docker';
 import type { LookPreset, AppearanceMode } from '../lib/look';
 import type { ShellLayoutMode } from '../lib/shellLayout';
@@ -115,13 +111,10 @@ export interface Project {
    *  Lives in app state on purpose: a repo file could make opening a hostile
    *  clone run arbitrary commands on the host. */
   verifyCommand?: string;
-  /** Checks an evidence package runs besides the verify command. App state,
-   *  for the same reason as `verifyCommand`. */
+  /** Checks the check suite runs besides the verify command. App state,
+   *  for the same reason as `verifyCommand`. Named `evidence*` from before the
+   *  rename; kept so saved projects load without a migration. */
   evidenceChecks?: ProjectCheck[];
-  /** Model that writes the evidence test summary and findings. */
-  evidenceModel?: EvidenceModelSettings;
-  /** Build evidence in the background after an agent turn that added commits. */
-  evidenceAutoBuild?: boolean;
   /** Run the verify command in the background after an agent turn that added
    *  commits. Only `false` is stored; unset means on. */
   verifyAutoRun?: boolean;
@@ -366,8 +359,9 @@ export interface Task {
   verificationRun?: VerificationRun;
   /** Latest app-run verify pass on a clean commit; a later failure points back to it. */
   lastVerifyPass?: VerifyPassRecord;
-  /** Latest evidence package: what the app observed, the agent claimed and a model thought. */
-  evidence?: EvidencePackage;
+  /** Latest check suite: the change scan and the check runs. Keeps its old
+   *  persisted name so saved state loads without a migration. */
+  evidence?: CheckSuite;
   /** Snapshot of the work so far, rewritten by a cheap model after each agent turn. */
   brief?: TaskBriefRecord;
   /** Runtime-only: a brief is being written, or the last attempt failed. */

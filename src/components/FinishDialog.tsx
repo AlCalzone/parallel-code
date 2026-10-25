@@ -8,7 +8,6 @@ import { ChangeTourButton } from './ChangeTourButton';
 import { CompletionReport } from './CompletionReport';
 import { ConfirmDialog } from './ConfirmDialog';
 import { DiffViewerDialog } from './DiffViewerDialog';
-import { EvidencePanel } from './EvidencePanel';
 import { FeatureHint } from './FeatureHint';
 import { MergeReadinessPanel } from './MergeReadinessPanel';
 import { FinishPrSection, PrMergeRoute } from './FinishPrSection';
@@ -51,7 +50,7 @@ interface FinishDialogProps {
   onClose: () => void;
 }
 
-const SHOWN_ELSEWHERE = new Set(['Merge safety', 'Verify command', 'Evidence', 'PR checks']);
+const SHOWN_ELSEWHERE = new Set(['Merge safety', 'Verify command', 'PR checks']);
 
 /**
  * One place to wrap up a task. Reads top to bottom: what blocks the merge,
@@ -62,7 +61,6 @@ const SHOWN_ELSEWHERE = new Set(['Merge safety', 'Verify command', 'Evidence', '
 export function FinishDialog(props: FinishDialogProps) {
   const merge = createMergeState(props);
   let readinessAnchor: HTMLDivElement | undefined;
-  // The same test the evidence panel uses to offer Configure checks.
   const hasChecks = () => getTaskChecks(props.task.id).length > 0;
   // Nothing configured, run or reported leaves readiness only "No verify command";
   // the review line below covers that case.
@@ -150,7 +148,7 @@ export function FinishDialog(props: FinishDialogProps) {
     return `${merge.squash() ? 'Squash merge' : 'Merge'} into local ${merge.baseBranchName()}`;
   };
   // Said elsewhere in this dialog: merge safety by the notices on top, the
-  // verify command in the check list, evidence by the panel these rows sit in.
+  // verify command by the readiness line, PR checks by the PR section.
   const readinessRows = () =>
     merge.mergeReadiness().checks.filter((check) => !SHOWN_ELSEWHERE.has(check.label));
   const confirmDisabled = () => {
@@ -263,18 +261,9 @@ export function FinishDialog(props: FinishDialogProps) {
             showNotification('Fix prompt staged in the task input. Review it, then send.');
             props.onClose();
           }}
-          onReviewFile={(file, line, side) => setReviewLocation({ file, line, side })}
+          hasDetails={readinessRows().length > 0}
         >
-          <EvidencePanel
-            task={props.task}
-            agentId={merge.selectedAgentId()}
-            headSha={merge.worktreeStatus()?.head_sha}
-            dirty={merge.worktreeStatus()?.has_uncommitted_changes}
-            onConfigure={() => props.onConfigureChecks()}
-            onReviewFile={(file, line, side) => setReviewLocation({ file, line, side })}
-          >
-            <MergeReadinessPanel checks={readinessRows()} />
-          </EvidencePanel>
+          <MergeReadinessPanel checks={readinessRows()} />
         </ReadinessSection>
       </div>
     </Show>
@@ -328,7 +317,7 @@ export function FinishDialog(props: FinishDialogProps) {
               }
             >
               Readiness says whether the verify command passed on this commit; Details holds the
-              full evidence.
+              other checks, such as coverage.
               <Show when={backgroundVerifyEnabled(props.task.id)}>
                 {' '}
                 It runs in the background after agent turns.
@@ -445,12 +434,12 @@ export function FinishDialog(props: FinishDialogProps) {
         onConfirm={confirm}
         onCancel={() => props.onClose()}
       />
-      {/* Keep the review provider alive so returning to evidence preserves draft comments. */}
+      {/* Keep the review provider alive so returning to Finish preserves draft comments. */}
       <DiffViewerDialog
         scrollToFile={props.open ? (reviewLocation()?.file ?? null) : null}
         scrollToLine={reviewLocation()?.line}
         scrollToSide={reviewLocation()?.side}
-        closeLabel="Back to evidence"
+        closeLabel="Back to Finish"
         taskName={props.task.name}
         worktreePath={props.task.worktreePath}
         baseBranch={props.task.baseBranch}

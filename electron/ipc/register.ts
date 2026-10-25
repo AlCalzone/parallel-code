@@ -74,7 +74,7 @@ import { detectTaskPrs } from './task-prs.js';
 import { readCoverageSummary } from './coverage.js';
 import { loadEslintQualityFindings } from './eslint-quality-findings.js';
 import { buildVerifyEnv, validateVerifyCommand, verificationRunner } from './verify.js';
-import { scanEvidence } from './evidence-scan.js';
+import { scanChange } from './change-scan.js';
 import {
   startRemoteServer,
   getMCPLogs,
@@ -104,7 +104,6 @@ import type { CanvasView } from '../shared/canvas-view.js';
 import type { AgentTourPayload } from '../shared/agent-tour.js';
 import type { ConfidencePayload } from '../shared/task-confidence.js';
 import type { GitHubCustomList } from '../shared/github-list.js';
-import type { EvidenceSubmission } from '../shared/evidence.js';
 import {
   buildMcpLaunchArgs,
   isAntigravityCommand,
@@ -361,13 +360,13 @@ export function projectRootArg(args: IpcArgs): string {
   return absolutePathArg(args, 'projectRoot');
 }
 
-function evidenceKeyPrefix(taskId: string): string {
-  return `${taskId}:evidence:`;
+function suiteKeyPrefix(taskId: string): string {
+  return `${taskId}:suite:`;
 }
 
 /** One key per check, so different checks can run side by side. */
-function evidenceRunKey(taskId: string, checkId: string): string {
-  return `${evidenceKeyPrefix(taskId)}${checkId}`;
+function suiteRunKey(taskId: string, checkId: string): string {
+  return `${suiteKeyPrefix(taskId)}${checkId}`;
 }
 
 export function worktreePathArg(args: IpcArgs): string {
@@ -1011,7 +1010,7 @@ export function registerAllHandlers(win: BrowserWindow): void {
     // A verify run still going would keep writing into the worktree being deleted.
     if (args.taskId) {
       verificationRunner.cancel(args.taskId);
-      verificationRunner.cancelPrefix(evidenceKeyPrefix(args.taskId));
+      verificationRunner.cancelPrefix(suiteKeyPrefix(args.taskId));
     }
     const authority = args.taskId ? delegation.getTask(args.taskId) : undefined;
     if (authority?.delegationParent || authority?.coordinatorMode)
@@ -1368,14 +1367,14 @@ export function registerAllHandlers(win: BrowserWindow): void {
     validateVerifyCommand(args.command);
     assertOptionalString(args.branchName, 'branchName');
     assertString(args.onOutput?.__CHANNEL_ID__, 'channelId');
-    assertOptionalBoolean(args.evidence, 'evidence');
-    if (args.evidence) assertString(args.checkId, 'checkId');
+    assertOptionalBoolean(args.checkSuite, 'checkSuite');
+    if (args.checkSuite) assertString(args.checkId, 'checkId');
     assertOptionalString(args.expectedHeadSha, 'expectedHeadSha');
     assertOptionalBoolean(args.lowPriority, 'lowPriority');
     const channel = `channel:${args.onOutput.__CHANNEL_ID__}`;
     return verificationRunner.start({
-      // Evidence checks have their own keys so they never cancel a manual run.
-      key: args.evidence ? evidenceRunKey(args.taskId, args.checkId) : args.taskId,
+      // Check-suite checks have their own keys so they never cancel a manual run.
+      key: args.checkSuite ? suiteRunKey(args.taskId, args.checkId) : args.taskId,
       expectedHeadSha: args.expectedHeadSha,
       lowPriority: args.lowPriority === true,
       worktreePath,
@@ -1388,18 +1387,18 @@ export function registerAllHandlers(win: BrowserWindow): void {
   });
   ipcMain.handle(IPC.CancelTaskVerification, (_e, args) => {
     assertString(args.taskId, 'taskId');
-    assertOptionalBoolean(args.evidence, 'evidence');
+    assertOptionalBoolean(args.checkSuite, 'checkSuite');
     assertOptionalString(args.checkId, 'checkId');
-    if (!args.evidence) return verificationRunner.cancel(args.taskId);
-    // Without a check id, Stop and Rebuild cancel every evidence check of the task.
+    if (!args.checkSuite) return verificationRunner.cancel(args.taskId);
+    // Without a check id, Stop and Rebuild cancel every suite check of the task.
     return args.checkId
-      ? verificationRunner.cancel(evidenceRunKey(args.taskId, args.checkId))
-      : verificationRunner.cancelPrefix(evidenceKeyPrefix(args.taskId));
+      ? verificationRunner.cancel(suiteRunKey(args.taskId, args.checkId))
+      : verificationRunner.cancelPrefix(suiteKeyPrefix(args.taskId));
   });
-  ipcMain.handle(IPC.GetEvidenceScan, (_e, args) => {
+  ipcMain.handle(IPC.GetChangeScan, (_e, args) => {
     const worktreePath = worktreePathArg(args);
     if (args.baseBranch !== undefined) validateBranchName(args.baseBranch, 'baseBranch');
-    return scanEvidence(worktreePath, args.baseBranch);
+    return scanChange(worktreePath, args.baseBranch);
   });
 
   // --- Task-scoped reasoning reports ---
@@ -1823,9 +1822,6 @@ export function registerAllHandlers(win: BrowserWindow): void {
       callRenderer<{ ok: boolean }>(IPC.MCP_PublishConfidenceRequest, { taskId, payload }),
     publishGitHubList: (taskId: string, list: GitHubCustomList) =>
       callRenderer<{ ok: boolean }>(IPC.MCP_PublishGitHubListRequest, { taskId, list }),
-    submitEvidence: (taskId: string, payload: EvidenceSubmission) =>
-      callRenderer<unknown>(IPC.MCP_SubmitEvidenceRequest, { taskId, payload }),
-    getEvidence: (taskId: string) => callRenderer<unknown>(IPC.MCP_GetEvidenceRequest, { taskId }),
     getProjects: () => callRenderer<RemoteProject[]>(IPC.Remote_GetProjectsRequest, {}),
     getAgentChoices: () => callRenderer<RemoteAgentChoice[]>(IPC.Remote_GetAgentsRequest, {}),
     createTaskFromMobile: (req: MobileTaskRequest) =>

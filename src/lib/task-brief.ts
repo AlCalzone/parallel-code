@@ -5,7 +5,7 @@
  * message and the branch diff. Pure helpers only; the store drives generation.
  */
 
-import { repoContent } from './evidence-review';
+import { repoContent } from './repo-content';
 import { readSingleJsonObject } from './tour-json';
 
 export interface BriefItem {

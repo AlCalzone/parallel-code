@@ -6,10 +6,7 @@ import { invoke } from '../lib/ipc';
 import { errMessage } from '../lib/log';
 import {
   backgroundVerifyEnabled,
-  buildEvidence,
-  getEvidenceConfidence,
   getPrChecks,
-  getProject,
   getTaskDotStatus,
   getVerifyCommand,
   mergeTask,
@@ -130,7 +127,6 @@ export function createMergeState(props: MergeStateProps) {
       verifyCommandConfigured: Boolean(getVerifyCommand(props.task.id)),
       prChecks: getPrChecks(props.task.id),
       coverage: coverageComparison(),
-      evidence: getEvidenceConfidence(props.task, worktreeStatus()),
     });
   /** Why Merge is unavailable, in the order the notices above it explain. */
   const mergeBlocker = (): string | undefined => {
@@ -186,11 +182,7 @@ export function createMergeState(props: MergeStateProps) {
       setSyncDone(kind);
       refetchAll();
       // New commits outdate the checks; re-run where the project runs them on its own.
-      if (getProject(props.task.projectId)?.evidenceAutoBuild)
-        buildEvidence(props.task.id, { trigger: 'auto' }).catch((err) => {
-          console.error('Evidence build after base sync failed:', err);
-        });
-      else if (backgroundVerifyEnabled(props.task.id)) {
+      if (backgroundVerifyEnabled(props.task.id)) {
         const taskId = props.task.id;
         runBackgroundVerify(taskId, () => getTaskDotStatus(taskId) !== 'busy').catch((err) => {
           console.error('Verify after base sync failed:', err);
