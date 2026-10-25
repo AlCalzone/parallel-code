@@ -486,3 +486,63 @@ describe('ChangedFilesList nested repositories', () => {
     expect(docsRow?.textContent).not.toContain('feature/login');
   });
 });
+
+describe('ChangedFilesList commit state', () => {
+  const files: ChangedFile[] = [
+    { path: 'src/dirty.ts', status: 'M', lines_added: 1, lines_removed: 0, committed: false },
+    { path: 'src/clean.ts', status: 'M', lines_added: 2, lines_removed: 1, committed: true },
+    { path: 'docs/notes.md', status: 'A', lines_added: 4, lines_removed: 0, committed: true },
+  ];
+
+  async function mountRows(selectedCommit?: string): Promise<Element[]> {
+    vi.mocked(invoke).mockImplementation(((channel: string) => {
+      if (channel === IPC.GetChangedFiles) return Promise.resolve(files);
+      if (channel === IPC.GetCommitChangedFiles) return Promise.resolve(files);
+      if (channel === IPC.GetUncommittedChangedFiles) {
+        return Promise.resolve(files.map((file) => ({ ...file, committed: false })));
+      }
+      if (channel === IPC.GetNestedRepos) return Promise.resolve([]);
+      return Promise.reject(new Error(`Unexpected IPC call: ${channel}`));
+    }) as typeof invoke);
+    const container = document.createElement('div');
+    document.body.append(container);
+    disposers.push(
+      render(
+        () => <ChangedFilesList worktreePath="/task" isActive selectedCommit={selectedCommit} />,
+        container,
+      ),
+    );
+    await waitFor(() => container.querySelectorAll('.file-row').length === 5);
+    return [...container.querySelectorAll('.file-row')];
+  }
+
+  const rowFor = (rows: Element[], title: string) =>
+    rows.find((row) => row.querySelector(`span[title="${title}"]`)) as HTMLElement | undefined;
+  const hasMark = (row: Element | undefined) =>
+    row?.querySelector('.changed-files-uncommitted-mark') !== null;
+
+  it('marks uncommitted files and folders that contain them, and dims fully committed ones', async () => {
+    const rows = await mountRows();
+
+    for (const title of ['src', 'src/dirty.ts']) {
+      expect(hasMark(rowFor(rows, title)), title).toBe(true);
+      expect(rowFor(rows, title)?.style.opacity, title).toBe('1');
+    }
+    for (const title of ['docs', 'docs/notes.md', 'src/clean.ts']) {
+      expect(hasMark(rowFor(rows, title)), title).toBe(false);
+      expect(rowFor(rows, title)?.style.opacity, title).toBe('0.7');
+    }
+  });
+
+  it.each([
+    ['a single commit', 'abc1234'],
+    ['uncommitted changes only', UNCOMMITTED_SELECTION],
+  ])('shows no commit state while viewing %s', async (_label, selection) => {
+    const rows = await mountRows(selection);
+
+    for (const row of rows) {
+      expect(hasMark(row)).toBe(false);
+      expect((row as HTMLElement).style.opacity).toBe('1');
+    }
+  });
+});

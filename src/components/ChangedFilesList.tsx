@@ -487,6 +487,12 @@ export function ChangedFilesList(props: ChangedFilesListProps) {
 
   const tree = createMemo(() => buildFileTree(files()));
   const visibleRows = createMemo(() => flattenVisibleTree(tree(), collapsed()));
+  // Only the all-changes view mixes committed and uncommitted files. Commit and tour inventories
+  // carry no working-tree state, and the uncommitted-only view would mark every row.
+  const showCommitState = () =>
+    !props.filesOverride &&
+    !isCommitHashSelection(props.selectedCommit) &&
+    !isUncommittedSelection(props.selectedCommit);
   const coverageFiles = createMemo(() => coverage()?.files ?? {});
   const hasCoverageArtifact = createMemo(() => coverage() !== null);
   const hasBaseCoverageArtifact = createMemo(() => baseCoverage() !== null);
@@ -1053,11 +1059,7 @@ export function ChangedFilesList(props: ChangedFilesListProps) {
                 'white-space': 'nowrap',
                 cursor: 'pointer',
                 'border-radius': 'var(--radius-xs)',
-                opacity:
-                  !isCommitHashSelection(props.selectedCommit) &&
-                  (row().isDir || row().node.file?.committed)
-                    ? '0.8'
-                    : '1',
+                opacity: showCommitState() && !row().node.hasUncommitted ? '0.7' : '1',
                 background:
                   selectedIndex() === i
                     ? theme.bgHover
@@ -1075,6 +1077,20 @@ export function ChangedFilesList(props: ChangedFilesListProps) {
                 }
               }}
             >
+              <Show when={showCommitState() && row().node.hasUncommitted}>
+                <span
+                  class="changed-files-uncommitted-mark"
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    left: '2px',
+                    top: '0',
+                    bottom: '0',
+                    width: '2px',
+                    background: theme.fgSubtle,
+                  }}
+                />
+              </Show>
               {row().isDir ? (
                 <>
                   <span
