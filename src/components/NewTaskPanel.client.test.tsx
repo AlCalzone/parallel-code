@@ -908,3 +908,45 @@ it('hides agents whose CLI is missing unless one is already selected', async () 
 
   setStore('lastAgentId', null);
 });
+
+function dropFiles(names: string[]): Event {
+  const files = names.map((n) => new File(['x'], n, { type: 'image/png' }));
+  const drop = new Event('drop', { bubbles: true, cancelable: true });
+  Object.defineProperty(drop, 'dataTransfer', { value: { files, types: ['Files'] } });
+  host.querySelector('[data-new-task-panel]')?.dispatchEvent(drop);
+  return drop;
+}
+
+it('inserts the paths of files dropped on the panel at the prompt caret', async () => {
+  const electron = Reflect.get(window, 'electron') as unknown;
+  Reflect.set(window, 'electron', { getPathForFile: (file: File) => `/home/me/${file.name}` });
+  const shellDrop = vi.fn();
+  host.addEventListener('drop', shellDrop);
+  try {
+    typePrompt('Fix the layout');
+    const prompt = host.querySelector('textarea');
+    prompt?.setSelectionRange(3, 3);
+    const drop = dropFiles(['screen shot.png']);
+
+    expect(drop.defaultPrevented).toBe(true);
+    expect(shellDrop).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(prompt?.value).toBe('Fix /home/me/screen\\ shot.png the layout'));
+  } finally {
+    Reflect.set(window, 'electron', electron);
+  }
+});
+
+it('reports dropped files it cannot attach', async () => {
+  const electron = Reflect.get(window, 'electron') as unknown;
+  Reflect.set(window, 'electron', { getPathForFile: () => '' });
+  try {
+    typePrompt('Fix it');
+    dropFiles(['image.png']);
+    await vi.waitFor(() =>
+      expect(host.textContent).toContain('Could not attach the dropped files.'),
+    );
+    expect(host.querySelector('textarea')?.value).toBe('Fix it');
+  } finally {
+    Reflect.set(window, 'electron', electron);
+  }
+});

@@ -29,6 +29,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { errMessage } from '../lib/log';
 import { withViewTransition } from '../lib/viewTransition';
 import { invoke } from '../lib/ipc';
+import { dataTransferToShellArgs } from '../lib/terminalDrop';
 import { IPC } from '../../electron/ipc/channels';
 import { resolveSkipPermissionsArgs } from '../../electron/shared/skip-permissions';
 import {
@@ -492,6 +493,38 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
     setPromptPaused(false);
     clearTimeout(promptPauseTimer);
     promptPauseTimer = setTimeout(() => setPromptPaused(true), SPLIT_TIP_PAUSE_MS);
+  }
+  // Dropped files become paths in the prompt, as on the terminal, so the agent can open
+  // them; images from a browser have no path and are saved to a temp file first.
+  function handleFileDragOver(e: DragEvent): void {
+    if (loading() || !e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }
+  function handleFileDrop(e: DragEvent): void {
+    const dt = e.dataTransfer;
+    if (loading() || !dt?.files.length) return;
+    // Stops the textarea's default of inserting only the file name, and the app's
+    // GitHub link drop from reading a browser image's URL.
+    e.preventDefault();
+    e.stopPropagation();
+    void insertDroppedPaths(dt);
+  }
+  async function insertDroppedPaths(dt: DataTransfer): Promise<void> {
+    const paths = await dataTransferToShellArgs(dt);
+    if (!paths) {
+      setError('Could not attach the dropped files.');
+      return;
+    }
+    // Read the caret after resolving: saving a browser image takes a moment to type through.
+    const before = prompt().slice(0, promptRef.selectionStart);
+    const after = prompt().slice(promptRef.selectionEnd);
+    const lead = before && !/\s$/.test(before) ? ' ' : '';
+    const trail = after && !/^\s/.test(after) ? ' ' : '';
+    handlePromptInput(`${before}${lead}${paths}${trail}${after}`);
+    const caret = before.length + lead.length + paths.length;
+    promptRef.focus();
+    promptRef.setSelectionRange(caret, caret);
   }
   const wantsSplitTip = () =>
     orchestrationEnabled() &&
@@ -1328,6 +1361,8 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
       aria-labelledby={titleId}
       data-new-task-panel
       class="new-task-appearing"
+      onDragOver={handleFileDragOver}
+      onDrop={handleFileDrop}
       onFocusIn={() => setStore('newTaskPanelFocused', true)}
       onFocusOut={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
@@ -1474,7 +1509,7 @@ export function NewTaskPanel(props: NewTaskPanelProps) {
                   if (canSubmit()) handleSubmit(e);
                 }
               }}
-              placeholder="What should the agent work on?"
+              placeholder="What should the agent work on? Drop files or images to add their paths."
               rows={6}
               style={{
                 background: theme.bgInput,
