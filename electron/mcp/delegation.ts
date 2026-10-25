@@ -57,7 +57,7 @@ const MAX_TOTAL_MESSAGES = 2000;
 const MAX_TOTAL_REQUESTS = 20000;
 // Independent tasks are neither supervised nor counted against the child limit, so a
 // looping agent could otherwise start worktrees without end.
-// shortcut: lifetime count per creator — count live tasks if creators legitimately need more
+// shortcut: fixed cap on open tasks per creator — make it a setting if creators need more
 const MAX_INDEPENDENT_PER_CREATOR = 10;
 const ID = /^[a-zA-Z0-9_-]{1,128}$/;
 // Shown on a queued message, so a delivery that cannot happen yet says why.
@@ -157,6 +157,11 @@ export class DelegationService {
     string,
     { payload: string; promise: Promise<CreatedIndependentTask> }
   >();
+  /**
+   * Request key → created task ID (undefined while launching) for every independent task
+   * that still counts against its creator's cap; a close or failed launch frees the slot.
+   */
+  private readonly openIndependent = new Map<string, string | undefined>();
   /** launchId → recheck, live while the renderer builds an independent task's worktree. */
   private readonly independentLaunches = new Map<string, () => void>();
   private readonly attempts = new Map<string, DelegationAttempt>();
@@ -515,10 +520,10 @@ export class DelegationService {
       return previous.promise;
     }
     const prefix = `${creatorTaskId}:`;
-    const started = [...this.independentRequests.keys()].filter((k) => k.startsWith(prefix));
-    if (started.length >= MAX_INDEPENDENT_PER_CREATOR)
+    const open = [...this.openIndependent.keys()].filter((k) => k.startsWith(prefix));
+    if (open.length >= MAX_INDEPENDENT_PER_CREATOR)
       throw new DelegationError(
-        `Independent task limit reached: this task may request ${MAX_INDEPENDENT_PER_CREATOR}`,
+        `Independent task limit reached: this task may have ${MAX_INDEPENDENT_PER_CREATOR} open; close or merge some first`,
       );
     // Building the worktree can take a while; a pause or disable meanwhile must still
     // stop the agent from starting, as the child path's launch guard does.
@@ -528,9 +533,20 @@ export class DelegationService {
       this.assertOrchestrationEnabled(epoch);
       this.creationGuard(creatorTaskId, caller, true);
     });
+    this.openIndependent.set(key, undefined);
     const promise = this.options
       .createIndependent({ ...request, launchId })
-      .then(({ taskId }) => ({ taskId, relation: 'independent' as const }))
+      .then(({ taskId }) => {
+        // A task closed before its launch resolved never comes back to free the slot.
+        if (this.openIndependent.has(key) && !this.tasks.get(taskId)?.closed)
+          this.openIndependent.set(key, taskId);
+        else this.openIndependent.delete(key);
+        return { taskId, relation: 'independent' as const };
+      })
+      .catch((error: unknown) => {
+        this.openIndependent.delete(key);
+        throw error;
+      })
       .finally(() => this.independentLaunches.delete(launchId));
     this.independentRequests.set(key, { payload, promise });
     return promise;
@@ -1318,10 +1334,13 @@ export class DelegationService {
   /**
    * A closed task can no longer create children, so its replay entries (which hold
    * full prompts) and launch attempts are unreachable. The closed authority record
-   * itself stays: it is what stops a late register from reviving the task.
+   * itself stays: it is what stops a late register from reviving the task. A closed
+   * independent task also frees its creator's slot.
    */
   private forgetLaunches(taskId: string): void {
     const prefix = `${taskId}:`;
+    for (const [key, created] of this.openIndependent)
+      if (created === taskId || key.startsWith(prefix)) this.openIndependent.delete(key);
     for (const key of this.requests.keys()) if (key.startsWith(prefix)) this.requests.delete(key);
     for (const key of this.independentRequests.keys())
       if (key.startsWith(prefix)) this.independentRequests.delete(key);

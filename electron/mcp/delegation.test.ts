@@ -475,6 +475,60 @@ describe('delegation authority and creation', () => {
     expect(createIndependent).toHaveBeenCalledTimes(10);
   });
 
+  it('frees an independent slot when its task closes or its launch fails', async () => {
+    await register('parent');
+    const caller = session('parent');
+    let next = 0;
+    createIndependent.mockImplementation(async () => ({ taskId: `t${next++}` }));
+    const create = (requestId: string) =>
+      service.callTool(caller, 'create_task', {
+        requestId,
+        relation: 'independent',
+        name: 'Task',
+        prompt: 'Do it',
+      });
+    for (let i = 0; i < 10; i++) await create(`r${i}`);
+    await expect(create('full')).rejects.toThrow('Independent task limit reached');
+    await service.request({ action: 'unregister', taskId: 't3' });
+    await expect(create('after-close')).resolves.toEqual({
+      taskId: 't10',
+      relation: 'independent',
+    });
+    await expect(create('full-again')).rejects.toThrow('Independent task limit reached');
+
+    await service.request({ action: 'unregister', taskId: 't4' });
+    createIndependent.mockRejectedValueOnce(new Error('worktree failed'));
+    await expect(create('fails')).rejects.toThrow('worktree failed');
+    await expect(create('after-failure')).resolves.toMatchObject({ taskId: 't11' });
+  });
+
+  it('frees an independent slot when its task closes as a parent or during launch', async () => {
+    await register('parent');
+    const caller = session('parent');
+    let next = 0;
+    createIndependent.mockImplementation(async () => ({ taskId: `t${next++}` }));
+    const create = (requestId: string) =>
+      service.callTool(caller, 'create_task', {
+        requestId,
+        relation: 'independent',
+        name: 'Task',
+        prompt: 'Do it',
+      });
+    for (let i = 0; i < 10; i++) await create(`r${i}`);
+    // A created task that delegated in turn closes through closeParent, not unregister.
+    await register('t0');
+    await service.closeParent('t0', false);
+    // Closed after it registered but before its launch answered the creator.
+    createIndependent.mockImplementationOnce(async () => {
+      await register('early');
+      service.unregister('early');
+      return { taskId: 'early' };
+    });
+    await expect(create('early')).resolves.toMatchObject({ taskId: 'early' });
+    await expect(create('last')).resolves.toMatchObject({ taskId: 't10' });
+    await expect(create('full')).rejects.toThrow('Independent task limit reached');
+  });
+
   it('holds independent tasks to the child byte limit and the launch pause', async () => {
     await register('parent');
     const caller = session('parent');
