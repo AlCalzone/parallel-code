@@ -28,6 +28,9 @@ export interface AgentHookStatusUpdate {
   detail?: string;
   /** Claude's final text for the turn; only present on turn boundaries. */
   lastAssistantMessage?: string;
+  /** A background sub-agent is still running, so the lead may sit at its prompt
+   *  while `working`: Esc there interrupts nothing. */
+  background?: boolean;
 }
 
 /** Posted by the main process to the renderer for every accepted hook event. */
@@ -90,6 +93,7 @@ export function isAgentHookEventPayload(value: unknown): value is AgentHookEvent
     HOOK_STATES.has(v.state) &&
     Number.isFinite(v.at) &&
     (v.prompt === undefined || v.prompt === 'permission' || v.prompt === 'question') &&
+    (v.background === undefined || typeof v.background === 'boolean') &&
     ['toolName', 'toolUseId', 'detail', 'lastAssistantMessage'].every(
       (key) => v[key] === undefined || typeof v[key] === 'string',
     )
@@ -262,6 +266,7 @@ export function transitionAgentHookStatus(
     lastAssistantMessage:
       event.lastAssistantMessage ??
       (sameState && event.state === 'done' ? previous.lastAssistantMessage : undefined),
+    ...(event.background ? { background: true } : {}),
   };
 }
 

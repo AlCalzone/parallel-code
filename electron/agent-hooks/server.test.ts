@@ -152,6 +152,26 @@ describe('startAgentHookServer', () => {
     }
   });
 
+  it('keeps the turn open until a background sub-agent stops', async () => {
+    const auth = {
+      'x-parallel-code-hook-token': tokenFrom(dir),
+      'x-parallel-code-agent-id': 'agent-1',
+      'x-parallel-code-task-id': 'task-1',
+      'x-parallel-code-launch-id': 'launch-1',
+    };
+    const send = (body: Record<string, unknown>) => post(JSON.stringify(body), auth);
+    await send({ hook_event_name: 'SubagentStart', agent_id: 'sub-1' });
+    await send({ hook_event_name: 'Stop' });
+    await send({ hook_event_name: 'SubagentStop', agent_id: 'sub-1' });
+    await send({ hook_event_name: 'Stop', last_assistant_message: 'All done' });
+    await vi.waitFor(() => expect(events).toHaveLength(2));
+    expect(events.map((e) => [e.state, e.background ?? false])).toEqual([
+      ['working', true],
+      ['done', false],
+    ]);
+    expect(events[1]?.lastAssistantMessage).toBe('All done');
+  });
+
   it('rejects a missing or wrong token without leaking anything', async () => {
     expect(await post('{}', { 'x-parallel-code-agent-id': 'a' })).toBe(403);
     expect(

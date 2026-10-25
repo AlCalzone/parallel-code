@@ -291,6 +291,14 @@ describe('agentHookStatus', () => {
     expect(getAgentHookStatus('a1')?.state).toBe('working');
   });
 
+  it('reads no interrupt into Esc at the prompt while a background sub-agent runs', () => {
+    applyAgentHookEvent(event({ state: 'working', event: 'SubagentRunning', background: true }));
+    noteAgentTerminalInput('a1', '\x1b');
+    noteAgentTerminalInput('a1', '\x03');
+    vi.advanceTimersByTime(1_000);
+    expect(getAgentHookStatus('a1')).toMatchObject({ state: 'working', background: true });
+  });
+
   it('cancels the interrupt when a hook event arrives inside the settle window', () => {
     applyAgentHookEvent(event({ state: 'working' }));
     noteAgentTerminalInput('a1', '\x03');
