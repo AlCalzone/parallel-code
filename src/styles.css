@@ -196,7 +196,8 @@ body.font-smoothing {
 }
 
 /* Overlaid rather than a grid column, so columns you are not working in show
-   the whole title. They appear on the active column, on hover and on keyboard
+   the whole title. They appear on the active column, on hovering anywhere in
+   the task column (not only its title bar) and on keyboard
    focus; nothing moves, the title's end fades out beneath them instead. */
 .task-title-actions {
   position: absolute;
@@ -214,7 +215,8 @@ body.font-smoothing {
 
 /* Transparent rather than hidden: Tab still reaches the buttons, and focusing
    one reveals the group through :focus-within. */
-.task-title-bar:not([data-active='true']):not([data-actions-pinned='true']):not(:hover):not(
+.task-column:not(:hover)
+  .task-title-bar:not([data-active='true']):not([data-actions-pinned='true']):not(
     :focus-within
   ):not(:has([aria-expanded='true']))
   .task-title-actions {
@@ -225,7 +227,7 @@ body.font-smoothing {
 .task-title-bar:is(
     [data-active='true'],
     [data-actions-pinned='true'],
-    :hover,
+    .task-column:hover *,
     :focus-within,
     :has([aria-expanded='true'])
   )
