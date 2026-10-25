@@ -864,6 +864,66 @@ main.board-panel-left > .plan-board-shell {
   object-position: left top;
   animation: board-task-switch-in 140ms var(--ease-out);
 }
+/* Tiles and focus: the shown task gets its own snapshot whose box grows from
+   its tile to the whole workspace, or shrinks back, while its neighbours
+   recede or return behind it. Only the wider layout is drawn, cropped to the
+   moving box, so terminal text stays crisp and never shows twice; shrinking
+   swaps to the tile's layout as the box lands. */
+:root:active-view-transition-type(focus-enter) .task-workspace .tiling-panel-shown,
+:root:active-view-transition-type(focus-exit) .task-workspace .tiling-panel-shown {
+  view-transition-name: focus-task;
+}
+::view-transition-group(focus-task) {
+  animation-duration: 180ms;
+}
+::view-transition-image-pair(focus-task) {
+  overflow: hidden;
+}
+::view-transition-old(focus-task),
+::view-transition-new(focus-task) {
+  height: 100%;
+  object-fit: none;
+  object-position: left top;
+  animation: none;
+}
+:root:active-view-transition-type(focus-enter)::view-transition-old(focus-task) {
+  opacity: 0;
+}
+:root:active-view-transition-type(focus-exit)::view-transition-old(focus-task) {
+  animation: view-fade-out 180ms steps(1, end) forwards;
+}
+:root:active-view-transition-type(focus-exit)::view-transition-new(focus-task) {
+  animation: focus-task-land 180ms steps(1, end) backwards;
+}
+:root:active-view-transition-type(focus-enter)::view-transition-old(task-workspace) {
+  opacity: 1;
+  animation: focus-neighbours-recede 120ms var(--ease-out) forwards;
+}
+/* The empty workspace stays beneath the returning tiles, so the window
+   background never shows through while they fade in. */
+:root:active-view-transition-type(focus-exit)::view-transition-old(task-workspace) {
+  opacity: 1;
+}
+:root:active-view-transition-type(focus-exit)::view-transition-new(task-workspace) {
+  animation: focus-neighbours-return 150ms var(--ease-out);
+}
+@keyframes focus-task-land {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes focus-neighbours-recede {
+  to {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+@keyframes focus-neighbours-return {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
 @keyframes board-task-switch-in {
   from {
     opacity: 0;

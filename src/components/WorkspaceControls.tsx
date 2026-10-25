@@ -6,6 +6,7 @@ import {
   toggleSettingsDialog,
   toggleSidebar,
   workspaceView,
+  workspaceViewTransitionTypes,
   type WorkspaceView,
 } from '../store/store';
 import { mod } from '../lib/platform';
@@ -94,7 +95,12 @@ function WorkspaceViewToggle() {
             title={item.title}
             label={item.title}
             pressed={workspaceView() === item.view}
-            onClick={() => withViewTransition(() => setWorkspaceView(item.view))}
+            onClick={() =>
+              withViewTransition(
+                () => setWorkspaceView(item.view),
+                workspaceViewTransitionTypes(item.view),
+              )
+            }
           >
             {item.icon()}
           </ToggleButton>

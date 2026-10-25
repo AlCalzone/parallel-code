@@ -97,6 +97,7 @@ import {
   setWorkspaceView,
   toggleBoardView,
   workspaceView,
+  workspaceViewTransitionTypes,
   toggleFocusMode,
   initMCPListeners,
   markTaskMcpPending,
@@ -778,8 +779,10 @@ function App() {
       newTask: () => withViewTransition(() => toggleNewTaskPanel(true)),
       addIdea: () => toggleIdeaDialog(),
       toggleSidebar: () => toggleSidebar(),
-      toggleFocusMode: () =>
-        withViewTransition(() => setWorkspaceView(workspaceView() === 'focus' ? 'tiles' : 'focus')),
+      toggleFocusMode: () => {
+        const next = workspaceView() === 'focus' ? 'tiles' : 'focus';
+        withViewTransition(() => setWorkspaceView(next), workspaceViewTransitionTypes(next));
+      },
       toggleBoardView: () => withViewTransition(toggleBoardView),
       openNextAttentionTask: () => openNextAttentionTask(),
       openPreviousAttentionTask: () => openPreviousAttentionTask(),
@@ -839,7 +842,7 @@ function App() {
         // The new-task draft and project pages cover the focused task; leave it for
         // when they close rather than flipping it unseen.
         if (store.focusMode && !store.showNewTaskPanel && !projectPageOpen()) {
-          toggleFocusMode(false);
+          withViewTransition(() => toggleFocusMode(false), workspaceViewTransitionTypes('tiles'));
         }
       },
       zoomIn: () => adjustGlobalScale(1),
