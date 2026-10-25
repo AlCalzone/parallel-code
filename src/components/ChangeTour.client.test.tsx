@@ -50,6 +50,7 @@ vi.mock('../lib/log', async (importOriginal) => ({
 }));
 const disposers: (() => void)[] = [];
 afterEach(() => {
+  vi.useRealTimers();
   disposers.splice(0).forEach((dispose) => dispose());
   document.body.replaceChildren();
   channels.length = 0;
@@ -145,6 +146,7 @@ const largeDiff = ['file.ts', 'second.ts', 'third.ts']
 
 describe('guided tour', () => {
   it('picks the tour model from the chevron beside Generate tour', () => {
+    vi.useFakeTimers();
     const { host } = mount();
     const trigger = host.querySelector<HTMLButtonElement>('[aria-label="Tour model"]');
     const controls = host.querySelector('.change-tour-hover');
@@ -152,6 +154,8 @@ describe('guided tour', () => {
     // The chevron is outside the hover anchor, so the help popover gives way to
     // the menu instead of standing over it.
     controls.dispatchEvent(new MouseEvent('mouseenter'));
+    vi.advanceTimersByTime(500);
+    vi.useRealTimers();
     expect(document.querySelector('[role="tooltip"]')).not.toBeNull();
     trigger.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
     expect(document.querySelector('[role="tooltip"]')).toBeNull();
@@ -166,6 +170,27 @@ describe('guided tour', () => {
     expect(store.askCodeModel).toBe('opus');
   });
 
+  it('waits a moment before showing help to the pointer, so passing over it shows nothing', () => {
+    vi.useFakeTimers();
+    try {
+      const { host } = mount();
+      const controls = host.querySelector('.change-tour-hover');
+      if (!controls) throw new Error('Missing generate control');
+      const tooltip = () => document.querySelector('[role="tooltip"]');
+      controls.dispatchEvent(new MouseEvent('mouseenter'));
+      vi.advanceTimersByTime(400);
+      expect(tooltip()).toBeNull();
+      controls.dispatchEvent(new MouseEvent('mouseleave'));
+      vi.advanceTimersByTime(1_000);
+      expect(tooltip()).toBeNull();
+      controls.dispatchEvent(new MouseEvent('mouseenter'));
+      vi.advanceTimersByTime(500);
+      expect(tooltip()).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('explains generation and the configured model on hover/focus without generating', () => {
     const { host } = mount();
     const button = host.querySelector('button');
@@ -174,7 +199,10 @@ describe('guided tour', () => {
     expect(button.textContent).toBe('Generate tour');
     // The action and the model chevron beside it, and nothing else.
     expect(host.querySelectorAll('button')).toHaveLength(2);
+    vi.useFakeTimers();
     controls.dispatchEvent(new MouseEvent('mouseenter'));
+    vi.advanceTimersByTime(500);
+    vi.useRealTimers();
     expect(document.querySelector('[role="tooltip"]')?.textContent).toContain('MiniMax-M2.7');
     expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(
       'Sends the selected tour diff',
@@ -411,9 +439,14 @@ describe('guided tour', () => {
     const { host, navigate } = mount(largeDiff);
     host.querySelector('button')?.click();
     complete();
-    [...host.querySelectorAll('button')]
-      .find((button) => button.title === 'Cancel tour generation')
-      ?.click();
+    // The action shows the run; only the × beside it stops it.
+    host.querySelector<HTMLButtonElement>('.change-tour-action')?.click();
+    expect(invoke).not.toHaveBeenCalledWith(IPC.CancelAskAboutCode, expect.anything());
+    host.querySelector<HTMLButtonElement>('button[aria-label="Cancel tour generation"]')?.click();
+    // The × goes away with the run; focus stays on the tour instead of falling to the page.
+    expect(document.activeElement).toBe(host.querySelector('.change-tour-action'));
+    // Focus moved there by the ×, not by the user: no help pops up over the dialog.
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
     complete(1, 'second.ts');
     expect(channels).toHaveLength(2);
     expect(navigate).not.toHaveBeenCalled();

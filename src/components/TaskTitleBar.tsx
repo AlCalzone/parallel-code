@@ -1,4 +1,4 @@
-import { Show, createSignal, onCleanup, onMount } from 'solid-js';
+import { For, Show, createSignal, onCleanup, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import {
   store,
@@ -18,7 +18,9 @@ import { EditableText, type EditableTextHandle } from './EditableText';
 import { IconButton } from './IconButton';
 import { MoreMenu } from './chat/MoreMenu';
 import { StatusDot, getDotTooltip } from './StatusDot';
-import { ClockIcon, CloseIcon } from './icons';
+import { ClockIcon, CloseIcon, ImageIcon, ReviewIcon } from './icons';
+import { finishReports, finishReportsTitle } from '../lib/finish-reports';
+import { taskScreens } from '../store/task-screens';
 import { withViewTransition } from '../lib/viewTransition';
 import { handleDragReorder } from '../lib/dragReorder';
 import { displayTaskNameFromPrompt, shouldUsePromptDerivedTaskName } from '../lib/clean-task-name';
@@ -56,11 +58,49 @@ export function TaskTitleBar(props: TaskTitleBarProps) {
     }
     return displayTaskNameFromPrompt(initialPrompt) || props.task.name;
   };
+  // Reports for older code would mislead, so only current ones show on the button.
+  const reports = () => {
+    const screens = taskScreens(props.task.id);
+    return finishReports({
+      confidence: props.task.confidence,
+      codeFingerprint: props.task.codeFingerprint,
+      brief: props.task.brief,
+      ...(screens?.state === 'done' && {
+        screens: {
+          headSha: screens.headSha,
+          capturedAt: screens.capturedAt,
+          fingerprint: screens.fingerprint,
+          count: screens.shots.length,
+        },
+      }),
+      headSha: store.taskGitStatus[props.task.id]?.head_sha,
+    });
+  };
+  // Reports run in the background after Finish closes; the button shows they are still coming.
+  const generating = () =>
+    [
+      props.task.reviewStatus?.state === 'running' && 'Review',
+      taskScreens(props.task.id)?.state === 'running' && 'Before & after',
+    ].filter((label): label is string => !!label);
   const finishTitle = () => {
     const base = props.task.baseBranch ?? 'base';
     return props.pushing
       ? 'Pushing… (open to see output)'
-      : `Finish: merge into ${base} (locally or via PR) or push`;
+      : finishReportsTitle(
+          `Finish: merge into ${base} (locally or via PR) or push`,
+          reports(),
+          generating(),
+        );
+  };
+  const finishLabel = () => {
+    const parts = [
+      reports().length &&
+        `current: ${reports()
+          .map((report) => report.label)
+          .join(', ')}`,
+      generating().length && `generating: ${generating().join(', ')}`,
+    ].filter(Boolean);
+    return !props.pushing && parts.length ? `Finish, ${parts.join('; ')}` : undefined;
   };
 
   // The actions overlay the title's end so inactive columns can show the whole
@@ -112,6 +152,8 @@ export function TaskTitleBar(props: TaskTitleBarProps) {
               class="task-finish-btn"
               data-state={props.pushing ? 'pushing' : props.pushSuccess ? 'pushed' : undefined}
               title={finishTitle()}
+              // The report icons are hidden from screen readers; their names are here instead.
+              aria-label={finishLabel()}
               onClick={(e) => {
                 e.stopPropagation();
                 props.onFinish();
@@ -132,6 +174,18 @@ export function TaskTitleBar(props: TaskTitleBarProps) {
                 </svg>
               </Show>
               {props.pushing ? 'Pushing…' : props.pushSuccess ? 'Pushed' : 'Finish'}
+              <Show when={!props.pushing && (reports().length > 0 || generating().length > 0)}>
+                <span class="task-finish-reports" aria-hidden="true">
+                  <For each={reports()}>
+                    {(report) =>
+                      report.kind === 'review' ? <ReviewIcon size={11} /> : <ImageIcon size={11} />
+                    }
+                  </For>
+                  <Show when={generating().length > 0}>
+                    <span class="inline-spinner task-finish-generating" />
+                  </Show>
+                </span>
+              </Show>
             </button>
           </Show>
           <MoreMenu

@@ -170,6 +170,7 @@ import {
   quitAndInstallUpdate,
 } from './updater.js';
 import { askAboutCode, cancelAskAboutCode } from './ask-code.js';
+import { approveTaskScreens, cancelTaskScreens, captureTaskScreens } from './task-screens.js';
 import { setMinimaxApiKey } from './ask-code-minimax.js';
 import { isStructuredPurpose } from './ask-code-purpose.js';
 import { readCheckSources } from './check-sources.js';
@@ -1469,6 +1470,33 @@ export function registerAllHandlers(win: BrowserWindow): void {
   ipcMain.handle(IPC.CancelAskAboutCode, (_e, args) => {
     assertString(args.requestId, 'requestId');
     cancelAskAboutCode(args.requestId);
+  });
+
+  ipcMain.handle(IPC.CaptureTaskScreens, (_e, args) => {
+    assertString(args.taskId, 'taskId');
+    validatePath(args.worktreePath, 'worktreePath');
+    assertOptionalString(args.baseBranch, 'baseBranch');
+    assertOptionalString(args.envFile, 'envFile');
+    return captureTaskScreens({
+      taskId: args.taskId,
+      worktreePath: args.worktreePath,
+      baseBranch: args.baseBranch,
+      envFile: args.envFile,
+      onStep: (step) => notify(IPC.TaskScreensProgress, { taskId: args.taskId, step }),
+      onAsk: (commands) => notify(IPC.TaskScreensProgress, { taskId: args.taskId, commands }),
+    });
+  });
+
+  ipcMain.handle(IPC.CancelTaskScreens, (_e, args) => {
+    assertString(args.taskId, 'taskId');
+    cancelTaskScreens(args.taskId);
+  });
+
+  ipcMain.handle(IPC.ApproveTaskScreens, (_e, args) => {
+    assertString(args.taskId, 'taskId');
+    assertString(args.after, 'after');
+    assertOptionalString(args.before, 'before');
+    approveTaskScreens(args.taskId, { after: args.after, before: args.before });
   });
 
   ipcMain.handle(IPC.ListCodexModels, () => listCodexModels());

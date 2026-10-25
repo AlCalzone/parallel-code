@@ -101,6 +101,7 @@ const NOT_HANDLED_HERE: readonly string[] = [
   IPC.Remote_MergeTaskRequest,
   IPC.Remote_SetNotesRequest,
   IPC.SuperProductivityOpenTaskRequested,
+  IPC.TaskScreensProgress,
   IPC.UpdateStatusChanged,
   IPC.WindowBlur,
   IPC.WindowCloseRequested,

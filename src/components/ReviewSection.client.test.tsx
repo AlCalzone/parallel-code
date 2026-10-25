@@ -153,7 +153,6 @@ function mount(task: Task, verifyFailed = false) {
   const [state, setState] = createStore(task);
   const onReworkStaged = vi.fn();
   const onOpenFile = vi.fn();
-  const onKeepWorking = vi.fn();
   const root = document.createElement('div');
   document.body.append(root);
   dispose = render(
@@ -163,12 +162,11 @@ function mount(task: Task, verifyFailed = false) {
         verifyFailed={verifyFailed}
         onReworkStaged={onReworkStaged}
         onOpenFile={onOpenFile}
-        onKeepWorking={onKeepWorking}
       />
     ),
     root,
   );
-  return { root, setState, onReworkStaged, onOpenFile, onKeepWorking };
+  return { root, setState, onReworkStaged, onOpenFile };
 }
 
 const buttons = (root: HTMLElement) => Array.from(root.querySelectorAll('button'));
@@ -185,13 +183,13 @@ function dismiss(setState: SetStoreFunction<Task>, text: string, reason = '') {
   setState('reviewDismissed', { [reviewItemId('risk', text)]: { text, reason } });
 }
 
-/** The review's box in the follow-ups row: one action that runs, cancels or opens the review. */
+/** The review's box in the follow-ups row: one action that runs or opens the review. */
 const toggle = (root: HTMLElement) => {
   const found = root.querySelector<HTMLButtonElement>('.finish-followup .change-tour-action');
   if (!found) throw new Error('Missing review action');
   return found;
 };
-/** The reviewer chevron split off the review's box. */
+/** The segment split off the review's box: the reviewer chevron, or × while it runs. */
 const chevron = (root: HTMLElement) => {
   const found = root.querySelector<HTMLButtonElement>('.finish-followup .change-tour-model');
   if (!found) throw new Error('Missing reviewer chevron');
@@ -357,7 +355,6 @@ describe('ReviewSection', () => {
 
   it('stays one follow-up until asked, and Run review runs the saved pick at once', () => {
     const { root } = mount(baseTask({ confidence: undefined }));
-    expect(root.querySelector('h3')?.textContent).toBe('Before you merge');
     expect(heading(root)).toBe('Run review');
     expect(toggle(root).title).toContain('Checks the work against what you asked');
     // Nothing to open yet, so the action is no disclosure.
@@ -405,24 +402,24 @@ describe('ReviewSection', () => {
     expect(mockRate).toHaveBeenCalledWith('task');
   });
 
-  it('says it runs in the background on the reviewer model, and can be cancelled', () => {
-    const { root, setState, onKeepWorking } = mount(
+  it('shows the review running on the reviewer model, and can be cancelled', () => {
+    const { root, setState } = mount(
       baseTask({ confidence: undefined, reviewStatus: { state: 'running', startedAt: 5_000 } }),
     );
     expect(heading(root)).toBe('Reviewing with opus');
-    expect(button(root, 'Keep working').title).toContain('runs on and tells you when it is ready');
-    button(root, 'Keep working').click();
-    expect(onKeepWorking).toHaveBeenCalled();
-    expect(mockCancel).not.toHaveBeenCalled();
-    expect(toggle(root).title).toBe('Cancel the review');
+    expect(toggle(root).querySelector('.inline-spinner')).not.toBeNull();
     expect(buttons(root).some((b) => /Run review/.test(b.textContent ?? ''))).toBe(false);
+    // The action shows the run; only the × beside it stops it.
     toggle(root).click();
+    expect(mockCancel).not.toHaveBeenCalled();
+    root.querySelector<HTMLButtonElement>('button[aria-label="Cancel the review"]')?.click();
     expect(mockCancel).toHaveBeenCalledWith('task');
+    // The × goes away with the run; focus stays on the review instead of falling to the page.
+    expect(document.activeElement).toBe(toggle(root));
     const rated = baseTask().confidence;
     if (!rated) throw new Error('Missing rating');
     setState({ confidence: { ...rated, publishedAt: 6_000 }, reviewStatus: undefined });
     expect(heading(root)).toBe('Review · 50% · 1 open');
-    expect(buttons(root).some((b) => b.textContent === 'Keep working')).toBe(false);
   });
 
   it('opens a review that finished while the dialog was closed', () => {
@@ -459,9 +456,10 @@ describe('ReviewSection', () => {
     sonnet.click();
     expect(mockSetModel).toHaveBeenCalledWith('task', { provider: 'claude', model: 'sonnet' });
     expect(mockRate).not.toHaveBeenCalled();
-    // A running review keeps the reviewer it started with.
+    // A running review keeps the reviewer it started with: the × to cancel takes the chevron's place.
     setState({ reviewStatus: { state: 'running', startedAt: 5_000 } });
-    expect(chevron(root).disabled).toBe(true);
+    expect(root.querySelector('[title^="Reviewer:"]')).toBeNull();
+    expect(chevron(root).getAttribute('aria-label')).toBe('Cancel the review');
   });
 
   it('keeps older scores after a failed review and says they are older', () => {

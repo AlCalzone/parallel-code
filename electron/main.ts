@@ -13,6 +13,7 @@ import { getUserDataDir } from './user-data-dir.js';
 import { installIpcTracing } from './ipc/trace.js';
 import { startAgentHookRuntime, stopAgentHookRuntime } from './agent-hooks/runtime.js';
 import { killAllAgents } from './ipc/pty.js';
+import { stopAllTaskScreens } from './ipc/task-screens.js';
 import { removeAllCanvasConfigs } from './mcp/canvas-config.js';
 import { stopAllPlanWatchers } from './ipc/plans.js';
 import { stopAllDocumentWork } from './documents/register.js';
@@ -333,6 +334,7 @@ app.on('will-quit', () => {
   removeAllCanvasConfigs();
   // Detached process groups would outlive Electron otherwise.
   verificationRunner.cancelAll();
+  stopAllTaskScreens();
   stopAgentHookRuntime();
   stopAllPlanWatchers();
   stopAllDocumentWork();

@@ -4,15 +4,10 @@ import { sf } from '../lib/fontScale';
 
 /**
  * What to check before merging: an optional lead line such as the verify
- * result, then optional steps such as the change tour and the review, as
- * same-sized boxes side by side. What one of them opens, like the review's
- * result, goes below the row at full width.
+ * result, then optional steps such as the review and the change tour, as
+ * same-sized boxes one per line. Each step's result opens right below it.
  */
-export function FollowUps(props: {
-  children?: JSX.Element;
-  lead?: JSX.Element;
-  below?: JSX.Element;
-}) {
+export function FollowUps(props: { children?: JSX.Element; lead?: JSX.Element }) {
   const headingId = createUniqueId();
   return (
     <section
@@ -24,7 +19,6 @@ export function FollowUps(props: {
       </h3>
       {props.lead}
       <div class="finish-followups">{props.children}</div>
-      {props.below}
     </section>
   );
 }

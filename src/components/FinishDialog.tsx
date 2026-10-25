@@ -18,6 +18,7 @@ import { ReadinessSection } from './ReadinessSection';
 import { FollowUps } from './FollowUps';
 import { ReviewSection } from './ReviewSection';
 import { RetroButton } from './RetroButton';
+import { ScreensFollowUp } from './ScreensSection';
 import { createMergeState } from './merge-state';
 import { PR_MERGE_ACTIONS, createFinishPr, taskPrUrl } from './pr-actions';
 import { createPushRun } from './push-run';
@@ -25,6 +26,7 @@ import { backgroundVerifyEnabled, getProject, getTaskChecks } from '../store/sto
 import { markFeatureHintSeen } from '../store/onboarding';
 import { showNotification } from '../store/notification';
 import { store } from '../store/core';
+import { canCaptureScreens, taskScreens } from '../store/task-screens';
 import { theme } from '../lib/theme';
 import { isVerificationStale, summarizeVerificationRun } from '../lib/verification-run';
 import { GitMergeIcon, SyncIcon, UploadIcon } from './icons';
@@ -243,10 +245,13 @@ export function FinishDialog(props: FinishDialogProps) {
     </div>
   );
 
+  // Screens of a change with no commits would show nothing; a past capture stays reachable.
+  const screensShown = () =>
+    (canCaptureScreens() && !tourDisabled()) || !!taskScreens(props.task.id);
   const retroBox = () => (
     <RetroButton
       task={props.task}
-      // The retro happens in the agent's session, so Finish steps aside like Keep working.
+      // The retro happens in the agent's session, so Finish steps aside.
       onSent={() => props.onClose()}
     />
   );
@@ -333,30 +338,32 @@ export function FinishDialog(props: FinishDialogProps) {
               </Show>
               <Show when={!hasChecks()}> Add a verify command to have your tests run.</Show>
             </FeatureHint>
-            {/* The verify result leads the optional steps; the review's result opens below them. */}
-            <Show
-              when={store.finishReview}
-              fallback={
-                <FollowUps lead={readiness()}>
-                  <Show when={tourShown()}>{tourBox()}</Show>
-                  {retroBox()}
-                </FollowUps>
-              }
-            >
-              <ReviewSection
-                task={props.task}
-                verifyFailed={verifyFailed()}
-                lead={readiness()}
-                companion={<Show when={tourShown()}>{tourBox()}</Show>}
-                trailing={retroBox()}
-                onReworkStaged={() => {
-                  showNotification('Rework prompt staged in the task input. Review it, then send.');
-                  props.onClose();
-                }}
-                onOpenFile={(file, line) => setReviewLocation({ file, line, side: 'new' })}
-                onKeepWorking={() => props.onClose()}
-              />
-            </Show>
+            {/* The verify result leads; each optional step's result opens right below it. The
+                review comes first: with the verify result, it says whether the work is right. */}
+            <FollowUps lead={readiness()}>
+              <Show when={store.finishReview}>
+                <ReviewSection
+                  task={props.task}
+                  verifyFailed={verifyFailed()}
+                  onReworkStaged={() => {
+                    showNotification(
+                      'Rework prompt staged in the task input. Review it, then send.',
+                    );
+                    props.onClose();
+                  }}
+                  onOpenFile={(file, line) => setReviewLocation({ file, line, side: 'new' })}
+                />
+              </Show>
+              <Show when={tourShown()}>{tourBox()}</Show>
+              <Show when={screensShown()}>
+                <ScreensFollowUp
+                  taskId={props.task.id}
+                  disabled={tourDisabled()}
+                  headSha={merge.worktreeStatus()?.head_sha}
+                />
+              </Show>
+              {retroBox()}
+            </FollowUps>
             {/* Without a PR the section would only say so; local merging needs no word on PRs. */}
             <Show when={taskPrUrl(props.task)}>
               <FinishPrSection

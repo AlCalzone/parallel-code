@@ -87,8 +87,6 @@ const reviewProps = vi.hoisted(() => ({
   current: undefined as
     | {
         verifyFailed: boolean;
-        companion?: JSX.Element;
-        lead?: JSX.Element;
         onReworkStaged: () => void;
         onOpenFile: (file: string, line?: number) => void;
       }
@@ -98,14 +96,7 @@ vi.mock('./ReviewSection', () => ({
   ReviewSection: (props: NonNullable<typeof reviewProps.current>) => {
     // eslint-disable-next-line solid/reactivity -- keeps the live props proxy for the test to read
     reviewProps.current = props;
-    // The verify result leads the section and the tour shares the review's row, so both arrive here.
-    return (
-      <>
-        {props.lead}
-        {props.companion}
-        <button onClick={() => props.onOpenFile('test.ts', 7)}>Open review finding</button>
-      </>
-    );
+    return <button onClick={() => props.onOpenFile('test.ts', 7)}>Open review finding</button>;
   },
 }));
 vi.mock('./MergeReadinessPanel', () => ({
@@ -1226,12 +1217,19 @@ describe('FinishDialog review', () => {
         ?.querySelector('h3')?.textContent;
     mount({ task: task() });
     await flush();
-    // With the review on, the line reaches the page only through the review's lead slot.
-    expect(document.querySelector('[aria-label="Readiness and checks"]')).not.toBeNull();
+    expect(readinessInSection()).toBe('Before you merge');
     dispose?.();
     setStore('finishReview', false);
     mount({ task: task() });
     await flush();
     expect(readinessInSection()).toBe('Before you merge');
+  });
+
+  it('lists the review before the tour, each step with its own result below it', async () => {
+    mount({ task: task() });
+    await flush();
+    const steps = document.querySelector('.finish-followups')?.textContent ?? '';
+    expect(steps.indexOf('Open review finding')).toBeGreaterThan(-1);
+    expect(steps.indexOf('Open review finding')).toBeLessThan(steps.indexOf('tour'));
   });
 });

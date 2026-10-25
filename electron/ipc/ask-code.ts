@@ -58,7 +58,7 @@ const activeRequests = new RequestRegistry<ChildProcess>({
  * terminal runs, so it needs the same credentials — otherwise configuring an
  * env file fixes the terminals and leaves this silently broken.
  */
-function askCodeEnv(envFile?: string): Record<string, string> {
+export function askCodeEnv(envFile?: string): Record<string, string> {
   const filtered: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) {
     if (v !== undefined) filtered[k] = v;

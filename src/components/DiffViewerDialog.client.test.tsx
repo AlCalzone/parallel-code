@@ -331,7 +331,9 @@ it.each(['cancel', 'reset'] as const)('ignores a pending diff load after %s', as
   host.querySelector('button')?.click();
   expect(host.textContent).toContain('Reading changes');
   expect(host.querySelector('.inline-spinner')).not.toBeNull();
-  if (action === 'cancel') host.querySelector('button')?.click();
+  // The tour's action only shows progress; the × beside it cancels.
+  if (action === 'cancel')
+    host.querySelector<HTMLButtonElement>('button[aria-label="Cancel tour generation"]')?.click();
   else tour.reset();
   resolveDiff(diff);
   await Promise.resolve();

@@ -223,6 +223,14 @@ export function CopyIcon(props: IconProps): JSX.Element {
   );
 }
 
+export function ImageIcon(props: IconProps): JSX.Element {
+  return (
+    <SvgIcon {...props}>
+      <path d="M2.75 2A1.75 1.75 0 0 0 1 3.75v8.5c0 .966.784 1.75 1.75 1.75h10.5A1.75 1.75 0 0 0 15 12.25v-8.5A1.75 1.75 0 0 0 13.25 2H2.75Zm0 1.5h10.5a.25.25 0 0 1 .25.25v5.94l-2.22-2.22a.75.75 0 0 0-1.06 0L6.5 11.19 5.28 9.97a.75.75 0 0 0-1.06 0L2.5 11.69V3.75a.25.25 0 0 1 .25-.25ZM5.5 7a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
+    </SvgIcon>
+  );
+}
+
 export function FolderIcon(props: IconProps): JSX.Element {
   return (
     <SvgIcon {...props}>

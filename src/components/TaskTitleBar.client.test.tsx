@@ -86,6 +86,38 @@ it('offers Finish as a labelled action that reflects push progress', () => {
   expect(finish?.dataset.state).toBe('pushed');
 });
 
+it('marks Finish with the reports that are current for the latest code', () => {
+  const finish = container.querySelector<HTMLButtonElement>('.task-finish-btn');
+  expect(finish?.querySelector('.task-finish-reports')).toBeNull();
+  setStore('tasks', 'one', 'confidence', {
+    scores: [{ label: 'Correct', score: 82, why: '' }],
+    findings: [],
+    publishedAt: 100,
+    fingerprint: 'a',
+  });
+  expect(finish?.querySelectorAll('.task-finish-reports svg')).toHaveLength(1);
+  expect(finish?.title).toContain('Current for the latest commit:\n· Review (lowest score 82%)');
+  // A later read of different code makes the review outdated.
+  setStore('tasks', 'one', 'codeFingerprint', { fingerprint: 'b', at: 200 });
+  expect(finish?.querySelector('.task-finish-reports')).toBeNull();
+  expect(finish?.title).toBe('Finish: merge into main (locally or via PR) or push');
+});
+
+it('shows a small spinner on Finish while a report is being generated', () => {
+  const finish = container.querySelector<HTMLButtonElement>('.task-finish-btn');
+  expect(finish?.querySelector('.task-finish-generating')).toBeNull();
+  setStore('tasks', 'one', 'reviewStatus', { state: 'running', startedAt: 1 });
+  expect(finish?.querySelector('.task-finish-generating')).not.toBeNull();
+  expect(finish?.title).toContain('Generating: Review');
+  expect(finish?.getAttribute('aria-label')).toBe('Finish, generating: Review');
+  // Pushing has its own spinner; the report one would read as a second loading state.
+  setPushing(true);
+  expect(finish?.querySelector('.task-finish-generating')).toBeNull();
+  setPushing(false);
+  setStore('tasks', 'one', 'reviewStatus', undefined);
+  expect(finish?.querySelector('.task-finish-generating')).toBeNull();
+});
+
 it('shows the status as an icon whose label appears on hover', () => {
   const status = container.querySelector<HTMLElement>('.task-title-status');
   const glyph = status?.querySelector('.status-glyph');

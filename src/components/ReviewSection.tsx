@@ -36,9 +36,8 @@ import {
   taskReviewModel,
 } from '../store/task-review';
 import type { Task } from '../store/types';
-import { CheckIcon, PlusIcon, ReviewIcon } from './icons';
+import { CheckIcon, CloseIcon, PlusIcon, ReviewIcon } from './icons';
 import { createHeightTransition } from './understanding/create-height-transition';
-import { FollowUps } from './FollowUps';
 import { ReviewChecksPicker } from './ReviewChecksPicker';
 import { ReviewerMenu } from './ReviewerMenu';
 import { ReviewScoreCard } from './ReviewScoreCard';
@@ -168,18 +167,10 @@ export function ReviewSection(props: {
   task: Task;
   /** The verify command failed on this commit. */
   verifyFailed: boolean;
-  /** Follow-ups that share the review's row, such as the change tour. */
-  companion?: JSX.Element;
-  /** Follow-ups after the review in its row, such as the retro, which widens when opened. */
-  trailing?: JSX.Element;
-  /** Shown above the follow-ups row, such as the verify result. */
-  lead?: JSX.Element;
   /** Called once a rework prompt is staged, so the dialog can close. */
   onReworkStaged: () => void;
   /** Opens a changed file at a line, above the dialog. */
   onOpenFile: (file: string, line?: number) => void;
-  /** Closes the dialog while the review runs on. */
-  onKeepWorking: () => void;
 }) {
   const bodyId = createUniqueId();
   const summary = createMemo(() =>
@@ -303,7 +294,7 @@ export function ReviewSection(props: {
     return failure() ? 'Retry review' : 'Run review';
   };
   const actionTitle = () => {
-    if (running()) return 'Cancel the review';
+    if (running()) return undefined;
     if (picking()) return 'Close the review settings';
     if (hasResult()) return open() ? 'Hide the review' : 'Show the review';
     return `Checks the work against what you asked, with ${reviewerName(props.task.id)}`;
@@ -572,37 +563,23 @@ export function ReviewSection(props: {
     </Show>
   );
 
+  let action: HTMLButtonElement | undefined;
   return (
-    <FollowUps
-      lead={props.lead}
-      below={
-        // Eases the dialog to the new height as the review or the picker opens and closes.
-        <div ref={(element) => createHeightTransition(element)} class="review-below">
-          <Show when={picking()} fallback={body()}>
-            <ReviewChecksPicker
-              task={props.task}
-              onCancel={() => setPicking(false)}
-              onStart={() => {
-                setPicking(false);
-                startReview(props.task.id);
-              }}
-            />
-          </Show>
-        </div>
-      }
-    >
-      {props.companion}
+    <div>
       <div class="finish-followup">
         <div class="change-tour-row">
           <button
+            ref={action}
             type="button"
             class="change-tour-action"
+            // Shows the run while it lasts; the × beside it is what stops it.
+            aria-busy={running()}
             aria-expanded={actionToggles() ? open() || picking() : undefined}
             aria-controls={actionToggles() && !picking() ? bodyId : undefined}
             title={actionTitle()}
             onClick={() => {
-              if (running()) cancelReview(props.task.id);
-              else if (picking()) setPicking(false);
+              if (running()) return;
+              if (picking()) setPicking(false);
               else if (hasResult()) setOpen((v) => !v);
               else rate();
             }}
@@ -613,14 +590,34 @@ export function ReviewSection(props: {
             </Show>
             <span class="change-tour-action-label">{actionLabel()}</span>
           </button>
-          {/* Like the tour's model; waits while a review runs or the settings carry their own pick. */}
-          <ReviewerMenu
-            class="change-tour-model"
-            chevronOnly
-            disabled={running() || picking()}
-            value={taskReviewModel(props.task.id)}
-            onChange={(model) => setTaskReviewModel(props.task.id, model)}
-          />
+          {/* Like the tour's model; waits while the settings carry their own pick. A running
+              review keeps the reviewer it started with, so the × to cancel takes its place. */}
+          <Show
+            when={running()}
+            fallback={
+              <ReviewerMenu
+                class="change-tour-model"
+                chevronOnly
+                disabled={picking()}
+                value={taskReviewModel(props.task.id)}
+                onChange={(model) => setTaskReviewModel(props.task.id, model)}
+              />
+            }
+          >
+            <button
+              type="button"
+              class="change-tour-model"
+              aria-label="Cancel the review"
+              title="Cancel the review"
+              onClick={() => {
+                // The × goes away with the run; keep focus on the review, not the page.
+                action?.focus();
+                cancelReview(props.task.id);
+              }}
+            >
+              <CloseIcon size={12} />
+            </button>
+          </Show>
         </div>
         <Show when={!props.task.confidence && failure()}>
           {(message) => (
@@ -638,21 +635,20 @@ export function ReviewSection(props: {
           )}
         </Show>
       </div>
-      {/* A button, not a hint: told only that they may leave, people wait. Its own
-          box beside the review, so the review's button keeps its shape. */}
-      <Show when={running()}>
-        <div class="finish-followup">
-          <button
-            type="button"
-            class="change-tour-action"
-            title="Closes this dialog. The review runs on and tells you when it is ready."
-            onClick={() => props.onKeepWorking()}
-          >
-            <span class="change-tour-action-label">Keep working</span>
-          </button>
-        </div>
-      </Show>
-      {props.trailing}
-    </FollowUps>
+      {/* Right under its button, so the result reads as the review's. Eases the
+          dialog to the new height as the review or the picker opens and closes. */}
+      <div ref={(element) => createHeightTransition(element)} class="finish-followup-below">
+        <Show when={picking()} fallback={body()}>
+          <ReviewChecksPicker
+            task={props.task}
+            onCancel={() => setPicking(false)}
+            onStart={() => {
+              setPicking(false);
+              startReview(props.task.id);
+            }}
+          />
+        </Show>
+      </div>
+    </div>
   );
 }

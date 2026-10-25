@@ -270,6 +270,21 @@ body.font-smoothing {
   color: var(--fg);
 }
 
+.task-finish-reports {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 2px;
+  color: var(--fg-subtle);
+}
+
+/* Glyph-sized, so a running review or capture reads as background work, not as Finish loading. */
+.task-finish-reports > .task-finish-generating {
+  width: 9px;
+  height: 9px;
+  border-width: 1.5px;
+}
+
 .task-finish-btn[data-state='pushed'] {
   color: var(--success);
 }
@@ -2390,9 +2405,15 @@ button {
   cursor: pointer;
 }
 
-.change-tour-action:hover:not(:disabled) {
+/* A running action (review, tour, capture) only shows progress; the × segment
+   beside it stops it. */
+.change-tour-action:hover:not(:disabled, [aria-busy='true']) {
   background: var(--bg-hover);
   color: var(--fg);
+}
+
+.change-tour-action[aria-busy='true'] {
+  cursor: default;
 }
 
 .change-tour-action:disabled {
@@ -2410,17 +2431,117 @@ button {
   flex-shrink: 0;
 }
 
+/* Finish's captured screens: plain framed thumbnails that open full size. */
+.screens-frame {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  cursor: zoom-in;
+  overflow: hidden;
+}
+
+.screens-frame:hover {
+  border-color: var(--fg-subtle);
+}
+
+.screens-frame img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Full-window screenshot viewer: a toolbar over a stage the image fits,
+   zooms and pans in. Zoom follows the wheel at once, without transitions. */
+.screen-viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.screen-viewer-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.screen-viewer-count {
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.screen-viewer-spacer {
+  flex: 1;
+}
+
+.screen-viewer-zoom {
+  min-width: 52px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.screen-viewer-zoom:hover {
+  background: var(--bg-hover);
+}
+
+.screen-viewer-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  cursor: zoom-in;
+  touch-action: none;
+}
+
+.screen-viewer-stage[data-zoomed] {
+  cursor: grab;
+}
+
+.screen-viewer-stage[data-zoomed]:active {
+  cursor: grabbing;
+}
+
+.screen-viewer-stage img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transform-origin: center;
+  user-select: none;
+}
+
+.screen-viewer-hint {
+  margin: 0;
+  color: var(--fg-subtle);
+  font-size: 11px;
+  text-align: center;
+}
+
 /* Finish dialog follow-ups: regular dialog buttons, each split off from its
-   model chevron, sized to their label rather than stretched across the row. */
+   model chevron, one per line and all the same width, each with its result
+   at full width below it. The width is fixed, so a running step's progress
+   text never resizes its box. */
 .finish-followups {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  flex-direction: column;
   gap: 8px;
 }
 
 .finish-followup {
-  flex: 0 1 auto;
+  width: min(100%, 24rem);
   min-width: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -2435,15 +2556,19 @@ button {
   font-size: inherit;
 }
 
-.finish-followup :is(.change-tour-hover, .change-tour-action) {
-  flex: 0 1 auto;
-  width: auto;
-}
-
 .finish-followup .change-tour-action {
   min-height: 32px;
   padding: 6px 14px;
   color: var(--fg);
+}
+
+.screens-progress {
+  display: block;
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* As buttons beside Run review, the tour reads like one: no trailing arrow. */
@@ -2468,16 +2593,17 @@ button {
   border-top: 1px solid var(--border-subtle);
 }
 
-/* flow-root keeps the review's top margin inside, so the height ease measures it. */
-.review-below {
+/* A follow-up's result, under its button. flow-root keeps the result's top margin
+   inside, so the height ease measures it. */
+.finish-followup-below {
   display: flow-root;
 }
 
-.review-below[data-resizing] {
+.finish-followup-below[data-resizing] {
   overflow: hidden;
 }
 
-.review-below > * {
+.finish-followup-below > * {
   animation: fadeIn var(--motion-enter) var(--ease-out);
 }
 
@@ -6197,7 +6323,7 @@ button.tour-save-state:not(:disabled):hover {
     animation: none;
   }
 
-  .review-below > *,
+  .finish-followup-below > *,
   .app-notice,
   .app-notice-check,
   .task-appearing,

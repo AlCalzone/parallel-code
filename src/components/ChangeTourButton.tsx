@@ -11,8 +11,12 @@ import {
 } from '../lib/floating';
 import { store } from '../store/store';
 import { activeFeatureHint } from '../store/onboarding';
+import { CloseIcon } from './icons';
 import { askCodeLabel } from './understanding/ask-code-label';
 import { TourModelMenu } from './understanding/TourModelMenu';
+
+/** Hover help waits this long, so a pointer passing over the button does not flash it. */
+const HELP_HOVER_DELAY_MS = 500;
 
 export function ChangeTourButton(props: {
   tour: ChangeTourController;
@@ -40,7 +44,25 @@ export function ChangeTourButton(props: {
   let controls: HTMLDivElement | undefined;
   let popover: HTMLDivElement | undefined;
   const openHelp = () => help.set(true);
-  const closeHelp = () => help.set(false);
+  let hoverTimer: ReturnType<typeof setTimeout> | undefined;
+  const cancelHover = () => {
+    clearTimeout(hoverTimer);
+    hoverTimer = undefined;
+  };
+  onCleanup(cancelHover);
+  // Focus opens the help at once; a pointer has to rest on the button first.
+  const hoverHelp = () => {
+    help.hold();
+    if (help.value() || hoverTimer) return;
+    hoverTimer = setTimeout(() => {
+      hoverTimer = undefined;
+      openHelp();
+    }, HELP_HOVER_DELAY_MS);
+  };
+  const closeHelp = () => {
+    cancelHover();
+    help.set(false);
+  };
   createAnchorEffect(helpOpen, () => {
     if (controls)
       setPosition(
@@ -76,6 +98,7 @@ export function ChangeTourButton(props: {
       document.removeEventListener('pointerdown', onPointer, true);
     });
   });
+  let action: HTMLButtonElement | undefined;
   return (
     <Show when={!props.disabled || props.tour.loading() || ready()}>
       <div class="change-tour-footer">
@@ -86,8 +109,9 @@ export function ChangeTourButton(props: {
           <div
             class="change-tour-hover"
             ref={controls}
-            onMouseEnter={openHelp}
+            onMouseEnter={hoverHelp}
             onMouseLeave={() => {
+              cancelHover();
               if (!controls?.contains(document.activeElement)) help.clear();
             }}
             onFocusIn={openHelp}
@@ -100,13 +124,15 @@ export function ChangeTourButton(props: {
             }}
           >
             <button
+              ref={action}
               class="change-tour-action"
               disabled={props.disabled && !props.tour.loading() && !ready()}
+              // Shows the run while it lasts; the × beside it is what stops it.
               aria-busy={props.tour.loading()}
               aria-describedby={helpOpen() ? helpId : undefined}
               title={
                 props.tour.loading()
-                  ? 'Cancel tour generation'
+                  ? undefined
                   : props.tour.error() ||
                     (ready()
                       ? props.tour.step() > 0
@@ -117,8 +143,7 @@ export function ChangeTourButton(props: {
               onClick={(event) => {
                 event.stopPropagation();
                 closeHelp();
-                if (props.tour.loading()) props.tour.cancel();
-                else props.onClick();
+                if (!props.tour.loading()) props.onClick();
               }}
             >
               <Show
@@ -179,8 +204,10 @@ export function ChangeTourButton(props: {
                   </span>
                 </Show>
               </span>
+              {/* Hidden, not removed, so the label keeps its width while the tour generates. */}
               <svg
                 class="change-tour-arrow"
+                style={{ visibility: props.tour.loading() ? 'hidden' : undefined }}
                 width="14"
                 height="14"
                 viewBox="0 0 16 16"
@@ -191,12 +218,30 @@ export function ChangeTourButton(props: {
                 stroke-linejoin="round"
                 aria-hidden="true"
               >
-                <path d={props.tour.loading() ? 'm4 4 8 8M12 4l-8 8' : 'M3 8h10m-4-4 4 4-4 4'} />
+                <path d="M3 8h10m-4-4 4 4-4 4" />
               </svg>
             </button>
           </div>
           {props.children}
-          <TourModelMenu class="change-tour-model" />
+          {/* A generating tour keeps the model it started with, so the × to cancel takes the menu's place. */}
+          <Show when={props.tour.loading()} fallback={<TourModelMenu class="change-tour-model" />}>
+            <button
+              type="button"
+              class="change-tour-model"
+              aria-label="Cancel tour generation"
+              title="Cancel tour generation"
+              onClick={(event) => {
+                event.stopPropagation();
+                // The × goes away with the run; keep focus on the tour, not the page.
+                action?.focus();
+                // That focus is not the user's: it must not raise the help popover.
+                closeHelp();
+                props.tour.cancel();
+              }}
+            >
+              <CloseIcon size={12} />
+            </button>
+          </Show>
         </div>
         <Show when={helpOpen()}>
           <Portal>
