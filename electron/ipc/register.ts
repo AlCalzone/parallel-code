@@ -1577,6 +1577,15 @@ export function registerAllHandlers(win: BrowserWindow): void {
   ipcMain.handle(IPC.CheckForUpdates, () => checkForUpdates());
   ipcMain.handle(IPC.DownloadUpdate, () => downloadUpdate());
   ipcMain.handle(IPC.QuitAndInstallUpdate, () => quitAndInstallUpdate());
+  // The quit still goes through the window's close prompt about running
+  // terminals. shortcut: Electron cannot unregister a relaunch, so cancelling
+  // that prompt, or keeping terminals in the background, leaves the next quit
+  // relaunching too — clear a flag from the prompt's cancel path and relaunch
+  // in `will-quit` if that surprises anyone.
+  ipcMain.handle(IPC.RestartApp, () => {
+    app.relaunch();
+    app.quit();
+  });
 
   // --- Notifications (fire-and-forget via ipcMain.on) ---
   const activeNotifications = new Set<Notification>();
