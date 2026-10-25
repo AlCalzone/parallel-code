@@ -217,6 +217,25 @@ it('lists finished work above idle tasks in the stopped lane', () => {
   expect(lane('Stopped')?.querySelector('.task-board-card')?.classList).toContain('state-ready');
 });
 
+it('groups subtasks under their coordinator, naming it once in other lanes', () => {
+  const headings = (title: string) =>
+    [...(lane(title)?.querySelectorAll('.task-board-family') ?? [])].map((el) => el.textContent);
+  setStore('tasks', 'c1', task('c1', 'Theme tokens', { coordinatedBy: 'pr' }));
+  setStore(
+    'tasks',
+    'c2',
+    task('c2', 'Toggle', { coordinatedBy: 'pr', prUrl: 'https://x/pull/43' }),
+  );
+  setStore('taskOrder', ['c1', 'review', 'pr', 'idle', 'c2']);
+  expect(cardNames('Stopped')).toEqual(['Theme tokens', 'Update docs']);
+  expect(headings('Stopped')).toEqual(['↳ Subtasks of Add dark mode']);
+  expect(cardNames('In pull request')).toEqual(['Add dark mode', 'Toggle']);
+  expect(headings('In pull request')).toEqual([]);
+  // A closed coordinator leaves no heading behind.
+  setStore('tasks', 'pr', undefined as unknown as Task);
+  expect(headings('Stopped')).toEqual([]);
+});
+
 it('filters cards by name or project', () => {
   const search = host.querySelector<HTMLInputElement>('.task-board-search');
   if (!search) throw new Error('missing search');

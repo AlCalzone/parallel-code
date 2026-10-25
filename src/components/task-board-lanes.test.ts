@@ -33,4 +33,8 @@ describe('headingParentAt', () => {
       undefined,
     ]);
   });
+
+  it('names the coordinator above a subtask at the top of the lane', () => {
+    expect(headingParentAt([task('a1', 'p')], 0)).toBe('p');
+  });
 });
