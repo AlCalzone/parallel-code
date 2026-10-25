@@ -5,6 +5,7 @@ import { closeTaskNow } from './CloseTaskDialog';
 import { FinishDialog } from './FinishDialog';
 import { invoke } from '../lib/ipc';
 import { setStore } from '../store/core';
+import { showNotification } from '../store/notification';
 import { getPrChecks, getTaskChecks, mergeTask, pushTask } from '../store/store';
 import {
   getPullRequestDetails,
@@ -81,6 +82,20 @@ vi.mock('./ChangeTourButton', () => ({
   ChangeTourButton: (props: { children?: JSX.Element }) => <span>tour{props.children}</span>,
 }));
 vi.mock('./ChangedFilesList', () => ({ ChangedFilesList: () => null }));
+// Covered by its own tests; its store imports reach past this file's mocks.
+const reviewProps = vi.hoisted(() => ({
+  current: undefined as
+    | { verifyFailed: boolean; companion?: JSX.Element; onReworkStaged: () => void }
+    | undefined,
+}));
+vi.mock('./ReviewSection', () => ({
+  ReviewSection: (props: NonNullable<typeof reviewProps.current>) => {
+    // eslint-disable-next-line solid/reactivity -- keeps the live props proxy for the test to read
+    reviewProps.current = props;
+    // The tour shares the review's row, so it arrives here.
+    return <>{props.companion}</>;
+  },
+}));
 vi.mock('./MergeReadinessPanel', () => ({
   MergeReadinessPanel: (props: { children?: JSX.Element }) => <div>{props.children}</div>,
 }));
@@ -160,6 +175,7 @@ vi.mock('../lib/theme', () => ({
   bannerStyle: () => ({}),
   dialogButtonStyle: () => ({}),
   linkButtonStyle: {},
+  sectionLabelStyle: {},
 }));
 
 let dispose: (() => void) | undefined;
@@ -198,6 +214,10 @@ function tour(stops = 0): ChangeTourController {
   } as unknown as ChangeTourController;
 }
 
+// Readiness shows once something backs it; an agent's own report is enough.
+const reported = () =>
+  task({ verification: { checks: [{ name: 'Tests', command: 'npm test', result: 'passed' }] } });
+
 function mount(
   options: { task?: Task; tour?: ChangeTourController; initialCleanup?: boolean } = {},
 ) {
@@ -216,7 +236,6 @@ function mount(
         task={options.task ?? task()}
         initialCleanup={options.initialCleanup ?? true}
         tour={options.tour ?? tour()}
-        tourDisabled={false}
         onTourClick={() => {}}
         onPushStart={() => {}}
         onDiffFileClick={() => {}}
@@ -324,10 +343,73 @@ describe('FinishDialog merge', () => {
 });
 
 describe('FinishDialog push', () => {
+  it('offers Push beside Merge only while origin lacks the branch head', async () => {
+    let remote = 'pushed';
+    mockInvoke((channel) => {
+      if (channel === IPC.GetBranchLog) return '';
+      if (channel === IPC.CheckMergeStatus)
+        return { conflicting_files: [], main_ahead_count: 0, remote };
+      return { current_branch: 'task/parent', has_committed_changes: true, head_sha: 'local' };
+    });
+    mount();
+    await flush();
+    expect(button('Push')).toBeUndefined();
+    dispose?.();
+    document.body.replaceChildren();
+    remote = 'unpushed';
+    mount();
+    await flush();
+    // A local merge needs no push, so Merge stays the main action.
+    expect(button('Push')?.className).toContain('btn-secondary');
+    expect(confirmButton()?.textContent).toBe('Merge into main');
+  });
+
+  it('keeps Push for conflicts, but not for a worktree on another branch or one still being read', async () => {
+    let status: () => unknown = () => ({
+      current_branch: 'task/parent',
+      has_committed_changes: true,
+      head_sha: 'local',
+    });
+    mockInvoke((channel) => {
+      if (channel === IPC.GetBranchLog) return '';
+      if (channel === IPC.CheckMergeStatus)
+        return { conflicting_files: ['src/a.ts'], main_ahead_count: 0, remote: 'unpushed' };
+      return status();
+    });
+    mount();
+    await flush();
+    // Conflicts block the merge only; pushing is how a PR gets them resolved.
+    expect(confirmButton()?.disabled).toBe(true);
+    expect(button('Push')?.disabled).toBe(false);
+
+    for (const [answer, reason] of [
+      [
+        () => ({ current_branch: 'other', has_committed_changes: true }),
+        "not on this task's branch",
+      ],
+      [() => new Promise(() => {}), 'Checking the branch'],
+    ] as const) {
+      dispose?.();
+      document.body.replaceChildren();
+      status = answer;
+      mount();
+      await flush();
+      expect(button('Push')?.disabled).toBe(true);
+      expect(button('Push')?.title).toContain(reason);
+    }
+  });
+
   it('pushes the branch and keeps a failure on screen', async () => {
     vi.mocked(pushTask).mockRejectedValueOnce(new Error('rejected: non-fast-forward'));
+    mockInvoke((channel) => {
+      if (channel === IPC.GetBranchLog) return '';
+      if (channel === IPC.CheckMergeStatus)
+        return { conflicting_files: [], main_ahead_count: 0, remote: 'differs' };
+      return { current_branch: 'task/parent', has_committed_changes: true, head_sha: 'local' };
+    });
     const handlers = mount();
-    button('Push branch')?.click();
+    await flush();
+    button('Push')?.click();
     expect(pushTask).toHaveBeenCalledWith('parent', expect.anything());
     await flush();
     expect(handlers.onPushDone).toHaveBeenCalledWith(false);
@@ -402,13 +484,32 @@ describe('FinishDialog merge blocker', () => {
     await flush();
     expect(confirmButton()?.disabled).toBe(true);
     expect(document.querySelector('[data-testid="footer-note"]')?.textContent).toBe(
-      'Nothing to merge yet.',
+      'No commits on this branch yet.',
     );
+  });
+
+  it('asks for a commit when the changes are not committed yet', async () => {
+    mockInvoke((channel) => {
+      if (channel === IPC.GetBranchLog) return '';
+      if (channel === IPC.CheckMergeStatus) return { conflicting_files: [], main_ahead_count: 0 };
+      return {
+        current_branch: 'task/parent',
+        has_committed_changes: false,
+        has_uncommitted_changes: true,
+      };
+    });
+    mount();
+    await flush();
+    expect(document.querySelector('[data-testid="footer-note"]')?.textContent).toBe(
+      'Commit the changes to merge them.',
+    );
+    // Nothing to merge yet, so no merge options either.
+    expect(document.body.textContent).not.toContain('Squash commits');
   });
 });
 
 describe('FinishDialog readiness tip', () => {
-  function mountWithTip() {
+  function mountWithTip(options: { task?: Task } = { task: reported() }) {
     vi.useFakeTimers();
     // An earlier test may have dismissed the tip.
     setStore('seenFeatureHints', []);
@@ -423,7 +524,7 @@ describe('FinishDialog readiness tip', () => {
       box.mockRestore();
       vi.useRealTimers();
     });
-    const handlers = mount();
+    const handlers = mount(options);
     vi.advanceTimersByTime(650);
     return { handlers, note: document.querySelector('[role="note"]') };
   }
@@ -437,6 +538,13 @@ describe('FinishDialog readiness tip', () => {
     tipButton(note, 'Configure checks')?.click();
     expect(handlers.onConfigureChecks).toHaveBeenCalledOnce();
     expect(document.querySelector('[role="note"]')).toBeNull();
+  });
+
+  it('leaves readiness and its tip out when nothing is configured, run or reported', () => {
+    const { note } = mountWithTip({});
+    expect(note).toBeNull();
+    expect(document.querySelector('[aria-label="Readiness and checks"]')).toBeNull();
+    expect(document.body.textContent).not.toContain('No verify command');
   });
 
   it('offers no setup once the project has any check', () => {
@@ -466,10 +574,27 @@ describe('FinishDialog tour', () => {
     regenerate?.click();
     expect(handlers.onRegenerateTour).toHaveBeenCalled();
   });
+
+  it("offers the tour from the dialog's own status, not the task panel", async () => {
+    mount();
+    await flush();
+    expect(document.body.textContent).toContain('tour');
+  });
+
+  it('leaves the tour out when the branch has no changes', async () => {
+    mockInvoke((channel) => {
+      if (channel === IPC.GetBranchLog) return '';
+      if (channel === IPC.CheckMergeStatus) return { conflicting_files: [], main_ahead_count: 0 };
+      return { current_branch: 'task/parent', has_committed_changes: false };
+    });
+    mount();
+    await flush();
+    expect(document.body.textContent).not.toContain('tour');
+  });
 });
 
 it('opens the cited side and line above the finish dialog and returns without closing it', () => {
-  const handlers = mount();
+  const handlers = mount({ task: reported() });
   button('Open evidence finding')?.click();
   const diff = document.querySelector<HTMLElement>('[data-testid="evidence-diff"]');
   expect(diff?.dataset).toMatchObject({ file: 'test.ts', line: '7', side: 'old' });
@@ -481,7 +606,7 @@ it('opens the cited side and line above the finish dialog and returns without cl
 });
 
 it('preserves unsent diff comments when returning to evidence and reopening a finding', () => {
-  mount();
+  mount({ task: reported() });
   button('Open evidence finding')?.click();
   button('Add review comment')?.click();
   expect(document.querySelector('[data-testid="review-comments"]')?.textContent).toBe(
@@ -496,9 +621,9 @@ it('preserves unsent diff comments when returning to evidence and reopening a fi
 });
 
 describe('FinishDialog GitHub', () => {
-  it('shows an empty state without linking an issue as a PR', () => {
+  it('leaves the PR section out without a PR, not taking an issue for one', () => {
     mount({ task: task({ githubUrl: 'https://github.com/o/r/issues/2' }) });
-    expect(document.body.textContent).toContain('No pull request detected');
+    expect(document.querySelector('section[aria-label="Pull request"]')).toBeNull();
     expect(button('PR #2 details…')).toBeUndefined();
   });
 
@@ -681,14 +806,44 @@ describe('FinishDialog with an open PR', () => {
     expect(handlers.onCloseTask).toHaveBeenCalled();
   });
 
-  it('blocks the PR merge while the PR lacks the latest local commit', async () => {
+  it('makes Push the main action while the PR lacks the latest local commit', async () => {
     vi.mocked(getPullRequestDetails).mockResolvedValue(prDetails({ headRefOid: 'older' }));
     mount({ task: task({ prUrl: PR_URL }) });
     await flush();
+    expect(confirmButton()?.textContent).toBe('Push');
+    expect(confirmButton()?.disabled).toBe(false);
+    expect(button('Merge as is')?.disabled).toBe(false);
+    expect(document.querySelector('[data-testid="footer-note"]')?.textContent).toBe(
+      'The PR is missing your latest commits.',
+    );
+  });
+
+  it('holds the push to the PR while the worktree is on another branch', async () => {
+    vi.mocked(getPullRequestDetails).mockResolvedValue(prDetails({ headRefOid: 'older' }));
+    mockInvoke((channel) => {
+      if (channel === IPC.GetBranchLog) return '';
+      if (channel === IPC.CheckMergeStatus)
+        return { conflicting_files: [], main_ahead_count: 0, remote: 'differs' };
+      return { current_branch: 'other', has_committed_changes: true, head_sha: 'local' };
+    });
+    mount({ task: task({ prUrl: PR_URL }) });
+    await flush();
+    expect(confirmButton()?.textContent).toBe('Push');
     expect(confirmButton()?.disabled).toBe(true);
     expect(document.querySelector('[data-testid="footer-note"]')?.textContent).toContain(
-      'Push the branch first',
+      "not on this task's branch",
     );
+  });
+
+  it('merges the PR as is without closing the task, which still has unpushed work', async () => {
+    vi.mocked(getPullRequestDetails).mockResolvedValue(prDetails({ headRefOid: 'older' }));
+    vi.mocked(mergePullRequestForTask).mockResolvedValueOnce(true);
+    const handlers = mount({ task: task({ prUrl: PR_URL }) });
+    await flush();
+    button('Merge as is')?.click();
+    await flush();
+    expect(mergePullRequestForTask).toHaveBeenCalled();
+    expect(handlers.onCloseTask).not.toHaveBeenCalled();
   });
 
   it('offers no bypass when GitHub does not block the merge', async () => {
@@ -845,8 +1000,8 @@ describe('FinishDialog with an open PR', () => {
     vi.mocked(getPullRequestDetails).mockResolvedValueOnce(prDetails());
     mount({ task: task({ prUrl: PR_URL }) });
     await flush();
-    expect(confirmButton()?.disabled).toBe(true);
-    button('Push branch')?.click();
+    expect(confirmButton()?.textContent).toBe('Push');
+    confirmButton()?.click();
     await flush();
     await flush();
     expect(confirmButton()?.disabled).toBe(false);
@@ -881,5 +1036,64 @@ describe('FinishDialog with an open PR', () => {
     expect(document.body.textContent).toContain('commits that are not in PR #42');
     button('Merge locally instead')?.click();
     expect(confirmButton()?.textContent).toBe('Merge into main');
+  });
+});
+
+describe('FinishDialog review', () => {
+  it('passes a failed verify to the review, and closes once rework is staged', async () => {
+    const handlers = mount({
+      task: task({
+        verificationRun: {
+          command: 'npm run check',
+          status: 'failed',
+          exitCode: 1,
+          headSha: 'local',
+          dirty: false,
+          startedAt: '2026-10-25T00:00:00Z',
+          finishedAt: '2026-10-25T00:01:00Z',
+          outputTail: '',
+        },
+      }),
+    });
+    await flush();
+    expect(reviewProps.current?.verifyFailed).toBe(true);
+    reviewProps.current?.onReworkStaged();
+    expect(showNotification).toHaveBeenCalledWith(
+      'Rework prompt staged in the task input. Review it, then send.',
+    );
+    expect(handlers.onClose).toHaveBeenCalled();
+  });
+
+  it('does not count a verify failure from an older commit', async () => {
+    mount({
+      task: task({
+        verificationRun: {
+          command: 'npm run check',
+          status: 'failed',
+          exitCode: 1,
+          headSha: 'older',
+          dirty: false,
+          startedAt: '2026-10-25T00:00:00Z',
+          finishedAt: '2026-10-25T00:01:00Z',
+          outputTail: '',
+        },
+      }),
+    });
+    await flush();
+    expect(reviewProps.current?.verifyFailed).toBe(false);
+  });
+
+  it('leaves the review out when it is turned off in Settings', async () => {
+    reviewProps.current = undefined;
+    setStore('finishReview', false);
+    try {
+      mount({ task: task() });
+      await flush();
+      expect(reviewProps.current).toBeUndefined();
+      // The tour keeps its place in the follow-ups without the review.
+      expect(document.body.textContent).toContain('Before you merge');
+    } finally {
+      setStore('finishReview', true);
+    }
   });
 });

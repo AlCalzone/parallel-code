@@ -16,13 +16,17 @@ import { CleanupOption, MergeBlockers, MergeChanges, MergeOptions } from './Merg
 import { closeTaskNow } from './CloseTaskDialog';
 import { PushSection } from './PushSection';
 import { ReadinessSection } from './ReadinessSection';
+import { FollowUps } from './FollowUps';
+import { ReviewSection } from './ReviewSection';
 import { createMergeState } from './merge-state';
 import { PR_MERGE_ACTIONS, createFinishPr, taskPrUrl } from './pr-actions';
 import { createPushRun } from './push-run';
 import { backgroundVerifyEnabled, getProject, getTaskChecks } from '../store/store';
 import { markFeatureHintSeen } from '../store/onboarding';
 import { showNotification } from '../store/notification';
-import { dialogButtonStyle, theme } from '../lib/theme';
+import { store } from '../store/core';
+import { theme } from '../lib/theme';
+import { isVerificationStale, summarizeVerificationRun } from '../lib/verification-run';
 import { GitMergeIcon, SyncIcon, UploadIcon } from './icons';
 
 export type FinishAction = 'merge' | 'push';
@@ -32,7 +36,6 @@ interface FinishDialogProps {
   task: Task;
   initialCleanup: boolean;
   tour: ChangeTourController;
-  tourDisabled: boolean;
   /** Opens a ready tour, or starts generating one, like the Changed Files button. */
   onTourClick: () => void;
   onRegenerateTour: () => void;
@@ -52,14 +55,22 @@ const SHOWN_ELSEWHERE = new Set(['Merge safety', 'Verify command', 'Evidence', '
 
 /**
  * One place to wrap up a task. Reads top to bottom: what blocks the merge,
- * what changed, whether the checks back it, then how to merge. Merge and push
- * are both footer actions, since pushing does not exclude merging later.
+ * the changed files, whether the checks back it, an optional review, then how
+ * to merge. Merge and push are both footer actions, since pushing does not
+ * exclude merging later.
  */
 export function FinishDialog(props: FinishDialogProps) {
   const merge = createMergeState(props);
   let readinessAnchor: HTMLDivElement | undefined;
   // The same test the evidence panel uses to offer Configure checks.
   const hasChecks = () => getTaskChecks(props.task.id).length > 0;
+  // Nothing configured, run or reported leaves readiness only "No verify command";
+  // the review line below covers that case.
+  const showReadiness = () =>
+    hasChecks() ||
+    !!props.task.verificationRun ||
+    !!props.task.evidence ||
+    !!props.task.verification?.checks.length;
   const [reviewLocation, setReviewLocation] = createSignal<{
     file: string;
     line?: number;
@@ -93,6 +104,13 @@ export function FinishDialog(props: FinishDialogProps) {
     headSha: () => (merge.worktreeStatus.error ? null : merge.worktreeStatus()?.head_sha),
   });
   const prMerging = () => pr.busy() === 'merge';
+  // Only a failure on the current commit counts; an older run is said in readiness below.
+  const verifyFailed = () => {
+    const run = props.task.verificationRun;
+    if (!run || merge.worktreeStatus.error) return false;
+    const head = merge.worktreeStatus()?.head_sha;
+    return summarizeVerificationRun(run, head).kind === 'failed' && !isVerificationStale(run, head);
+  };
   // Not the local cleanup flag: that follows deleteBranchOnClose, which closeTask applies itself.
   const [closeAfterPrMerge, setCloseAfterPrMerge] = createSignal(true);
 
@@ -109,7 +127,16 @@ export function FinishDialog(props: FinishDialogProps) {
     ),
   );
 
+  // Reading an errored resource throws; an unknown remote offers no push.
+  const remote = () => (merge.mergeStatus.error ? undefined : merge.mergeStatus()?.remote);
+  // Merging a PR is pinned to its head, so local commits must be pushed first.
+  const pushFirst = () => pr.mode() === 'pr' && pr.headDiffers();
+  // A local merge uses local commits, so pushing is only on offer, never required.
+  const offerPush = () =>
+    pr.mode() === 'local' && (remote() === 'unpushed' || remote() === 'differs');
+
   const confirmLabel = () => {
+    if (pushFirst()) return push.pushing() ? 'Pushing…' : 'Push';
     if (pr.mode() === 'merged') return 'Close task';
     if (merge.merging() || prMerging()) return 'Merging...';
     const method = pr.method();
@@ -127,19 +154,33 @@ export function FinishDialog(props: FinishDialogProps) {
     merge.mergeReadiness().checks.filter((check) => !SHOWN_ELSEWHERE.has(check.label));
   const confirmDisabled = () => {
     if (push.pushing()) return true;
+    if (pushFirst()) return pushDisabled() || !!pushBlocker();
     if (pr.mode() === 'merged') return false;
     if (pr.mode() === 'pr') return !!pr.busy() || !!pr.blocker();
     return !!pr.busy() || !merge.canMerge();
   };
   const footerNote = () => {
     if (merge.merging() || prMerging() || pr.mode() === 'merged') return undefined;
+    if (pushFirst()) return pushBlocker() ?? 'The PR is missing your latest commits.';
     return pr.mode() === 'pr' ? pr.blocker() : merge.mergeBlocker();
   };
   const pushDisabled = () => push.pushing() || merge.merging() || prMerging();
+  /**
+   * Why pushing would send the wrong thing. Merge-only blockers such as
+   * conflicts stay out: pushing is how a PR gets them resolved. An unreadable
+   * status blocks nothing; the push reports its own error.
+   */
+  const pushBlocker = (): string | undefined => {
+    if (merge.worktreeStatus.error) return undefined;
+    if (!merge.worktreeStatus()) return 'Checking the branch…';
+    if (merge.hasBranchMismatch()) return "The worktree is not on this task's branch.";
+    return undefined;
+  };
   const mergeAndClose = async () => {
     if (await merge.merge()) props.onClose();
   };
-  const mergePr = async () => {
+  /** `asIs` merges the PR without the unpushed commits, so the task stays open for them. */
+  const mergePr = async (asIs = false) => {
     const number = pr.number();
     const outcome = await pr.merge();
     if (outcome === 'failed') return;
@@ -149,7 +190,7 @@ export function FinishDialog(props: FinishDialogProps) {
       return;
     }
     showNotification(`Merged PR #${number}`, { tone: 'success' });
-    if (!merge.requiresSeparateClose() && closeAfterPrMerge()) {
+    if (!asIs && !merge.requiresSeparateClose() && closeAfterPrMerge()) {
       const { id, worktreePath } = props.task;
       props.onClose();
       // Fetched now, not on open: a running agent may have written files since.
@@ -168,12 +209,39 @@ export function FinishDialog(props: FinishDialogProps) {
     void pr.refetch();
   };
   const confirm = () => {
-    if (pr.mode() === 'merged') {
+    if (pushFirst()) push.start();
+    else if (pr.mode() === 'merged') {
       props.onClose();
       props.onCloseTask();
     } else if (pr.mode() === 'pr') void mergePr();
     else void mergeAndClose();
   };
+
+  // Judged from the dialog's own status: the panel's file list may not be mounted.
+  // Until the status arrives the tour counts as possible, so the row does not jump.
+  const tourDisabled = () => {
+    const status = merge.worktreeStatus();
+    return !!status && !status.has_committed_changes && !status.has_uncommitted_changes;
+  };
+  // A disabled tour with nothing to show or cancel would be an empty box.
+  const tourShown = () => !tourDisabled() || props.tour.loading() || props.tour.stops().length > 0;
+  const tourBox = () => (
+    <div class="finish-followup">
+      <ChangeTourButton tour={props.tour} onClick={props.onTourClick} disabled={tourDisabled()}>
+        <Show when={props.tour.stops().length > 0 && !props.tour.loading()}>
+          <button
+            type="button"
+            class="change-tour-action change-tour-segment"
+            onClick={() => props.onRegenerateTour()}
+            title="Discard this tour and generate a new one"
+          >
+            <SyncIcon size={12} />
+            Regenerate
+          </button>
+        </Show>
+      </ChangeTourButton>
+    </div>
+  );
 
   return (
     <>
@@ -197,25 +265,7 @@ export function FinishDialog(props: FinishDialogProps) {
               open={props.open}
               onDone={() => props.onClose()}
               onDiffFileClick={props.onDiffFileClick}
-            >
-              <ChangeTourButton
-                tour={props.tour}
-                onClick={props.onTourClick}
-                disabled={props.tourDisabled}
-              >
-                <Show when={props.tour.stops().length > 0 && !props.tour.loading()}>
-                  <button
-                    type="button"
-                    class="change-tour-action change-tour-segment"
-                    onClick={() => props.onRegenerateTour()}
-                    title="Discard this tour and generate a new one"
-                  >
-                    <SyncIcon size={12} />
-                    Regenerate
-                  </button>
-                </Show>
-              </ChangeTourButton>
-            </MergeChanges>
+            />
             {/* A sub-task's own report is context for the review, so it starts folded. */}
             <Show when={props.task.coordinatedBy && props.task.completion}>
               <details style={{ 'margin-bottom': '20px', 'font-size': '13px' }}>
@@ -229,38 +279,40 @@ export function FinishDialog(props: FinishDialogProps) {
               </details>
             </Show>
             {/* Opening the section or running a check there is taking the tip. */}
-            <div ref={readinessAnchor} onClick={() => markFeatureHintSeen('finish-review')}>
-              <ReadinessSection
-                task={props.task}
-                headSha={merge.worktreeStatus()?.head_sha}
-                // Reading an errored resource throws; the line then omits "N commits ago".
-                branchCommits={
-                  merge.branchCommits.error
-                    ? undefined
-                    : merge.branchCommits()?.map((commit) => commit.hash)
-                }
-                onConfigure={() => props.onConfigureChecks()}
-                onStaged={() => {
-                  showNotification('Fix prompt staged in the task input. Review it, then send.');
-                  props.onClose();
-                }}
-                onReviewFile={(file, line, side) => setReviewLocation({ file, line, side })}
-              >
-                <EvidencePanel
+            <Show when={showReadiness()}>
+              <div ref={readinessAnchor} onClick={() => markFeatureHintSeen('finish-review')}>
+                <ReadinessSection
                   task={props.task}
-                  agentId={merge.selectedAgentId()}
                   headSha={merge.worktreeStatus()?.head_sha}
-                  dirty={merge.worktreeStatus()?.has_uncommitted_changes}
+                  // Reading an errored resource throws; the line then omits "N commits ago".
+                  branchCommits={
+                    merge.branchCommits.error
+                      ? undefined
+                      : merge.branchCommits()?.map((commit) => commit.hash)
+                  }
                   onConfigure={() => props.onConfigureChecks()}
+                  onStaged={() => {
+                    showNotification('Fix prompt staged in the task input. Review it, then send.');
+                    props.onClose();
+                  }}
                   onReviewFile={(file, line, side) => setReviewLocation({ file, line, side })}
                 >
-                  <MergeReadinessPanel checks={readinessRows()} />
-                </EvidencePanel>
-              </ReadinessSection>
-            </div>
+                  <EvidencePanel
+                    task={props.task}
+                    agentId={merge.selectedAgentId()}
+                    headSha={merge.worktreeStatus()?.head_sha}
+                    dirty={merge.worktreeStatus()?.has_uncommitted_changes}
+                    onConfigure={() => props.onConfigureChecks()}
+                    onReviewFile={(file, line, side) => setReviewLocation({ file, line, side })}
+                  >
+                    <MergeReadinessPanel checks={readinessRows()} />
+                  </EvidencePanel>
+                </ReadinessSection>
+              </div>
+            </Show>
             <FeatureHint
               id="finish-review"
-              when={props.open}
+              when={props.open && showReadiness()}
               anchor={() => readinessAnchor}
               title="Check what backs this change"
               actions={
@@ -278,21 +330,48 @@ export function FinishDialog(props: FinishDialogProps) {
               </Show>
               <Show when={!hasChecks()}> Add a verify command to have your tests run.</Show>
             </FeatureHint>
-            <FinishPrSection
-              task={props.task}
-              pr={pr}
-              disabled={push.pushing() || merge.merging()}
-              onOpenPullRequest={(url) => props.onOpenPullRequest(url)}
-              onStaged={() => {
-                showNotification('Prompt staged in the task input. Review it, then send.');
-                props.onClose();
-              }}
+            {/* Optional steps before merging; the review's result opens below them. */}
+            <Show
+              when={store.finishReview}
+              fallback={
+                <Show when={tourShown()}>
+                  <FollowUps>{tourBox()}</FollowUps>
+                </Show>
+              }
             >
-              <Show when={taskPrUrl(props.task)}>
+              <ReviewSection
+                task={props.task}
+                verifyFailed={verifyFailed()}
+                companion={<Show when={tourShown()}>{tourBox()}</Show>}
+                onReworkStaged={() => {
+                  showNotification('Rework prompt staged in the task input. Review it, then send.');
+                  props.onClose();
+                }}
+                onOpenFile={(file, line) => setReviewLocation({ file, line, side: 'new' })}
+              />
+            </Show>
+            {/* Without a PR the section would only say so; local merging needs no word on PRs. */}
+            <Show when={taskPrUrl(props.task)}>
+              <FinishPrSection
+                task={props.task}
+                pr={pr}
+                disabled={push.pushing() || merge.merging()}
+                onOpenPullRequest={(url) => props.onOpenPullRequest(url)}
+                onStaged={() => {
+                  showNotification('Prompt staged in the task input. Review it, then send.');
+                  props.onClose();
+                }}
+              >
                 <PrMergeRoute pr={pr} disabled={push.pushing() || merge.merging()} />
-              </Show>
-            </FinishPrSection>
-            <Show when={pr.mode() === 'local'}>
+              </FinishPrSection>
+            </Show>
+            {/* Cleanup and squash mean nothing without commits; while that is unknown they stay, so nothing jumps. */}
+            <Show
+              when={
+                pr.mode() === 'local' &&
+                !(merge.worktreeStatus() && !merge.hasCommittedChangesToMerge())
+              }
+            >
               <div style={{ 'margin-top': '12px' }}>
                 <MergeOptions task={props.task} state={merge} />
               </div>
@@ -309,31 +388,6 @@ export function FinishDialog(props: FinishDialogProps) {
                 </CleanupOption>
               </div>
             </Show>
-            {/* Pushing does not finish the task, so it sits with the content, not the footer. */}
-            <div
-              style={{
-                display: 'flex',
-                'flex-wrap': 'wrap',
-                gap: '8px',
-                'align-items': 'center',
-                'margin-top': '12px',
-                'font-size': '12px',
-                color: theme.fgMuted,
-              }}
-            >
-              <button
-                type="button"
-                class="btn-secondary btn-with-icon"
-                disabled={pushDisabled()}
-                onClick={() => void push.start()}
-                title={`Push ${props.task.branchName} to origin`}
-                style={dialogButtonStyle(false, pushDisabled() && !push.pushing())}
-              >
-                <UploadIcon size={14} />
-                {push.pushing() ? 'Pushing…' : 'Push branch'}
-              </button>
-              {pr.mode() === 'pr' ? 'Updates the PR; the task stays open.' : 'The task stays open.'}
-            </div>
             <Show when={push.pushing() || push.output() || push.error()}>
               <div style={{ 'margin-top': '12px' }}>
                 <PushSection run={push} />
@@ -343,9 +397,42 @@ export function FinishDialog(props: FinishDialogProps) {
         }
         confirmDisabled={confirmDisabled()}
         footerNote={footerNote()}
-        confirmLoading={merge.merging() || prMerging()}
+        confirmLoading={merge.merging() || prMerging() || (pushFirst() && push.pushing())}
         confirmLabel={confirmLabel()}
-        confirmIcon={pr.mode() === 'merged' ? undefined : <GitMergeIcon size={14} />}
+        confirmIcon={
+          pushFirst() ? (
+            <UploadIcon size={14} />
+          ) : pr.mode() === 'merged' ? undefined : (
+            <GitMergeIcon size={14} />
+          )
+        }
+        extraActions={
+          <>
+            <Show when={pushFirst()}>
+              <button
+                type="button"
+                class="btn-secondary"
+                disabled={pushDisabled() || !!pr.busy() || !!pr.blocker(true)}
+                title={`Merge PR #${pr.number()} as it is on GitHub; the task stays open for the rest`}
+                onClick={() => void mergePr(true)}
+              >
+                Merge as is
+              </button>
+            </Show>
+            <Show when={offerPush() || (pr.mode() === 'local' && push.pushing())}>
+              <button
+                type="button"
+                class="btn-secondary btn-with-icon"
+                disabled={pushDisabled() || !!pushBlocker()}
+                title={pushBlocker() ?? `Push ${props.task.branchName} to origin without merging`}
+                onClick={() => push.start()}
+              >
+                <UploadIcon size={12} />
+                {push.pushing() ? 'Pushing…' : 'Push'}
+              </button>
+            </Show>
+          </>
+        }
         cancelLabel={push.pushing() ? 'Close' : 'Cancel'}
         onConfirm={confirm}
         onCancel={() => props.onClose()}

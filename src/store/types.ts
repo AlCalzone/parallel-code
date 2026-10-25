@@ -27,6 +27,8 @@ import type { AskCodeProvider } from '../../electron/shared/ask-code-models';
 import type { TaskNameModelId } from '../../electron/shared/task-name-model';
 import type { TaskBriefRecord } from '../lib/task-brief';
 import type { TaskConfidence } from '../lib/task-confidence';
+import type { ReviewDismissal } from '../lib/review-summary';
+import type { ReviewModelSettings } from '../lib/task-review';
 import type {
   EvidenceModelSettings,
   EvidencePackage,
@@ -123,6 +125,9 @@ export interface Project {
   /** Run the verify command in the background after an agent turn that added
    *  commits. Only `false` is stored; unset means on. */
   verifyAutoRun?: boolean;
+  /** Ids of the checks a review runs besides the reviewer. Unset until the
+   *  user first picks; empty means the reviewer alone. */
+  reviewChecks?: string[];
   terminalBookmarks?: TerminalBookmark[];
   isGitRepo?: boolean; // undefined treated as true for backward compat
   tasksCollapsed?: boolean; // sidebar task group, defaults to expanded
@@ -369,8 +374,14 @@ export interface Task {
   briefStatus?: { state: 'generating' } | { state: 'failed'; message: string };
   /** Runtime-only: newest diff fingerprint read, which ratings are compared against. */
   codeFingerprint?: { fingerprint: string; at: number };
-  /** Latest rating the agent published through `confidence_publish`. */
+  /** Latest rating: from a review, or published by the agent through `confidence_publish`. */
   confidence?: TaskConfidence;
+  /** Runtime-only: a review is running, or the last one failed. */
+  reviewStatus?: { state: 'running'; startedAt: number } | { state: 'failed'; message: string };
+  /** Review risks the user set aside, keyed by review item id, with their reason. */
+  reviewDismissed?: Record<string, ReviewDismissal>;
+  /** The reviewer picked for this task; unset uses Settings › Review. */
+  reviewModel?: ReviewModelSettings;
   landingState?: LandingState;
   landingReason?: string;
   landingSummary?: string;
@@ -482,6 +493,10 @@ export interface PersistedTask {
   brief?: unknown;
   /** Validated on load. */
   confidence?: unknown;
+  /** Validated on load. */
+  reviewDismissed?: unknown;
+  /** Validated on load. */
+  reviewModel?: unknown;
   landingState?: LandingState;
   landingReason?: string;
   landingSummary?: string;
@@ -543,7 +558,7 @@ export interface PersistedState {
   modelTaskNames?: boolean;
   taskNameModel?: TaskNameModelId;
   taskBriefs?: boolean;
-  confidencePrompt?: string;
+  reviewGuidance?: string;
   showSidebarTips?: boolean;
   showSidebarProgress?: boolean;
   sidebarNeedsInputFirst?: boolean;
@@ -584,6 +599,10 @@ export interface PersistedState {
   defaultPropagateSkipPermissions?: boolean;
   /** Show which canvas nodes the user owns (agents cannot edit them without override). */
   canvasOwnershipBadges?: boolean;
+  /** Offer a review line in the Finish dialog. */
+  finishReview?: boolean;
+  /** Which model reviews a task's work. */
+  reviewModel?: ReviewModelSettings;
   autoStartRemoteAccess?: boolean;
 }
 
@@ -690,8 +709,8 @@ export interface AppStore {
   taskNameModel: TaskNameModelId;
   /** Opt-in: write a task brief with the naming model after each agent turn. */
   taskBriefs: boolean;
-  /** Prompt "Rate confidence" sends; empty uses the built-in audit. */
-  confidencePrompt: string;
+  /** The user's own notes for the task reviewer, added to its instructions. */
+  reviewGuidance: string;
   showSidebarTips: boolean;
   showSidebarProgress: boolean;
   /** Pin tasks that are waiting on an answer to the top of the sidebar task
@@ -787,6 +806,8 @@ export interface AppStore {
   defaultSkipPermissions: boolean;
   defaultPropagateSkipPermissions: boolean;
   canvasOwnershipBadges: boolean;
+  finishReview: boolean;
+  reviewModel: ReviewModelSettings;
   mcpStatus: MCPStatus;
   usage: Record<UsageProvider, UsageState>;
 }

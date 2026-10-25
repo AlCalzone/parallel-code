@@ -11,13 +11,15 @@ import {
   setModelTaskNames,
   setTaskNameModel,
   setTaskBriefs,
-  setConfidencePrompt,
+  setFinishReview,
+  setReviewGuidance,
+  setReviewModel,
   setAskCodeProvider,
   setAskCodeModel,
   setMinimaxApiKey,
 } from '../../store/store';
 import { modelToRun } from '../../lib/ask-code-model';
-import { DEFAULT_CONFIDENCE_PROMPT } from '../../lib/task-confidence';
+import { ReviewModelFields } from '../ReviewModelFields';
 import {
   SettingsCard,
   SettingsCheckboxRow,
@@ -79,20 +81,38 @@ export function AiAssistSettings() {
             </label>
           </SettingsCard>
         </Show>
-        <Show when={store.taskBriefs}>
+      </SettingsSection>
+      <SettingsSection title="Review">
+        <SettingsCheckboxRow
+          label="Offer a review when finishing a task"
+          checked={store.finishReview}
+          onChange={setFinishReview}
+          description="Adds a Review line to the Finish dialog. Nothing runs until you click Run review, which sends your prompts and the branch diff to a separate reviewer model, so the task's agent never rates its own work"
+        />
+        <Show when={store.finishReview}>
           <SettingsCard>
+            <div
+              style={{ display: 'flex', 'align-items': 'center', gap: '10px', 'flex-wrap': 'wrap' }}
+            >
+              <span style={{ 'font-size': '13px', color: theme.fg, 'white-space': 'nowrap' }}>
+                Reviewer model
+              </span>
+              <ReviewModelFields
+                value={store.reviewModel}
+                onChange={(change) => setReviewModel({ ...store.reviewModel, ...change })}
+                style={{ ...settingsFieldStyle, 'font-size': '13px', cursor: 'pointer' }}
+              />
+            </div>
             <label style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
-              <span style={{ 'font-size': '13px', color: theme.fg }}>Confidence rating prompt</span>
+              <span style={{ 'font-size': '13px', color: theme.fg }}>Review guidance</span>
               <span style={{ 'font-size': '12px', color: theme.fgMuted }}>
-                Sent to the agent by Rate confidence on the task brief card. Leave empty for the
-                built-in audit, or name your own rating skill. It should end with the agent calling
-                confidence_publish.
+                Optional notes added to the reviewer's instructions, such as what matters in your
+                codebase.
               </span>
               <textarea
                 rows={3}
-                value={store.confidencePrompt}
-                placeholder={DEFAULT_CONFIDENCE_PROMPT}
-                onChange={(e) => setConfidencePrompt(e.currentTarget.value)}
+                value={store.reviewGuidance}
+                onChange={(e) => setReviewGuidance(e.currentTarget.value)}
                 style={{
                   resize: 'vertical',
                   ...settingsFieldStyle,

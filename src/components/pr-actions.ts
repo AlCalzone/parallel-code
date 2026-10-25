@@ -253,11 +253,13 @@ export function createFinishPr(props: FinishPrProps) {
     return bypassProtection() && !!pr && prIsBlocked(pr);
   };
 
-  const blocker = (): string | undefined => {
+  /** Why merging is unavailable; `asIs` merges the PR at its own head, local commits aside. */
+  const blocker = (asIs = false): string | undefined => {
     const pr = actions.pr();
     if (!pr) return 'Checking the pull request…';
     const github = prMergeBlocker(pr, bypassing());
     if (github) return github;
+    if (asIs) return undefined;
     if (props.headSha() === undefined) return 'Checking the branch…';
     // Merging is pinned to the PR head, so local commits would be left behind.
     if (headDiffers()) {

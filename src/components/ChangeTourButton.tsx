@@ -180,6 +180,7 @@ export function ChangeTourButton(props: {
                 </Show>
               </span>
               <svg
+                class="change-tour-arrow"
                 width="14"
                 height="14"
                 viewBox="0 0 16 16"

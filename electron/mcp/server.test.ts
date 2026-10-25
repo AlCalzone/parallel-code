@@ -685,7 +685,7 @@ describe('mind map tools', () => {
     } as unknown as MCPClient;
     const rating = {
       scores: [{ label: 'Correct', score: 80.4, why: 'Happy path tested.' }],
-      findings: [{ kind: 'gap', text: 'No dedupe yet.', file: 'src/a.ts' }],
+      findings: [{ kind: 'gap', text: 'No dedupe yet.', file: 'src/a.ts', axis: 'Correct' }],
       source: 'review skill',
     };
     const context = { client, taskId: 'own-task', coordinatorId: '', canvasOnly: true };

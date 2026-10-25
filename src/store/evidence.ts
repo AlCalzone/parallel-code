@@ -190,7 +190,12 @@ function worthAutoBuild(previous: EvidencePackage | undefined, scan: EvidenceSca
  */
 export async function buildEvidence(
   taskId: string,
-  options: { trigger: EvidencePackage['trigger']; claim?: EvidenceClaim },
+  options: {
+    trigger: EvidencePackage['trigger'];
+    claim?: EvidenceClaim;
+    /** Runs only these checks, as picked for a review. */
+    only?: readonly string[];
+  },
 ): Promise<void> {
   const task = store.tasks[taskId];
   if (!task) return;
@@ -210,8 +215,15 @@ export async function buildEvidence(
   if (auto && !worthAutoBuild(store.tasks[taskId]?.evidence, scan)) return;
   const pkg = freshPackage(store.tasks[taskId]?.evidence, scan, options);
   const checks = getTaskChecks(taskId).map((check) => ({ ...check }));
+  const { only } = options;
+  // A check picked for a review runs even when it is on-demand; every other gate still holds.
+  const planned = only
+    ? checks
+        .filter((check) => only.includes(check.id))
+        .map((check) => ({ ...check, run: 'auto' as const }))
+    : checks;
   const plan = planChecks({
-    checks,
+    checks: planned,
     dockerMode: Boolean(task.dockerMode),
     flags: scan.flags,
     dirty: scan.dirty,

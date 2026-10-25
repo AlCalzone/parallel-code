@@ -21,6 +21,10 @@ interface SuggestChecksButtonProps {
   /** The review model the dialog currently shows, saved or not. */
   model: EvidenceModelSettings;
   onSuggest: (suggestion: CheckSuggestion) => void;
+  /** Defaults to "Suggest with AI". */
+  label?: string;
+  /** What to do with the suggestion; defaults to reviewing it before Save. */
+  doneHint?: string;
 }
 
 /**
@@ -60,7 +64,7 @@ export function SuggestChecksButton(props: SuggestChecksButtonProps) {
         throw new Error(suggestion.reason ?? 'The model found no commands to suggest.');
       props.onSuggest(suggestion);
       // Suggested commands run automatically once saved, so always ask for a review.
-      const review = 'Review the commands before saving.';
+      const review = props.doneHint ?? 'Review the commands before saving.';
       setStatus({ text: suggestion.reason ? `${suggestion.reason} ${review}` : review });
     } catch (err) {
       if (!disposed) setStatus({ text: errMessage(err), error: true });
@@ -89,7 +93,7 @@ export function SuggestChecksButton(props: SuggestChecksButtonProps) {
         }}
       >
         <SparkleIcon size={12} />
-        {running() ? 'Suggesting…' : 'Suggest with AI'}
+        {running() ? 'Suggesting…' : (props.label ?? 'Suggest with AI')}
       </button>
       <Show when={status()}>
         {(current) => (

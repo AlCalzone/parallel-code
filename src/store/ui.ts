@@ -9,6 +9,7 @@ import type { LookPreset, AppearanceMode } from '../lib/look';
 import { osIsDark } from '../lib/os-appearance';
 import type { CustomTheme } from '../lib/custom-theme';
 import { themeToCss } from '../lib/custom-theme';
+import type { ReviewModelSettings } from '../lib/task-review';
 import type { PersistedWindowState, TaskViewportVisibility } from './types';
 import { invoke } from '../lib/ipc';
 import { IPC } from '../../electron/ipc/channels';
@@ -184,8 +185,8 @@ export function setTaskBriefs(enabled: boolean): void {
   setStore('taskBriefs', enabled);
 }
 
-export function setConfidencePrompt(prompt: string): void {
-  setStore('confidencePrompt', prompt);
+export function setReviewGuidance(guidance: string): void {
+  setStore('reviewGuidance', guidance);
 }
 
 export function setShowSidebarTips(show: boolean): void {
@@ -256,6 +257,15 @@ export function setDefaultSkipPermissions(enabled: boolean): void {
 
 export function setCanvasOwnershipBadges(enabled: boolean): void {
   setStore('canvasOwnershipBadges', enabled);
+}
+
+export function setFinishReview(enabled: boolean): void {
+  setStore('finishReview', enabled);
+}
+
+export function setReviewModel(model: ReviewModelSettings): void {
+  // Replaced whole: a model left out of the new choice must not survive from the old one.
+  setStore('reviewModel', reconcile(model));
 }
 
 export function setDefaultPropagateSkipPermissions(enabled: boolean): void {

@@ -125,7 +125,13 @@ export interface MergeStatus {
    *  conflict. The branch's checks never ran against those base changes.
    *  Absent from older senders. */
   overlapping_files?: string[];
+  /** The task branch on origin as of the last fetch or push: never pushed,
+   *  at another commit than HEAD, or at HEAD. Absent without an origin, on a
+   *  detached HEAD, and from older senders. */
+  remote?: RemoteBranchState;
 }
+
+export type RemoteBranchState = 'unpushed' | 'differs' | 'pushed';
 
 export interface MergeResult {
   main_branch: string;

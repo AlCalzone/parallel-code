@@ -20,8 +20,8 @@ vi.mock('../store/task-brief', () => ({
   reopenBriefDecision: vi.fn(),
   refreshTaskBrief: vi.fn(),
   refreshCodeFingerprint: mockRefreshCode,
-  requestConfidenceRating: mockRate,
 }));
+vi.mock('../store/review-run', () => ({ startReview: mockRate }));
 
 import type { Task } from '../store/types';
 import { TaskBriefBar, TaskBriefLine } from './TaskBrief';
@@ -285,7 +285,7 @@ describe('TaskBriefBar', () => {
     const { bar } = mount(baseTask({ confidence: undefined }));
     expect(bar.textContent).not.toContain('%');
     bar.click();
-    button('Rate confidence')?.click();
+    button('Run review')?.click();
     expect(mockRate).toHaveBeenCalledWith('task');
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(card()).toBeNull();
@@ -308,11 +308,14 @@ describe('TaskBriefBar', () => {
     terminal.remove();
   });
 
-  it('names the agent a rating goes to when the task has several', () => {
+  it('never names a task agent for the review, and holds it while one runs', () => {
+    // A separate model reviews, so the agent the brief's corrections go to is beside the point.
     mockTargetName.mockReturnValue('Codex');
-    const { bar } = mount(baseTask({ confidence: undefined }));
+    const { bar } = mount(baseTask());
     bar.click();
-    expect(button('Rate confidence · Codex')).toBeDefined();
+    expect(button('Review again')).toBeDefined();
+    lastSetState?.('reviewStatus', { state: 'running', startedAt: 1 });
+    expect(button('Reviewing…')?.disabled).toBe(true);
   });
 
   it('explains the empty state before the first brief', () => {

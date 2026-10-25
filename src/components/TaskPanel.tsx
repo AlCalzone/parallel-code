@@ -1120,7 +1120,6 @@ export function TaskPanel(props: TaskPanelProps) {
               : finishCloses() || (getProject(props.task.projectId)?.deleteBranchOnClose ?? true)
           }
           tour={tour}
-          tourDisabled={changedFileCount() === 0}
           onTourClick={openOrGenerateTour}
           onRegenerateTour={() => {
             tour.reset();

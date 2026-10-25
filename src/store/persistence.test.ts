@@ -339,6 +339,34 @@ describe('background verify persistence', () => {
     expect(JSON.parse(lastCall[1].json).tasks['task-1'].lastVerifyPass).toEqual(pass);
   });
 
+  it('round-trips review dismissals and drops malformed ones', async () => {
+    const def = agentDef();
+    const dismissed = { 'risk:no real provider.': { text: 'No real provider.', reason: 'CI' } };
+    mockInvoke.mockResolvedValueOnce(
+      stateWith(
+        {},
+        {
+          'task-1': { ...persistedTask(def), reviewDismissed: dismissed },
+          'task-2': {
+            ...persistedTask(def),
+            id: 'task-2',
+            branchName: 'task/task-2',
+            worktreePath: '/repo/.worktrees/task-2',
+            reviewDismissed: { 'risk:x': 'not an entry' },
+          },
+        },
+      ),
+    );
+    await loadState();
+    expect(store.tasks['task-1'].reviewDismissed).toEqual(dismissed);
+    expect(store.tasks['task-2'].reviewDismissed).toBeUndefined();
+
+    mockInvoke.mockResolvedValueOnce(undefined);
+    await saveState();
+    const lastCall = mockInvoke.mock.calls[mockInvoke.mock.calls.length - 1];
+    expect(JSON.parse(lastCall[1].json).tasks['task-1'].reviewDismissed).toEqual(dismissed);
+  });
+
   it.each([
     [false, false],
     [true, undefined],
@@ -1660,6 +1688,41 @@ describe('task brief settings', () => {
     mockInvoke.mockResolvedValueOnce(basePayload({ taskBriefs: 'yes' }));
     await loadState();
     expect(store.taskBriefs).toBe(false);
+  });
+});
+
+describe('finish review setting', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('keeps the review line on unless it was turned off', async () => {
+    mockInvoke.mockResolvedValueOnce(basePayload());
+    await loadState();
+    expect(store.finishReview).toBe(true);
+    mockInvoke.mockResolvedValueOnce(basePayload({ finishReview: false }));
+    await loadState();
+    expect(store.finishReview).toBe(false);
+    mockInvoke.mockResolvedValueOnce(basePayload({ finishReview: 'no' }));
+    await loadState();
+    expect(store.finishReview).toBe(true);
+  });
+
+  it('restores the reviewer model and guidance, but not the old agent rating prompt', async () => {
+    mockInvoke.mockResolvedValueOnce(
+      basePayload({
+        reviewModel: { provider: 'codex', model: 'gpt-5', effort: 'high' },
+        reviewGuidance: 'Weigh missing tests heavily.',
+        confidencePrompt: 'Run my /confidence skill',
+      }),
+    );
+    await loadState();
+    expect(store.reviewModel).toEqual({ provider: 'codex', model: 'gpt-5', effort: 'high' });
+    expect(store.reviewGuidance).toBe('Weigh missing tests heavily.');
+    mockInvoke.mockResolvedValueOnce(
+      basePayload({ reviewModel: 'opus', confidencePrompt: 'Run my /confidence skill' }),
+    );
+    await loadState();
+    expect(store.reviewModel).toEqual({ provider: 'claude', model: 'opus' });
+    expect(store.reviewGuidance).toBe('');
   });
 });
 

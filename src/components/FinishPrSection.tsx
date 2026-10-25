@@ -77,7 +77,7 @@ export function FinishPrSection(props: FinishPrSectionProps) {
           )}
         </Show>
       </h3>
-      <Show when={taskPrUrl(props.task)} fallback={<p>No pull request detected for this task.</p>}>
+      <Show when={taskPrUrl(props.task)}>
         <Show when={!merged()} fallback={<p style={mutedText}>Merged on GitHub.</p>}>
           <Show when={summary() || canMarkReady()}>
             <p style={mutedText}>

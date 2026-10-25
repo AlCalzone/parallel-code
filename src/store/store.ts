@@ -167,7 +167,7 @@ export {
   setModelTaskNames,
   setTaskNameModel,
   setTaskBriefs,
-  setConfidencePrompt,
+  setReviewGuidance,
   setShowSidebarTips,
   setShowSidebarProgress,
   setSidebarNeedsInputFirst,
@@ -191,6 +191,8 @@ export {
   setDisableClaudeUiMode,
   setDefaultSkipPermissions,
   setCanvasOwnershipBadges,
+  setFinishReview,
+  setReviewModel,
   setDefaultPropagateSkipPermissions,
 } from './ui';
 export {

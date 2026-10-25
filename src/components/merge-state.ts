@@ -136,7 +136,10 @@ export function createMergeState(props: MergeStateProps) {
   const mergeBlocker = (): string | undefined => {
     if (!worktreeStatus()) return 'Checking the branch…';
     if (hasBranchMismatch()) return "The worktree is not on this task's branch.";
-    if (!hasCommittedChangesToMerge()) return 'Nothing to merge yet.';
+    if (!hasCommittedChangesToMerge())
+      return worktreeStatus()?.has_uncommitted_changes
+        ? 'Commit the changes to merge them.'
+        : 'No commits on this branch yet.';
     if (hasConflicts()) return `Resolve the conflicts with ${baseBranchName()} first.`;
     if (squash() && !squashTitle().trim()) return 'Add a commit title.';
     return undefined;

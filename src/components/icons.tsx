@@ -377,6 +377,25 @@ export function MentionIcon(props: IconProps): JSX.Element {
   );
 }
 
+/** Clipboard with a check, for the review; hairline like the change tour's icon beside it. */
+export function ReviewIcon(props: IconProps): JSX.Element {
+  return (
+    <SvgIcon {...props}>
+      <g
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.25"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M5.5 2.75H4.25a1 1 0 0 0-1 1v9.5a1 1 0 0 0 1 1h7.5a1 1 0 0 0 1-1v-9.5a1 1 0 0 0-1-1H10.5" />
+        <rect x="5.5" y="1.75" width="5" height="2" rx="0.5" />
+        <path d="m5.75 9 1.5 1.5 3-3" />
+      </g>
+    </SvgIcon>
+  );
+}
+
 export function ShieldIcon(props: IconProps): JSX.Element {
   return (
     <SvgIcon {...props}>

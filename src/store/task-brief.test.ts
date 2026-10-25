@@ -38,9 +38,7 @@ import {
   publishTaskConfidence,
   refreshCodeFingerprint,
   refreshTaskBrief,
-  requestConfidenceRating,
 } from './task-brief';
-import { DEFAULT_CONFIDENCE_PROMPT } from '../lib/task-confidence';
 
 const DIFF = 'diff --git a/src/a.ts b/src/a.ts\n+change';
 
@@ -60,7 +58,6 @@ beforeEach(() => {
   hook.status = null;
   setStore('taskBriefs', true);
   setStore('taskNameModel', 'haiku');
-  setStore('confidencePrompt', '');
   setStore('tasks', {
     t1: {
       id: 't1',
@@ -320,15 +317,7 @@ describe('decisions and ratings', () => {
     expect(task().brief?.decisions).toEqual({});
   });
 
-  it('asks for a rating with the configured prompt or the built-in one', async () => {
-    await requestConfidenceRating('t1');
-    expect(mockSendPrompt).toHaveBeenLastCalledWith('t1', 'agent-1', DEFAULT_CONFIDENCE_PROMPT);
-    setStore('confidencePrompt', 'Run my /confidence skill');
-    await requestConfidenceRating('t1');
-    expect(mockSendPrompt).toHaveBeenLastCalledWith('t1', 'agent-1', 'Run my /confidence skill');
-  });
-
-  it('names the agent that ratings and corrections go to only when there are several', () => {
+  it('names the agent that corrections go to only when there are several', () => {
     expect(briefTargetAgentName(task())).toBeUndefined();
     const agent = (name: string) => ({ def: { name } });
     setStore('agents', { 'agent-1': agent('Claude Code'), 'agent-2': agent('Codex') } as never);

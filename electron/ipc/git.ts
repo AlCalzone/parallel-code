@@ -29,6 +29,7 @@ import type {
   FileDiffResult,
   GitIgnoredEntry,
   MergeStatus,
+  RemoteBranchState,
   WorktreeStatus,
 } from './shared-types.js';
 
@@ -2340,10 +2341,39 @@ export async function discardUncommitted(worktreePath: string): Promise<void> {
   await exec('git', ['clean', '-fd'], { cwd: worktreePath });
 }
 
+/**
+ * Where origin's copy of the checked-out branch stands. Reads the local
+ * remote-tracking ref without fetching, so it costs no network; pushes from
+ * the app update that ref.
+ */
+async function remoteBranchState(worktreePath: string): Promise<RemoteBranchState | undefined> {
+  const read = (args: string[]) =>
+    exec('git', args, { cwd: worktreePath }).then(
+      ({ stdout }) => stdout.trim(),
+      () => undefined,
+    );
+  const [origin, branch, head] = await Promise.all([
+    read(['config', '--get', 'remote.origin.url']),
+    read(['symbolic-ref', '--quiet', '--short', 'HEAD']),
+    read(['rev-parse', 'HEAD']),
+  ]);
+  if (!origin || !branch || !head) return undefined;
+  const remote = await read(['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${branch}`]);
+  if (!remote) return 'unpushed';
+  return remote === head ? 'pushed' : 'differs';
+}
+
 export async function checkMergeStatus(
   worktreePath: string,
   baseBranch?: string,
 ): Promise<MergeStatus> {
+  const remote = remoteBranchState(worktreePath);
+  const status = await checkBaseStatus(worktreePath, baseBranch);
+  const state = await remote;
+  return state ? { ...status, remote: state } : status;
+}
+
+async function checkBaseStatus(worktreePath: string, baseBranch?: string): Promise<MergeStatus> {
   const mainBranch = baseBranch ?? (await detectMainBranch(worktreePath));
 
   // Count main commits not in HEAD, excluding patch-equivalents already

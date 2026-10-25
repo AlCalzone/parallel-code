@@ -167,9 +167,10 @@ it("names Codex's own default model once its list loads, with no placeholder bef
   setStore('askCodeProvider', 'codex');
   setStore('askCodeModel', '');
   selectTab('AI assist');
+  // MiniMax is offered only for code Q&A, which tells its select from the reviewer's.
   const select = () =>
     [...document.querySelectorAll<HTMLSelectElement>('select')]
-      .find((element) => [...element.options].some((option) => option.value === 'codex'))
+      .find((element) => [...element.options].some((option) => option.value === 'minimax'))
       ?.parentElement?.parentElement?.querySelectorAll('select')[1];
   await vi.waitFor(() => expect(select()?.options.length).toBe(0));
   setCodexModels([

@@ -1,7 +1,9 @@
 import { parseCompletionRecord } from '../../electron/shared/completion-report';
 import { persistedEvidence, restoredEvidence } from '../lib/evidence-package';
 import { restoreTaskBriefRecord } from '../lib/task-brief';
+import { restoreReviewChecks } from '../lib/review-checks';
 import { restoreTaskConfidence } from '../lib/task-confidence';
+import { restoreReviewDismissed } from '../lib/review-summary';
 import type { PrBabysit } from '../lib/pr-babysit';
 import {
   parseEvidenceModelSettings,
@@ -88,6 +90,7 @@ import { syncTerminalCounter } from './terminals';
 import { showNotification, NOTIFICATION_ERROR_MS } from './notification';
 import { errMessage, warn as logWarn } from '../lib/log';
 import { canvasTabKey } from '../lib/canvas-tabs';
+import { restoreReviewModel } from '../lib/task-review';
 import {
   hiddenAgentTaskIds,
   isHiddenAgentTaskId,
@@ -408,6 +411,8 @@ function toPersistedTask(task: Task, agentDefs: AgentDef[], collapsed?: boolean)
     evidence: persistedEvidence(task.evidence),
     brief: task.brief,
     confidence: task.confidence,
+    reviewDismissed: task.reviewDismissed,
+    reviewModel: task.reviewModel,
     landingState: task.landingState,
     landingReason: task.landingReason,
     landingSummary: task.landingSummary,
@@ -474,7 +479,7 @@ export async function saveState(): Promise<void> {
     modelTaskNames: store.modelTaskNames,
     taskNameModel: store.taskNameModel,
     taskBriefs: store.taskBriefs || undefined,
-    confidencePrompt: store.confidencePrompt.trim() || undefined,
+    reviewGuidance: store.reviewGuidance.trim() || undefined,
     showSidebarTips: store.showSidebarTips,
     showSidebarProgress: store.showSidebarProgress,
     sidebarNeedsInputFirst: store.sidebarNeedsInputFirst,
@@ -525,6 +530,8 @@ export async function saveState(): Promise<void> {
     defaultPropagateSkipPermissions: store.defaultPropagateSkipPermissions || undefined,
     // Default on: only an explicit opt-out is stored.
     canvasOwnershipBadges: store.canvasOwnershipBadges ? undefined : false,
+    finishReview: store.finishReview ? undefined : false,
+    reviewModel: store.reviewModel,
     autoStartRemoteAccess: store.autoStartRemoteAccess || undefined,
   };
 
@@ -688,7 +695,7 @@ interface LegacyPersistedState {
   modelTaskNames?: unknown;
   taskNameModel?: unknown;
   taskBriefs?: unknown;
-  confidencePrompt?: unknown;
+  reviewGuidance?: unknown;
   showSidebarTips?: unknown;
   showSidebarProgress?: unknown;
   sidebarNeedsInputFirst?: unknown;
@@ -731,6 +738,8 @@ interface LegacyPersistedState {
   defaultSkipPermissions?: unknown;
   defaultPropagateSkipPermissions?: unknown;
   canvasOwnershipBadges?: unknown;
+  finishReview?: unknown;
+  reviewModel?: unknown;
   autoStartRemoteAccess?: unknown;
 }
 
@@ -789,6 +798,7 @@ export async function loadState(): Promise<void> {
     p.evidenceModel = parseEvidenceModelSettings(p.evidenceModel);
     p.evidenceAutoBuild = p.evidenceAutoBuild === true ? true : undefined;
     p.verifyAutoRun = p.verifyAutoRun === false ? false : undefined;
+    p.reviewChecks = restoreReviewChecks(p.reviewChecks);
     p.superProductivityProjectId = isValidSpId(p.superProductivityProjectId)
       ? p.superProductivityProjectId
       : undefined;
@@ -960,8 +970,9 @@ export async function loadState(): Promise<void> {
         ? raw.taskNameModel
         : DEFAULT_TASK_NAME_MODEL;
       s.taskBriefs = raw.taskBriefs === true;
-      s.confidencePrompt =
-        typeof raw.confidencePrompt === 'string' ? raw.confidencePrompt.slice(0, 4_000) : '';
+      // Its predecessor confidencePrompt was an instruction to the task's agent, so it is not carried over.
+      s.reviewGuidance =
+        typeof raw.reviewGuidance === 'string' ? raw.reviewGuidance.slice(0, 4_000) : '';
       s.showSidebarTips = typeof raw.showSidebarTips === 'boolean' ? raw.showSidebarTips : true;
       s.showSidebarProgress =
         typeof raw.showSidebarProgress === 'boolean' ? raw.showSidebarProgress : true;
@@ -1057,6 +1068,8 @@ export async function loadState(): Promise<void> {
       s.defaultSkipPermissions = raw.defaultSkipPermissions === true;
       s.defaultPropagateSkipPermissions = raw.defaultPropagateSkipPermissions === true;
       s.canvasOwnershipBadges = raw.canvasOwnershipBadges !== false;
+      s.finishReview = raw.finishReview !== false;
+      s.reviewModel = restoreReviewModel(raw.reviewModel);
 
       s.autoStartRemoteAccess = raw.autoStartRemoteAccess === true;
 
@@ -1232,6 +1245,9 @@ export async function loadState(): Promise<void> {
           evidence: restoredEvidence(pt.evidence),
           brief: restoreTaskBriefRecord(pt.brief),
           confidence: restoreTaskConfidence(pt.confidence),
+          reviewDismissed: restoreReviewDismissed(pt.reviewDismissed),
+          reviewModel:
+            pt.reviewModel === undefined ? undefined : restoreReviewModel(pt.reviewModel),
           landingState: pt.landingState,
           landingReason: pt.landingReason,
           landingSummary: pt.landingSummary,
@@ -1388,6 +1404,9 @@ export async function loadState(): Promise<void> {
           evidence: restoredEvidence(pt.evidence),
           brief: restoreTaskBriefRecord(pt.brief),
           confidence: restoreTaskConfidence(pt.confidence),
+          reviewDismissed: restoreReviewDismissed(pt.reviewDismissed),
+          reviewModel:
+            pt.reviewModel === undefined ? undefined : restoreReviewModel(pt.reviewModel),
           landingState: pt.landingState,
           landingReason: pt.landingReason,
           landingSummary: pt.landingSummary,

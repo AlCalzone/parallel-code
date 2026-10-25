@@ -25,7 +25,8 @@ export interface EvidenceModelRequest {
 /**
  * One structured call with the project's provider, model and reasoning level:
  * an evidence review, (`purpose: 'checks'`) a suggested check setup, or
- * (`purpose: 'task-name'`) a short task title, or (`purpose: 'brief'`) a task brief.
+ * (`purpose: 'task-name'`) a short task title, (`purpose: 'brief'`) a task brief,
+ * or (`purpose: 'review'`) an independent rating of a task's work.
  * Resolves with the response text; rejects on provider failure, a runaway
  * response, or the client deadline.
  */
@@ -34,7 +35,7 @@ export function startEvidenceModelRequest(options: {
   cwd: string;
   settings: Pick<EvidenceModelSettings, 'provider' | 'model' | 'effort'>;
   agentEnvFiles: Record<string, string>;
-  purpose?: 'evidence' | 'checks' | 'task-name' | 'brief';
+  purpose?: 'evidence' | 'checks' | 'task-name' | 'brief' | 'review';
 }): EvidenceModelRequest {
   const requestId = crypto.randomUUID();
   const channel = new Channel<AskMessage>();

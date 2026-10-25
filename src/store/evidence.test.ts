@@ -242,6 +242,14 @@ describe('buildEvidence', () => {
     expect(mockSaveState).toHaveBeenCalled();
   });
 
+  it('runs only the checks a review picked, on-demand ones included', async () => {
+    answer(scan());
+    await buildEvidence('t1', { trigger: 'manual', only: ['e2e', 'unit'] });
+    // The project's order, not the pick's; verify was not picked, so it does not run.
+    expect(runCommands()).toEqual(['npm test', 'npm run e2e']);
+    expect(store.tasks.t1.evidence?.skipped).toEqual([]);
+  });
+
   it('reuses a manual verify run of the same commit instead of running it again', async () => {
     setTask({ verificationRun: finished('npm run check', { status: 'failed', exitCode: 1 }) });
     answer(scan());

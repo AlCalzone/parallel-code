@@ -2405,6 +2405,77 @@ button {
   flex-shrink: 0;
 }
 
+/* Finish dialog follow-ups: regular dialog buttons, each split off from its
+   model chevron, sized to their label rather than stretched across the row. */
+.finish-followups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.finish-followup {
+  flex: 0 1 auto;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-input);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.finish-followup .change-tour-footer {
+  border-top: 0;
+  font-size: inherit;
+}
+
+.finish-followup :is(.change-tour-hover, .change-tour-action) {
+  flex: 0 1 auto;
+  width: auto;
+}
+
+.finish-followup .change-tour-action {
+  min-height: 32px;
+  padding: 6px 14px;
+  color: var(--fg);
+}
+
+/* As buttons beside Run review, the tour reads like one: no trailing arrow. */
+.finish-followup .change-tour-arrow {
+  display: none;
+}
+
+.finish-followup .change-tour-model {
+  padding: 0 9px;
+  border-left-color: var(--border);
+}
+
+.review-rows > li {
+  padding: 12px 0;
+}
+
+.review-rows > li:first-child {
+  padding-top: 0;
+}
+
+.review-rows > li + li {
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* flow-root keeps the review's top margin inside, so the height ease measures it. */
+.review-below {
+  display: flow-root;
+}
+
+.review-below[data-resizing] {
+  overflow: hidden;
+}
+
+.review-below > * {
+  animation: fadeIn var(--motion-enter) var(--ease-out);
+}
+
 .review-control {
   padding: 4px 8px;
   border: 1px solid var(--border);
@@ -6137,6 +6208,7 @@ button.tour-save-state:not(:disabled):hover {
     animation: none;
   }
 
+  .review-below > *,
   .app-notice,
   .app-notice-check,
   .task-appearing,

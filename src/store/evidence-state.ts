@@ -40,7 +40,12 @@ export function setCheckOutput(taskId: string, checkId: string, output: string |
 
 export function getTaskChecks(taskId: string): ProjectCheck[] {
   const task = store.tasks[taskId];
-  return effectiveChecks((task && getProject(task.projectId)) ?? {});
+  return task ? getProjectChecks(task.projectId) : [];
+}
+
+/** The checks a project runs, the verify command first. */
+export function getProjectChecks(projectId: string): ProjectCheck[] {
+  return effectiveChecks(getProject(projectId) ?? {});
 }
 
 /** The worktree state evidence is judged against; callers pick the freshest source they have. */

@@ -1,10 +1,4 @@
 import { For, Index, Show, type JSX } from 'solid-js';
-import {
-  ASK_CODE_CLAUDE_MODELS,
-  ASK_CODE_MODELS,
-  askCodeEfforts,
-} from '../../electron/shared/ask-code-models';
-import { effortToRun, modelToRun } from '../lib/ask-code-model';
 import type {
   EvidenceCheckKind,
   EvidenceModelSettings,
@@ -17,6 +11,7 @@ import {
 } from '../../electron/shared/evidence-settings';
 import { sectionLabelStyle, theme } from '../lib/theme';
 import { CloseIcon, PlusIcon } from './icons';
+import { fieldStyle, ReviewModelFields } from './ReviewModelFields';
 
 /** A check being edited; the name follows the kind and new rows get their id when saved. */
 export type CheckDraft = Omit<ProjectCheck, 'id' | 'name'> & { id?: string };
@@ -55,16 +50,6 @@ const WHEN_LABELS: Record<EvidenceModelSettings['when'], string> = {
   manual: 'Only when I click Run AI review',
   handoff: 'On every agent handoff',
   risky: 'On handoffs with flags, untested code or large diffs',
-};
-// Same height and corners as the dialog's text inputs, so a check row lines up with them.
-const fieldStyle = {
-  background: theme.bgInput,
-  border: `1px solid ${theme.border}`,
-  'border-radius': 'var(--radius-md)',
-  padding: '7px 10px',
-  color: theme.fg,
-  'font-size': '13px',
-  'min-width': '0',
 };
 const hintStyle = { 'font-size': '12px', color: theme.fgSubtle, 'line-height': '1.45' };
 // A floated legend lays out as an ordinary grid item, so it takes the fieldset's
@@ -203,58 +188,7 @@ export function EvidenceSettingsFields(props: EvidenceSettingsFieldsProps) {
           </For>
         </select>
         <Show when={props.model.when !== 'off'}>
-          <select
-            aria-label="Review provider"
-            value={props.model.provider}
-            onChange={(e) =>
-              setModel({
-                provider: e.currentTarget.value === 'codex' ? 'codex' : 'claude',
-                model: undefined,
-                effort: undefined,
-              })
-            }
-            style={fieldStyle}
-          >
-            <option value="claude">Claude</option>
-            <option value="codex">Codex</option>
-          </select>
-          <Show
-            when={props.model.provider === 'claude'}
-            fallback={
-              <input
-                aria-label="Review model"
-                // An empty field runs this model; the request names it.
-                placeholder={modelToRun('codex', '') || 'Model slug'}
-                value={props.model.model ?? ''}
-                onInput={(e) => setModel({ model: e.currentTarget.value.trim() || undefined })}
-                style={fieldStyle}
-              />
-            }
-          >
-            <select
-              aria-label="Review model"
-              // Unset runs the same model the request falls back to.
-              value={props.model.model ?? ASK_CODE_MODELS.claude}
-              onChange={(e) => setModel({ model: e.currentTarget.value || undefined })}
-              style={fieldStyle}
-            >
-              <For each={ASK_CODE_CLAUDE_MODELS}>{(m) => <option value={m}>{m}</option>}</For>
-            </select>
-          </Show>
-          <select
-            aria-label="Reasoning level"
-            value={effortToRun(
-              props.model.provider,
-              props.model.model || modelToRun(props.model.provider, ''),
-              props.model.effort ?? '',
-            )}
-            onChange={(e) => setModel({ effort: e.currentTarget.value || undefined })}
-            style={fieldStyle}
-          >
-            <For each={askCodeEfforts(props.model.provider)}>
-              {(effort) => <option value={effort}>{effort}</option>}
-            </For>
-          </select>
+          <ReviewModelFields value={props.model} onChange={setModel} />
         </Show>
       </div>
       <Show when={props.model.when !== 'off'}>

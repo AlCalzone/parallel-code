@@ -1,4 +1,5 @@
 import { createEffect, createRoot, untrack } from 'solid-js';
+import { produce } from 'solid-js/store';
 import { TASK_NAME_MODELS } from '../../electron/shared/task-name-model';
 import { parseConfidencePayload } from '../../electron/shared/task-confidence';
 import { startEvidenceModelRequest } from '../lib/evidence-model-request';
@@ -13,7 +14,6 @@ import {
   parseTaskBriefResponse,
   type BriefDecisionState,
 } from '../lib/task-brief';
-import { DEFAULT_CONFIDENCE_PROMPT } from '../lib/task-confidence';
 import { isAgentChat } from './agent-chat';
 import { getAgentHookStatus } from './agentHookStatus';
 import { store, setStore } from './core';
@@ -41,12 +41,12 @@ const inFlight = new Map<string, { cancel: () => void }>();
 /** Tasks whose turn ended again while their brief was being written. */
 const rerun = new Set<string>();
 
-function isLiveTask(task: Task | undefined): task is Task {
+export function isLiveTask(task: Task | undefined): task is Task {
   return !!task && !task.closingStatus && !!task.worktreePath;
 }
 
 /** The branch diff, '' when the task has no git, or undefined when it could not be read. */
-async function readTaskDiff(task: Task): Promise<string | undefined> {
+export async function readTaskDiff(task: Task): Promise<string | undefined> {
   if (task.gitIsolation === 'none') return '';
   try {
     const { rawDiff } = await loadTaskDiff({
@@ -102,7 +102,7 @@ function latestAgentMessage(task: Task): AgentMessage {
 }
 
 /** Prompts sent after `since`; for the first brief, the prompt the task started with. */
-function promptsSince(task: Task, since: number): string[] {
+export function promptsSince(task: Task, since: number): string[] {
   const history = task.promptHistory ?? [];
   const recent = history.filter((entry) => (entry.sentAt ?? 0) > since).map((e) => e.text);
   if (recent.length || since > 0) return recent;
@@ -223,7 +223,7 @@ export async function refreshTaskBrief(
 }
 
 /** Records the newest code fingerprint seen, which ratings are compared against. */
-function noteCodeFingerprint(taskId: string, fingerprint: string, at: number): void {
+export function noteCodeFingerprint(taskId: string, fingerprint: string, at: number): void {
   const known = store.tasks[taskId]?.codeFingerprint;
   if (known && known.at >= at) return;
   setStore('tasks', taskId, 'codeFingerprint', { fingerprint, at });
@@ -340,7 +340,7 @@ function mainAgentId(task: Task): string | undefined {
 }
 
 /**
- * Names the agent that ratings and decision corrections go to. The card spans
+ * Names the agent that decision corrections go to. The card spans
  * every agent pane, so with several it would otherwise be unclear which one is
  * asked; with one agent there is nothing to tell apart.
  */
@@ -368,14 +368,6 @@ export async function changeBriefDecision(
   setDecisionState(taskId, text, 'sent');
 }
 
-/** Asks the task's agent to rate its work and publish it with confidence_publish. */
-export async function requestConfidenceRating(taskId: string): Promise<void> {
-  const task = store.tasks[taskId];
-  const agentId = task && mainAgentId(task);
-  if (!agentId) throw new Error('This task has no agent to ask.');
-  await sendPrompt(taskId, agentId, store.confidencePrompt.trim() || DEFAULT_CONFIDENCE_PROMPT);
-}
-
 /**
  * Stores a rating the agent published. The diff is read afterwards so the card
  * can tell when later work makes the rating out of date.
@@ -386,7 +378,13 @@ export function publishTaskConfidence(taskId: string, input: unknown): void {
   if (!Object.hasOwn(store.tasks, taskId) || !task || task.closingStatus)
     throw new Error('Task not available.');
   const publishedAt = Date.now();
-  setStore('tasks', taskId, 'confidence', { ...payload, publishedAt });
+  // Replaced, not merged: a field the new rating leaves out must not survive from the old one.
+  setStore(
+    produce((s) => {
+      const target = s.tasks[taskId];
+      if (target) target.confidence = { ...payload, publishedAt };
+    }),
+  );
   void readTaskDiff(task).then((rawDiff) => {
     // Unread code cannot be compared later, so the rating keeps no fingerprint.
     if (rawDiff === undefined) return;

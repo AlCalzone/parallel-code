@@ -148,12 +148,8 @@ export function MergeBlockers(props: MergeSectionProps) {
   );
 }
 
-/**
- * What is being reviewed: open by default, since everything below judges it.
- * Children, such as the change tour, form a footer strip under the file list,
- * as in the task's changed-files panel.
- */
-export function MergeChanges(props: MergeSectionProps & { children?: JSX.Element }) {
+/** What is being reviewed: open by default, since everything below judges it. */
+export function MergeChanges(props: MergeSectionProps) {
   return (
     <details open style={{ 'margin-bottom': '20px', 'font-size': '13px' }}>
       <summary style={{ cursor: 'pointer', color: theme.fgMuted }}>
@@ -164,11 +160,10 @@ export function MergeChanges(props: MergeSectionProps & { children?: JSX.Element
         <MergeCommitList state={props.state} />
         <div
           style={{
+            // Square corners: rounded, the list reads like one of the buttons around it.
             border: `1px solid ${theme.border}`,
-            'border-radius': 'var(--radius-md)',
             overflow: 'hidden',
-            // About five rows plus the footer: the list scrolls itself so the
-            // dialog does not.
+            // About five rows: the list scrolls itself so the dialog does not.
             'max-height': '200px',
             display: 'flex',
             'flex-direction': 'column',
@@ -184,7 +179,6 @@ export function MergeChanges(props: MergeSectionProps & { children?: JSX.Element
             coverageReportPath={getProject(props.task.projectId)?.coverageReportPath}
             onCoverageComparisonChange={props.state.setCoverageComparison}
           />
-          {props.children}
         </div>
       </div>
     </details>
