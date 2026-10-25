@@ -180,6 +180,12 @@ const toggle = (root: HTMLElement) => {
   if (!found) throw new Error('Missing review action');
   return found;
 };
+/** The reviewer chevron split off the review's box. */
+const chevron = (root: HTMLElement) => {
+  const found = root.querySelector<HTMLButtonElement>('.finish-followup .change-tour-model');
+  if (!found) throw new Error('Missing reviewer chevron');
+  return found;
+};
 const heading = (root: HTMLElement) =>
   toggle(root).querySelector('.change-tour-action-label')?.firstChild?.textContent;
 /** Opens the review unless it opened on its own. */
@@ -187,8 +193,6 @@ const expand = (root: HTMLElement) => {
   if (toggle(root).getAttribute('aria-expanded') !== 'true') toggle(root).click();
 };
 const settings = (root: HTMLElement) => button(root, 'Change settings');
-/** Starts a review from the open settings. */
-const start = (root: HTMLElement) => button(root, /Start review/).click();
 
 describe('ReviewSection', () => {
   it('asks what to run on the first review in a project and saves the pick', () => {
@@ -268,7 +272,7 @@ describe('ReviewSection', () => {
     expect(mockRate).not.toHaveBeenCalled();
   });
 
-  it('names a picked check that failed, and runs again with other settings', () => {
+  it('leaves check results to the readiness rows, and runs again with other settings', () => {
     setProject({ reviewChecks: ['verify', 'unit'] });
     const run = (checkId: string, status: 'passed' | 'failed') => ({
       checkId,
@@ -292,10 +296,8 @@ describe('ReviewSection', () => {
       }),
     );
     expand(root);
-    // Results sit in the readiness rows above; the review names what failed.
-    expect(root.querySelector('[aria-label="Confidence"]')?.textContent).toContain(
-      'Not ready to merge: Unit failed',
-    );
+    // Results sit in the readiness rows above; the review does not say them twice.
+    expect(root.querySelector('[aria-label="Confidence"]')?.textContent).not.toContain('Unit');
     settings(root).click();
     const boxes = [...root.querySelectorAll<HTMLInputElement>('fieldset input[type="checkbox"]')];
     // It starts from the saved pick.
@@ -310,7 +312,7 @@ describe('ReviewSection', () => {
     expect(mockRate).toHaveBeenCalledWith('task');
   });
 
-  it('shows what was asked, what changed and the key line from the reviewer alone', () => {
+  it('shows what changed and the key line from the reviewer alone, the ask on hover', () => {
     const task = baseTask({ brief: undefined });
     const { root, onOpenFile } = mount({
       ...task,
@@ -326,45 +328,55 @@ describe('ReviewSection', () => {
     });
     expand(root);
     const text = root.textContent ?? '';
-    expect(text).toContain('Asked Keep ?next= through sign-in.');
-    const items = [...root.querySelectorAll('ol li')].map((li) => li.textContent);
-    expect(items).toEqual([
-      'You land where you were going instead of /.unit',
+    expect(text).not.toContain('Keep ?next=');
+    expect(root.querySelector('[title^="Rated against"]')?.getAttribute('title')).toBe(
+      'Rated against: Keep ?next= through sign-in.',
+    );
+    // Changes show unfolded; only a gap in testing is said, the covering tests are on hover.
+    const items = [...root.querySelectorAll('ol li')];
+    expect(items.map((li) => li.textContent)).toEqual([
+      'You land where you were going instead of /.',
       'Lost return URLs are remembereduntested',
     ]);
+    expect(items[0].getAttribute('title')).toBe('Tested: unit');
     expect(text).not.toContain('brief');
     button(root, 'src/auth.ts:72').click();
     expect(onOpenFile).toHaveBeenCalledWith('src/auth.ts', 72);
   });
 
-  it('stays one follow-up until asked, and Run review asks what to run first', () => {
+  it('stays one follow-up until asked, and Run review runs the saved pick at once', () => {
     const { root } = mount(baseTask({ confidence: undefined }));
     expect(root.querySelector('h3')?.textContent).toBe('Before you merge');
     expect(heading(root)).toBe('Run review');
     expect(toggle(root).title).toContain('Checks the work against what you asked');
-    expect(root.textContent).not.toContain('Asked ');
     // Nothing to open yet, so the action is no disclosure.
     expect(toggle(root).hasAttribute('aria-expanded')).toBe(false);
     // Opening the dialog sends nothing.
     expect(mockRate).not.toHaveBeenCalled();
     toggle(root).click();
-    // The task's first review shows its settings, from the saved pick, before it runs.
-    expect(mockRate).not.toHaveBeenCalled();
+    // The project's checks were picked before, so a task's first review asks nothing.
+    expect(root.querySelector('fieldset')).toBeNull();
+    expect(mockRate).toHaveBeenCalledWith('task');
+  });
+
+  it('closes the first review settings from the review button', () => {
+    setProject({ reviewChecks: undefined });
+    const { root } = mount(baseTask({ confidence: undefined }));
+    toggle(root).click();
     expect(toggle(root).getAttribute('aria-expanded')).toBe('true');
     expect(toggle(root).title).toBe('Close the review settings');
     toggle(root).click();
     expect(root.querySelector('fieldset')).toBeNull();
-    toggle(root).click();
-    start(root);
-    expect(mockRate).toHaveBeenCalledWith('task');
+    expect(mockRate).not.toHaveBeenCalled();
   });
 
   it("picks the reviewer for this task in the review's settings", () => {
+    setProject({ reviewChecks: undefined });
     setStore('reviewModel', { provider: 'claude', model: 'opus' });
     const { root } = mount(baseTask({ confidence: undefined }));
-    // One model menu, inside the settings; the button itself has none.
-    expect(root.querySelectorAll('[aria-haspopup="menu"]')).toHaveLength(0);
     toggle(root).click();
+    // The open settings carry the pick; the chevron beside the button waits.
+    expect(chevron(root).disabled).toBe(true);
     const menu = root.querySelector<HTMLButtonElement>('fieldset [aria-label^="Reviewer model"]');
     if (!menu) throw new Error('Missing reviewer menu');
     expect(menu.textContent).toBe('opus');
@@ -399,15 +411,31 @@ describe('ReviewSection', () => {
     expect(toggle(root).textContent).not.toContain('You can close this dialog');
   });
 
-  it('says why a review failed and offers it again', () => {
+  it('says why a review failed and offers it again, with another reviewer', () => {
     const { root } = mount(
       baseTask({ confidence: undefined, reviewStatus: { state: 'failed', message: 'No CLI' } }),
     );
     expect(heading(root)).toBe('Retry review');
     expect(root.querySelector('[role="alert"]')?.textContent).toBe('The review failed: No CLI');
+    expect(chevron(root).disabled).toBe(false);
     toggle(root).click();
-    start(root);
     expect(mockRate).toHaveBeenCalledWith('task');
+  });
+
+  it('switches the reviewer from beside the button without running a review', () => {
+    const { root, setState } = mount(baseTask());
+    expect(chevron(root).title).toMatch(/^Reviewer: opus/);
+    chevron(root).click();
+    const sonnet = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find(
+      (row) => row.textContent?.trim() === 'sonnet',
+    );
+    if (!sonnet) throw new Error('Missing sonnet row');
+    sonnet.click();
+    expect(mockSetModel).toHaveBeenCalledWith('task', { provider: 'claude', model: 'sonnet' });
+    expect(mockRate).not.toHaveBeenCalled();
+    // A running review keeps the reviewer it started with.
+    setState({ reviewStatus: { state: 'running', startedAt: 5_000 } });
+    expect(chevron(root).disabled).toBe(true);
   });
 
   it('keeps older scores after a failed review and says they are older', () => {
@@ -436,14 +464,15 @@ describe('ReviewSection', () => {
     expect(toggle(root).getAttribute('aria-expanded')).toBe('false');
     toggle(root).click();
     expect(toggle(root).getAttribute('aria-expanded')).toBe('true');
-    expect(root.textContent).toContain('Asked Send people back after sign-in.');
-    // The weakest score stands for the whole; every score keeps its reason.
+    // The weakest score stands for the whole and says why; a score above the bar keeps its reason on hover.
     const card = root.querySelector('[aria-label="Confidence"]');
     expect(card?.textContent).toContain('50%confident · held back by Completeness');
-    expect([...(card?.querySelectorAll('li') ?? [])].map((li) => li.textContent)).toEqual([
-      'Correctness88%Tested.',
-      'Completeness50%Misses remember-me.',
+    expect(card?.textContent).toContain('Misses remember-me.');
+    const others = [...(card?.querySelectorAll('[aria-label="Other scores"] li') ?? [])];
+    expect(others.map((li) => [li.textContent, li.getAttribute('title')])).toEqual([
+      ['Correctness 88%', 'Tested.'],
     ]);
+    expect(card?.textContent).not.toContain('Tested.');
     expect(root.textContent).not.toContain('Cookie lasts 5 minutes.');
     // A current rating can still be run again, say on another model; it is checked against the code as it is now.
     expect(button(root, 'Run review again').disabled).toBe(false);
@@ -451,7 +480,51 @@ describe('ReviewSection', () => {
     expect(toggle(root).getAttribute('aria-expanded')).toBe('true');
     toggle(root).click();
     expect(toggle(root).getAttribute('aria-expanded')).toBe('false');
-    expect(root.textContent).not.toContain('Asked ');
+    expect(root.querySelector('[aria-label="Confidence"]')).toBeNull();
+  });
+
+  it('keeps every low score with its reason', () => {
+    const task = baseTask({ codeFingerprint: { fingerprint: 'same', at: 4_000 } });
+    const rated = task.confidence;
+    if (!rated) throw new Error('Missing rating');
+    const scores = [...rated.scores, { label: 'Tested', score: 55, why: 'No e2e.' }];
+    const { root } = mount({ ...task, confidence: { ...rated, scores } });
+    expand(root);
+    const card = root.querySelector('[aria-label="Confidence"]');
+    expect(card?.textContent).toContain('Tested 55% · No e2e.');
+    expect(card?.querySelectorAll('[aria-label="Other scores"] li')).toHaveLength(1);
+  });
+
+  /** A rating of the current code that finds nothing to act on. */
+  function cleanTask(overrides: Partial<Task> = {}): Task {
+    const task = baseTask({ codeFingerprint: { fingerprint: 'same', at: 4_000 }, ...overrides });
+    const brief = task.brief;
+    if (!brief) throw new Error('Missing brief');
+    return {
+      ...task,
+      brief: { ...brief, brief: { ...brief.brief, open: [], extra: [] } },
+      confidence: {
+        scores: [{ label: 'Correctness', score: 88, why: 'Tested.' }],
+        findings: [],
+        publishedAt: 3_000,
+        fingerprint: 'same',
+      },
+    };
+  }
+
+  it('leaves a clean review folded, its verdict on the button', async () => {
+    const { root } = mount(cleanTask());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(heading(root)).toBe('Review · 88% · nothing open');
+    expect(toggle(root).getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('opens a clean review the user watched finish', () => {
+    const { root, setState } = mount(
+      cleanTask({ reviewStatus: { state: 'running', startedAt: 5_000 } }),
+    );
+    setState('reviewStatus', undefined);
+    expect(toggle(root).getAttribute('aria-expanded')).toBe('true');
   });
 
   /** Makes the next code read wait until the test settles it, as a real diff read does. */
@@ -507,7 +580,6 @@ describe('ReviewSection', () => {
     expect(toggle(root).getAttribute('aria-expanded')).toBe('true');
     expect(root.textContent).toContain('Says the tests pass.');
     button(root, 'Run review').click();
-    start(root);
     expect(mockRate).toHaveBeenCalledWith('task');
   });
 
@@ -567,13 +639,32 @@ describe('ReviewSection', () => {
     expect(button(root, 'Rework (1)').disabled).toBe(false);
   });
 
+  it('names where a risk came from and the score it lowers on hover only', () => {
+    const task = baseTask({ codeFingerprint: { fingerprint: 'same', at: 4_000 } });
+    const rated = task.confidence;
+    if (!rated) throw new Error('Missing rating');
+    const findings = [
+      { kind: 'risk' as const, text: 'Races on logout.', file: 'src/auth.ts', axis: 'Correctness' },
+    ];
+    const { root } = mount({ ...task, confidence: { ...rated, findings } });
+    expand(root);
+    const row = [...root.querySelectorAll('li')].find((li) =>
+      li.textContent?.includes('Races on logout.'),
+    );
+    expect(row?.textContent).toContain('src/auth.ts');
+    expect(row?.textContent).not.toContain('Lowers');
+    expect(row?.querySelector('[title]')?.getAttribute('title')).toBe(
+      'From the confidence check · Lowers Correctness',
+    );
+  });
+
   it('folds risks dismissed before the dialog opened', () => {
     const task = baseTask({
       reviewDismissed: { [reviewItemId('risk', OPEN)]: { text: OPEN, reason: 'Gone soon' } },
     });
     const { root } = mount(task);
     expand(root);
-    expect(root.textContent).toContain('Nothing left open.');
+    expect(root.textContent).toContain('Unsure · none open');
     expect(root.textContent).not.toContain(OPEN);
     button(root, 'Accepted earlier (1)').click();
     expect(root.querySelector<HTMLInputElement>('input[type="text"]')?.value).toBe('Gone soon');
