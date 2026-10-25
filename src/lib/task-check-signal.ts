@@ -17,6 +17,8 @@ export interface CheckSignal {
   label: string;
   color: string;
   title: string;
+  /** A failure: shown as a tinted chip rather than plain status text. */
+  urgent?: boolean;
 }
 
 export interface CheckSignalInput {
@@ -35,10 +37,10 @@ const MAX_TITLE_FLAGS = 5;
 // Kinds without an entry stay silent: running or passed asks nothing of you, a
 // configured-but-never-run command on every task would be noise, and cancelled
 // runs carry no signal.
-const RUN_SIGNAL: Partial<Record<VerificationSummaryKind, { label: string; color: string }>> = {
+const RUN_SIGNAL: Partial<Record<VerificationSummaryKind, Omit<CheckSignal, 'title'>>> = {
   stale: { label: 'Re-run verify', color: theme.warning },
   dirty: { label: 'Re-run verify', color: theme.warning },
-  failed: { label: 'Fix failing verify', color: theme.error },
+  failed: { label: 'Verify failed', color: theme.error, urgent: true },
 };
 
 function reportedSignal(verification?: SubtaskVerification): CheckSignal | undefined {
@@ -74,6 +76,7 @@ export function taskCheckSignal(input: CheckSignalInput): CheckSignal | undefine
       // A failed check already makes the level low, so the colour follows the level.
       color: EVIDENCE_LEVEL[level].color,
       title: title.join('\n'),
+      urgent: level === 'low',
     };
   }
   if (!usesVerificationRun(input.verificationRun, input.verifyCommandConfigured))

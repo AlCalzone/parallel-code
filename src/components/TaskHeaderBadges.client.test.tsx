@@ -7,6 +7,7 @@ import { store, setStore } from '../store/core';
 import { bringTaskToFront, sendTaskToBack } from '../store/background-tasks';
 import { invoke } from '../lib/ipc';
 import type { Task } from '../store/types';
+import type { VerificationRun } from '../ipc/types';
 
 vi.mock('../lib/ipc', () => ({ invoke: vi.fn(), fireAndForget: vi.fn() }));
 
@@ -89,6 +90,40 @@ it('keeps the check summary as plain text once the task cannot be finished', () 
   setCanFinish(false);
   expect(container.querySelector('button.task-check-signal')).toBeNull();
   expect(container.querySelector('.task-header-badges')?.textContent).toMatch(/^\S/);
+});
+
+const verifyRun = (overrides: Partial<VerificationRun>): VerificationRun => ({
+  command: 'npm test',
+  headSha: 'a'.repeat(40),
+  dirty: false,
+  startedAt: '2026-10-06T10:00:00.000Z',
+  finishedAt: '2026-10-06T10:01:00.000Z',
+  status: 'failed',
+  exitCode: 1,
+  outputTail: '',
+  ...overrides,
+});
+
+// rowChipBox gives every chip a fixed height; plain status text has none.
+it('marks a failing verify run as a chip that still opens Finish', () => {
+  setStore('tasks', 'one', 'verificationRun', verifyRun({}));
+  const signal = container.querySelector<HTMLButtonElement>('button.task-check-signal');
+  expect(signal?.textContent).toBe('Verify failed');
+  expect(signal?.style.height).not.toBe('');
+  signal?.click();
+  expect(onFinish).toHaveBeenCalledOnce();
+});
+
+it('keeps a verify warning as plain status text', () => {
+  setStore(
+    'tasks',
+    'one',
+    'verificationRun',
+    verifyRun({ status: 'passed', exitCode: 0, dirty: true }),
+  );
+  const signal = container.querySelector<HTMLButtonElement>('button.task-check-signal');
+  expect(signal?.textContent).toBe('Re-run verify');
+  expect(signal?.style.height).toBe('');
 });
 
 // The branch bar collapses an empty group's margin with :empty, so a group

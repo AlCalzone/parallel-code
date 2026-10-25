@@ -9,7 +9,7 @@ import {
 } from '../store/store';
 import { theme } from '../lib/theme';
 import { badgeStyle, neutralBadgeStyle, rowChipBox } from '../lib/badgeStyle';
-import { taskCheckSignal } from '../lib/task-check-signal';
+import { taskCheckSignal, type CheckSignal } from '../lib/task-check-signal';
 import { getTaskDockerBadgeLabel } from '../lib/docker';
 import type { Task } from '../store/types';
 import {
@@ -20,6 +20,9 @@ import {
 
 const tinted = (color: string) => ({ ...badgeStyle(color), ...rowChipBox });
 const neutral = { ...neutralBadgeStyle, ...rowChipBox };
+// Only a failure earns the tint; warnings stay plain status text.
+const signalStyle = (signal: CheckSignal) =>
+  signal.urgent ? tinted(signal.color) : { color: signal.color };
 
 function landingBadge(task: Task) {
   switch (task.landingState) {
@@ -88,7 +91,7 @@ export function TaskAttentionBadges(props: {
           <Show
             when={props.onFinish}
             fallback={
-              <span style={{ color: signal().color }} title={signal().title}>
+              <span style={signalStyle(signal())} title={signal().title}>
                 {signal().label}
               </span>
             }
@@ -97,7 +100,7 @@ export function TaskAttentionBadges(props: {
               <button
                 type="button"
                 class="task-check-signal"
-                style={{ color: signal().color }}
+                style={signalStyle(signal())}
                 title={`${signal().title}\n\nOpen Finish to review.`}
                 onClick={(e) => {
                   e.stopPropagation();
