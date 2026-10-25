@@ -125,6 +125,40 @@ describe('test-weakened rules', () => {
     expect(result.tests).toMatchObject([{ title: 'x', change: 'changed' }]);
   });
 
+  it('treats a reworded title on an otherwise unchanged line as changed', () => {
+    const result = analyze([
+      file('src/a.test.ts', 'M', ["  it('saves x', () => {"], ["  it('saves x on blur', () => {"]),
+    ]);
+    expect(result.flags).toEqual([]);
+    expect(result.tests).toEqual([
+      { file: 'src/a.test.ts', kind: 'unit', title: 'saves x on blur', change: 'changed' },
+    ]);
+  });
+
+  it('treats a reworded title that also occurs in the call name as changed', () => {
+    const result = analyze([file('src/a.test.ts', 'M', ["it('t', () => {"], ["it('tt', () => {"])]);
+    expect(result.flags).toEqual([]);
+  });
+
+  it('still flags a reworded title whose body was replaced in the same block', () => {
+    const result = analyze([
+      file(
+        'src/a.test.ts',
+        'M',
+        ["it('rejects x', () => {", '  expect(check(x)).toBe(false)'],
+        ["it('accepts y', () => {", '  expect(true).toBe(true)'],
+      ),
+    ]);
+    expect(result.flags).toMatchObject([{ rule: 'test-removed', category: 'test-weakened' }]);
+  });
+
+  it('still flags a title replaced by a different kind of call', () => {
+    const result = analyze([
+      file('src/a.test.ts', 'M', ["describe('x', () => {"], ["it('y', () => {"]),
+    ]);
+    expect(result.flags).toMatchObject([{ rule: 'test-removed' }]);
+  });
+
   it('does not flag a rename that preserves titles', () => {
     const result = analyze([
       file('src/b.test.ts', 'R', ["it('x', () => {"], ["it('x', () => {"], 'src/a.test.ts'),

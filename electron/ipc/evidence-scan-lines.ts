@@ -2,6 +2,8 @@ export interface DiffLine {
   /** New-file line for added lines, old-file line for removed lines. */
   line: number;
   text: string;
+  /** Run of consecutive +/- lines this line belongs to; a line replaced in place shares it. */
+  block: number;
 }
 
 export interface ParsedHunks {
@@ -17,21 +19,24 @@ export function parseHunks(patch: string): ParsedHunks {
   let oldLine = 0;
   let newLine = 0;
   let inHunk = false;
+  let block = 0;
   for (const raw of patch.split('\n')) {
     const header = HUNK_HEADER.exec(raw);
     if (header) {
       oldLine = Number(header[1]);
       newLine = Number(header[2]);
       inHunk = true;
+      block++;
     } else if (!inHunk || raw.startsWith('\\')) {
       continue;
     } else if (raw.startsWith('+')) {
-      result.added.push({ line: newLine++, text: raw.slice(1) });
+      result.added.push({ line: newLine++, text: raw.slice(1), block });
     } else if (raw.startsWith('-')) {
-      result.removed.push({ line: oldLine++, text: raw.slice(1) });
+      result.removed.push({ line: oldLine++, text: raw.slice(1), block });
     } else {
       oldLine++;
       newLine++;
+      block++;
     }
   }
   return result;
@@ -44,6 +49,16 @@ const TITLE_CALL =
 export function extractTitle(text: string): string | undefined {
   const match = TITLE_CALL.exec(text);
   return match ? (match[1] ?? match[2] ?? match[3]) : undefined;
+}
+
+/** The line with its describe/it/test title cut out, by position so call names stay intact. */
+export function withoutTitle(text: string): string | undefined {
+  const match = TITLE_CALL.exec(text);
+  if (!match) return undefined;
+  const title = match[1] ?? match[2] ?? match[3] ?? '';
+  // The match ends with the closing quote, right after the title.
+  const end = match.index + match[0].length - 1;
+  return text.slice(0, end - title.length) + text.slice(end);
 }
 
 /** Small non-cryptographic hash (cyrb53) so flag ids stay stable without Node imports. */

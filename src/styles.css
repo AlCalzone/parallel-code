@@ -328,7 +328,7 @@ body.font-smoothing {
   margin: 0 0 0 8px;
 }
 
-/* Reads as the status text it extends; the underline on hover shows it opens Finish. */
+/* Reads as the status text it extends; the pointer cursor shows it opens Finish. */
 .task-check-signal {
   padding: 0;
   border: 0;
@@ -336,10 +336,6 @@ body.font-smoothing {
   font: inherit;
   white-space: pre;
   cursor: pointer;
-}
-
-.task-check-signal:hover {
-  text-decoration: underline;
 }
 
 /* A neutral badge that acts; only hover reveals it is clickable. */

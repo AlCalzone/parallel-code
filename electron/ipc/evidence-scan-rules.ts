@@ -11,7 +11,14 @@ import {
   type EvidenceTestChange,
 } from '../shared/evidence.js';
 import { classifyPath, isSnapshotPath, subjectBase, testKind } from './evidence-scan-paths.js';
-import { extractTitle, hashText, parseHunks, type ParsedHunks } from './evidence-scan-lines.js';
+import {
+  extractTitle,
+  hashText,
+  parseHunks,
+  withoutTitle,
+  type DiffLine,
+  type ParsedHunks,
+} from './evidence-scan-lines.js';
 
 export { classifyPath, testKind } from './evidence-scan-paths.js';
 export { extractTitle } from './evidence-scan-lines.js';
@@ -231,6 +238,32 @@ function titlesOf(lines: { line: number; text: string }[]) {
   });
 }
 
+/** Lines that are the only removed (or added) line of their change block. */
+function soleLines(lines: DiffLine[]): Map<number, DiffLine> {
+  const counts = new Map<number, number>();
+  for (const { block } of lines) counts.set(block, (counts.get(block) ?? 0) + 1);
+  return new Map(lines.filter((l) => counts.get(l.block) === 1).map((l) => [l.block, l]));
+}
+
+/**
+ * Removed line → new title for test titles reworded in place. Only a one-line
+ * replacement whose text differs in nothing but the title counts, so a test
+ * swapped for a different one, body and all, is still flagged.
+ */
+function retitled(hunks: ParsedHunks): Map<number, string> {
+  const added = soleLines(hunks.added);
+  const pairs = new Map<number, string>();
+  for (const removed of soleLines(hunks.removed).values()) {
+    const next = added.get(removed.block);
+    if (!next) continue;
+    const title = extractTitle(next.text);
+    const rest = withoutTitle(removed.text);
+    if (title !== undefined && rest !== undefined && rest === withoutTitle(next.text))
+      pairs.set(removed.line, title);
+  }
+  return pairs;
+}
+
 function testChanges(entries: Entry[]): { tests: EvidenceTestChange[]; flags: EvidenceFlag[] } {
   const testEntries = entries.filter((e) => e.role === 'test');
   const added = new Map(testEntries.map((e) => [e.path, titlesOf(e.hunks.added)]));
@@ -243,11 +276,14 @@ function testChanges(entries: Entry[]): { tests: EvidenceTestChange[]; flags: Ev
     const addedTitles = new Set(addedHere.map((t) => t.title));
     const removedHere = titlesOf(entry.hunks.removed);
     const removedTitles = new Set(removedHere.map((t) => t.title));
+    const renamed = retitled(entry.hunks);
+    const renamedTo = new Set(renamed.values());
     const push = (title: string, change: EvidenceTestChange['change']) =>
       tests.push({ file: entry.path, kind, title, change });
-    for (const title of addedTitles) push(title, removedTitles.has(title) ? 'changed' : 'added');
+    for (const title of addedTitles)
+      push(title, removedTitles.has(title) || renamedTo.has(title) ? 'changed' : 'added');
     for (const { title, line, text } of removedHere) {
-      if (addedTitles.has(title)) continue;
+      if (addedTitles.has(title) || renamed.has(line)) continue;
       push(title, allAdded.has(title) ? 'changed' : 'removed');
       if (entry.status !== 'D' && !allAdded.has(title))
         flags.push(
