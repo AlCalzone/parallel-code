@@ -99,6 +99,7 @@ export {
   moveActiveTask,
   jumpToTask,
   toggleNewTaskPanel,
+  startProjectTask,
 } from './navigation';
 export {
   registerFocusFn,

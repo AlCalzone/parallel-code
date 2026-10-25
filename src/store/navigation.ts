@@ -163,6 +163,19 @@ export function toggleNewTaskPanel(show?: boolean): void {
 }
 
 /**
+ * Opens a blank new-task form for the project. An already open form keeps its
+ * draft and project, as with the other prefilled starts.
+ */
+export function startProjectTask(projectId: string): void {
+  if (!store.showNewTaskPanel) {
+    setStore('newTaskDropUrl', null);
+    // An empty name lets the model name the task from the prompt.
+    setStore('newTaskPrefillPrompt', { prompt: '', name: '', projectId });
+  }
+  toggleNewTaskPanel(true);
+}
+
+/**
  * Selects the project whose tasks show. On a plan this switches to the new
  * project's plan; all projects, or one without a plan, show the running tasks.
  */

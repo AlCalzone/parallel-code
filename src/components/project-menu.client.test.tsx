@@ -15,10 +15,13 @@ beforeEach(() => {
   setStore('editorCommand', '');
   setStore('kanbanProjectId', null);
   setStore('githubIssuesProjectId', null);
+  setStore('showNewTaskPanel', false);
+  setStore('newTaskPrefillPrompt', null);
 });
 
-it('offers the project views, its folder, settings and removal for a code project', () => {
+it('offers a new task, the project views, its folder, settings and removal for a code project', () => {
   expect(labels(code)).toEqual([
+    'New task',
     'Plan board',
     'GitHub issues',
     'Show in file manager',
@@ -51,4 +54,23 @@ it('opens the chosen view and dialogs', () => {
   expect(dialogs.editSettings).toHaveBeenCalledWith(code);
   run('Remove project…');
   expect(dialogs.remove).toHaveBeenCalledWith('code');
+});
+
+it('opens a blank new-task form for the project', () => {
+  setStore('projects', [code]);
+  projectMenuItems(code, false, dialogs)
+    .find((item) => item.label === 'New task')
+    ?.run?.();
+  expect(store.showNewTaskPanel).toBe(true);
+  expect(store.newTaskPrefillPrompt).toMatchObject({ projectId: 'code', prompt: '', name: '' });
+});
+
+it('keeps an open draft when starting a new task', () => {
+  setStore('projects', [code]);
+  setStore('showNewTaskPanel', true);
+  setStore('newTaskPrefillPrompt', { prompt: 'draft', projectId: 'other' });
+  projectMenuItems(code, false, dialogs)
+    .find((item) => item.label === 'New task')
+    ?.run?.();
+  expect(store.newTaskPrefillPrompt?.prompt).toBe('draft');
 });

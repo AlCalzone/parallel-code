@@ -5,11 +5,11 @@ import { withViewTransition } from '../lib/viewTransition';
 import { openGitHubIssues } from '../store/github';
 import { openKanban } from '../store/kanban';
 import { isDocumentProject } from '../store/projects';
-import { isProjectMissing, showNotification, store } from '../store/store';
+import { isProjectMissing, showNotification, startProjectTask, store } from '../store/store';
 import type { Project } from '../store/types';
 import { ContextMenu, type MoreMenuItem } from './chat/MoreMenu';
 import { DocumentIcon } from '../documents/DocumentIcon';
-import { FolderIcon, GitHubIcon, PencilIcon, PlanIcon, TrashIcon } from './icons';
+import { FolderIcon, GitHubIcon, PencilIcon, PlanIcon, PlusIcon, TrashIcon } from './icons';
 
 /** Dialogs the menu opens; whoever renders the menu owns them. */
 export interface ProjectMenuDialogs {
@@ -35,6 +35,11 @@ function viewItems(project: Project): MoreMenuItem[] {
       },
     ];
   return [
+    {
+      label: 'New task',
+      icon: <PlusIcon size={14} />,
+      run: () => withViewTransition(() => startProjectTask(project.id)),
+    },
     {
       label: 'Plan board',
       icon: <PlanIcon size={14} />,
