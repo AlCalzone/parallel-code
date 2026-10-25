@@ -2123,6 +2123,28 @@ html:not([data-look^='obsidian'], [data-look^='islands-'], [data-look='workbench
   padding: 10px 44px 10px 14px !important;
 }
 
+/* Clears the Needs you / staged label overlaid on the textarea's top edge.
+   html body outranks every look's !important padding above.
+   shortcut: the labels push the text down a line when they appear — reserve the line if that jars. */
+html body .prompt-textarea.prompt-textarea--labelled {
+  padding-top: 26px !important;
+}
+
+/* Start the Needs you line where the typed text starts, which each look sets
+   through the textarea's left border and padding. */
+.prompt-needs-you {
+  left: 11px;
+}
+
+html:not([data-look^='obsidian'], [data-look^='islands-'], [data-look='workbench'])
+  .prompt-needs-you {
+  left: 14px;
+}
+
+html:is([data-look^='islands-'], [data-look='workbench']) .prompt-needs-you {
+  left: 8px;
+}
+
 /* The html prefix outranks the faint base placeholder further down. */
 html .prompt-textarea::placeholder {
   color: var(--fg-subtle);

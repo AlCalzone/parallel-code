@@ -976,7 +976,6 @@ export function PromptInput(props: PromptInputProps) {
             style={{
               position: 'absolute',
               top: '4px',
-              left: '10px',
               right: '36px',
               display: 'flex',
               gap: '6px',
@@ -987,6 +986,8 @@ export function PromptInput(props: PromptInputProps) {
               'white-space': 'nowrap',
               'pointer-events': 'none',
               'z-index': '1',
+              'padding-bottom': '3px',
+              'border-bottom': `1px solid ${theme.border}`,
             }}
           >
             <span
@@ -1000,13 +1001,21 @@ export function PromptInput(props: PromptInputProps) {
             >
               Needs you
             </span>
-            <span style={{ overflow: 'hidden', 'text-overflow': 'ellipsis', 'min-width': '0' }}>
+            <span
+              style={{
+                overflow: 'hidden',
+                'text-overflow': 'ellipsis',
+                'min-width': '0',
+                'font-size': sf(12),
+              }}
+            >
               {question()}
             </span>
           </div>
         </Show>
         <textarea
           class="prompt-textarea"
+          classList={{ 'prompt-textarea--labelled': !!staged() || !!question() }}
           ref={(el) => {
             textareaRef = el;
             props.ref?.(el);
@@ -1041,8 +1050,7 @@ export function PromptInput(props: PromptInputProps) {
             background: theme.bgInput,
             border: staged() ? `1px solid ${theme.accent}60` : `1px solid ${theme.border}`,
             'border-radius': 'var(--radius-lg)',
-            // shortcut: the labels push the text down a line when they appear — reserve the line if that jars.
-            padding: staged() || question() ? '20px 36px 6px 10px' : '6px 36px 6px 10px',
+            padding: '6px 36px 6px 10px',
             color: theme.fg,
             'font-size': sf(13),
             'font-family': "'JetBrains Mono', monospace",
