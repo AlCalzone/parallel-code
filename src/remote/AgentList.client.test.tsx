@@ -182,6 +182,15 @@ it('groups tasks under the desktop board lanes and names a ready task by its che
       taskName: 'Red PR',
       attention: 'idle',
       ci: 'failure',
+      lane: 'needs',
+    },
+    {
+      ...base,
+      agentId: 'a4',
+      taskId: 't4',
+      taskName: 'Babysat PR',
+      attention: 'idle',
+      ci: 'failure',
       lane: 'pr',
     },
     {
@@ -201,15 +210,17 @@ it('groups tasks under the desktop board lanes and names a ready task by its che
     host,
   );
   const group = (name: string) => host.querySelector(`section[aria-label="${name}"]`);
-  expect(group('In pull request')?.textContent).toContain('Red PR');
-  expect(group('In pull request')?.textContent).toContain('CI failed');
+  expect(group('Needs you')?.textContent).toContain('Red PR');
+  expect(group('Needs you')?.textContent).toContain('CI failed');
+  expect(group('In pull request')?.textContent).toContain('Babysat PR');
   expect(group('Stopped')?.textContent).toContain('Green work');
   expect(group('Stopped')?.textContent).toContain('Ready to merge');
   // Without a lane from the desktop, the phone still files a question under Needs you.
   expect(group('Needs you')?.textContent).toContain('Question');
-  // Failed CI keeps its lane but still counts, and shows, as needing you.
+  // The desktop leaves failed CI in its PR lane only while Babysit hands it to
+  // the agent, so the phone does not count it as needing you either.
   expect(host.textContent).toContain('2 tasks need your attention');
-  expect(group('In pull request')?.querySelector('.agent-card.attention')).not.toBeNull();
+  expect(group('In pull request')?.querySelector('.agent-card.attention')).toBeNull();
 });
 
 it("shows a task's PR row like the board card, without repeating its checks in the status", () => {
@@ -243,7 +254,7 @@ it("shows a task's PR row like the board card, without repeating its checks in t
   expect(row?.textContent).toContain('Babysitting');
   expect(row?.classList.contains('failed')).toBe(true);
   expect(red?.querySelector('.agent-status')?.textContent).not.toContain('CI failed');
-  // Failed CI still needs the user even though the PR row, not the pill, says so.
-  expect(red?.classList.contains('attention')).toBe(true);
+  // Babysit hands the failure to the agent, so the card does not ask for the user.
+  expect(red?.classList.contains('attention')).toBe(false);
   expect(plain?.querySelector('.agent-pr')).toBeNull();
 });

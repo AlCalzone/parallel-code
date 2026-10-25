@@ -24,6 +24,7 @@ const lanes: { id: RemoteBoardLane; name: string }[] = [
   { id: 'stopped', name: 'Stopped' },
   { id: 'working', name: 'Working' },
   { id: 'pr', name: 'In pull request' },
+  { id: 'ready', name: 'Ready to merge' },
   { id: 'snoozed', name: 'Snoozed & minimized' },
 ];
 
@@ -35,8 +36,10 @@ function laneOf(agent: RemoteAgent): RemoteBoardLane {
   return agent.attention === 'active' ? 'working' : 'stopped';
 }
 
-/** Failed CI stays in its PR lane like on the board, but still needs the user. */
-const needsAttention = (agent: RemoteAgent) => laneOf(agent) === 'needs' || isCiFailed(agent);
+/** The desktop's lane decides, so failed CI that Babysit hands to the agent is
+ *  not counted; a task it has not described yet falls back to its CI. */
+const needsAttention = (agent: RemoteAgent) =>
+  laneOf(agent) === 'needs' || (!agent.lane && isCiFailed(agent));
 
 export function AgentList(props: AgentListProps) {
   let searchInput: HTMLInputElement | undefined;

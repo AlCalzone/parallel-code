@@ -1,6 +1,8 @@
 import { isHiddenAgentTaskId } from '../documents/task-id';
 import { store } from '../store/core';
 import { isTaskBackgrounded } from '../store/background-tasks';
+import { getPrBabysit } from '../store/pr-babysit';
+import { getPrChecks, isPrReadyToMerge } from '../store/pr-checks-state';
 import { getProject } from '../store/projects';
 import { matchesTaskProjectFilter } from '../store/task-project-filter';
 import { getTaskOpenQuestion } from '../store/taskStatus';
@@ -8,7 +10,7 @@ import type { Task } from '../store/types';
 import { cardTaskState, finishCheckLabel, type CardTaskState } from './board/task-state';
 import { holdWorking } from './task-board-hold';
 
-export type BoardLaneId = 'needs' | 'working' | 'stopped' | 'pr' | 'snoozed';
+export type BoardLaneId = 'needs' | 'working' | 'stopped' | 'pr' | 'ready' | 'snoozed';
 
 export interface BoardLane {
   id: BoardLaneId;
@@ -17,12 +19,14 @@ export interface BoardLane {
 }
 
 // Left to right. Stopped sits next to Needs you so everything waiting on you
-// is together; Working and In pull request need nothing from you yet.
+// is together; Working and In pull request need nothing from you yet. Ready to
+// merge follows the pull requests it graduates from.
 const LANE_TITLES: Record<BoardLaneId, string> = {
   needs: 'Needs you',
   stopped: 'Stopped',
   working: 'Working',
   pr: 'In pull request',
+  ready: 'Ready to merge',
   snoozed: 'Snoozed & minimized',
 };
 
@@ -58,10 +62,23 @@ export function boardLaneOf(task: Task): BoardLaneId {
   // nothing needs you; otherwise a question would wait unseen in the rail.
   if (task.collapsed) return 'snoozed';
   if (state === 'active' || checking) return 'working';
-  if (task.prUrl) return 'pr';
+  if (task.prUrl) return pullRequestLane(task.id);
   // Ready vs idle hinges on whether the agent committed, not on what you do
   // next, so they share a lane and the card's label tells them apart.
   return 'stopped';
+}
+
+/** A pull request waits on you when GitHub says it cannot merge as it is, or
+ *  when it can; otherwise on CI or reviewers. Babysit sends CI failures back to
+ *  the agent, so those wait on it until Babysit gives up and stops. */
+function pullRequestLane(taskId: string): BoardLaneId {
+  const checks = getPrChecks(taskId);
+  if (!checks || checks.merged) return 'pr';
+  if (isPrReadyToMerge(checks)) return 'ready';
+  if (checks.mergeable === 'CONFLICTING' || checks.reviewDecision === 'CHANGES_REQUESTED')
+    return 'needs';
+  if (checks.overall === 'failure' && !getPrBabysit(taskId)) return 'needs';
+  return 'pr';
 }
 
 function matchesQuery(task: Task, query: string): boolean {

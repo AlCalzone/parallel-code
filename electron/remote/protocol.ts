@@ -58,7 +58,16 @@ export type RemotePrStatusKind = 'merged' | 'ready' | 'blocked' | 'running' | 'f
 export type RemoteCiStatus = 'pending' | 'failure' | 'success';
 
 /** Mirrors the desktop board's lanes (src/components/task-board-lanes.ts). */
-export type RemoteBoardLane = 'needs' | 'stopped' | 'working' | 'pr' | 'snoozed';
+/** The desktop board's lanes; the main process passes on only these. */
+export const REMOTE_BOARD_LANES = [
+  'needs',
+  'stopped',
+  'working',
+  'pr',
+  'ready',
+  'snoozed',
+] as const;
+export type RemoteBoardLane = (typeof REMOTE_BOARD_LANES)[number];
 
 /** An agent the mobile "New Task" screen can launch, with the models it offers. */
 export interface RemoteAgentChoice {

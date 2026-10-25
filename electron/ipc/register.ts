@@ -93,6 +93,7 @@ import type {
   RemoteTaskContext,
   RemoteTaskDiff,
 } from '../remote/protocol.js';
+import { REMOTE_BOARD_LANES } from '../remote/protocol.js';
 import { atomicWriteFileSync } from '../mcp/atomic.js';
 import { getUserDataDir } from '../user-data-dir.js';
 import {
@@ -1924,13 +1925,7 @@ export function registerAllHandlers(win: BrowserWindow): void {
     'review',
   ]);
   const VALID_CI: ReadonlySet<RemoteCiStatus> = new Set(['pending', 'failure', 'success']);
-  const VALID_LANE: ReadonlySet<RemoteBoardLane> = new Set([
-    'needs',
-    'stopped',
-    'working',
-    'pr',
-    'snoozed',
-  ]);
+  const VALID_LANE: ReadonlySet<RemoteBoardLane> = new Set(REMOTE_BOARD_LANES);
 
   // Renderer pushes the full per-task attention snapshot whenever it changes.
   // We replace the cache and re-broadcast the agent list so connected phones

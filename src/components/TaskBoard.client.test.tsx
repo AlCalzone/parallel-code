@@ -147,6 +147,33 @@ it('offers Babysit beside an open pull request', () => {
   removePrChecks('pr');
 });
 
+it('moves a pull request by what it waits for', () => {
+  const at = () =>
+    [...host.querySelectorAll('.task-board-lane')]
+      .find((el) => cardNamesIn(el).includes('Add dark mode'))
+      ?.querySelector('h3')
+      ?.textContent?.replace(/\d+$/, '');
+  const cardNamesIn = (el: Element) =>
+    [...el.querySelectorAll('.task-board-name')].map((n) => n.textContent);
+  setPrChecks('pr', checksFromUpdate({ overall: 'pending' }));
+  expect(at()).toBe('In pull request');
+  setPrChecks('pr', checksFromUpdate({ overall: 'failure' }));
+  expect(at()).toBe('Needs you');
+  // Babysit hands CI failures to the agent, so the task waits on it, not on you.
+  setStore('tasks', 'pr', 'prBabysit', { attempts: 1 });
+  expect(at()).toBe('In pull request');
+  setPrChecks('pr', checksFromUpdate({ overall: 'success', reviewDecision: 'CHANGES_REQUESTED' }));
+  expect(at()).toBe('Needs you');
+  setStore('tasks', 'pr', 'prBabysit', undefined);
+  setPrChecks('pr', checksFromUpdate({ overall: 'success', mergeable: 'CONFLICTING' }));
+  expect(at()).toBe('Needs you');
+  setPrChecks('pr', checksFromUpdate({ overall: 'success', reviewDecision: 'REVIEW_REQUIRED' }));
+  expect(at()).toBe('In pull request');
+  setPrChecks('pr', checksFromUpdate({ overall: 'success', reviewDecision: 'APPROVED' }));
+  expect(at()).toBe('Ready to merge');
+  removePrChecks('pr');
+});
+
 it('puts the lanes that need attention next to each other', () => {
   const titles = [...host.querySelectorAll('.task-board-lane h3')].map((h) =>
     h.textContent?.replace(/\d+$/, ''),
