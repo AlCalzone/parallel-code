@@ -254,33 +254,59 @@ export function AgentDetail(props: AgentDetailProps) {
         cell(y - (rect?.top ?? 0), rect?.height, term.rows),
       );
     };
-    const scrollTerminal = (dx: number, dy: number, x: number, y: number) => {
-      if (!term || !terminalScroller) return;
+    /** Pan the grid; returns the vertical pixels it had no room for. */
+    const scrollPane = (dx: number, dy: number) => {
+      if (!terminalScroller) return dy;
       terminalScroller.scrollLeft += dx;
       const previousTop = terminalScroller.scrollTop;
       terminalScroller.scrollTop = Math.max(
         0,
         Math.min(terminalScroller.scrollHeight - terminalScroller.clientHeight, previousTop + dy),
       );
-      if (Math.abs(dy) >= Math.abs(dx)) {
-        historyPixels += dy - (terminalScroller.scrollTop - previousTop);
-        const lines = Math.trunc(historyPixels / terminalLineHeight);
-        if (lines) {
-          if (term.buffer.active.type === 'alternate') scrollFullScreen(lines, x, y);
-          else term.scrollLines(lines);
-          historyPixels -= lines * terminalLineHeight;
-        }
+      return dy - (terminalScroller.scrollTop - previousTop);
+    };
+    const scrollHistory = (dy: number, x: number, y: number) => {
+      if (!term) return;
+      historyPixels += dy;
+      const lines = Math.trunc(historyPixels / terminalLineHeight);
+      if (!lines) return;
+      if (term.buffer.active.type === 'alternate') scrollFullScreen(lines, x, y);
+      else term.scrollLines(lines);
+      historyPixels -= lines * terminalLineHeight;
+    };
+    const scrollTerminal = (dx: number, dy: number, x: number, y: number) => {
+      const rest = scrollPane(dx, dy);
+      if (Math.abs(dy) >= Math.abs(dx)) scrollHistory(rest, x, y);
+      updateTerminalBottom();
+    };
+    // A swipe that runs out of grid would otherwise jump from smooth panning to
+    // line steps mid-gesture. Like nested native scrollers, history waits for a
+    // fresh swipe unless this one starts with the grid already at its edge.
+    let swipeTarget: 'pane' | 'history' | undefined;
+    const paneCanScroll = (dy: number) => {
+      if (!terminalScroller) return false;
+      const room = terminalScroller.scrollHeight - terminalScroller.clientHeight;
+      // Fractional scroll offsets can sit a pixel short of the edge.
+      return dy < 0 ? terminalScroller.scrollTop >= 1 : terminalScroller.scrollTop <= room - 1;
+    };
+    const scrollSwipe = (dx: number, dy: number, x: number, y: number) => {
+      if (touchAxis === 'x') scrollPane(dx, 0);
+      else {
+        swipeTarget ??= paneCanScroll(dy) ? 'pane' : 'history';
+        if (swipeTarget === 'pane') scrollPane(0, dy);
+        else scrollHistory(dy, x, y);
       }
       updateTerminalBottom();
     };
     // Coasts over the cell where the swipe left off.
-    const fling = createFling((dx, dy) => scrollTerminal(dx, dy, touchX, touchY));
+    const fling = createFling((dx, dy) => scrollSwipe(dx, dy, touchX, touchY));
     const touchStart = (e: TouchEvent) => {
       e.stopPropagation();
       fling.stop();
       historyPixels = 0;
       touchId = undefined;
       touchAxis = undefined;
+      swipeTarget = undefined;
       if (e.touches.length === 1) {
         touchId = e.touches[0].identifier;
         touchX = e.touches[0].clientX;
@@ -307,7 +333,7 @@ export function AgentDetail(props: AgentDetailProps) {
       if (!touchAxis && Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
       touchAxis ??= Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
       const [moveX, moveY] = touchAxis === 'x' ? [dx, 0] : [0, dy];
-      scrollTerminal(moveX, moveY, touch.clientX, touch.clientY);
+      scrollSwipe(moveX, moveY, touch.clientX, touch.clientY);
       fling.track(moveX, moveY);
       touchX = touch.clientX;
       touchY = touch.clientY;

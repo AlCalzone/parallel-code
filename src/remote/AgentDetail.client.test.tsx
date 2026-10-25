@@ -786,12 +786,50 @@ describe('phone terminal viewport', () => {
       expect(terminalMocks.scrollLines).not.toHaveBeenCalled();
       expect(move.defaultPrevented).toBe(true);
       expect(xtermGesture).not.toHaveBeenCalled();
+      touch(content, 'touchend', 0, 0, 0);
       scroller.scrollTop = 900;
-      touch(content, 'touchmove', 80, 0);
+      touch(content, 'touchstart', 100, 100);
+      touch(content, 'touchmove', 90, 50);
       expect(terminalMocks.scrollLines).toHaveBeenCalledWith(2);
       expect(touch(content, 'touchmove', 50, 0, 2).defaultPrevented).toBe(false);
     } finally {
       document.removeEventListener('touchmove', xtermGesture);
+    }
+  });
+
+  it('keeps a swipe that reaches the grid edge off history until the next swipe', () => {
+    mount();
+    const { scroller } = viewport();
+    scroller.scrollTop = 40;
+    touch(scroller, 'touchstart', 100, 100);
+    touch(scroller, 'touchmove', 100, 300);
+    expect(scroller.scrollTop).toBe(0);
+    expect(terminalMocks.scrollLines).not.toHaveBeenCalled();
+    touch(scroller, 'touchend', 0, 0, 0);
+    touch(scroller, 'touchstart', 100, 100);
+    touch(scroller, 'touchmove', 100, 160);
+    expect(terminalMocks.scrollLines).toHaveBeenCalledWith(-3);
+  });
+
+  it('stops a flick at the grid edge instead of coasting into history', () => {
+    vi.useFakeTimers();
+    try {
+      mount();
+      const { scroller } = viewport();
+      // Let the open-at-latest fit settle before placing the grid near its top.
+      vi.advanceTimersByTime(16);
+      scroller.scrollTop = 85;
+      touch(scroller, 'touchstart', 100, 100);
+      vi.advanceTimersByTime(16);
+      touch(scroller, 'touchmove', 100, 140);
+      vi.advanceTimersByTime(16);
+      touch(scroller, 'touchmove', 100, 180);
+      touch(scroller, 'touchend', 0, 0, 0);
+      vi.advanceTimersByTime(1000);
+      expect(scroller.scrollTop).toBe(0);
+      expect(terminalMocks.scrollLines).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
     }
   });
 
