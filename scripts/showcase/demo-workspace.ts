@@ -283,7 +283,7 @@ export const seedDemoWorkspace = (
     focusMode: Boolean(focusId && tasks.length > 0),
     // One theme for every shot, so stills and videos cut together.
     appearanceMode: 'dark',
-    darkThemePreset: 'noir',
+    darkThemePreset: 'parallel-code',
     // Delegation needs a real agent connected to the app's MCP server; without
     // one, chat tasks show a "start a new task session" banner.
     mcpOrchestrationEnabled: false,

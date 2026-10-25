@@ -37,11 +37,13 @@
 
 ## Screenshots
 
-| Multiple agents in parallel                           | Focused view on a single task                 |
-| ----------------------------------------------------- | --------------------------------------------- |
-| ![Overview](screens/islands-overview.png)             | ![Focus view](screens/islands-focus-view.png) |
-| **Diff review with inline comments**                  | **AI Arena — race agents head-to-head**       |
-| ![Diff review](screens/diff-dialog-code-comments.png) | ![AI Arena](screens/ai-arena-mode.png)        |
+| Agents working, waiting for input, and ready to merge | One task in focus with its chat, files, notes, and shell |
+| ----------------------------------------------------- | -------------------------------------------------------- |
+| ![Overview](screens/showcase-overview.png)            | ![Focus view](screens/showcase-focus.png)                |
+| **Inline review comments you send back to the agent** | **A guided tour of what the agent changed**              |
+| ![Diff review](screens/showcase-diff-review.png)      | ![Change tour](screens/showcase-change-tour.png)         |
+| **The agent's reasoning graph, updated live**         | **A mind map with branches linked to live tasks**        |
+| ![Reasoning graph](screens/showcase-reasoning.png)    | ![Mind map](screens/showcase-mind-map.png)               |
 
 ## Why Parallel Code?
 

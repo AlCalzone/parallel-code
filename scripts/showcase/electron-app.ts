@@ -376,7 +376,7 @@ export const sendChatMessage = async (page: Page, slug: string, text: string): P
   const column = taskColumn(page, slug);
   // The model list fills once the chat has connected; a send before that is refused.
   await expect(column.getByRole('option', { name: 'Sonnet 5' })).toBeAttached();
-  const composer = column.getByRole('textbox', { name: 'Message Claude' });
+  const composer = column.getByRole('combobox', { name: 'Message Claude' });
   await composer.fill(text);
   await composer.press('Enter');
   await expect(column.locator('.chat-user-message', { hasText: text })).toBeVisible();
