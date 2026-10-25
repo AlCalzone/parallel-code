@@ -168,6 +168,7 @@
   "CheckForUpdates": "check_for_updates",
   "DownloadUpdate": "download_update",
   "QuitAndInstallUpdate": "quit_and_install_update",
+  "RestartApp": "restart_app",
   "GetUpdateStatus": "get_update_status",
   "UpdateStatusChanged": "update_status_changed",
   "StartMCPServer": "start_mcp_server",

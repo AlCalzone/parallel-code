@@ -143,7 +143,8 @@ import { startTaskBriefWatcher } from './store/task-brief';
 import { showPlanTasks, startKanbanAutomation } from './store/kanban';
 import { startPrChecksSubscription } from './store/pr-checks';
 import { startPrBabysitWatcher } from './store/pr-babysit';
-import { startUpdateSubscription } from './store/updates';
+import { restartApp, startUpdateSubscription } from './store/updates';
+import { isStaleBuildError } from './lib/stale-build';
 import { startRemoteTaskHandlers } from './store/remoteTaskHandler';
 import { startRemoteStatusSync } from './store/remoteStatusSync';
 import { startAgentHookStatusListener } from './store/agentHookStatus';
@@ -923,8 +924,14 @@ function App() {
             'font-family': "var(--font-ui, 'Sora', sans-serif)",
           }}
         >
-          <div style={{ 'font-size': '19px', 'font-weight': '600', color: theme.error }}>
-            Something went wrong
+          <div
+            style={{
+              'font-size': '19px',
+              'font-weight': '600',
+              color: isStaleBuildError(err) ? theme.fg : theme.error,
+            }}
+          >
+            {isStaleBuildError(err) ? 'Parallel Code was updated' : 'Something went wrong'}
           </div>
           <div
             style={{
@@ -934,11 +941,13 @@ function App() {
               'word-break': 'break-word',
             }}
           >
-            {String(err)}
+            {isStaleBuildError(err)
+              ? 'A newer version was installed while the app was running. Restart to load it.'
+              : String(err)}
           </div>
           <button
             class="btn-with-icon"
-            onClick={reset}
+            onClick={() => (isStaleBuildError(err) ? restartApp() : reset())}
             style={{
               background: theme.bgElevated,
               border: `1px solid ${theme.border}`,
@@ -950,7 +959,7 @@ function App() {
             }}
           >
             <SyncIcon size={14} />
-            Reload
+            {isStaleBuildError(err) ? 'Restart' : 'Reload'}
           </button>
         </div>
       )}

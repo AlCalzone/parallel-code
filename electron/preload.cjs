@@ -175,6 +175,7 @@ const ALLOWED_CHANNELS = new Set([
   'check_for_updates',
   'download_update',
   'quit_and_install_update',
+  'restart_app',
   'get_update_status',
   'update_status_changed',
   'start_mcp_server',
