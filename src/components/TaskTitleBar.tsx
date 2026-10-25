@@ -8,6 +8,8 @@ import {
   getTaskDotStatus,
   getTaskAttentionState,
   toggleTaskFocusMode,
+  setActiveTask,
+  workspaceViewTransitionTypes,
   isTaskCanvasVisible,
   openTaskCanvas,
   closeTaskCanvas,
@@ -146,7 +148,13 @@ export function TaskTitleBar(props: TaskTitleBarProps) {
             }
             onClick={() => {
               const taskId = props.task.id;
-              withViewTransition(() => toggleTaskFocusMode(taskId));
+              // The button bypasses the title bar's tap-to-activate; activate before the
+              // old layout is captured so focus grows from this tile, not the last one.
+              if (store.activeTaskId !== taskId) setActiveTask(taskId);
+              withViewTransition(
+                () => toggleTaskFocusMode(taskId),
+                workspaceViewTransitionTypes(store.focusMode ? 'tiles' : 'focus'),
+              );
             }}
             title={focusShown() ? 'Exit focus mode' : 'Focus on this task'}
             pressed={focusShown()}

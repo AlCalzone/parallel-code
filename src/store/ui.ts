@@ -4,7 +4,7 @@ import { produce, reconcile } from 'solid-js/store';
 import { store, setStore } from './core';
 import { setActiveTask } from './navigation';
 import { setTaskFocusedPanel } from './focused-panel';
-import { closeBoard, closeProjectPages } from './project-pages';
+import { closeBoard, closeProjectPages, projectPageOpen } from './project-pages';
 import type { LookPreset, AppearanceMode } from '../lib/look';
 import { osIsDark } from '../lib/os-appearance';
 import type { CustomTheme } from '../lib/custom-theme';
@@ -354,6 +354,17 @@ export type WorkspaceView = 'focus' | 'tiles' | 'board';
 export function workspaceView(): WorkspaceView {
   if (store.boardView) return 'board';
   return store.focusMode ? 'focus' : 'tiles';
+}
+
+/** View-transition types for switching to `next`. Tiles and focus share one
+ *  layout strip, so between them the active task can grow into focus and
+ *  shrink back; the board and pages have their own transitions. */
+export function workspaceViewTransitionTypes(next: WorkspaceView): string[] {
+  const current = workspaceView();
+  if (current === next || current === 'board' || next === 'board' || projectPageOpen()) return [];
+  // Without a task focus stays on tiles; animating would only shimmer the tiles.
+  if (next === 'focus' && !store.activeTaskId) return [];
+  return [next === 'focus' ? 'focus-enter' : 'focus-exit'];
 }
 
 /** Shows one of the three workspace views, closing any page that covers them. */

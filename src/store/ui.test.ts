@@ -70,6 +70,7 @@ import {
   setWorkspaceView,
   toggleBoardView,
   workspaceView,
+  workspaceViewTransitionTypes,
   toggleTaskFocusMode,
   getPanelUserSize,
   setPanelUserSize,
@@ -172,6 +173,30 @@ describe('workspace views', () => {
     setWorkspaceView('focus');
 
     expect(workspaceView()).toBe('tiles');
+  });
+
+  it('animates the shown task only between tiles and focus', () => {
+    expect(workspaceViewTransitionTypes('focus')).toEqual(['focus-enter']);
+    expect(workspaceViewTransitionTypes('tiles')).toEqual([]);
+    expect(workspaceViewTransitionTypes('board')).toEqual([]);
+
+    mockStore.focusMode = true;
+    expect(workspaceViewTransitionTypes('tiles')).toEqual(['focus-exit']);
+
+    mockStore.boardView = true;
+    expect(workspaceViewTransitionTypes('tiles')).toEqual([]);
+  });
+
+  it('skips the animation when there is no task to focus', () => {
+    mockStore.activeTaskId = null;
+
+    expect(workspaceViewTransitionTypes('focus')).toEqual([]);
+  });
+
+  it('leaves a covering page to its own transition', () => {
+    mockStore.githubIssuesProjectId = 'project-1';
+
+    expect(workspaceViewTransitionTypes('focus')).toEqual([]);
   });
 });
 

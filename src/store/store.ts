@@ -148,6 +148,7 @@ export {
   toggleTaskFocusMode,
   workspaceView,
   setWorkspaceView,
+  workspaceViewTransitionTypes,
   toggleBoardView,
   setTaskSplitMode,
   setTerminalFont,

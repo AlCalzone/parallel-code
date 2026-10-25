@@ -78,7 +78,11 @@ import { ActionIcon } from './BlockActions';
 import { Dialog } from '../components/Dialog';
 import { openInEditor, revealItemInDir } from '../lib/shell';
 import { UndoIcon } from '../components/icons';
-import { setDocumentFullWidth, toggleTaskFocusMode } from '../store/ui';
+import {
+  setDocumentFullWidth,
+  toggleTaskFocusMode,
+  workspaceViewTransitionTypes,
+} from '../store/ui';
 import { isTerminalPaneOnScreen } from '../lib/terminalPaneVisibility';
 import { errMessage } from '../lib/log';
 import { withViewTransition } from '../lib/viewTransition';
@@ -1158,7 +1162,10 @@ export function DocumentWorkspacePanel() {
             aria-pressed={store.focusMode && isActive()}
             onClick={() => {
               const id = taskId();
-              withViewTransition(() => toggleTaskFocusMode(id));
+              withViewTransition(
+                () => toggleTaskFocusMode(id),
+                workspaceViewTransitionTypes(store.focusMode ? 'tiles' : 'focus'),
+              );
             }}
           >
             {/* Same glyph as the task title bar: one focus icon everywhere. */}

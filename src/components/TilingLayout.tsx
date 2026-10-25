@@ -739,13 +739,14 @@ export function TilingLayout() {
             {(child, i) => {
               const filteredOut = () =>
                 store.taskOrder.includes(child.id) && isHiddenTask(child.id);
+              const isShown = () =>
+                (child.id === '__document-workspace' ? documentTaskId() : child.id) === shownId();
               const wrapperStyle = createMemo((): JSX.CSSProperties => {
                 if (filteredOut()) return { display: 'none' };
                 const isPlaceholder = child.id === '__placeholder';
                 if (focusMode()) {
                   if (isPlaceholder) return { display: 'none' };
-                  const id = child.id === '__document-workspace' ? documentTaskId() : child.id;
-                  const isActive = id === shownId();
+                  const isActive = isShown();
                   return {
                     position: 'absolute',
                     inset: store.themePreset.startsWith('islands-') ? '0 4px 0 0' : '0',
@@ -777,11 +778,8 @@ export function TilingLayout() {
                 <>
                   <div
                     style={wrapperStyle()}
-                    inert={
-                      focusMode() &&
-                      (child.id === '__document-workspace' ? documentTaskId() : child.id) !==
-                        shownId()
-                    }
+                    classList={{ 'tiling-panel-shown': isShown() }}
+                    inert={focusMode() && !isShown()}
                   >
                     {child.content()}
                   </div>
