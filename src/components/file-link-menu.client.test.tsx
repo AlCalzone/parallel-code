@@ -274,3 +274,37 @@ it('offers a folder open, reveal or copy, and opens it on Cmd/Ctrl+click', () =>
   expect(mocks.invoke).toHaveBeenCalledWith(IPC.OpenPath, { filePath: '/repo/wt/src.d/' });
   expect(mocks.openInEditor).not.toHaveBeenCalled();
 });
+
+it('leads with the changes dialog for a file the task changed, and opens it there', () => {
+  mocks.store.editorCommand = 'code';
+  const open = vi.fn();
+  const ctx = {
+    ...context(),
+    changes: { has: (path: string) => ['src/main.ts', 'docs/plan.md'].includes(path), open },
+  };
+  for (const [filePath, relative] of [
+    ['/repo/wt/src/main.ts', 'src/main.ts'],
+    ['/repo/wt/docs/plan.md', 'docs/plan.md'],
+  ]) {
+    open.mockClear();
+    const menu = fileLinkMenu(filePath, 3, ctx);
+    expect(menu.actions[0]?.label).toBe('Open in changes');
+    menu.open?.();
+    run(menu, 'Open in changes');
+    expect(open.mock.calls).toEqual([[relative], [relative]]);
+  }
+  expect(mocks.openFileInEditor).not.toHaveBeenCalled();
+  expect(ctx.openDialog).not.toHaveBeenCalled();
+});
+
+it('keeps the usual menu for files the task did not change', () => {
+  const ctx = { ...context(), changes: { has: () => false, open: vi.fn() } };
+  expect(fileLinkMenu('/repo/wt/src/other.ts', undefined, ctx).actions[0]?.label).not.toBe(
+    'Open in changes',
+  );
+  expect(fileLinkMenu('/outside/main.ts', undefined, ctx).actions[0]?.label).not.toBe(
+    'Open in changes',
+  );
+  fileLinkMenu('/repo/wt/docs/plan.md', undefined, ctx).open?.();
+  expect(ctx.openDialog).toHaveBeenCalledWith('/repo/wt/docs/plan.md');
+});

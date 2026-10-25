@@ -5,7 +5,7 @@ import { createStore } from 'solid-js/store';
 import { afterEach, beforeAll, expect, it, onTestFinished, vi } from 'vitest';
 import { TaskPanel } from './TaskPanel';
 import { IPC } from '../../electron/ipc/channels';
-import type { CommitInfo } from '../ipc/types';
+import type { ChangedFile, CommitInfo } from '../ipc/types';
 import { invoke } from '../lib/ipc';
 import {
   store,
@@ -230,13 +230,23 @@ vi.mock('./UnderstandingTourDialog', () => ({
 }));
 vi.mock('./TaskChangedFilesSection', () => ({
   TaskChangedFilesSection: (props: {
-    onFileCountChange?: (count: number) => void;
+    onFilesChange?: (files: ChangedFile[]) => void;
     commitList: CommitInfo[];
     isActive: boolean;
   }) => {
     fileInventory.mounts++;
     createEffect(() => {
-      fileInventory.report = props.onFileCountChange ?? (() => {});
+      const report = props.onFilesChange;
+      fileInventory.report = (count) =>
+        report?.(
+          Array.from({ length: count }, (_, i) => ({
+            path: `file-${i}.ts`,
+            lines_added: 1,
+            lines_removed: 0,
+            status: 'M',
+            committed: true,
+          })),
+        );
     });
     createEffect(() => {
       const active = props.isActive;

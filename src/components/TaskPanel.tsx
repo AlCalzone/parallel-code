@@ -45,6 +45,7 @@ import { CloseTaskDialog } from './CloseTaskDialog';
 import { FinishDialog, type FinishAction } from './FinishDialog';
 import { PullRequestDialog } from './PullRequestDialog';
 import { DiffViewerDialog } from './DiffViewerDialog';
+import type { ChangesLink } from './file-link-menu';
 import { PlanViewerDialog } from './PlanViewerDialog';
 import { EditProjectDialog } from './EditProjectDialog';
 import { TaskTitleBar } from './TaskTitleBar';
@@ -70,7 +71,7 @@ import { SubTaskStrip } from './SubTaskStrip';
 import { theme } from '../lib/theme';
 import { isMac } from '../lib/platform';
 import type { Task } from '../store/types';
-import type { CommitInfo } from '../ipc/types';
+import type { ChangedFile, CommitInfo } from '../ipc/types';
 import type { TranscriptMarks } from '../investigation/transcript';
 import { isLandedTaskState } from '../store/landing';
 import { boardSidePanelOpen } from '../store/project-pages';
@@ -412,7 +413,20 @@ export function TaskPanel(props: TaskPanelProps) {
   let promptHandle: PromptInputHandle | undefined;
 
   const isGitUnavailable = () => props.task.gitIsolation === 'none' || isLandedTask();
-  const [changedFileCount, setChangedFileCount] = createSignal(0);
+  const [changedFiles, setChangedFiles] = createSignal<ChangedFile[]>([]);
+  const changedFileCount = () => changedFiles().length;
+  const openChangedFile = (path: string) => {
+    setStartTour(false);
+    setDiffScrollTarget(path);
+  };
+  /** File links to a listed file open its diff, in the selection the list shows. */
+  const changesLink = (): ChangesLink | undefined =>
+    isGitUnavailable()
+      ? undefined
+      : {
+          has: (path) => changedFiles().some((file) => file.path === path),
+          open: openChangedFile,
+        };
   // Two-column layout kicks in once the main column is wide enough, whether
   // the task fills the window in focus mode or is a widened tile.
   // Hysteresis: enter at >=1080, leave at <1030. A single threshold flickers
@@ -606,6 +620,7 @@ export function TaskPanel(props: TaskPanelProps) {
         }
         onOpenTour={openAgentTour}
         onOpenInSidePanel={openInSidePanel}
+        changes={changesLink()}
         task={props.task}
         isActive={props.isActive}
         selectedAgentId={selectedAgentId()}
@@ -620,6 +635,7 @@ export function TaskPanel(props: TaskPanelProps) {
       task={props.task}
       isActive={props.isActive}
       onOpenInSidePanel={openInSidePanel}
+      changes={changesLink()}
     />
   );
   const canvasVisible = () => isTaskCanvasVisible(props.task);
@@ -695,14 +711,11 @@ export function TaskPanel(props: TaskPanelProps) {
       commitList={commitList()}
       selectedCommit={selectedCommit()}
       onCommitNavigate={setSelectedCommit}
-      onDiffFileClick={(path) => {
-        setStartTour(false);
-        setDiffScrollTarget(path);
-      }}
+      onDiffFileClick={openChangedFile}
       tour={tour}
       onTourClick={openOrGenerateTour}
       tourDisabled={changedFileCount() === 0}
-      onFileCountChange={setChangedFileCount}
+      onFilesChange={setChangedFiles}
       onUnderstandClick={(file) => openFileTour(file.path)}
       understanding={understanding}
     />

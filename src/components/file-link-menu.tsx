@@ -8,7 +8,15 @@ import { errMessage } from '../lib/log';
 import { isMac } from '../lib/platform';
 import { openFileInEditor, openInEditor, revealItemInDir } from '../lib/shell';
 import { showNotification, store } from '../store/store';
-import { CopyIcon, ExternalLinkIcon, EyeIcon, FolderIcon, LayersIcon, PencilIcon } from './icons';
+import {
+  CopyIcon,
+  DiffIcon,
+  ExternalLinkIcon,
+  EyeIcon,
+  FolderIcon,
+  LayersIcon,
+  PencilIcon,
+} from './icons';
 import type { TerminalLinkAction } from './TerminalSelectionMenu';
 
 /** What a clicked terminal link offers: menu entries, and what Cmd/Ctrl+click does. */
@@ -18,6 +26,12 @@ export interface FileLinkMenu {
   open?: () => void;
 }
 
+/** The task's changed files; worktree-relative paths, as the changes list shows them. */
+export interface ChangesLink {
+  has: (relativePath: string) => boolean;
+  open: (relativePath: string) => void;
+}
+
 export interface FileLinkContext {
   worktreePath: string;
   openDialog: (filePath: string) => void;
@@ -25,6 +39,8 @@ export interface FileLinkContext {
   openMarkdown?: (filePath: string) => void;
   /** Present where the task shows a side panel; takes a worktree-relative path. */
   openInSidePanel?: (relativePath: string) => void;
+  /** Present where the task has a changes dialog; a listed file opens there by default. */
+  changes?: ChangesLink;
 }
 
 /** Each kind of file decides which places a link can open it in. */
@@ -89,7 +105,19 @@ function copyPath(filePath: string): void {
 
 const shortcut = `${isMac ? 'Cmd' : 'Ctrl'}+click`;
 
-function markdownActions(filePath: string, ctx: FileLinkContext): TerminalLinkAction[] {
+/** Opens a file the task changed in the changes dialog, or undefined when it isn't listed. */
+function changesOpener(filePath: string, ctx: FileLinkContext): (() => void) | undefined {
+  const changes = ctx.changes;
+  const relative = worktreeRelativePath(ctx.worktreePath, filePath);
+  if (!changes || !relative || !changes.has(relative)) return undefined;
+  return () => changes.open(relative);
+}
+
+function markdownActions(
+  filePath: string,
+  ctx: FileLinkContext,
+  isShortcut: boolean,
+): TerminalLinkAction[] {
   const relative = worktreeRelativePath(ctx.worktreePath, filePath);
   const sidePanel = ctx.openInSidePanel;
   const openMarkdown = ctx.openMarkdown;
@@ -99,7 +127,9 @@ function markdownActions(filePath: string, ctx: FileLinkContext): TerminalLinkAc
       ? [
           {
             label: 'Open',
-            title: `What ${shortcut} does: the workspace for its files, else the dialog`,
+            title: isShortcut
+              ? `What ${shortcut} does: the workspace for its files, else the dialog`
+              : undefined,
             icon: () => <EyeIcon size={14} />,
             run: () => openMarkdown(filePath),
           },
@@ -107,7 +137,7 @@ function markdownActions(filePath: string, ctx: FileLinkContext): TerminalLinkAc
       : []),
     {
       label: 'Open in dialog',
-      title: ctx.openMarkdown ? undefined : `${shortcut} opens the dialog directly`,
+      title: ctx.openMarkdown || !isShortcut ? undefined : `${shortcut} opens the dialog directly`,
       icon: () => <EyeIcon size={14} />,
       run: () => ctx.openDialog(filePath),
     },
@@ -153,14 +183,17 @@ export function fileLinkMenu(
       : kind === 'executable'
         ? undefined
         : defaultApp;
-  const open = {
-    folder: defaultApp,
-    markdown: () => (ctx.openMarkdown ?? ctx.openDialog)(filePath),
-    html: defaultApp,
-    binary: defaultApp,
-    executable: editor,
-    text: editor,
-  }[kind];
+  const openChanges = kind === 'folder' ? undefined : changesOpener(filePath, ctx);
+  const open =
+    openChanges ??
+    {
+      folder: defaultApp,
+      markdown: () => (ctx.openMarkdown ?? ctx.openDialog)(filePath),
+      html: defaultApp,
+      binary: defaultApp,
+      executable: editor,
+      text: editor,
+    }[kind];
   const defaultAppItem = {
     label: kind === 'html' ? 'Open in browser' : 'Open with default app',
     icon: () => <ExternalLinkIcon size={14} />,
@@ -174,7 +207,8 @@ export function fileLinkMenu(
   const primary = {
     folder: [{ label: 'Open folder', icon: () => <FolderIcon size={14} />, run: defaultApp }],
     markdown: [
-      ...markdownActions(filePath, ctx),
+      // A changed file's Cmd/Ctrl+click goes to the changes dialog instead.
+      ...markdownActions(filePath, ctx, !openChanges),
       ...editAsDocumentActions(filePath),
       ...editorItems,
     ],
@@ -191,8 +225,19 @@ export function fileLinkMenu(
   const revealItems = openable
     ? [{ label: 'Show in folder', icon: () => <FolderIcon size={14} />, run: reveal }]
     : [];
+  const changesItems = openChanges
+    ? [
+        {
+          label: 'Open in changes',
+          title: `What ${shortcut} does: this file's diff in the changes dialog`,
+          icon: () => <DiffIcon size={14} />,
+          run: openChanges,
+        },
+      ]
+    : [];
   return {
     actions: [
+      ...changesItems,
       ...primary,
       ...revealItems,
       { label: 'Copy path', icon: () => <CopyIcon size={14} />, run: () => copyPath(filePath) },

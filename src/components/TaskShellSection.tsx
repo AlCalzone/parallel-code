@@ -29,7 +29,7 @@ import {
   setTaskShellAutoLayout,
 } from '../store/store';
 import { TerminalView } from './TerminalView';
-import { fileLinkMenu } from './file-link-menu';
+import { fileLinkMenu, type ChangesLink } from './file-link-menu';
 import { findBareFile } from '../lib/find-bare-file';
 import { createMarkdownViewer } from './MarkdownViewerDialog';
 import { editAsDocument } from '../documents/store';
@@ -67,6 +67,8 @@ interface TaskShellSectionProps {
   isActive: boolean;
   /** Opens a worktree-relative file in the task's side panel. */
   onOpenInSidePanel?: (relativePath: string) => void;
+  /** The task's changed files, which links open in the changes dialog. */
+  changes?: ChangesLink;
 }
 
 /** Smallest height the shell section can show without clipping its open
@@ -379,6 +381,7 @@ export function TaskShellSection(props: TaskShellSectionProps) {
                         worktreePath: props.task.worktreePath,
                         openDialog: markdownViewer.show,
                         openInSidePanel: props.onOpenInSidePanel,
+                        changes: props.changes,
                       })
                     }
                     findBareFile={(name) => findBareFile(name, props.task)}

@@ -52,8 +52,8 @@ interface ChangedFilesListProps {
   baseBranch?: string;
   /** Reports coverage changes when task or base coverage data refreshes. */
   onCoverageComparisonChange?: (comparison: CoverageComparison | null) => void;
-  /** Reports the number of listed files whenever the list refreshes. */
-  onFileCountChange?: (count: number) => void;
+  /** Reports the listed files whenever the list refreshes. */
+  onFilesChange?: (files: ChangedFile[]) => void;
   /** Files with uncommitted changes, or null when the current view carries no working-tree state. */
   onUncommittedCountChange?: (count: number | null) => void;
   /** Reports added/removed line totals whenever the list refreshes. */
@@ -466,7 +466,7 @@ function OpenMarkdownButton(props: { filePath: string; onOpenMarkdownClick?: () 
 
 export function ChangedFilesList(props: ChangedFilesListProps) {
   const [files, setFiles] = createSignal<ChangedFile[]>([]);
-  createEffect(() => props.onFileCountChange?.(files().length));
+  createEffect(() => props.onFilesChange?.(files()));
   const [comparisonFiles, setComparisonFiles] = createSignal<ChangedFile[] | null>(null);
   const [coverage, setCoverage] = createSignal<CoverageSummary | null>(null);
   const [baseCoverage, setBaseCoverage] = createSignal<CoverageSummary | null>(null);

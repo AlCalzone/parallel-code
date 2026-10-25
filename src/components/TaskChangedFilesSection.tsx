@@ -38,7 +38,7 @@ interface TaskChangedFilesSectionProps {
   selectedCommit: CommitSelection;
   onCommitNavigate: (selection: CommitSelection) => void;
   onDiffFileClick: (path: string) => void;
-  onFileCountChange?: (count: number) => void;
+  onFilesChange?: (files: ChangedFile[]) => void;
   /** Starts a guided tour of a changed file; omit to hide the row action. */
   onUnderstandClick?: (file: ChangedFile) => void;
   /** Lets each row's tour button show its own generating/ready state. */
@@ -218,9 +218,9 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
           coverageReportPath={coverageReportPath()}
           selectedCommit={props.selectedCommit}
           onFileClick={(file) => props.onDiffFileClick(file.path)}
-          onFileCountChange={(count) => {
-            setFileCount(count);
-            props.onFileCountChange?.(count);
+          onFilesChange={(files) => {
+            setFileCount(files.length);
+            props.onFilesChange?.(files);
           }}
           onTotalsChange={setTotals}
           onUncommittedCountChange={setUncommittedCount}

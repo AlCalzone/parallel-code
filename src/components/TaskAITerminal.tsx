@@ -29,7 +29,7 @@ import { isSupportedDelegationAgent } from '../store/delegation';
 import { InfoBar } from './InfoBar';
 import { PromptHistory } from './PromptHistory';
 import { TerminalView } from './TerminalView';
-import { fileLinkMenu, type FileLinkMenu } from './file-link-menu';
+import { fileLinkMenu, type ChangesLink, type FileLinkMenu } from './file-link-menu';
 import { findBareFile } from '../lib/find-bare-file';
 import { createMarkdownViewer } from './MarkdownViewerDialog';
 import { SessionPicker } from './SessionPicker';
@@ -66,6 +66,8 @@ interface TaskAITerminalProps {
   onFileLink?: (filePath: string) => boolean;
   /** Present where the task has a side panel: opens a worktree-relative Markdown path there. */
   onOpenInSidePanel?: (relativePath: string) => void;
+  /** The task's changed files, which links open in the changes dialog. */
+  changes?: ChangesLink;
   onReview?: (path?: string) => void;
   /** Opens the tour the agent published through `tour_publish`. */
   onOpenTour?: () => void;
@@ -531,6 +533,7 @@ export function TaskAITerminal(props: TaskAITerminalProps) {
                     openDialog: markdownViewer.show,
                     openMarkdown: props.onFileLink ? routeMarkdown : undefined,
                     openInSidePanel: props.onOpenInSidePanel,
+                    changes: props.changes,
                   })
                 }
                 findBareFile={(name) => findBareFile(name, props.task)}
