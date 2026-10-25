@@ -9,7 +9,7 @@ import {
   untrack,
   Show,
 } from 'solid-js';
-import { Terminal, type IMarker } from '@xterm/xterm';
+import { Terminal, type IBufferRange, type ILink, type IMarker } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -57,12 +57,15 @@ import {
   computeWrappedPathLinks,
   createTerminalHttpLinkHandler,
   terminalLinkFilePath,
+  type TerminalPathLink,
+  terminalLinkLine,
 } from '../lib/terminalLinks';
 import { recordSharedWebglContextLoss, WEBGL_REATTACH_DELAY_MS } from '../lib/webglContextLoss';
 import { isTerminalPaneOnScreen, WEBGL_DETACH_DELAY_MS } from '../lib/terminalPaneVisibility';
 import type { PtyOutput } from '../ipc/types';
 import { SyncIcon, SendIcon } from './icons';
-import { TerminalSelectionMenu } from './TerminalSelectionMenu';
+import { TerminalSelectionMenu, type TerminalLinkAction } from './TerminalSelectionMenu';
+import type { FileLinkMenu } from './file-link-menu';
 import './AgentHandoffComposer.css';
 
 let windowUnloading = false;
@@ -170,9 +173,13 @@ interface TerminalViewProps {
   }) => void;
   onData?: (data: Uint8Array) => void;
   onPromptDetected?: (text: string) => void;
-  onFileLink?: (filePath: string) => void;
   /** Present: right-clicking a Markdown or HTML path offers to edit it as a document. */
   onEditAsDocument?: (filePath: string) => void;
+  /** Present: plain-clicking a path opens its menu, and Cmd/Ctrl+click runs its `open`.
+   *  Absent: Cmd/Ctrl+click opens the path with the default app. */
+  fileLinkMenu?: (filePath: string, line: number | undefined) => FileLinkMenu;
+  /** Present: a file name printed without a folder links to the file this finds, if any. */
+  findBareFile?: (name: string) => Promise<string | undefined>;
   onReady?: (focusFn: () => void) => void;
   onBufferReady?: (getBuffer: () => string) => void;
   /** Exposes the scrollback-marker API: `mark(key)` registers a marker at the current line
@@ -210,6 +217,9 @@ function getTerminalBindings() {
   return resolvedBindings().filter((b) => b.layer === 'terminal');
 }
 
+/** Pixels between a clicked link and its menu's corner. */
+const LINK_MENU_OFFSET = 4;
+
 export function TerminalView(props: TerminalViewProps) {
   let containerRef!: HTMLDivElement;
   let term: Terminal | undefined;
@@ -239,6 +249,9 @@ export function TerminalView(props: TerminalViewProps) {
     y: number;
     text: string;
     documentPath?: string;
+    actions?: TerminalLinkAction[];
+    /** The clicked link, which a double-click selects instead. */
+    linkRange?: IBufferRange;
   }>();
   /** The path link under the pointer, so a right-click can act on it. */
   let hoveredPath: string | undefined;
@@ -256,6 +269,21 @@ export function TerminalView(props: TerminalViewProps) {
       text: cleanCopiedTerminalText(term?.getSelection() ?? ''),
       documentPath,
     });
+  }
+
+  /**
+   * The menu's backdrop swallows a double-click's second press, so xterm never
+   * selects the word; select the link it opened for, as the double-click would.
+   */
+  function selectLinkInstead(range: IBufferRange): () => void {
+    return () => {
+      setSelectionMenu(undefined);
+      if (!term) return;
+      // Ranges are 1-based and inclusive; select() counts cells across wrapped rows.
+      const length = (range.end.y - range.start.y) * term.cols + range.end.x - range.start.x + 1;
+      term.select(range.start.x - 1, range.start.y - 1, length);
+      term.focus();
+    };
   }
 
   /**
@@ -551,32 +579,74 @@ export function TerminalView(props: TerminalViewProps) {
         // Reconstruct wrapped lines so a path that spans multiple rows stays a
         // single clickable link across every row it occupies.
         const links = computeWrappedPathLinks(term.buffer.active, y - 1);
-        callback(
-          links.map((link) => ({
-            range: link.range,
-            text: link.text,
-            hover() {
-              hoveredPath = resolveLinkPath(link.text);
-            },
-            leave() {
-              hoveredPath = undefined;
-            },
-            activate(event: MouseEvent, _text: string) {
-              // Require Cmd+click (Mac) or Ctrl+click (Linux) to open links
-              const modifierHeld = isMac ? event.metaKey : event.ctrlKey;
-              if (!modifierHeld) return;
-              const resolved = resolveLinkPath(link.text);
-              // .md files open in viewer; Shift held = open externally instead
-              if (/\.md$/i.test(resolved) && props.onFileLink && !event.shiftKey) {
-                props.onFileLink(resolved);
-              } else {
-                invoke(IPC.OpenPath, { filePath: resolved }).catch(console.error);
-              }
-            },
-          })),
+        const findBareFile = props.findBareFile;
+        if (!links.some((link) => link.bare)) {
+          callback(links.map((link) => toTerminalLink(link, resolveLinkPath(link.text))));
+          return;
+        }
+        // A bare name links only to a file that is found, never to a guess.
+        // shortcut: a reply that lands after the pointer moved rows can replace that
+        // row's links until the next move; xterm can't cancel a reply, so caching
+        // lookups to answer synchronously is the fix if that shows.
+        void Promise.all(
+          links.map((link) =>
+            link.bare
+              ? findBareFile?.(terminalLinkFilePath(link.text))
+              : resolveLinkPath(link.text),
+          ),
+        ).then((paths) =>
+          callback(
+            links.flatMap((link, i) => {
+              const filePath = paths[i];
+              return filePath ? [toTerminalLink(link, filePath)] : [];
+            }),
+          ),
         );
       },
     });
+
+    /** The xterm link for a matched path, opening `resolved` wherever it is clicked. */
+    function toTerminalLink(link: TerminalPathLink, resolved: string): ILink {
+      return {
+        range: link.range,
+        text: link.text,
+        hover() {
+          hoveredPath = resolved;
+        },
+        leave() {
+          hoveredPath = undefined;
+        },
+        activate(event: MouseEvent, _text: string) {
+          const modifierHeld = isMac ? event.metaKey : event.ctrlKey;
+          const menu = props.fileLinkMenu?.(resolved, terminalLinkLine(link.text));
+          const showMenu = () =>
+            setSelectionMenu({
+              // Off the pointer, so a double-click's second press reaches the backdrop.
+              x: event.clientX + LINK_MENU_OFFSET,
+              y: event.clientY + LINK_MENU_OFFSET,
+              text: '',
+              actions: menu?.actions,
+              linkRange: link.range,
+            });
+          // A plain click offers where to open the file; without a menu it does
+          // nothing, and only Cmd+click (Mac) or Ctrl+click (Linux) opens links.
+          if (!modifierHeld) {
+            // xterm activates on mouseup over the link even after a drag; a
+            // selection means the user was copying, not choosing a destination.
+            if (menu?.actions.length && !term?.hasSelection()) showMenu();
+            return;
+          }
+          // Shift held = open with the default app instead
+          if (menu && !event.shiftKey) {
+            // A file with nowhere to open on its own still offers its menu.
+            if (menu.open) menu.open();
+            else if (menu.actions.length) showMenu();
+          } else {
+            invoke(IPC.OpenPath, { filePath: resolved }).catch(console.error);
+          }
+        },
+      };
+    }
 
     props.onReady?.(() => term?.focus());
 
@@ -1429,7 +1499,8 @@ export function TerminalView(props: TerminalViewProps) {
             {...selection}
             recipients={props.handoffRecipients ?? []}
             onSend={(text, id) => props.onSendSelection?.(text, id)}
-            onOpinion={props.onSecondOpinion}
+            onOpinion={selection.actions ? undefined : props.onSecondOpinion}
+            onDoubleClick={selection.linkRange && selectLinkInstead(selection.linkRange)}
             onEditAsDocument={props.onEditAsDocument}
             onClose={(restoreFocus = true) => {
               setSelectionMenu(undefined);

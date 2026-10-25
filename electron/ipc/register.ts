@@ -24,7 +24,8 @@ import {
 } from './pty.js';
 import { loadEnvFile } from './env-file.js';
 import { getResourceSnapshot } from './resources.js';
-import { editorGotoArgs, spawnDetached, validateEditorCommand } from './open-file.js';
+import { editorLineArgs, spawnDetached, validateEditorCommand } from './open-file.js';
+import { isExecutablePath } from '../shared/executable-path.js';
 import { appendGitInfoExcludeBlock } from './git-exclude.js';
 import {
   spawnAgent,
@@ -1482,8 +1483,7 @@ export function registerAllHandlers(win: BrowserWindow): void {
     const filePath = expandHome(args.filePath);
     validatePath(filePath, 'filePath');
     // Block executable extensions to prevent accidental code execution
-    const dangerous = /\.(sh|bash|exe|bat|cmd|app|command|desktop|appimage|run)$/i;
-    if (dangerous.test(filePath)) {
+    if (isExecutablePath(filePath)) {
       throw new Error('Cannot open executable files');
     }
     return shell.openPath(filePath);
@@ -1493,8 +1493,8 @@ export function registerAllHandlers(win: BrowserWindow): void {
     assertString(args.filePath, 'filePath');
     const filePath = expandHome(args.filePath);
     validatePath(filePath, 'filePath');
-    if (!/\.md$/i.test(filePath)) {
-      throw new Error('Only .md files can be read');
+    if (!/\.(md|markdown)$/i.test(filePath)) {
+      throw new Error('Only Markdown files can be read');
     }
     const stat = await fs.promises.stat(filePath);
     if (stat.size > 2 * 1024 * 1024) {
@@ -1730,8 +1730,10 @@ export function registerAllHandlers(win: BrowserWindow): void {
 
   // --- Shell/Opener ---
   ipcMain.handle(IPC.ShellReveal, (_e, args) => {
-    validatePath(args.filePath, 'filePath');
-    shell.showItemInFolder(args.filePath);
+    assertString(args.filePath, 'filePath');
+    const filePath = expandHome(args.filePath);
+    validatePath(filePath, 'filePath');
+    shell.showItemInFolder(filePath);
   });
 
   ipcMain.handle(IPC.ShellOpenFile, async (_e, args) => {
@@ -1742,18 +1744,17 @@ export function registerAllHandlers(win: BrowserWindow): void {
     const line = args.line;
     if (Number.isInteger(line) && line > 0 && args.editorCommand) {
       const cmd = validateEditorCommand(args.editorCommand);
-      const gotoArgs = editorGotoArgs(cmd, absolute, line);
-      if (gotoArgs) {
-        try {
-          await spawnDetached(cmd, gotoArgs);
-          return '';
-        } catch (err) {
-          logWarn('shell', 'Editor launch failed; opening with the default app', {
-            error: errMessage(err),
-          });
-        }
+      try {
+        await spawnDetached(cmd, editorLineArgs(cmd, absolute, line));
+        return '';
+      } catch (err) {
+        logWarn('shell', 'Editor launch failed; opening with the default app', {
+          error: errMessage(err),
+        });
       }
     }
+    // The default app would run a script instead of showing it.
+    if (isExecutablePath(absolute)) return 'Cannot open executable files';
     return shell.openPath(absolute);
   });
 
@@ -1762,8 +1763,10 @@ export function registerAllHandlers(win: BrowserWindow): void {
   });
 
   ipcMain.handle(IPC.ShellOpenInEditor, (_e, args) => {
-    validatePath(args.worktreePath, 'worktreePath');
-    return spawnDetached(validateEditorCommand(args.editorCommand), [args.worktreePath]);
+    assertString(args.worktreePath, 'worktreePath');
+    const target = expandHome(args.worktreePath);
+    validatePath(target, 'worktreePath');
+    return spawnDetached(validateEditorCommand(args.editorCommand), [target]);
   });
 
   // --- Mobile task-creation bridge (paired phones) ---

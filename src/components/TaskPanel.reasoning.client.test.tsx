@@ -20,11 +20,13 @@ import {
   uncollapseTask,
   openCanvasReasoning,
   openCanvasMindMap,
+  openCanvasDocument,
   activateCanvasTab,
   showNotification,
   toggleFocusMode,
   setTaskFocusedPanel,
   setTaskBriefs,
+  setActiveTask,
 } from '../store/store';
 import { GIST_LABEL } from '../lib/understanding-tour';
 import type { Task } from '../store/types';
@@ -84,6 +86,7 @@ vi.mock('../store/store', () => {
     openCanvasReasoning: vi.fn(),
     openCanvasMindMap: vi.fn(),
     openCanvasBrowser: vi.fn(),
+    openCanvasDocument: vi.fn(),
     showNotification: vi.fn(),
     registerAction: vi.fn(),
     unregisterAction: vi.fn(),
@@ -120,8 +123,13 @@ vi.mock('../lib/ipc', () => ({
   },
 }));
 vi.mock('./TaskAITerminal', () => ({
-  TaskAITerminal: (props: { onReview?: (path?: string) => void; brief?: JSX.Element }) => (
+  TaskAITerminal: (props: {
+    onReview?: (path?: string) => void;
+    onOpenInSidePanel?: (path: string) => void;
+    brief?: JSX.Element;
+  }) => (
     <div class="test-terminal">
+      <button class="test-side-panel" onClick={() => props.onOpenInSidePanel?.('docs/plan.md')} />
       {props.brief}
       Scrollback
       <button
@@ -290,6 +298,38 @@ afterEach(() => {
   vi.mocked(invoke).mockReset();
   vi.mocked(invoke).mockResolvedValue(undefined);
   vi.useRealTimers();
+});
+
+it('opens a terminal Markdown link in the side panel and moves focus there', async () => {
+  const task: Task = {
+    id: 'task',
+    name: 'Task',
+    projectId: 'project',
+    agentIds: ['agent'],
+    shellAgentIds: [],
+    notes: '',
+    gitIsolation: 'none',
+    branchName: '',
+    worktreePath: '/tmp/task',
+    lastPrompt: '',
+  };
+  const container = document.createElement('div');
+  document.body.append(container);
+  dispose = render(() => <TaskPanel task={task} isActive />, container);
+  vi.mocked(setTaskFocusedPanel).mockClear();
+  container.querySelector<HTMLButtonElement>('.test-side-panel')?.click();
+  expect(openCanvasDocument).toHaveBeenCalledWith('task', 'docs/plan.md');
+  // Queued so the clicked agent pane, which selects itself as the click bubbles, does not win.
+  expect(setTaskFocusedPanel).not.toHaveBeenCalledWith('task', 'canvas');
+  await Promise.resolve();
+  expect(setTaskFocusedPanel).toHaveBeenLastCalledWith('task', 'canvas');
+
+  // A task switch before the microtask leaves the newly active task's focus alone.
+  vi.mocked(setTaskFocusedPanel).mockClear();
+  container.querySelector<HTMLButtonElement>('.test-side-panel')?.click();
+  setActiveTask('other-task');
+  await Promise.resolve();
+  expect(setTaskFocusedPanel).not.toHaveBeenCalledWith('task', 'canvas');
 });
 
 it('hides the brief bar, and with it Rate confidence, while briefs are off', () => {

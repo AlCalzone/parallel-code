@@ -263,6 +263,14 @@ export function TaskPanel(props: TaskPanelProps) {
     }
     void understanding.generate(input);
   };
+  const openInSidePanel = (path: string) => {
+    const taskId = props.task.id;
+    openCanvasDocument(taskId, path);
+    // The clicked agent pane selects itself as the click bubbles; reveal the panel after.
+    queueMicrotask(() => {
+      if (store.activeTaskId === taskId) setTaskFocusedPanel(taskId, 'canvas');
+    });
+  };
   /**
    * The entry button: reopens the cached tour, or publishes it again when the
    * cache was cleared. A published tour is never generated.
@@ -593,6 +601,7 @@ export function TaskPanel(props: TaskPanelProps) {
               }
         }
         onOpenTour={openAgentTour}
+        onOpenInSidePanel={openInSidePanel}
         task={props.task}
         isActive={props.isActive}
         selectedAgentId={selectedAgentId()}
@@ -616,7 +625,13 @@ export function TaskPanel(props: TaskPanelProps) {
       />
     </div>
   );
-  const shellSectionEl = <TaskShellSection task={props.task} isActive={props.isActive} />;
+  const shellSectionEl = (
+    <TaskShellSection
+      task={props.task}
+      isActive={props.isActive}
+      onOpenInSidePanel={openInSidePanel}
+    />
+  );
   const canvasVisible = () => isTaskCanvasVisible(props.task);
   const mindMapActive = () => props.task.canvasActiveTab === 'mindmap';
   const graphActive = () => mindMapActive() || props.task.canvasActiveTab === 'reasoning';

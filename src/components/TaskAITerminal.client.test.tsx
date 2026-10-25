@@ -640,9 +640,9 @@ it('copies the raw Markdown of a file opened in the viewer', async () => {
   );
   mount();
   const terminalProps = mocks.terminalMounts.mock.calls[0]?.[0] as {
-    onFileLink?: (filePath: string) => void;
+    fileLinkMenu?: (filePath: string, line?: number) => { open: () => void };
   };
-  terminalProps.onFileLink?.('/worktree/NOTES.md');
+  terminalProps.fileLinkMenu?.('/worktree/NOTES.md').open();
 
   await vi.waitFor(() => {
     expect(document.querySelector('[role="dialog"] [title="Copy Markdown"]')).not.toBeNull();
@@ -662,9 +662,9 @@ it('offers to edit a file opened in the viewer as a document', async () => {
   );
   mount();
   const terminalProps = mocks.terminalMounts.mock.calls[0]?.[0] as {
-    onFileLink?: (filePath: string) => void;
+    fileLinkMenu?: (filePath: string, line?: number) => { open: () => void };
   };
-  terminalProps.onFileLink?.('/worktree/NOTES.md');
+  terminalProps.fileLinkMenu?.('/worktree/NOTES.md').open();
 
   const button = await vi.waitFor(() => {
     const el = document.querySelector<HTMLButtonElement>(
@@ -692,9 +692,9 @@ it('logs why copying the Markdown failed', async () => {
   try {
     mount();
     const terminalProps = mocks.terminalMounts.mock.calls[0]?.[0] as {
-      onFileLink?: (filePath: string) => void;
+      fileLinkMenu?: (filePath: string, line?: number) => { open: () => void };
     };
-    terminalProps.onFileLink?.('/worktree/NOTES.md');
+    terminalProps.fileLinkMenu?.('/worktree/NOTES.md').open();
     await vi.waitFor(() => {
       expect(document.querySelector('[role="dialog"] [title="Copy Markdown"]')).not.toBeNull();
     });

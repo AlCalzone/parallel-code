@@ -29,6 +29,9 @@ import {
   setTaskShellAutoLayout,
 } from '../store/store';
 import { TerminalView } from './TerminalView';
+import { fileLinkMenu } from './file-link-menu';
+import { findBareFile } from '../lib/find-bare-file';
+import { createMarkdownViewer } from './MarkdownViewerDialog';
 import { editAsDocument } from '../documents/store';
 import { CloseIcon } from './icons';
 import { theme } from '../lib/theme';
@@ -62,6 +65,8 @@ const toolbarBtnStyle = (highlighted: boolean, iconOnly = false): JSX.CSSPropert
 interface TaskShellSectionProps {
   task: Task;
   isActive: boolean;
+  /** Opens a worktree-relative file in the task's side panel. */
+  onOpenInSidePanel?: (relativePath: string) => void;
 }
 
 /** Smallest height the shell section can show without clipping its open
@@ -148,6 +153,8 @@ export function TaskShellSection(props: TaskShellSectionProps) {
     if (store.focusMode) return 'max(200px, 33vh)';
     return '140px';
   };
+
+  const markdownViewer = createMarkdownViewer();
 
   return (
     <div
@@ -367,6 +374,14 @@ export function TaskShellSection(props: TaskShellSectionProps) {
                     args={['-l']}
                     cwd={props.task.worktreePath}
                     onEditAsDocument={store.documentWorkspacesEnabled ? editAsDocument : undefined}
+                    fileLinkMenu={(filePath, line) =>
+                      fileLinkMenu(filePath, line, {
+                        worktreePath: props.task.worktreePath,
+                        openDialog: markdownViewer.show,
+                        openInSidePanel: props.onOpenInSidePanel,
+                      })
+                    }
+                    findBareFile={(name) => findBareFile(name, props.task)}
                     dockerMode={props.task.dockerMode}
                     dockerImage={props.task.dockerImage}
                     initialCommand={initialCommand}
@@ -392,6 +407,7 @@ export function TaskShellSection(props: TaskShellSectionProps) {
           </For>
         </div>
       </Show>
+      {markdownViewer.view()}
     </div>
   );
 }

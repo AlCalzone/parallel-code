@@ -4,10 +4,13 @@ import type { Task } from '../store/types';
 import { TaskShellSection } from './TaskShellSection';
 import { editAsDocument } from '../documents/store';
 import { store } from '../store/store';
+import { IPC } from '../../electron/ipc/channels';
+import type { FileLinkMenu } from './file-link-menu';
 
-const { terminalProps, setShellLayoutOverride } = vi.hoisted(() => ({
+const { terminalProps, setShellLayoutOverride, invoke } = vi.hoisted(() => ({
   terminalProps: [] as Record<string, unknown>[],
   setShellLayoutOverride: vi.fn(),
+  invoke: vi.fn(),
 }));
 
 vi.mock('../store/store', () => ({
@@ -49,6 +52,7 @@ vi.mock('./TerminalView', () => ({
   },
 }));
 vi.mock('../documents/store', () => ({ editAsDocument: vi.fn() }));
+vi.mock('../lib/ipc', () => ({ invoke }));
 
 const disposers: Array<() => void> = [];
 
@@ -84,6 +88,41 @@ describe('TaskShellSection', () => {
     );
 
     expect(terminalProps[0]?.onEditAsDocument).toBe(editAsDocument);
+  });
+
+  it('offers a clicked shell file link the side panel and the Markdown dialog', async () => {
+    invoke.mockResolvedValue('# Plan');
+    const onOpenInSidePanel = vi.fn();
+    const container = document.createElement('div');
+    document.body.append(container);
+    disposers.push(
+      render(
+        () => (
+          <TaskShellSection
+            task={makeTask(['shell-1'])}
+            isActive
+            onOpenInSidePanel={onOpenInSidePanel}
+          />
+        ),
+        container,
+      ),
+    );
+    const fileLinkMenu = terminalProps[0]?.fileLinkMenu as (
+      filePath: string,
+      line?: number,
+    ) => FileLinkMenu;
+    const menu = fileLinkMenu('/tmp/task/docs/plan.md');
+
+    menu.actions.find((a) => a.label === 'Open in side panel')?.run();
+    expect(onOpenInSidePanel).toHaveBeenCalledWith('docs/plan.md');
+    menu.open?.();
+    expect(invoke).toHaveBeenCalledWith(IPC.ReadFileText, { filePath: '/tmp/task/docs/plan.md' });
+    await vi.waitFor(() => expect(document.body.textContent).toContain('plan.md'));
+
+    invoke.mockResolvedValueOnce(true);
+    const findBareFile = terminalProps[0]?.findBareFile as (name: string) => Promise<unknown>;
+    await expect(findBareFile('plan.md')).resolves.toBe('/tmp/task/plan.md');
+    expect(invoke).toHaveBeenLastCalledWith(IPC.CheckPathExists, { path: '/tmp/task/plan.md' });
   });
 
   it('keeps terminal bookmark buttons at their natural width in a horizontally scrollable toolbar', () => {
