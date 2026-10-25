@@ -17,6 +17,21 @@ export function ProjectVerificationSection(props: ProjectVerificationSectionProp
   const form = () => props.form;
   return (
     <div style={{ display: 'flex', 'flex-direction': 'column', gap: '18px' }}>
+      {/* First, since it fills both the verify command and the checks below. */}
+      <div style={{ 'margin-bottom': '8px' }}>
+        <SuggestChecksButton
+          projectRoot={props.projectRoot}
+          model={store.reviewModel}
+          label="Suggest verify command and checks with AI"
+          large
+          onSuggest={(suggestion) => {
+            // Keep what the user has when the model has nothing for a field.
+            if (suggestion.verifyCommand) form().setVerifyCommand(suggestion.verifyCommand);
+            if (suggestion.checks.length > 0)
+              form().setEvidenceChecks(keepCheckIds(form().evidenceChecks(), suggestion.checks));
+          }}
+        />
+      </div>
       <ProjectField
         label="Verify command"
         aside="runs in the task worktree"
@@ -55,17 +70,6 @@ export function ProjectVerificationSection(props: ProjectVerificationSectionProp
         checked={form().verifyAutoRun()}
         onChange={(checked) => form().setVerifyAutoRun(checked)}
       />
-      <SuggestChecksButton
-        projectRoot={props.projectRoot}
-        model={store.reviewModel}
-        onSuggest={(suggestion) => {
-          // Keep what the user has when the model has nothing for a field.
-          if (suggestion.verifyCommand) form().setVerifyCommand(suggestion.verifyCommand);
-          if (suggestion.checks.length > 0)
-            form().setEvidenceChecks(keepCheckIds(form().evidenceChecks(), suggestion.checks));
-        }}
-      />
-
       <ProjectChecksFields
         checks={form().evidenceChecks()}
         onChecksChange={(checks) => form().setEvidenceChecks(checks)}

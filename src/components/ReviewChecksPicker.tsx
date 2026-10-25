@@ -52,8 +52,8 @@ const hint: JSX.CSSProperties = { 'font-size': sf(12), color: theme.fgSubtle };
 /**
  * Picks what a review runs in this project, shown before the project's first
  * review and from Change settings after. The reviewer always runs: the review is
- * built from it. Checks that run on their own start picked; on-demand ones,
- * usually slow, start unpicked.
+ * built from it. Until the project saves a pick, checks set to Ticked start
+ * picked and the others, usually slow, unpicked.
  */
 export function ReviewChecksPicker(props: {
   task: Task;
@@ -187,7 +187,8 @@ export function ReviewChecksPicker(props: {
       </Show>
       <div style={{ display: 'flex', gap: '8px', 'align-items': 'center', 'padding-top': '4px' }}>
         <span style={{ ...hint, flex: '1' }}>
-          Checks are saved for the project, the reviewer for this task.
+          Ticked checks run in the task worktree unless held back; the reviewer waits for their
+          results. Checks are saved for the project, the reviewer for this task.
         </span>
         <button type="button" style={dialogButtonStyle(false)} onClick={() => props.onCancel()}>
           Cancel

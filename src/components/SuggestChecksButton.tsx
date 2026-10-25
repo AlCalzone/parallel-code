@@ -22,6 +22,8 @@ interface SuggestChecksButtonProps {
   label?: string;
   /** What to do with the suggestion; defaults to reviewing it before Save. */
   doneHint?: string;
+  /** A larger button, for when it leads a whole section. */
+  large?: boolean;
 }
 
 /**
@@ -60,7 +62,8 @@ export function SuggestChecksButton(props: SuggestChecksButtonProps) {
       if (!suggestion.verifyCommand && suggestion.checks.length === 0)
         throw new Error(suggestion.reason ?? 'The model found no commands to suggest.');
       props.onSuggest(suggestion);
-      // Suggested commands run automatically once saved, so always ask for a review.
+      // A saved verify command can run in the background and checks run in the task
+      // worktree, so always ask for a review.
       const review = props.doneHint ?? 'Review the commands before saving.';
       setStatus({ text: suggestion.reason ? `${suggestion.reason} ${review}` : review });
     } catch (err) {
@@ -80,16 +83,16 @@ export function SuggestChecksButton(props: SuggestChecksButtonProps) {
         onClick={() => void suggest()}
         title="Reads package.json, Makefile, CI workflows and similar files and asks the review model for commands"
         style={{
-          padding: '3px 10px',
+          padding: props.large ? '6px 14px' : '3px 10px',
           background: theme.bgInput,
           border: `1px solid ${theme.border}`,
           'border-radius': 'var(--radius-sm)',
           color: theme.fgMuted,
           cursor: running() ? 'default' : 'pointer',
-          'font-size': '12px',
+          'font-size': props.large ? '13px' : '12px',
         }}
       >
-        <SparkleIcon size={12} />
+        <SparkleIcon size={props.large ? 14 : 12} />
         {running() ? 'Suggesting…' : (props.label ?? 'Suggest with AI')}
       </button>
       <Show when={status()}>

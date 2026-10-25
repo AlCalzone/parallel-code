@@ -19,7 +19,8 @@ export interface ProjectCheck {
   name: string;
   kind: CheckKind;
   command: string;
-  /** `auto` runs on every handoff the execution gate allows; `on-demand` only on click. */
+  /** Whether a review's check picker starts with this check ticked; only until the
+   *  project saves its own pick (`Project.reviewChecks`). Never starts a run by itself. */
   run: 'auto' | 'on-demand';
 }
 

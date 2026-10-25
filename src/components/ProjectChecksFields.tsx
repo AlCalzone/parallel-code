@@ -7,6 +7,7 @@ import {
 } from '../../electron/shared/check-settings';
 import { sectionLabelStyle, theme } from '../lib/theme';
 import { CloseIcon, PlusIcon } from './icons';
+import { projectHintStyle } from './ProjectDialogParts';
 import { fieldStyle } from './ReviewModelFields';
 
 /** A check being edited; the name follows the kind and new rows get their id when saved. */
@@ -58,6 +59,11 @@ export function ProjectChecksFields(props: ProjectChecksFieldsProps) {
   return (
     <fieldset style={{ border: 'none', padding: '0', margin: '0', display: 'grid', gap: '8px' }}>
       <legend style={legendStyle}>Checks</legend>
+      <div style={projectHintStyle}>
+        Extra commands a review can run in the task worktree. They never run on their own. Checks
+        set to Ticked start ticked in the first review; after that a review remembers your pick, and
+        checks added later start unticked.
+      </div>
       {/* Index keeps each row's inputs while its draft object is replaced on every keystroke. */}
       <Index each={props.checks}>
         {(check, index) => (
@@ -86,15 +92,15 @@ export function ProjectChecksFields(props: ProjectChecksFieldsProps) {
               style={{ ...fieldStyle, 'font-family': "'JetBrains Mono', monospace" }}
             />
             <select
-              aria-label="When the check runs"
+              aria-label="Ticked when starting a review"
               value={check().run}
               onChange={(e) =>
                 edit(index, { run: e.currentTarget.value === 'on-demand' ? 'on-demand' : 'auto' })
               }
               style={fieldStyle}
             >
-              <option value="auto">Auto</option>
-              <option value="on-demand">On demand</option>
+              <option value="auto">Ticked</option>
+              <option value="on-demand">Unticked</option>
             </select>
             <button
               type="button"
