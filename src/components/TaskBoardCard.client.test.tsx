@@ -153,3 +153,14 @@ it("opens the task on the board's other side from its menu", () => {
   expect(labels()).toContain('Open on the right');
   setStore({ boardView: false, boardPeek: false, boardSidePanelLeft: false });
 });
+
+it('marks a subtask and names its coordinator', () => {
+  const card = () => container.querySelector('.task-board-card');
+  expect(card()?.classList.contains('subtask')).toBe(false);
+  setStore('tasks', 'parent', { ...task, id: 'parent', name: 'Coordinator' });
+  setStore('tasks', 'one', 'coordinatedBy', 'parent');
+  expect(card()?.classList.contains('subtask')).toBe(true);
+  expect(card()?.querySelector('.task-board-meta')?.textContent).toContain(
+    'Subtask of Coordinator',
+  );
+});

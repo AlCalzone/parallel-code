@@ -361,10 +361,22 @@ export interface AddIssuesResult {
   column: string;
 }
 
+function addedMessage(total: number, { added, created, column }: AddIssuesResult): string {
+  if (added === 0)
+    return total === 1 ? 'Already on the plan' : `All ${total} are already on the plan`;
+  const cards = `${added} ${added === 1 ? 'card' : 'cards'}`;
+  const skipped = total - added;
+  return (
+    (created ? `Created KANBAN.md with ${cards} in ${column}` : `Added ${cards} to ${column}`) +
+    (skipped ? `; ${skipped} already on the plan` : '')
+  );
+}
+
 /**
  * Adds GitHub issues or PRs to the project's board as cards in the first
  * column, skipping any it already tracks and creating the board if the
- * project has none. Null on failure, which is reported.
+ * project has none. Confirms the outcome, or reports the failure and
+ * returns null.
  */
 export async function addIssuesToBoard(
   projectId: string,
@@ -395,6 +407,9 @@ export async function addIssuesToBoard(
       column = next.columns.find((c) => !isArchiveColumn(c.title))?.title ?? '';
       return next === board ? null : next;
     });
+    // The same item picked twice is one card, not one skipped.
+    const total = new Set(items.map((item) => item.url)).size;
+    showNotification(addedMessage(total, { added, created, column }));
     return { added, created, column };
   } catch (err) {
     logWarn('kanban', 'could not add issues to board', { projectId, error: errMessage(err) });

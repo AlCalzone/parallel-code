@@ -85,6 +85,23 @@ function readyFirst(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => rank(a) - rank(b));
 }
 
+/**
+ * Keeps each coordinator's subtasks together, right after it when it shares
+ * the lane. A family sits where its first member did, so an urgent subtask
+ * still lifts it to the top of Needs you.
+ */
+export function groupSubtasks(tasks: Task[]): Task[] {
+  const families = new Map<string, Task[]>();
+  for (const task of tasks) {
+    const key = task.coordinatedBy ?? task.id;
+    const family = families.get(key) ?? [];
+    if (task.id === key) family.unshift(task);
+    else family.push(task);
+    families.set(key, family);
+  }
+  return [...families.values()].flat();
+}
+
 export function boardLanes(tasks: Task[]): BoardLane[] {
   const lanes = (Object.keys(LANE_TITLES) as BoardLaneId[]).map((id) => ({
     id,
@@ -96,5 +113,6 @@ export function boardLanes(tasks: Task[]): BoardLane[] {
   if (needs) needs.tasks = byLongestWait(needs.tasks);
   const stopped = lanes.find((lane) => lane.id === 'stopped');
   if (stopped) stopped.tasks = readyFirst(stopped.tasks);
+  for (const lane of lanes) lane.tasks = groupSubtasks(lane.tasks);
   return lanes;
 }

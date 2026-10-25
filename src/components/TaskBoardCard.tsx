@@ -60,10 +60,29 @@ export function BoardProjectLabel(props: { projectId: string | null | undefined 
   );
 }
 
+/** A subtask's coordinator, while it is open. */
+function parentTask(task: Task): Task | undefined {
+  return task.coordinatedBy ? store.tasks[task.coordinatedBy] : undefined;
+}
+
 function CardMeta(props: { task: Task; since: number | undefined; waiting: boolean }) {
   return (
     <div class="task-board-meta">
-      <BoardProjectLabel projectId={props.task.projectId} />
+      {/* A subtask shares its coordinator's project, so naming the coordinator says more. */}
+      <Show
+        when={parentTask(props.task)}
+        fallback={<BoardProjectLabel projectId={props.task.projectId} />}
+      >
+        {(parent) => (
+          <span class="task-board-project" title={`Subtask of ${parent().name}`}>
+            <span>
+              <span aria-hidden="true">↳ </span>
+              <span class="dialog-sr-only">Subtask of </span>
+              {parent().name}
+            </span>
+          </span>
+        )}
+      </Show>
       {/* Names the cause of a stopped card's spinner in the agent's slot, so the row never reflows. */}
       <Show
         when={getTaskAttentionState(props.task.id) === 'shell_busy'}
@@ -133,6 +152,7 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
         'close-failed': props.task.closingStatus === 'error',
         shown: shown(),
         closing: closing(),
+        subtask: !!parentTask(props.task),
       }}
       onContextMenu={(event) => menu.onContextMenu(event)}
     >

@@ -251,10 +251,28 @@ describe('GitHub issues on the board', () => {
     expect(await issueBoardColumn('p1', issue.url)).toBe('Backlog');
   });
 
+  it('confirms what it added', async () => {
+    const other = { title: 'Slow search', url: 'https://github.com/acme/app/issues/13' };
+    await addIssuesToBoard('p1', [issue]);
+    expect(showNotification).toHaveBeenLastCalledWith('Added 1 card to Backlog');
+    await addIssuesToBoard('p1', [issue, other]);
+    expect(showNotification).toHaveBeenLastCalledWith(
+      'Added 1 card to Backlog; 1 already on the plan',
+    );
+    await addIssuesToBoard('p1', [issue]);
+    expect(showNotification).toHaveBeenLastCalledWith('Already on the plan');
+  });
+
+  it('does not count an item picked twice as already on the plan', async () => {
+    await addIssuesToBoard('p1', [issue, issue]);
+    expect(showNotification).toHaveBeenLastCalledWith('Added 1 card to Backlog');
+  });
+
   it('creates the board when the project has none', async () => {
     disk.text = null;
     expect(await addIssuesToBoard('p1', [issue])).toMatchObject({ added: 1, created: true });
     expect(disk.text).toContain('## Backlog\n\n- [ ] Crash on start');
+    expect(showNotification).toHaveBeenLastCalledWith('Created KANBAN.md with 1 card in Backlog');
   });
 
   it('does not make a pull request card the new task’s own PR', () => {

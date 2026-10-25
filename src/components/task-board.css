@@ -453,6 +453,20 @@ html[data-look^='islands-'] .task-board {
 .task-board-controls .task-board-search:focus-visible {
   outline: none;
 }
+/* Subtasks sit indented under their coordinator, tied to it by a plain rule. */
+.task-board-card.subtask {
+  margin-left: 14px;
+}
+.task-board-card.subtask::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -9px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--border);
+}
 /* A closing task fades while its teardown runs; the card stays put. */
 .task-board-card.closing {
   opacity: 0.55;
