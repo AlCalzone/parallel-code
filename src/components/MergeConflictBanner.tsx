@@ -6,15 +6,18 @@ import { overlapText } from '../lib/readiness-line';
 import type { MergeState } from './merge-state';
 import { GitBranchIcon, GitMergeIcon, SparkleIcon } from './icons';
 
-const buttonStyle = (primary: boolean, disabled = false) => ({
+// Neutral even with conflicts: the banner carries the urgency, and full-strength
+// text, not an accent fill, marks the suggested route.
+const buttonStyle = (suggested: boolean, disabled = false) => ({
   padding: '5px 12px',
-  background: primary ? theme.accent : theme.bgInput,
-  border: primary ? `1px solid ${theme.accent}` : `1px solid ${theme.border}`,
+  background: theme.bgInput,
+  border: `1px solid ${theme.border}`,
   'border-radius': 'var(--radius-md)',
-  color: primary ? theme.accentText : theme.fg,
+  color: suggested ? theme.fg : theme.fgMuted,
   cursor: disabled ? 'not-allowed' : 'pointer',
   'font-size': '12px',
-  'font-weight': primary ? '600' : 'normal',
+  'font-weight': suggested ? '500' : 'normal',
+  'white-space': 'nowrap',
   opacity: disabled ? '0.5' : '1',
 });
 
@@ -27,6 +30,9 @@ export function MergeConflictBanner(props: { task: Task; state: MergeState; onDo
   const base = () => props.state.baseBranchName();
   // Other uncommitted changes are stashed and put back around the sync.
   const overlap = () => props.state.uncommittedOverlap();
+  // Undefined when the overlap is unknown: then neither overlap line shows.
+  const baseOverlap = () =>
+    props.state.hasConflicts() ? undefined : props.state.mergeStatus()?.overlapping_files;
   const blocked = () => props.state.syncing() !== null || overlap().length > 0;
   const blockedTitle = (action: string) =>
     overlap().length ? `Commit or stash your changes before you ${action}` : undefined;
@@ -57,18 +63,31 @@ export function MergeConflictBanner(props: { task: Task; state: MergeState; onDo
         <Show when={status().main_ahead_count > 0}>
           <div
             style={{
-              ...bannerStyle(props.state.hasConflicts() ? theme.error : theme.warning),
-              'margin-bottom': '12px',
+              // A base that moved on is routine; only conflicts need attention now.
+              ...(props.state.hasConflicts()
+                ? bannerStyle(theme.error)
+                : {
+                    padding: '8px 12px',
+                    'border-radius': 'var(--radius-md)',
+                    border: `1px solid ${theme.border}`,
+                  }),
+              'margin-bottom': '28px',
               'font-size': '13px',
             }}
           >
-            <div style={{ 'font-weight': '600' }}>
+            <div style={{ 'font-weight': props.state.hasConflicts() ? '600' : 'normal' }}>
               <Show
                 when={props.state.hasConflicts()}
                 fallback={
                   <>
                     {base()} has {status().main_ahead_count} new commit
-                    {status().main_ahead_count > 1 ? 's' : ''}. Bring them into this branch first.
+                    {status().main_ahead_count > 1 ? 's' : ''}.
+                    {/* Nothing to act on without overlap, so it stays on the heading's line. */}
+                    <Show when={baseOverlap()?.length === 0}>
+                      <span style={{ color: theme.fgMuted }}>
+                        {" No overlap with this branch's files."}
+                      </span>
+                    </Show>
                   </>
                 }
               >
@@ -90,12 +109,10 @@ export function MergeConflictBanner(props: { task: Task; state: MergeState; onDo
               </ul>
             </Show>
             {/* Checks on this branch never saw those commits; overlap is where that matters. */}
-            <Show when={!props.state.hasConflicts() && status().overlapping_files}>
-              {(files) => (
-                <div style={{ 'margin-top': '4px', color: theme.fgMuted }}>
-                  {overlapText(files(), base())}
-                </div>
-              )}
+            <Show when={baseOverlap()?.length}>
+              <div style={{ 'margin-top': '4px', color: theme.fgMuted }}>
+                {overlapText(baseOverlap() ?? [], status().main_ahead_count)}
+              </div>
             </Show>
             <Show when={overlap().length > 0}>
               <div style={{ 'margin-top': '4px' }}>
@@ -121,7 +138,7 @@ export function MergeConflictBanner(props: { task: Task; state: MergeState; onDo
                 style={buttonStyle(!agentSuggested(), blocked())}
               >
                 <GitBranchIcon size={12} />
-                {props.state.syncing() === 'rebase' ? 'Rebasing…' : `Rebase onto ${base()}`}
+                {props.state.syncing() === 'rebase' ? 'Rebasing…' : 'Rebase'}
               </button>
               <button
                 class="btn-with-icon"
@@ -135,7 +152,7 @@ export function MergeConflictBanner(props: { task: Task; state: MergeState; onDo
                 style={buttonStyle(false, blocked())}
               >
                 <GitMergeIcon size={12} />
-                {props.state.syncing() === 'merge' ? 'Merging…' : `Merge ${base()} into branch`}
+                {props.state.syncing() === 'merge' ? 'Merging…' : 'Merge'}
               </button>
               <Show when={agentRunning()}>
                 <button

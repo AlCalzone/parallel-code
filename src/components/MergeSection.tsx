@@ -5,7 +5,8 @@ import {
   getTaskChecks,
   updateTaskBranch,
 } from '../store/store';
-import { bannerStyle, theme } from '../lib/theme';
+import { bannerStyle, sectionLabelStyle, theme } from '../lib/theme';
+import { sf } from '../lib/fontScale';
 import type { Task } from '../store/types';
 import type { ChangedFile } from '../ipc/types';
 import { ChangedFilesList } from './ChangedFilesList';
@@ -176,7 +177,7 @@ export function MergeBlockers(props: MergeSectionProps) {
 export function MergeChanges(props: MergeSectionProps) {
   return (
     <details open style={{ 'margin-bottom': '20px', 'font-size': '13px' }}>
-      <summary style={{ cursor: 'pointer', color: theme.fgMuted }}>
+      <summary style={{ ...sectionLabelStyle, 'font-size': sf(11), cursor: 'pointer' }}>
         Commits and changed files
         <Show when={props.state.commitCount()}>{(count) => ` (${commitLabel(count())})`}</Show>
       </summary>

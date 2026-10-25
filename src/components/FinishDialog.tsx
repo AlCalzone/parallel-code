@@ -27,7 +27,8 @@ import { markFeatureHintSeen } from '../store/onboarding';
 import { showNotification } from '../store/notification';
 import { store } from '../store/core';
 import { canCaptureScreens, taskScreens } from '../store/task-screens';
-import { theme } from '../lib/theme';
+import { sectionLabelStyle } from '../lib/theme';
+import { sf } from '../lib/fontScale';
 import { isVerificationStale, summarizeVerificationRun } from '../lib/verification-run';
 import { isTourOutdated } from '../lib/finish-reports';
 import { errMessage, warn as logWarn } from '../lib/log';
@@ -336,7 +337,7 @@ export function FinishDialog(props: FinishDialogProps) {
             {/* A sub-task's own report is context for the review, so it starts folded. */}
             <Show when={props.task.coordinatedBy && props.task.completion}>
               <details style={{ 'margin-bottom': '20px', 'font-size': '13px' }}>
-                <summary style={{ cursor: 'pointer', color: theme.fgMuted }}>
+                <summary style={{ ...sectionLabelStyle, 'font-size': sf(11), cursor: 'pointer' }}>
                   Agent completion report
                 </summary>
                 <CompletionReport

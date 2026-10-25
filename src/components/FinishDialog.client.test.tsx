@@ -463,11 +463,11 @@ describe('FinishDialog base sync', () => {
     );
     // Where the new base commits meet this branch, checks here never saw them.
     expect(document.body.textContent).toContain(
-      'They also change 1 file this branch changed: src/a.ts. Test again after bringing in main.',
+      "They also change 1 of this branch's files: src/a.ts. Test again afterwards.",
     );
-    expect(button('Rebase onto main')).toBeDefined();
+    expect(button('Rebase')).toBeDefined();
     expect(confirmButton()?.textContent).toBe('Merge into local main');
-    button('Merge main into branch')?.click();
+    button('Merge')?.click();
     expect(invoke).toHaveBeenCalledWith(IPC.MergeBaseIntoTask, {
       worktreePath: '/repo/.worktrees/parent',
       baseBranch: 'main',
@@ -479,6 +479,32 @@ describe('FinishDialog base sync', () => {
     expect(document.querySelector('[role="status"]')?.textContent).toContain(
       'Merged main into this branch.',
     );
+  });
+
+  it('says on one line when the new base commits leave this branch alone', async () => {
+    mockInvoke((channel) => {
+      if (channel === IPC.GetBranchLog) return '';
+      if (channel === IPC.CheckMergeStatus)
+        return { conflicting_files: [], main_ahead_count: 1, overlapping_files: [] };
+      return { current_branch: 'task/parent', has_committed_changes: true };
+    });
+    mount({ task: task({ baseBranch: 'main' }) });
+    await flush();
+    expect(document.body.textContent).toContain(
+      "main has 1 new commit. No overlap with this branch's files.",
+    );
+  });
+
+  it('claims no overlap when the merge check could not tell', async () => {
+    mockInvoke((channel) => {
+      if (channel === IPC.GetBranchLog) return '';
+      if (channel === IPC.CheckMergeStatus) return { conflicting_files: [], main_ahead_count: 1 };
+      return { current_branch: 'task/parent', has_committed_changes: true };
+    });
+    mount({ task: task({ baseBranch: 'main' }) });
+    await flush();
+    expect(document.body.textContent).toContain('main has 1 new commit.');
+    expect(document.body.textContent).not.toContain('No overlap');
   });
 
   it('brings the base in over uncommitted changes the base does not touch', async () => {
@@ -493,8 +519,8 @@ describe('FinishDialog base sync', () => {
     });
     mount({ task: task({ baseBranch: 'main' }) });
     await flush();
-    expect(button('Rebase onto main')?.disabled).toBe(false);
-    expect(button('Merge main into branch')?.disabled).toBe(false);
+    expect(button('Rebase')?.disabled).toBe(false);
+    expect(button('Merge')?.disabled).toBe(false);
   });
 
   it('asks to commit uncommitted changes the base changed too', async () => {
@@ -517,8 +543,8 @@ describe('FinishDialog base sync', () => {
     expect(document.body.textContent).toContain(
       'Commit or stash your changes to src/a.ts first: main changed them too.',
     );
-    expect(button('Rebase onto main')?.disabled).toBe(true);
-    expect(button('Merge main into branch')?.disabled).toBe(true);
+    expect(button('Rebase')?.disabled).toBe(true);
+    expect(button('Merge')?.disabled).toBe(true);
   });
 
   it('asks the agent to resolve the conflicting files', async () => {
@@ -561,7 +587,7 @@ describe('FinishDialog base sync', () => {
     });
     mount({ task: task({ baseBranch: 'main', agentIds: ['agent'] }) });
     await flush();
-    button('Rebase onto main')?.click();
+    button('Rebase')?.click();
     await flush();
     const text = document.body.textContent ?? '';
     expect(text).toContain(
@@ -587,7 +613,7 @@ describe('FinishDialog base sync', () => {
     });
     mount({ task: task({ baseBranch: 'main' }) });
     await flush();
-    button('Rebase onto main')?.click();
+    button('Rebase')?.click();
     await flush();
     expect(document.body.textContent).toContain('Rebase failed: index.lock exists');
     expect(document.body.textContent).not.toContain('instead');

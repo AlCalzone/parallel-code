@@ -172,11 +172,10 @@ export function readinessLine(input: ReadinessLineInput): ReadinessLine {
 
 const OVERLAP_NAMES = 3;
 
-/** Under "base has N new commits": whether those commits touch this branch's files. */
-export function overlapText(files: readonly string[], base: string): string {
-  if (files.length === 0) return 'None of them touch files this branch changed.';
+/** Under "base has N new commits": which of this branch's files they also change. */
+export function overlapText(files: readonly string[], commitCount: number): string {
   const names = files.slice(0, OVERLAP_NAMES).join(', ');
   const more = files.length > OVERLAP_NAMES ? ` and ${files.length - OVERLAP_NAMES} more` : '';
-  const noun = files.length === 1 ? 'file this branch changed' : 'files this branch changed';
-  return `They also change ${files.length} ${noun}: ${names}${more}. Test again after bringing in ${base}.`;
+  const subject = commitCount === 1 ? 'It also changes' : 'They also change';
+  return `${subject} ${files.length} of this branch's files: ${names}${more}. Test again afterwards.`;
 }

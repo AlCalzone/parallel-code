@@ -160,14 +160,12 @@ describe('lastPassText', () => {
 });
 
 describe('overlapText', () => {
-  it('says when the base commits leave this branch alone', () => {
-    expect(overlapText([], 'main')).toBe('None of them touch files this branch changed.');
-  });
-
   it('names the shared files, a few at most', () => {
-    expect(overlapText(['a.ts'], 'main')).toBe(
-      'They also change 1 file this branch changed: a.ts. Test again after bringing in main.',
+    expect(overlapText(['a.ts'], 1)).toBe(
+      "It also changes 1 of this branch's files: a.ts. Test again afterwards.",
     );
-    expect(overlapText(['a', 'b', 'c', 'd', 'e'], 'dev')).toContain('a, b, c and 2 more');
+    expect(overlapText(['a', 'b', 'c', 'd', 'e'], 3)).toBe(
+      "They also change 5 of this branch's files: a, b, c and 2 more. Test again afterwards.",
+    );
   });
 });

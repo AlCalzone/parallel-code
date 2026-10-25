@@ -12,7 +12,7 @@ export function FollowUps(props: { children?: JSX.Element; lead?: JSX.Element })
   return (
     <section
       aria-labelledby={headingId}
-      style={{ 'margin-bottom': '20px', 'font-size': sf(13), 'line-height': '1.45' }}
+      style={{ 'margin-bottom': '28px', 'font-size': sf(13), 'line-height': '1.45' }}
     >
       <h3 id={headingId} style={{ ...sectionLabelStyle, 'font-size': sf(11), margin: '0 0 6px' }}>
         Before you merge
