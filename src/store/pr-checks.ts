@@ -105,6 +105,8 @@ interface ActiveWatcher {
   taskName: string;
   /** Asks the main process to keep polling while the window is hidden. */
   babysit: boolean;
+  /** Lets the main process notice pushes made outside the app, e.g. by the agent. */
+  branch: { worktreePath: string; branchName: string } | null;
 }
 
 export function startPrChecksSubscription(): () => void {
@@ -127,7 +129,9 @@ export function startPrChecksSubscription(): () => void {
       prev &&
       prev.prUrl === watcher.prUrl &&
       prev.taskName === watcher.taskName &&
-      prev.babysit === watcher.babysit
+      prev.babysit === watcher.babysit &&
+      prev.branch?.worktreePath === watcher.branch?.worktreePath &&
+      prev.branch?.branchName === watcher.branch?.branchName
     )
       return;
     activeByWatchId.set(watchId, watcher);
@@ -318,11 +322,16 @@ export function startPrChecksSubscription(): () => void {
       const prUrl = taskPrUrl(task);
       if (prUrl && closedPrimaryByTaskId.get(taskId) !== prUrl) {
         seen.add(taskId);
+        const candidate = branchPrCandidateFor(task);
         startWatcher(taskId, {
           taskId,
           prUrl,
           taskName: task.name,
           babysit: task.prBabysit !== undefined,
+          branch: candidate && {
+            worktreePath: candidate.worktreePath,
+            branchName: candidate.branchName,
+          },
         });
       }
       for (const pr of getTaskExtraPrs(taskId)) {
@@ -334,6 +343,8 @@ export function startPrChecksSubscription(): () => void {
           taskName: `${task.name} · ${extraPrLabel(pr)}`,
           // Babysitting follows the primary PR only.
           babysit: false,
+          // Pushes reach these through the primary PR's shared head.
+          branch: null,
         });
       }
     }

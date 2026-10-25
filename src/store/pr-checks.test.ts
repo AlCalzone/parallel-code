@@ -246,6 +246,7 @@ describe('startPrChecksSubscription branch PR detection', () => {
       prUrl: 'https://github.com/acme/app/pull/12',
       taskName: 'Task',
       babysit: false,
+      branch: { worktreePath: '/repo/.worktrees/task-1', branchName: 'task/task-1' },
     });
     disposeRoot?.();
   });
@@ -435,6 +436,7 @@ describe('startPrChecksSubscription additional PRs', () => {
       prUrl: primaryUrl,
       taskName: 'Task',
       babysit: false,
+      branch: { worktreePath: '/repo/.worktrees/task-1', branchName: 'task/task-1' },
     });
     expect(mockFireAndForget).toHaveBeenCalledWith(IPC.StartPrChecksWatcher, {
       taskId: 'task-1',
@@ -442,6 +444,7 @@ describe('startPrChecksSubscription additional PRs', () => {
       prUrl: apiUrl,
       taskName: 'Task · api #7',
       babysit: false,
+      branch: null,
     });
     dispose();
   });
@@ -618,6 +621,7 @@ describe('startPrChecksSubscription additional PRs', () => {
       prUrl: nextUrl,
       taskName: 'Task',
       babysit: false,
+      branch: { worktreePath: '/repo/.worktrees/task-1', branchName: 'task/task-1' },
     });
     dispose();
   });

@@ -1314,12 +1314,18 @@ export function registerAllHandlers(win: BrowserWindow): void {
     assertString(args.taskName, 'taskName');
     assertString(args.watchId, 'watchId');
     if (!isPrUrl(args.prUrl)) return; // defense in depth — also re-checked downstream
+    const branch = args.branch ?? null;
+    if (branch !== null) {
+      validatePath(branch.worktreePath, 'branch.worktreePath');
+      validateBranchName(branch.branchName, 'branch.branchName');
+    }
     startPrChecksWatcher({
       taskId: args.taskId,
       prUrl: args.prUrl,
       taskName: args.taskName,
       watchId: args.watchId,
       babysit: args.babysit === true,
+      branch: branch && { worktreePath: branch.worktreePath, branchName: branch.branchName },
     });
   });
   ipcMain.handle(IPC.StopPrChecksWatcher, (_e, args) => {

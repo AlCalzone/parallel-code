@@ -26,8 +26,16 @@ const exec = promisify(execFile);
 const TICK_MS = 30_000;
 const SETTLED_REFRESH_MS = 5 * 60_000;
 const POST_PUSH_REFRESH_GRACE_MS = 2 * 60_000;
+/** GitHub can report a new head before it has created that head's checks. */
+const NEW_HEAD_CHECKS_WAIT_MS = 2 * 60_000;
 const GH_TIMEOUT_MS = 15_000;
 const GH_MAX_BUFFER = 4 * 1024 * 1024;
+
+/** A task's local branch, whose remote-tracking ref reveals pushes made outside the app. */
+export interface PrBranch {
+  worktreePath: string;
+  branchName: string;
+}
 
 interface TaskEntry {
   /** Map key: the task ID for a task's primary PR, distinct per additional PR. */
@@ -37,6 +45,10 @@ interface TaskEntry {
   prUrl: string;
   /** Babysat PRs keep polling while the window is hidden, so their failures still reach the agent. */
   babysit: boolean;
+  /** Only a task's primary PR has one; additional PRs follow it through a shared head. */
+  branch: PrBranch | null;
+  /** Last SHA seen at `origin/<branch>`, so a tick can tell when the branch was pushed. */
+  originSha: string | null;
   overall: PrChecksOverall;
   isDraft: boolean;
   reviewDecision: PrReviewDecision | null;
@@ -54,6 +66,10 @@ interface TaskEntry {
   lastNotifiedOutcome: Exclude<PrChecksOverall, 'pending' | 'none'> | null;
   /** After a local push, ignore stale old-SHA check data while GitHub catches up. */
   postPushRefreshUntil: number | null;
+  /** When GitHub last reported a new head; until its checks appear it shows as running. */
+  headChangedAt: number | null;
+  /** Number of the latest poll. Replies can arrive out of order, so only its reply applies. */
+  pollSeq: number;
 }
 
 let win: BrowserWindow | null = null;
@@ -101,6 +117,7 @@ export function startPrChecksWatcher(args: {
   taskName: string;
   watchId: string;
   babysit: boolean;
+  branch: PrBranch | null;
 }): void {
   if (disabled) return;
   if (!isPrUrl(args.prUrl)) return;
@@ -112,7 +129,11 @@ export function startPrChecksWatcher(args: {
   // not leak into the new one. A rename-only update (same URL) just updates
   // the display name.
   const isFreshSubscription = !existing || existing.prUrl !== args.prUrl;
-  const { babysit } = args;
+  const { babysit, branch } = args;
+  // Another branch's ref is no baseline for this one.
+  const sameBranch =
+    existing?.branch?.worktreePath === branch?.worktreePath &&
+    existing?.branch?.branchName === branch?.branchName;
   const next: TaskEntry = isFreshSubscription
     ? {
         watchId,
@@ -120,6 +141,8 @@ export function startPrChecksWatcher(args: {
         taskName: args.taskName,
         prUrl: args.prUrl,
         babysit,
+        branch,
+        originSha: null,
         overall: 'pending',
         isDraft: false,
         reviewDecision: null,
@@ -134,8 +157,16 @@ export function startPrChecksWatcher(args: {
         lastNotifiedSha: null,
         lastNotifiedOutcome: null,
         postPushRefreshUntil: null,
+        headChangedAt: null,
+        pollSeq: 0,
       }
-    : { ...existing, taskName: args.taskName, babysit };
+    : {
+        ...existing,
+        taskName: args.taskName,
+        babysit,
+        branch,
+        originSha: sameBranch ? existing.originSha : null,
+      };
   tasks.set(watchId, next);
   ensureInterval();
   if (isFreshSubscription) {
@@ -152,16 +183,29 @@ export function stopPrChecksWatcher(watchId: string): void {
  *  and further PRs sharing that head. Nested repositories' PRs keep their state. */
 export function refreshPrChecksWatcher(taskId: string): void {
   if (disabled) return;
+  const marked = markTaskPushed(taskId);
+  ensureInterval();
+  // Poll now instead of up to a tick later: a merge or ready-for-review shows
+  // at once, and GitHub may already report a pushed head.
+  for (const watchId of marked) refreshOne(watchId).catch(handleGhError);
+}
+
+/** Marks the task's primary PR and the PRs sharing its head; returns their watch IDs. */
+function markTaskPushed(taskId: string): string[] {
   const primary = tasks.get(taskId);
-  if (!primary) return;
+  if (!primary) return [];
+  const marked: string[] = [];
   for (const entry of tasks.values()) {
     const sharesHead =
       entry.taskId === taskId &&
       primary.headRefOid !== null &&
       entry.headRefOid === primary.headRefOid;
-    if (entry === primary || sharesHead) markPushed(entry);
+    if (entry === primary || sharesHead) {
+      markPushed(entry);
+      marked.push(entry.watchId);
+    }
   }
-  ensureInterval();
+  return marked;
 }
 
 function markPushed(entry: TaskEntry): void {
@@ -220,10 +264,11 @@ async function runTick(babysatOnly = false): Promise<void> {
   if (disabled || isRefreshing) return;
   isRefreshing = true;
   try {
+    const watched = [...tasks.values()].filter((entry) => !babysatOnly || entry.babysit);
+    await Promise.all(watched.map(detectOutsidePush));
     const now = Date.now();
     const due: string[] = [];
-    for (const entry of tasks.values()) {
-      if (babysatOnly && !entry.babysit) continue;
+    for (const entry of watched) {
       if (entry.overall === 'pending') {
         due.push(entry.watchId);
       } else if (now - entry.lastRefreshedAt >= SETTLED_REFRESH_MS) {
@@ -238,10 +283,45 @@ async function runTick(babysatOnly = false): Promise<void> {
   }
 }
 
+/**
+ * Pushes from the agent's terminal bypass the app, so a settled PR would wait
+ * up to SETTLED_REFRESH_MS to notice its new head. `git push` moves the local
+ * remote-tracking ref, which costs no network to read.
+ */
+async function detectOutsidePush(entry: TaskEntry): Promise<void> {
+  if (!entry.branch) return;
+  const sha = await readOriginSha(entry.branch);
+  const previous = entry.originSha;
+  entry.originSha = sha;
+  // The first read is only a baseline. A ref at the PR's head, or one moved
+  // while a push is still awaited, was pushed by the app, which marked the PR.
+  if (!sha || !previous || sha === previous || sha === entry.headRefOid) return;
+  if (entry.postPushRefreshUntil !== null) return;
+  if (tasks.get(entry.watchId) === entry) markTaskPushed(entry.taskId);
+}
+
+async function readOriginSha(branch: PrBranch): Promise<string | null> {
+  try {
+    const { stdout } = await exec(
+      'git',
+      ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${branch.branchName}`],
+      { cwd: branch.worktreePath, timeout: GH_TIMEOUT_MS },
+    );
+    return stdout.trim() || null;
+  } catch (err) {
+    // `--verify --quiet` exits 1 for a branch that was never pushed.
+    if ((err as { code?: unknown }).code !== 1) {
+      console.warn('[pr-checks] reading origin ref failed:', (err as Error)?.message ?? err);
+    }
+    return null;
+  }
+}
+
 async function refreshOne(watchId: string): Promise<void> {
   const entry = tasks.get(watchId);
   if (!entry) return;
 
+  const seq = ++entry.pollSeq;
   let status: Awaited<ReturnType<typeof fetchPrStatus>>;
   try {
     status = await fetchPrStatus(entry.prUrl);
@@ -252,6 +332,9 @@ async function refreshOne(watchId: string): Promise<void> {
     // or break the first-refresh-silent invariant.
     return;
   }
+  // A newer poll owns the result, or the watcher was stopped or replaced
+  // meanwhile; a replacement polls on its own or on the next tick.
+  if (tasks.get(watchId) !== entry || entry.pollSeq !== seq) return;
 
   if (status.state === 'MERGED' || status.state === 'CLOSED') {
     // Emit one final `cleared` update so the renderer drops its watcher
@@ -281,10 +364,19 @@ async function refreshOne(watchId: string): Promise<void> {
       : status.checks;
   const view = { state: status.state, headRefOid: status.headRefOid };
 
-  const { overall, passing, pending, failing } = summarize(checks);
-  const counts = { passing, pending, failing };
   const prevSha = entry.headRefOid;
   const shaChanged = entry.hasFetched && prevSha !== view.headRefOid;
+  const headChangedAt = shaChanged ? Date.now() : entry.headChangedAt;
+  const summary = summarize(checks);
+  // GitHub reports a new head before it creates that head's checks. Show it
+  // as running meanwhile, so the status neither blanks out nor stops polling.
+  const awaitingChecks =
+    checks.length === 0 &&
+    headChangedAt !== null &&
+    Date.now() - headChangedAt < NEW_HEAD_CHECKS_WAIT_MS;
+  const overall: PrChecksOverall = awaitingChecks ? 'pending' : summary.overall;
+  const { passing, pending, failing } = summary;
+  const counts = { passing, pending, failing };
   const firstRefresh = !entry.hasFetched;
   const waitingForPostPushHead =
     entry.postPushRefreshUntil !== null &&
@@ -320,6 +412,7 @@ async function refreshOne(watchId: string): Promise<void> {
 
   // Reset notification dedupe when a new push arrives.
   if (shaChanged) {
+    entry.headChangedAt = headChangedAt;
     entry.lastNotifiedSha = null;
     entry.lastNotifiedOutcome = null;
     entry.postPushRefreshUntil = null;

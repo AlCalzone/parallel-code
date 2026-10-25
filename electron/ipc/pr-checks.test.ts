@@ -476,6 +476,7 @@ describe('refreshPrChecksWatcher', () => {
         prUrl: 'https://github.com/a/b/pull/1',
         taskName: 'test',
         babysit: false,
+        branch: null,
       });
       await flushPromises();
       expect(send.mock.calls[send.mock.calls.length - 1]?.[1]).toMatchObject({
@@ -522,6 +523,7 @@ describe('refreshPrChecksWatcher', () => {
       prUrl: 'https://github.com/a/b/pull/1',
       taskName: 'test',
       babysit: false,
+      branch: null,
     });
     refreshPrChecksWatcher('t1');
     await flushPromises();
@@ -568,6 +570,7 @@ describe('refreshPrChecksWatcher', () => {
       prUrl: 'https://github.com/a/b/pull/1',
       taskName: 'test',
       babysit: false,
+      branch: null,
     });
     await flushPromises();
     expect(send).toHaveBeenCalledTimes(1);
@@ -576,7 +579,8 @@ describe('refreshPrChecksWatcher', () => {
     expect(send).toHaveBeenCalledTimes(2);
     expect(send.mock.calls[1][1]).toMatchObject({ taskId: 't1', overall: 'pending' });
 
-    await __runTickForTests();
+    // The refresh polls at once; GitHub still reports the old head, which stays hidden.
+    await flushPromises();
     expect(send).toHaveBeenCalledTimes(2);
 
     await __runTickForTests();
@@ -622,6 +626,7 @@ describe('refreshPrChecksWatcher', () => {
         prUrl: 'https://github.com/a/b/pull/1',
         taskName: 'test',
         babysit: false,
+        branch: null,
       });
       await flushPromises();
       refreshPrChecksWatcher('t1');
@@ -669,6 +674,7 @@ describe('refreshPrChecksWatcher', () => {
         prUrl: 'https://github.com/a/b/pull/1',
         taskName: 'test',
         babysit: false,
+        branch: null,
       });
       await flushPromises();
       expect(send).toHaveBeenCalledTimes(1);
@@ -709,6 +715,7 @@ describe('refreshPrChecksWatcher', () => {
       prUrl: 'https://github.com/a/b/pull/1',
       taskName: 'test',
       babysit: false,
+      branch: null,
     });
     await flushPromises();
 
@@ -721,6 +728,273 @@ describe('refreshPrChecksWatcher', () => {
       mergedAt: merged ? '2026-10-09T10:00:00Z' : undefined,
     });
     expect(__getStateForTests().taskIds).toEqual([]);
+  });
+
+  it('polls GitHub right away instead of waiting for the next tick', async () => {
+    const send = vi.fn();
+    initPrChecks(fakeWindow(send));
+    let state = 'OPEN';
+    const calls = stubGh((_args, cb) =>
+      cb(null, JSON.stringify({ state, headRefOid: 'sha', statusCheckRollup: [] }), ''),
+    );
+    startPrChecksWatcher({
+      taskId: 't1',
+      watchId: 't1',
+      prUrl: 'https://github.com/a/b/pull/1',
+      taskName: 'test',
+      babysit: false,
+      branch: null,
+    });
+    await flushPromises();
+    state = 'MERGED';
+
+    refreshPrChecksWatcher('t1');
+    await flushPromises();
+
+    expect(calls).toHaveLength(2);
+    expect(send.mock.calls[send.mock.calls.length - 1]?.[1]).toMatchObject({ merged: true });
+  });
+});
+
+describe('startPrChecksWatcher — pushes made outside the app', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetForTests();
+  });
+
+  const success = [{ name: 'build', status: 'COMPLETED', conclusion: 'SUCCESS' }];
+  const pending = [{ name: 'build', status: 'IN_PROGRESS', conclusion: '' }];
+
+  async function watchSettledPr(send: ReturnType<typeof vi.fn>) {
+    initPrChecks(fakeWindow(send));
+    const github = { head: 'old-sha', rollup: success };
+    const local: { origin: string; error: (Error & { code?: unknown }) | null } = {
+      origin: 'old-sha',
+      error: null,
+    };
+    const calls = stubGh((args, cb, cmd) => {
+      if (cmd === 'git') {
+        cb(local.error, local.error ? '' : `${local.origin}\n`, '');
+        return;
+      }
+      cb(
+        null,
+        JSON.stringify({
+          state: 'OPEN',
+          headRefOid: github.head,
+          statusCheckRollup: github.rollup,
+        }),
+        '',
+      );
+    });
+    startPrChecksWatcher({
+      taskId: 't1',
+      watchId: 't1',
+      prUrl: 'https://github.com/a/b/pull/1',
+      taskName: 'test',
+      babysit: false,
+      branch: { worktreePath: '/wt', branchName: 'feature' },
+    });
+    await flushPromises();
+    await __runTickForTests();
+    return { github, local, ghCalls: () => calls.filter((a) => a[0] !== 'rev-parse') };
+  }
+
+  it('re-polls a settled PR on the next tick after its branch is pushed', async () => {
+    const send = vi.fn();
+    const { github, local, ghCalls } = await watchSettledPr(send);
+    expect(ghCalls()).toHaveLength(1);
+
+    local.origin = 'new-sha';
+    github.head = 'new-sha';
+    github.rollup = pending;
+    await __runTickForTests();
+
+    expect(ghCalls()).toHaveLength(2);
+    expect(send.mock.calls[send.mock.calls.length - 1]?.[1]).toMatchObject({
+      overall: 'pending',
+      headSha: 'new-sha',
+    });
+  });
+
+  it('leaves a settled PR alone while its branch has not moved', async () => {
+    const send = vi.fn();
+    const { ghCalls } = await watchSettledPr(send);
+
+    await __runTickForTests();
+
+    expect(ghCalls()).toHaveLength(1);
+  });
+
+  it('does not mark a push the app already reported a second time', async () => {
+    const send = vi.fn();
+    const { local } = await watchSettledPr(send);
+    // The app pushed and refreshed; GitHub still reports the old head.
+    refreshPrChecksWatcher('t1');
+    await flushPromises();
+    local.origin = 'new-sha';
+    send.mockClear();
+
+    await __runTickForTests();
+
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('logs a failed ref read, but not a branch that was never pushed', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const send = vi.fn();
+      const { local } = await watchSettledPr(send);
+
+      local.error = Object.assign(new Error('exit 1'), { code: 1 });
+      await __runTickForTests();
+      expect(warn).not.toHaveBeenCalled();
+
+      local.error = Object.assign(new Error('spawn git ENOENT'), { code: 'ENOENT' });
+      await __runTickForTests();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('[pr-checks]'), expect.anything());
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('keeps polling a pushed head until GitHub has created its checks', async () => {
+    const send = vi.fn();
+    const { github, ghCalls } = await watchSettledPr(send);
+    github.head = 'new-sha';
+    github.rollup = [];
+    refreshPrChecksWatcher('t1');
+    await flushPromises();
+    expect(ghCalls()).toHaveLength(2);
+
+    github.rollup = pending;
+    await __runTickForTests();
+
+    expect(ghCalls()).toHaveLength(3);
+    expect(send.mock.calls[send.mock.calls.length - 1]?.[1]).toMatchObject({
+      overall: 'pending',
+      headSha: 'new-sha',
+    });
+  });
+
+  it('shows a pushed head without checks as running, not as having no CI', async () => {
+    const send = vi.fn();
+    const { github } = await watchSettledPr(send);
+    github.head = 'new-sha';
+    github.rollup = [];
+    send.mockClear();
+
+    refreshPrChecksWatcher('t1');
+    await flushPromises();
+    await __runTickForTests();
+    expect(send.mock.calls.map(([, p]) => (p as { overall: string }).overall)).not.toContain(
+      'none',
+    );
+
+    // A head that still has no checks after the wait really has no CI.
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 3 * 60_000);
+    try {
+      await __runTickForTests();
+    } finally {
+      now.mockRestore();
+    }
+    expect(send.mock.calls[send.mock.calls.length - 1]?.[1]).toMatchObject({ overall: 'none' });
+  });
+
+  it('starts a new baseline when the PR’s branch changes', async () => {
+    const send = vi.fn();
+    const { local } = await watchSettledPr(send);
+    startPrChecksWatcher({
+      taskId: 't1',
+      watchId: 't1',
+      prUrl: 'https://github.com/a/b/pull/1',
+      taskName: 'test',
+      babysit: false,
+      branch: { worktreePath: '/wt', branchName: 'other' },
+    });
+    local.origin = 'other-sha';
+    send.mockClear();
+
+    await __runTickForTests();
+
+    expect(send).not.toHaveBeenCalled();
+  });
+});
+
+describe('refreshPrChecksWatcher — replies arriving out of order', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetForTests();
+  });
+
+  it('polls at once after a push even while a tick’s poll is running', async () => {
+    initPrChecks(fakeWindow(vi.fn()));
+    const held: ExecCb[] = [];
+    stubGh((_args, cb) => held.push(cb));
+    startPrChecksWatcher({
+      taskId: 't1',
+      watchId: 't1',
+      prUrl: 'https://github.com/a/b/pull/1',
+      taskName: 'test',
+      babysit: false,
+      branch: null,
+    });
+    held.shift()?.(
+      null,
+      JSON.stringify({
+        state: 'OPEN',
+        headRefOid: 'old-sha',
+        statusCheckRollup: [{ name: 'build', status: 'IN_PROGRESS', conclusion: '' }],
+      }),
+      '',
+    );
+    await flushPromises();
+    void __runTickForTests();
+    await flushPromises();
+    expect(held).toHaveLength(1);
+
+    refreshPrChecksWatcher('t1');
+    await flushPromises();
+
+    expect(held).toHaveLength(2);
+  });
+
+  it('never lets an older reply replace a newer head', async () => {
+    const send = vi.fn();
+    initPrChecks(fakeWindow(send));
+    const held: ExecCb[] = [];
+    stubGh((_args, cb) => held.push(cb));
+    const reply = (cb: ExecCb | undefined, headRefOid: string, rollup: unknown[]) =>
+      cb?.(null, JSON.stringify({ state: 'OPEN', headRefOid, statusCheckRollup: rollup }), '');
+    const success = [{ name: 'build', status: 'COMPLETED', conclusion: 'SUCCESS' }];
+    const running = [{ name: 'build', status: 'IN_PROGRESS', conclusion: '' }];
+    startPrChecksWatcher({
+      taskId: 't1',
+      watchId: 't1',
+      prUrl: 'https://github.com/a/b/pull/1',
+      taskName: 'test',
+      babysit: false,
+      branch: null,
+    });
+    reply(held.shift(), 'old-sha', success);
+    await flushPromises();
+
+    refreshPrChecksWatcher('t1');
+    const tick = __runTickForTests();
+    await flushPromises();
+    // Newest first: the last poll sees the pushed head, earlier ones the old head.
+    const inFlight = held.splice(0);
+
+    reply(inFlight.pop(), 'new-sha', running);
+    await flushPromises();
+    for (const cb of inFlight.reverse()) reply(cb, 'old-sha', success);
+    await tick;
+    await flushPromises();
+
+    expect(send.mock.calls[send.mock.calls.length - 1]?.[1]).toMatchObject({
+      headSha: 'new-sha',
+      overall: 'pending',
+    });
   });
 });
 
@@ -750,6 +1024,7 @@ describe('startPrChecksWatcher — several PRs per task', () => {
       prUrl: 'https://github.com/a/b/pull/1',
       taskName: 'T',
       babysit: false,
+      branch: null,
     });
     startPrChecksWatcher({
       taskId: 't1',
@@ -757,6 +1032,7 @@ describe('startPrChecksWatcher — several PRs per task', () => {
       taskName: 'T · api #2',
       watchId: 't1:api',
       babysit: false,
+      branch: null,
     });
     await flushPromises();
 
@@ -796,7 +1072,14 @@ describe('startPrChecksWatcher — several PRs per task', () => {
       ),
     );
     const watch = (watchId: string, prUrl: string) =>
-      startPrChecksWatcher({ taskId: 't1', watchId, prUrl, taskName: 'T', babysit: false });
+      startPrChecksWatcher({
+        taskId: 't1',
+        watchId,
+        prUrl,
+        taskName: 'T',
+        babysit: false,
+        branch: null,
+      });
     watch('t1', 'https://github.com/a/b/pull/1');
     watch('t1:b', 'https://github.com/a/b/pull/3');
     watch('t1:api', 'https://github.com/a/api/pull/2');
@@ -845,6 +1128,7 @@ describe('startPrChecksWatcher — hidden window', () => {
         prUrl: `https://github.com/a/b/pull/${watchId === 'babysat' ? 1 : 2}`,
         taskName: 'T',
         babysit,
+        branch: null,
       });
     watch('plain', false);
     watch('babysat', true);
@@ -855,6 +1139,47 @@ describe('startPrChecksWatcher — hidden window', () => {
     await flushPromises();
 
     expect(calls.map((args) => args[2])).toEqual(['https://github.com/a/b/pull/1']);
+  });
+
+  it('notices a push to a babysat PR’s branch while the window is hidden', async () => {
+    initPrChecks(fakeWindow(vi.fn()));
+    let origin = 'old-sha';
+    let head = 'old-sha';
+    const calls = stubGh((_args, cb, cmd) => {
+      if (cmd === 'git') {
+        cb(null, `${origin}\n`, '');
+        return;
+      }
+      cb(
+        null,
+        JSON.stringify({
+          state: 'OPEN',
+          headRefOid: head,
+          statusCheckRollup: [{ name: 'build', status: 'COMPLETED', conclusion: 'SUCCESS' }],
+        }),
+        '',
+      );
+    });
+    startPrChecksWatcher({
+      taskId: 't1',
+      watchId: 't1',
+      prUrl: 'https://github.com/a/b/pull/1',
+      taskName: 'T',
+      babysit: true,
+      branch: { worktreePath: '/wt', branchName: 'feature' },
+    });
+    await flushPromises();
+    vi.advanceTimersByTime(30_000);
+    await flushPromises();
+    const ghCalls = () => calls.filter((args) => args[0] !== 'rev-parse');
+    expect(ghCalls()).toHaveLength(1);
+
+    origin = 'new-sha';
+    head = 'new-sha';
+    vi.advanceTimersByTime(30_000);
+    await flushPromises();
+
+    expect(ghCalls()).toHaveLength(2);
   });
 });
 
@@ -871,6 +1196,7 @@ describe('startPrChecksWatcher — graceful degradation', () => {
       prUrl: 'https://github.com/a/b/issues/1',
       taskName: 'test',
       babysit: false,
+      branch: null,
     });
     expect(__getStateForTests().taskIds).toEqual([]);
   });
@@ -887,6 +1213,7 @@ describe('startPrChecksWatcher — graceful degradation', () => {
       prUrl: 'https://github.com/a/b/pull/1',
       taskName: 'test',
       babysit: false,
+      branch: null,
     });
     // Allow the fire-and-forget refresh to settle.
     await new Promise((resolve) => setImmediate(resolve));
@@ -910,6 +1237,7 @@ describe('startPrChecksWatcher — graceful degradation', () => {
       prUrl: 'https://github.com/a/b/pull/1',
       taskName: 'test',
       babysit: false,
+      branch: null,
     });
     await new Promise((resolve) => setImmediate(resolve));
     expect(__getStateForTests().disabled).toBe(true);
