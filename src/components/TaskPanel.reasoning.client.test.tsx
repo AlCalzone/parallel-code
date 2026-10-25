@@ -691,7 +691,7 @@ function mountEmptyTask() {
   return { container, setTask };
 }
 
-it('sizes the focus support column to content until a shell opens, preserving its panels', () => {
+it('gives the focus support column height to changed files until a shell opens, preserving its panels', () => {
   const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1200);
   try {
     toggleFocusMode(true);
@@ -700,20 +700,26 @@ it('sizes the focus support column to content until a shell opens, preserving it
     const notes = expectDefined(container.querySelector('.test-notes'));
     const terminal = container.querySelector('.test-terminal');
     const notesCell = expectDefined(notes.closest<HTMLElement>('.rp-cell'));
+    const filesCell = expectDefined(
+      container.querySelector('.test-files')?.closest<HTMLElement>('.rp-cell'),
+    );
     const column = expectDefined(notesCell.parentElement);
 
-    expect(column.style.height).toBe('auto');
+    expect(column.style.height).toBe('100%');
     // Oversized pins must scroll inside the column instead of being clipped.
     expect(column.style.maxHeight).toBe('100%');
     expect(column.style.overflow).toBe('auto');
     // Focus-mode notes are 240px tall; a shorter cell would clip their bottom edge.
     expect(notesCell.style.minHeight).toBe('240px');
+    // Without shells the changed files fill the column instead of stopping at their cap.
+    expect(filesCell.style.flex).toBe('1 1 0px');
+    expect(filesCell.style.maxHeight).toBe('');
     setTask('shellAgentIds', ['shell']);
-    expect(column.style.height).toBe('100%');
+    expect(filesCell.style.flex).toBe('0 0 auto');
     expect(container.querySelector('.test-notes')).toBe(notes);
     expect(container.querySelector('.test-terminal')).toBe(terminal);
     setTask('shellAgentIds', []);
-    expect(column.style.height).toBe('auto');
+    expect(filesCell.style.flex).toBe('1 1 0px');
   } finally {
     width.mockRestore();
   }

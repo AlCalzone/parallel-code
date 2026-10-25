@@ -791,7 +791,7 @@ export function TaskPanel(props: TaskPanelProps) {
 
   // Notes and changed-files children reused across stack and split trees.
   // In the stack-mode inner horizontal split, both children absorb (50/50 default).
-  // In the split-right vertical tree, both are content-sized and shell absorbs.
+  // In the split-right vertical tree, shell absorbs; without shells changed files do.
   const notesChild: PanelChild = {
     id: 'notes',
     resizeLabel: 'Resize notes panel',
@@ -887,13 +887,20 @@ export function TaskPanel(props: TaskPanelProps) {
                   <ResizablePanel
                     direction="vertical"
                     persistKey={`task:${props.task.id}:split-right`}
-                    absorberIds={['shell-section']}
-                    // An empty shell is just its toolbar. An auto-height column
-                    // keeps the absorber from claiming the unused column space.
+                    // An empty shell is just its toolbar, so without shells the
+                    // changed files (or notes, without git) take the free height
+                    // instead of leaving it blank below a capped pane.
+                    absorberIds={[
+                      props.task.shellAgentIds.length > 0
+                        ? 'shell-section'
+                        : isGitUnavailable()
+                          ? 'notes'
+                          : 'changed-files',
+                    ]}
                     // Vertical pins don't shrink, so pinned or dragged panels can
                     // outgrow the column; scroll keeps them and their handles reachable.
                     style={{
-                      height: props.task.shellAgentIds.length > 0 ? '100%' : 'auto',
+                      height: '100%',
                       'max-height': '100%',
                       overflow: 'auto',
                     }}

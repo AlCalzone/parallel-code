@@ -97,14 +97,12 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
       data-panel-focused={isPanelFocused(props.task.id, 'changed-files') ? 'true' : 'false'}
       style={{
         // `height: 100%` fills when the panel is an absorber (notes-split
-        // horizontal, 50/50 with notes). `min-height` gives the content-sized
-        // case (split-right vertical) a usable default, while `max-height`
-        // keeps the panel from ballooning past ~40 % of the viewport when the
-        // changed-file list is long. The ResizablePanel wrapper applies the
-        // fixed 300 px cap for unpinned auto-growth.
+        // horizontal, 50/50 with notes; split-right without shells). `min-height`
+        // gives the content-sized case (split-right with shells) a usable
+        // default. The ResizablePanel wrapper caps unpinned auto-growth, so no
+        // cap here: it would stop an absorber or a dragged pin from growing.
         height: '100%',
         'min-height': `${SUPPORT_PANE_MIN_HEIGHT}px`,
-        'max-height': '40vh',
         'min-width': '0',
         background: theme.taskPanelBg,
         display: 'flex',
