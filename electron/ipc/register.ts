@@ -1083,7 +1083,8 @@ export function registerAllHandlers(win: BrowserWindow): void {
   });
   ipcMain.handle(IPC.CheckMergeStatus, (_e, args) => {
     const worktreePath = worktreePathArg(args);
-    return checkMergeStatus(worktreePath, optionalBaseBranch(args));
+    const projectRoot = args.projectRoot ? projectRootArg(args) : undefined;
+    return checkMergeStatus(worktreePath, optionalBaseBranch(args), projectRoot);
   });
   ipcMain.handle(IPC.MergeTask, async (_e, args) => {
     const projectRoot = projectRootArg(args);
@@ -1091,6 +1092,7 @@ export function registerAllHandlers(win: BrowserWindow): void {
     assertBoolean(args.squash, 'squash');
     assertOptionalString(args.message, 'message');
     assertOptionalBoolean(args.cleanup, 'cleanup');
+    assertOptionalBoolean(args.allowDirtyTarget, 'allowDirtyTarget');
     await delegation.assertDirectMergeAllowed(projectRoot, branchName, args.cleanup ?? false);
     const baseBranch = optionalBaseBranch(args);
     const worktreePath = optionalWorktreePath(args);
@@ -1102,6 +1104,8 @@ export function registerAllHandlers(win: BrowserWindow): void {
       args.cleanup ?? false,
       baseBranch,
       worktreePath,
+      undefined,
+      args.allowDirtyTarget ?? false,
     );
     // The merge already happened; failing to tell the parent must not report it as failed.
     await delegation

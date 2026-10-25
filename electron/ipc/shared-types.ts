@@ -129,6 +129,20 @@ export interface MergeStatus {
    *  at another commit than HEAD, or at HEAD. Absent without an origin, on a
    *  detached HEAD, and from older senders. */
   remote?: RemoteBranchState;
+  /** The task's uncommitted files the base's newer commits changed too.
+   *  Bringing the base in could not put them back cleanly. Absent when there
+   *  are none and from older senders. */
+  uncommitted_overlap?: string[];
+  /** Uncommitted changes in the checkout the merge runs in, and those of them
+   *  the merge changes too. A merge sets the first aside and refuses the
+   *  second. Absent when that checkout is clean or was not asked about. */
+  target_uncommitted?: MergeTargetChanges;
+}
+
+export interface MergeTargetChanges {
+  path: string;
+  files: string[];
+  overlap: string[];
 }
 
 export type RemoteBranchState = 'unpushed' | 'differs' | 'pushed';
@@ -137,6 +151,8 @@ export interface MergeResult {
   main_branch: string;
   lines_added: number;
   lines_removed: number;
+  /** Set when the merge went through but something around it did not. */
+  warning?: string;
 }
 
 /** A Git repository inside a task's worktree that the task's own repository does not track. */

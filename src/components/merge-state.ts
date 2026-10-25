@@ -7,6 +7,7 @@ import { errMessage } from '../lib/log';
 import {
   backgroundVerifyEnabled,
   getPrChecks,
+  getProjectPath,
   getTaskDotStatus,
   getVerifyCommand,
   mergeTask,
@@ -44,7 +45,13 @@ export function createMergeState(props: MergeStateProps) {
     Boolean(props.task.delegationParent || props.task.coordinatorMode);
 
   const resourceSource = () =>
-    props.open ? { path: props.task.worktreePath, baseBranch: props.task.baseBranch } : null;
+    props.open
+      ? {
+          path: props.task.worktreePath,
+          baseBranch: props.task.baseBranch,
+          projectRoot: getProjectPath(props.task.projectId),
+        }
+      : null;
   const [branchLog, { refetch: refetchBranchLog, mutate: mutateBranchLog }] = createResource(
     resourceSource,
     (src) =>
@@ -71,6 +78,8 @@ export function createMergeState(props: MergeStateProps) {
       invoke<MergeStatus>(IPC.CheckMergeStatus, {
         worktreePath: src.path,
         baseBranch: src.baseBranch,
+        // Also reports uncommitted changes where the merge would land.
+        projectRoot: src.projectRoot,
       }),
   );
   const refetchAll = () => {
@@ -82,6 +91,10 @@ export function createMergeState(props: MergeStateProps) {
 
   const commitCount = () => (branchLog() ?? '').split('\n').filter((line) => line.trim()).length;
   const hasConflicts = () => (mergeStatus()?.conflicting_files.length ?? 0) > 0;
+  /** Uncommitted changes in the base checkout; the merge sets them aside. */
+  const targetUncommitted = () => mergeStatus()?.target_uncommitted;
+  /** The task's uncommitted files the base changed too: they block bringing it in. */
+  const uncommittedOverlap = () => mergeStatus()?.uncommitted_overlap ?? [];
   const hasCommittedChangesToMerge = () => worktreeStatus()?.has_committed_changes ?? false;
   const baseBranchName = () => props.task.baseBranch ?? mergeStatus()?.base_branch ?? 'main';
   const selectedAgentId = () => {
@@ -137,6 +150,8 @@ export function createMergeState(props: MergeStateProps) {
         ? 'Commit the changes to merge them.'
         : 'No commits on this branch yet.';
     if (hasConflicts()) return `Resolve the conflicts with ${baseBranchName()} first.`;
+    if (targetUncommitted()?.overlap.length)
+      return `Commit or stash the changes in ${baseBranchName()} that this merge touches.`;
     if (squash() && !squashTitle().trim()) return 'Add a commit title.';
     return undefined;
   };
@@ -220,6 +235,8 @@ export function createMergeState(props: MergeStateProps) {
           ? formatSquashMessage({ title: squashTitle(), body: squashBody() })
           : undefined,
         cleanup: !requiresSeparateClose() && cleanupAfterMerge(),
+        // The dialog warned about them; the backend refuses if the merge touches them.
+        allowDirtyTarget: true,
       });
       void advanceKanbanCard(projectId, branchName, 'done');
       return true;
@@ -239,6 +256,8 @@ export function createMergeState(props: MergeStateProps) {
     refetchAll,
     commitCount,
     hasConflicts,
+    targetUncommitted,
+    uncommittedOverlap,
     hasCommittedChangesToMerge,
     baseBranchName,
     selectedAgentId,

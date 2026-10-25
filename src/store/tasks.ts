@@ -34,7 +34,7 @@ import {
   rescheduleTaskStatusPolling,
 } from './taskStatus';
 import { recordMergedLines, recordTaskMerged } from './completion';
-import { showNotification } from './notification';
+import { NOTIFICATION_ERROR_MS, showNotification } from './notification';
 import { warn as logWarn } from '../lib/log';
 import { cleanTaskName } from '../lib/clean-task-name';
 import { prefersMotion } from '../lib/reducedMotion';
@@ -649,7 +649,13 @@ export function forgetTask(taskId: string, agentIds: readonly string[]): void {
 
 export async function mergeTask(
   taskId: string,
-  options?: { squash?: boolean; message?: string; cleanup?: boolean },
+  options?: {
+    squash?: boolean;
+    message?: string;
+    cleanup?: boolean;
+    /** Set the base checkout's uncommitted changes aside instead of refusing. */
+    allowDirtyTarget?: boolean;
+  },
 ): Promise<void> {
   // Precondition failures throw so the merge dialog can say why nothing
   // happened; a silent return here reads as "Merge did nothing" to the user.
@@ -681,11 +687,12 @@ export async function mergeTask(
     squash: options?.squash ?? false,
     message: options?.message,
     cleanup,
+    allowDirtyTarget: options?.allowDirtyTarget ?? false,
   });
-  showNotification(
-    `Merged “${task.name}” into ${mergeResult.main_branch} · +${mergeResult.lines_added} −${mergeResult.lines_removed}`,
-    { tone: 'success' },
-  );
+  const merged = `Merged “${task.name}” into ${mergeResult.main_branch} · +${mergeResult.lines_added} −${mergeResult.lines_removed}`;
+  if (mergeResult.warning)
+    showNotification(`${merged}. ${mergeResult.warning}`, { durationMs: NOTIFICATION_ERROR_MS });
+  else showNotification(merged, { tone: 'success' });
 
   if (cleanup) {
     recordMergedLines(mergeResult.lines_added, mergeResult.lines_removed);

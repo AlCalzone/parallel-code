@@ -6,7 +6,7 @@ import { FinishDialog } from './FinishDialog';
 import { invoke } from '../lib/ipc';
 import { setStore } from '../store/core';
 import { showNotification } from '../store/notification';
-import { getPrChecks, getTaskChecks, mergeTask, pushTask } from '../store/store';
+import { getPrChecks, getTaskChecks, mergeTask, pushTask, sendPrompt, store } from '../store/store';
 import {
   getPullRequestDetails,
   markPullRequestReadyForTask,
@@ -27,6 +27,7 @@ vi.mock('../store/store', () => ({
   runTaskVerification: vi.fn(async () => undefined),
   stageVerificationFailurePrompt: vi.fn(() => false),
   getProject: () => undefined,
+  getProjectPath: () => '/repo',
   getPrChecks: vi.fn(() => undefined),
   getVerifyCommand: () => undefined,
   getTaskChecks: vi.fn(() => []),
@@ -475,9 +476,118 @@ describe('FinishDialog base sync', () => {
       'Merged main into this branch.',
     );
   });
+
+  it('brings the base in over uncommitted changes the base does not touch', async () => {
+    mockInvoke((channel) => {
+      if (channel === IPC.GetBranchLog) return '';
+      if (channel === IPC.CheckMergeStatus) return { conflicting_files: [], main_ahead_count: 2 };
+      return {
+        current_branch: 'task/parent',
+        has_committed_changes: true,
+        has_uncommitted_changes: true,
+      };
+    });
+    mount({ task: task({ baseBranch: 'main' }) });
+    await flush();
+    expect(button('Rebase onto main')?.disabled).toBe(false);
+    expect(button('Merge main into branch')?.disabled).toBe(false);
+  });
+
+  it('asks to commit uncommitted changes the base changed too', async () => {
+    mockInvoke((channel) => {
+      if (channel === IPC.GetBranchLog) return '';
+      if (channel === IPC.CheckMergeStatus)
+        return {
+          conflicting_files: [],
+          main_ahead_count: 2,
+          uncommitted_overlap: ['src/a.ts'],
+        };
+      return {
+        current_branch: 'task/parent',
+        has_committed_changes: true,
+        has_uncommitted_changes: true,
+      };
+    });
+    mount({ task: task({ baseBranch: 'main' }) });
+    await flush();
+    expect(document.body.textContent).toContain(
+      'Commit or stash your changes to src/a.ts first: main changed them too.',
+    );
+    expect(button('Rebase onto main')?.disabled).toBe(true);
+    expect(button('Merge main into branch')?.disabled).toBe(true);
+  });
+
+  it('asks the agent to resolve the conflicting files', async () => {
+    mockInvoke((channel) => {
+      if (channel === IPC.GetBranchLog) return '';
+      if (channel === IPC.CheckMergeStatus)
+        return { conflicting_files: ['src/a.ts', 'src/b.ts'], main_ahead_count: 1 };
+      return { current_branch: 'task/parent', has_committed_changes: true };
+    });
+    vi.mocked(sendPrompt).mockResolvedValue(undefined);
+    store.agents = { agent: { status: 'running' } } as unknown as typeof store.agents;
+    onTestFinished(() => {
+      store.agents = {};
+    });
+    const handlers = mount({ task: task({ baseBranch: 'main', agentIds: ['agent'] }) });
+    await flush();
+    button('Rebase with AI')?.click();
+    expect(handlers.onClose).toHaveBeenCalled();
+    expect(sendPrompt).toHaveBeenCalledWith(
+      'parent',
+      'agent',
+      'rebase on main branch and resolve the conflicts in src/a.ts, src/b.ts',
+    );
+  });
 });
 
 describe('FinishDialog merge blocker', () => {
+  it('warns about uncommitted changes in the base checkout and merges past them', async () => {
+    mockInvoke((channel) => {
+      if (channel === IPC.GetBranchLog) return '';
+      if (channel === IPC.CheckMergeStatus)
+        return {
+          conflicting_files: [],
+          main_ahead_count: 0,
+          target_uncommitted: { path: '/repo', files: ['notes.txt', 'b.txt'], overlap: [] },
+        };
+      return { current_branch: 'task/parent', has_committed_changes: true };
+    });
+    mount();
+    await flush();
+    expect(document.querySelector('[data-testid="target-uncommitted"]')?.textContent).toBe(
+      '/repo has uncommitted changes in 2 files. Merging sets them aside and puts them back afterwards.',
+    );
+    expect(confirmButton()?.disabled).toBe(false);
+    confirmButton()?.click();
+    expect(mergeTask).toHaveBeenCalledWith(
+      'parent',
+      expect.objectContaining({ allowDirtyTarget: true }),
+    );
+  });
+
+  it('blocks the merge while base checkout changes touch files it merges', async () => {
+    mockInvoke((channel) => {
+      if (channel === IPC.GetBranchLog) return '';
+      if (channel === IPC.CheckMergeStatus)
+        return {
+          conflicting_files: [],
+          main_ahead_count: 0,
+          target_uncommitted: { path: '/repo', files: ['a.ts'], overlap: ['a.ts'] },
+        };
+      return { current_branch: 'task/parent', has_committed_changes: true };
+    });
+    mount();
+    await flush();
+    expect(document.querySelector('[data-testid="target-uncommitted"]')?.textContent).toBe(
+      'Uncommitted changes in /repo touch files this merge changes: a.ts. Commit or stash them first.',
+    );
+    expect(confirmButton()?.disabled).toBe(true);
+    expect(document.querySelector('[data-testid="footer-note"]')?.textContent).toBe(
+      'Commit or stash the changes in main that this merge touches.',
+    );
+  });
+
   it('says next to the disabled merge button why it is disabled', async () => {
     mockInvoke((channel) => {
       if (channel === IPC.GetBranchLog) return '';

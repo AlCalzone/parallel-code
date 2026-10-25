@@ -28,7 +28,9 @@ import type {
   CommitInfo,
   FileDiffResult,
   GitIgnoredEntry,
+  MergeResult,
   MergeStatus,
+  MergeTargetChanges,
   RemoteBranchState,
   WorktreeStatus,
 } from './shared-types.js';
@@ -1527,6 +1529,149 @@ export async function setAsideKanbanEdits(
   };
 }
 
+const PATH_ESCAPES: Record<string, number> = {
+  a: 7,
+  b: 8,
+  t: 9,
+  n: 10,
+  v: 11,
+  f: 12,
+  r: 13,
+  '"': 34,
+  '\\': 92,
+};
+
+/** Undoes git's C-style quoting of a path: `"my notes.txt"`, `"caf\303\251.txt"`. */
+function unquotePath(quoted: string): string {
+  if (!quoted.startsWith('"') || !quoted.endsWith('"')) return quoted;
+  const chars = [...quoted.slice(1, -1)];
+  const bytes: number[] = [];
+  for (let i = 0; i < chars.length; i++) {
+    const char = chars[i] ?? '';
+    if (char !== '\\') {
+      bytes.push(...Buffer.from(char));
+      continue;
+    }
+    const next = chars[++i] ?? '';
+    if (/[0-7]/.test(next)) {
+      // Octal escapes are single bytes of a UTF-8 sequence.
+      bytes.push(parseInt(chars.slice(i, i + 3).join(''), 8));
+      i += 2;
+    } else bytes.push(PATH_ESCAPES[next] ?? next.charCodeAt(0));
+  }
+  return Buffer.from(bytes).toString('utf8');
+}
+
+/**
+ * Paths named by `git status --porcelain` lines; a rename names both sides.
+ * shortcut: a path containing ` -> ` splits wrongly — parse `-z` output if that matters.
+ */
+function statusPaths(lines: string[]): string[] {
+  return lines.flatMap((line) => line.slice(3).split(' -> ').map(unquotePath));
+}
+
+/**
+ * Uncommitted changes in `cwd` (except unstaged board edits), and those of
+ * them `to` changed since it diverged from `from`. Bringing `to` in would
+ * change those files under the user's edits, so a stash could not be put
+ * back cleanly.
+ */
+async function uncommittedOverlap(
+  cwd: string,
+  from: string,
+  to: string,
+): Promise<{ files: string[]; overlap: string[]; porcelain: string }> {
+  // Every untracked file, not just its directory, so paths compare one to one.
+  const { stdout: porcelain } = await exec('git', ['status', '--porcelain', '-uall'], { cwd });
+  const files = statusPaths(blockingStatusLines(porcelain));
+  if (!files.length) return { files, overlap: [], porcelain };
+  // -z: unquoted paths, as statusPaths returns them.
+  const { stdout } = await exec(
+    'git',
+    ['diff', '--name-only', '-z', '--no-renames', `${from}...${to}`, '--'],
+    { cwd, maxBuffer: MAX_BUFFER },
+  );
+  const changed = new Set(stdout.split('\0').filter(Boolean));
+  return { files, overlap: files.filter((file) => changed.has(file)), porcelain };
+}
+
+/** `a, b, c and 2 more`: short enough for an error message. */
+function fileList(files: string[], max = 5): string {
+  const shown = files.slice(0, max).join(', ');
+  return files.length > max ? `${shown} and ${files.length - max} more` : shown;
+}
+
+/** Git's own explanation of a failed command, without Node's "Command failed: …" preamble. */
+function gitErrorText(e: unknown): string {
+  const stderr = typeof e === 'object' && e !== null ? (e as { stderr?: unknown }).stderr : null;
+  if (typeof stderr === 'string' && stderr.trim()) return stderr.trim();
+  return e instanceof Error ? e.message : String(e);
+}
+
+/** Files left unmerged by a stopped merge or rebase; read before aborting it. */
+async function conflictedFiles(cwd: string): Promise<string[]> {
+  try {
+    const { stdout } = await exec('git', ['diff', '--name-only', '--diff-filter=U'], { cwd });
+    return stdout.split('\n').filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+async function findStash(
+  cwd: string,
+  message: string,
+): Promise<{ sha: string; ref: string } | undefined> {
+  const { stdout } = await exec('git', ['stash', 'list', '--format=%H%x00%gd%x00%gs'], { cwd });
+  for (const line of stdout.split('\n')) {
+    const [sha, ref, subject] = line.split('\0');
+    if (sha && ref && subject?.endsWith(message)) return { sha, ref };
+  }
+  return undefined;
+}
+
+/**
+ * Stashes the tracked changes in `mergeRoot` for a merge and returns a
+ * function that puts them back, staged state included. It resolves to a
+ * warning when they could not be put back, or `keep` asks to leave them; the
+ * stash then stays for the user.
+ * Untracked files stay in place: neither the merge nor its recovery
+ * (`reset --hard`, `merge --abort`) removes them.
+ */
+async function setAsideLocalChanges(
+  mergeRoot: string,
+  branchName: string,
+): Promise<(keep?: boolean) => Promise<string | undefined>> {
+  const message = `Parallel Code: set aside to merge ${branchName} (${new Date().toISOString()})`;
+  await exec('git', ['stash', 'push', '-m', message], { cwd: mergeRoot });
+  const kept = `Your uncommitted changes in ${mergeRoot} could not be put back; they are saved in the stash “${message}”.`;
+  // The stash list is shared with every worktree, so find ours by its message.
+  const stash = await findStash(mergeRoot, message).catch((err: unknown) => {
+    console.warn('git stash list failed after stashing for a merge:', err);
+    return 'unknown' as const;
+  });
+  if (stash === 'unknown') return async () => kept;
+  // Only untracked files: git had nothing to stash.
+  if (!stash) return async () => undefined;
+  return async (keep = false) => {
+    // Applied on another commit than they were made on, they would land on the wrong branch.
+    if (keep) return kept;
+    try {
+      await exec('git', ['stash', 'apply', '--index', stash.sha], { cwd: mergeRoot });
+    } catch (err) {
+      console.warn('git stash apply failed after merge:', err);
+      return kept;
+    }
+    // Other stashes may have been pushed meanwhile: look the entry up again.
+    const current = await findStash(mergeRoot, message).catch(() => undefined);
+    if (current)
+      await exec('git', ['stash', 'drop', current.ref], { cwd: mergeRoot }).catch((err) =>
+        console.warn('git stash drop failed after merge:', err),
+      );
+    return undefined;
+  };
+}
+
 /**
  * Keep the worktree container out of the project's `git status`. `.worktrees/`
  * sits inside the repo's own working tree, so in a project whose `.gitignore`
@@ -2363,14 +2508,44 @@ async function remoteBranchState(worktreePath: string): Promise<RemoteBranchStat
   return remote === head ? 'pushed' : 'differs';
 }
 
+/**
+ * `projectRoot`, when given, adds the uncommitted changes of the checkout a
+ * merge of this task would run in.
+ */
 export async function checkMergeStatus(
   worktreePath: string,
   baseBranch?: string,
+  projectRoot?: string,
 ): Promise<MergeStatus> {
   const remote = remoteBranchState(worktreePath);
   const status = await checkBaseStatus(worktreePath, baseBranch);
+  const target = projectRoot
+    ? await mergeTargetChanges(projectRoot, worktreePath, status.base_branch)
+    : undefined;
   const state = await remote;
-  return state ? { ...status, remote: state } : status;
+  return {
+    ...status,
+    ...(state && { remote: state }),
+    ...(target && { target_uncommitted: target }),
+  };
+}
+
+/** Mirrors where `mergeTask` merges: the base's own worktree, else the project root. */
+async function mergeTargetChanges(
+  projectRoot: string,
+  worktreePath: string,
+  mainBranch: string,
+): Promise<MergeTargetChanges | undefined> {
+  try {
+    const mergeRoot = (await getBranchWorktreePath(projectRoot, mainBranch))?.path ?? projectRoot;
+    const { stdout: head } = await exec('git', ['rev-parse', 'HEAD'], { cwd: worktreePath });
+    const { files, overlap } = await uncommittedOverlap(mergeRoot, mainBranch, head.trim());
+    return files.length ? { path: mergeRoot, files, overlap } : undefined;
+  } catch (err) {
+    // The merge checks again; a missing notice must not hide the rest of the status.
+    logDebug('git', `mergeTargetChanges failed for ${projectRoot}: ${err}`);
+    return undefined;
+  }
 }
 
 async function checkBaseStatus(worktreePath: string, baseBranch?: string): Promise<MergeStatus> {
@@ -2413,11 +2588,15 @@ async function checkBaseStatus(worktreePath: string, baseBranch?: string): Promi
     }
   }
 
+  const uncommitted = await uncommittedOverlap(worktreePath, 'HEAD', mainBranch)
+    .then((changes) => changes.overlap)
+    .catch(() => []);
   return {
     main_ahead_count: mainAheadCount,
     conflicting_files: conflictingFiles,
     base_branch: mainBranch,
     overlapping_files: await overlappingFiles(worktreePath, mainBranch, conflictingFiles),
+    ...(uncommitted.length && { uncommitted_overlap: uncommitted }),
   };
 }
 
@@ -2469,7 +2648,9 @@ export async function mergeTask(
   baseBranch?: string,
   worktreePath?: string,
   mergeWorktreePath?: string,
-): Promise<{ main_branch: string; lines_added: number; lines_removed: number }> {
+  /** Merge into a checkout with uncommitted changes by setting them aside. */
+  allowDirtyTarget = false,
+): Promise<MergeResult> {
   const lockKey = await detectRepoLockKey(projectRoot).catch(() => projectRoot);
 
   return withWorktreeLock(lockKey, async () => {
@@ -2515,15 +2696,31 @@ export async function mergeTask(
     // Verify clean working tree in the merge root. The project's Kanban board
     // (KANBAN.md) is edited in place by the app as tasks move, so its unstaged
     // edits do not block a merge: they are set aside and restored around it.
-    const { stdout: statusOut } = await exec('git', ['status', '--porcelain'], {
-      cwd: mergeRoot,
-    });
-    if (blockingStatusLines(statusOut).length)
+    // Other changes block it unless the caller allows setting them aside too,
+    // and the merge leaves the files they touch alone.
+    const local = await uncommittedOverlap(mergeRoot, mainBranch, branchName);
+    if (local.files.length && !allowDirtyTarget)
       throw new Error(
         'Working tree has uncommitted changes. Please commit or stash them before merging.',
       );
-    const restoreKanban = await setAsideKanbanEdits(mergeRoot, statusOut);
+    if (local.overlap.length)
+      throw new Error(
+        `Uncommitted changes in ${mergeRoot} touch files this merge changes: ` +
+          `${fileList(local.overlap)}. Commit or stash them first.`,
+      );
+    const restoreKanban = await setAsideKanbanEdits(mergeRoot, local.porcelain);
+    let restoreLocal = async (_keep?: boolean): Promise<string | undefined> => undefined;
+    let branchRestoreFailed = false;
+    // Runs once, from catch on failure or else from finally.
+    let restored = false;
+    const putBack = () => {
+      restored = true;
+      return restoreLocal(branchRestoreFailed);
+    };
+    let result: MergeResult;
+    let warning: string | undefined;
     try {
+      if (local.files.length) restoreLocal = await setAsideLocalChanges(mergeRoot, branchName);
       // Capture the current branch BEFORE any checkout so we can restore it afterward.
       const originalBranch = targetWorktree
         ? null
@@ -2539,6 +2736,7 @@ export async function mergeTask(
           try {
             await exec('git', ['checkout', originalBranch], { cwd: projectRoot });
           } catch (e) {
+            branchRestoreFailed = true;
             console.warn(`Failed to restore branch '${originalBranch}':`, e);
           }
         }
@@ -2548,11 +2746,12 @@ export async function mergeTask(
         try {
           await exec('git', ['merge', '--squash', '--', branchName], { cwd: mergeRoot });
         } catch (e) {
+          const conflicts = await conflictedFiles(mergeRoot);
           await exec('git', ['reset', '--hard', 'HEAD'], { cwd: mergeRoot }).catch((recoverErr) =>
             console.warn('git reset --hard failed during squash recovery:', recoverErr),
           );
           await restoreBranch();
-          throw new Error(`Squash merge failed: ${e}`);
+          throw mergeFailure('Squash merge', conflicts, e);
         }
         const msg = message ?? 'Squash merge';
         try {
@@ -2562,17 +2761,18 @@ export async function mergeTask(
             console.warn('git reset --hard failed during commit recovery:', recoverErr),
           );
           await restoreBranch();
-          throw new Error(`Commit failed: ${e}`);
+          throw new Error(`Commit failed: ${gitErrorText(e)}`);
         }
       } else {
         try {
           await exec('git', ['merge', '--', branchName], { cwd: mergeRoot });
         } catch (e) {
+          const conflicts = await conflictedFiles(mergeRoot);
           await exec('git', ['merge', '--abort'], { cwd: mergeRoot }).catch((recoverErr) =>
             console.warn('git merge --abort failed:', recoverErr),
           );
           await restoreBranch();
-          throw new Error(`Merge failed: ${e}`);
+          throw mergeFailure('Merge', conflicts, e);
         }
       }
 
@@ -2584,11 +2784,27 @@ export async function mergeTask(
 
       await restoreBranch();
 
-      return { main_branch: mainBranch, lines_added: linesAdded, lines_removed: linesRemoved };
+      result = { main_branch: mainBranch, lines_added: linesAdded, lines_removed: linesRemoved };
+    } catch (e) {
+      // The merge error alone would leave the user unaware their changes sit in a stash.
+      const kept = await putBack();
+      if (kept) throw new Error(`${e instanceof Error ? e.message : String(e)} ${kept}`);
+      throw e;
     } finally {
+      // After restoreBranch: the changes go back onto the commit they were made on.
+      if (!restored) warning = await putBack();
       await restoreKanban();
     }
+    return warning ? { ...result, warning } : result;
   });
+}
+
+function mergeFailure(operation: string, conflicts: string[], e: unknown): Error {
+  return new Error(
+    conflicts.length
+      ? `${operation} stopped on conflicts in ${fileList(conflicts)}; nothing was merged.`
+      : `${operation} failed: ${gitErrorText(e)}`,
+  );
 }
 
 export async function getBranchLog(worktreePath: string, baseBranch?: string): Promise<string> {
@@ -2727,8 +2943,9 @@ export function pushTask(
 }
 
 /**
- * Brings the base branch into the task branch, by rebase or by merge commit. A
- * failure is aborted, so the worktree is never left mid-operation.
+ * Brings the base branch into the task branch, by rebase or by merge commit.
+ * Uncommitted changes are stashed and put back, unless the base changed the
+ * same files. A failure is aborted, so the worktree is never left mid-operation.
  */
 async function syncWithBase(
   worktreePath: string,
@@ -2739,15 +2956,30 @@ async function syncWithBase(
 
   return withWorktreeLock(lockKey, async () => {
     const mainBranch = baseBranch ?? (await detectMainBranch(worktreePath));
+    // Otherwise the autostash would come back with conflict markers in them.
+    const { overlap } = await uncommittedOverlap(worktreePath, 'HEAD', mainBranch);
+    if (overlap.length)
+      throw new Error(
+        `Commit or stash your changes to ${fileList(overlap)} first: ${mainBranch} changed them too.`,
+      );
     const args =
-      operation === 'merge' ? ['merge', '--no-edit', mainBranch] : ['rebase', mainBranch];
+      operation === 'merge'
+        ? ['merge', '--no-edit', '--autostash', mainBranch]
+        : ['rebase', '--autostash', mainBranch];
     try {
       await exec('git', args, { cwd: worktreePath });
     } catch (e) {
+      const conflicts = await conflictedFiles(worktreePath);
+      // --abort also puts the autostash back.
       await exec('git', [operation, '--abort'], { cwd: worktreePath }).catch((recoverErr) =>
         console.warn(`git ${operation} --abort failed:`, recoverErr),
       );
-      throw new Error(`${operation === 'merge' ? 'Merge' : 'Rebase'} failed: ${e}`);
+      const label = operation === 'merge' ? 'Merge' : 'Rebase';
+      throw new Error(
+        conflicts.length
+          ? `${label} stopped on conflicts in ${fileList(conflicts)} and was undone; the branch is unchanged.`
+          : `${label} failed: ${gitErrorText(e)}`,
+      );
     }
     invalidateDiffBaseCache();
   });

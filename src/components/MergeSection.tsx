@@ -111,6 +111,32 @@ export function MergeBlockers(props: MergeSectionProps) {
           Uncommitted changes in the worktree are not part of this merge.
         </div>
       </Show>
+      <Show when={props.state.targetUncommitted()}>
+        {(target) => (
+          <div
+            data-testid="target-uncommitted"
+            style={{
+              ...bannerStyle(theme.warning),
+              'margin-bottom': '12px',
+              'font-size': '13px',
+            }}
+          >
+            <Show
+              when={target().overlap.length > 0}
+              fallback={
+                <>
+                  {target().path} has uncommitted changes in {target().files.length} file
+                  {target().files.length > 1 ? 's' : ''}. Merging sets them aside and puts them back
+                  afterwards.
+                </>
+              }
+            >
+              Uncommitted changes in {target().path} touch files this merge changes:{' '}
+              {target().overlap.join(', ')}. Commit or stash them first.
+            </Show>
+          </div>
+        )}
+      </Show>
       <Show when={!props.state.worktreeStatus.loading && !props.state.hasCommittedChangesToMerge()}>
         <div
           style={{

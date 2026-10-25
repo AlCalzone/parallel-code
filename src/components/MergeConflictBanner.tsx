@@ -24,17 +24,22 @@ const buttonStyle = (primary: boolean, disabled = false) => ({
  */
 export function MergeConflictBanner(props: { task: Task; state: MergeState; onDone: () => void }) {
   const base = () => props.state.baseBranchName();
-  const dirty = () => Boolean(props.state.worktreeStatus()?.has_uncommitted_changes);
-  const blocked = () => props.state.syncing() !== null || dirty();
+  // Other uncommitted changes are stashed and put back around the sync.
+  const overlap = () => props.state.uncommittedOverlap();
+  const blocked = () => props.state.syncing() !== null || overlap().length > 0;
   const blockedTitle = (action: string) =>
-    dirty() ? `Commit or stash changes before you ${action}` : undefined;
+    overlap().length ? `Commit or stash your changes before you ${action}` : undefined;
   const agentRunning = () =>
     props.task.agentIds.length > 0 &&
     store.agents[props.state.selectedAgentId()]?.status === 'running';
   const askAgent = () => {
     const agentId = props.state.selectedAgentId();
     props.onDone();
-    sendPrompt(props.task.id, agentId, `rebase on ${base()} branch`).catch((err) => {
+    const conflicts = props.state.mergeStatus()?.conflicting_files ?? [];
+    const prompt = conflicts.length
+      ? `rebase on ${base()} branch and resolve the conflicts in ${conflicts.join(', ')}`
+      : `rebase on ${base()} branch`;
+    sendPrompt(props.task.id, agentId, prompt).catch((err) => {
       console.error('Failed to send rebase prompt:', err);
     });
   };
@@ -84,6 +89,12 @@ export function MergeConflictBanner(props: { task: Task; state: MergeState; onDo
                   {overlapText(files(), base())}
                 </div>
               )}
+            </Show>
+            <Show when={overlap().length > 0}>
+              <div style={{ 'margin-top': '4px' }}>
+                Commit or stash your changes to {overlap().join(', ')} first: {base()} changed them
+                too.
+              </div>
             </Show>
             <div
               style={{

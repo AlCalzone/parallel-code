@@ -47,7 +47,7 @@ const ipcHandlers = new Map<string, (data: unknown) => void>();
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
 vi.mock('../lib/ipc', () => ({ Channel: vi.fn(), invoke: mockInvoke }));
-vi.mock('./notification', () => ({ showNotification: vi.fn() }));
+vi.mock('./notification', () => ({ NOTIFICATION_ERROR_MS: 10_000, showNotification: vi.fn() }));
 
 vi.mock('./core', async () => {
   const { createMockStoreHarness } = await import('./test-helpers');
@@ -1968,6 +1968,26 @@ describe('Super Productivity completion wiring', () => {
     expect(showNotification).toHaveBeenCalledWith('Merged “Add forecast” into main · +10 −2', {
       tone: 'success',
     });
+  });
+
+  it('keeps a merge warning up instead of the success notice', async () => {
+    mockTasks['task-1'] = { ...worktreeTask(), name: 'Add forecast' };
+    mockInvoke.mockImplementation((channel: string) =>
+      Promise.resolve(
+        channel === IPC.MergeTask
+          ? { main_branch: 'main', lines_added: 10, lines_removed: 2, warning: 'Changes kept.' }
+          : undefined,
+      ),
+    );
+    await mergeTask('task-1', { cleanup: true, allowDirtyTarget: true });
+    expect(mockInvoke).toHaveBeenCalledWith(
+      IPC.MergeTask,
+      expect.objectContaining({ allowDirtyTarget: true }),
+    );
+    expect(showNotification).toHaveBeenCalledWith(
+      'Merged “Add forecast” into main · +10 −2. Changes kept.',
+      { durationMs: 10_000 },
+    );
   });
 
   it('does not complete anything for a merge that keeps the task', async () => {
