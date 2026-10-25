@@ -37,6 +37,11 @@
 
 ## Screenshots
 
+<p align="center">
+  <img src="screens/showcase-board.png" alt="Board with ten agents sorted by what they need from you" width="800"><br>
+  <em>Ten agents across Claude Code, Codex, Gemini and Copilot, sorted by what they need from you</em>
+</p>
+
 | Agents working, waiting for input, and ready to merge | One task in focus with its chat, files, notes, and shell |
 | ----------------------------------------------------- | -------------------------------------------------------- |
 | ![Overview](screens/showcase-overview.png)            | ![Focus view](screens/showcase-focus.png)                |
