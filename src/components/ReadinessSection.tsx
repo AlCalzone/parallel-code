@@ -71,6 +71,8 @@ const detailStyle = {
   'white-space': 'nowrap',
 } as const;
 
+const codeStyle = { 'font-family': 'var(--font-mono)', 'font-size': '12px' };
+
 const ACTION_LABEL: Record<ReadinessAction, string> = {
   run: 'Run',
   rerun: 'Re-run',
@@ -107,6 +109,7 @@ export function ReadinessSection(props: ReadinessSectionProps) {
       autoRun: backgroundVerifyEnabled(props.task.id),
       now: now(),
     });
+  const detailTitle = () => [line().command, line().detail].filter(Boolean).join(' · ');
   // A review's check run restarts verify itself, so a click would only cancel its run.
   const suiteBusy = () => {
     const pkg = props.task.evidence;
@@ -140,20 +143,18 @@ export function ReadinessSection(props: ReadinessSectionProps) {
     })[next];
 
   return (
-    <section aria-label="Readiness and checks" style={{ margin: '0 0 6px', 'font-size': '13px' }}>
+    <section aria-label="Readiness and checks" style={{ margin: '0 0 14px', 'font-size': '13px' }}>
       <div style={rowStyle}>
         {/* Only the outcome is announced, not ages and button labels as they tick. */}
         <span
           role="status"
           style={{
+            flex: '1',
             color: line().tone === 'failed' ? theme.error : theme.fg,
             'white-space': 'nowrap',
           }}
         >
           {line().text}
-        </span>
-        <span style={detailStyle} title={line().detail}>
-          {line().detail}
         </span>
         <Show when={action()}>
           {(next) => (
@@ -182,6 +183,12 @@ export function ReadinessSection(props: ReadinessSectionProps) {
             <span aria-hidden="true">{open() ? '▾' : '▸'}</span> Details
           </button>
         </Show>
+      </div>
+      {/* Kept in every state, even empty, so a result arriving never moves the dialog. */}
+      <div style={{ ...detailStyle, 'min-height': '18px' }} title={detailTitle()}>
+        <Show when={line().command}>{(command) => <code style={codeStyle}>{command()}</code>}</Show>
+        {line().command && line().detail ? ' · ' : ''}
+        {line().detail}
       </div>
       <Show when={otherFailures().length > 0}>
         <div style={rowStyle}>

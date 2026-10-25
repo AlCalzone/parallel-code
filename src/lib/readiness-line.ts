@@ -18,6 +18,8 @@ export interface ReadinessLine {
   /** Colour is kept for failures; everything else reads as plain text. */
   tone: 'neutral' | 'failed';
   text: string;
+  /** The verify command, shown as code ahead of `detail`. */
+  command?: string;
   detail: string;
   action?: ReadinessAction;
 }
@@ -111,11 +113,13 @@ export function readinessLine(input: ReadinessLineInput): ReadinessLine {
     return {
       tone: 'neutral',
       text: 'Not tested on this commit',
+      // The hold explains this commit better than the command does.
+      command: held ? undefined : command,
       detail: held
         ? `${held}.`
         : input.autoRun
-          ? `\`${command}\` runs in the background after the agent's next turn.`
-          : `\`${command}\``,
+          ? "runs in the background after the agent's next turn."
+          : '',
       action: 'run',
     };
   }
@@ -126,7 +130,8 @@ export function readinessLine(input: ReadinessLineInput): ReadinessLine {
       return {
         tone: 'neutral',
         text: 'Verify running',
-        detail: joined(`\`${command}\``, `started ${ago(run.startedAt, input.now)}`),
+        command,
+        detail: `started ${ago(run.startedAt, input.now)}`,
         action: 'cancel',
       };
     case 'passed':

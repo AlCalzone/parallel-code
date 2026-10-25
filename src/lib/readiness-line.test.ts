@@ -85,7 +85,8 @@ describe('readinessLine', () => {
   it('shows a running check with Cancel', () => {
     expect(line({ run: run({ status: 'running', finishedAt: null }) })).toMatchObject({
       text: 'Verify running',
-      detail: '`npm test` · started 10m ago',
+      command: 'npm test',
+      detail: 'started 10m ago',
       action: 'cancel',
     });
   });
@@ -93,16 +94,19 @@ describe('readinessLine', () => {
   it('says when the next background run happens', () => {
     expect(line()).toMatchObject({
       text: 'Not tested on this commit',
-      detail: "`npm test` runs in the background after the agent's next turn.",
+      command: 'npm test',
+      detail: "runs in the background after the agent's next turn.",
       action: 'run',
     });
-    expect(line({ autoRun: false }).detail).toBe('`npm test`');
+    expect(line({ autoRun: false })).toMatchObject({ command: 'npm test', detail: '' });
   });
 
   it('explains why the background run held this commit back', () => {
-    expect(line({ hold: { headSha: HEAD, reason: 'dirty' } }).detail).toBe(
+    const held = line({ hold: { headSha: HEAD, reason: 'dirty' } });
+    expect(held.detail).toBe(
       'Background run held back because the worktree has uncommitted changes.',
     );
+    expect(held.command).toBeUndefined();
     // A hold for an earlier commit says nothing about this one.
     expect(line({ hold: { headSha: 'b'.repeat(40), reason: 'dirty' } }).detail).toContain(
       'runs in the background',

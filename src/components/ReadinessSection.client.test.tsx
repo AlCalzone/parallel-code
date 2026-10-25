@@ -87,6 +87,7 @@ describe('ReadinessSection', () => {
   it('says the commit is untested and offers Run, with details folded', () => {
     mount();
     expect(status()).toContain('Not tested on this commit');
+    expect(document.querySelector('code')?.textContent).toBe('npm test');
     expect(body()?.hidden).toBe(true);
     button('Run')?.click();
     expect(runTaskVerification).toHaveBeenCalledWith('task');
