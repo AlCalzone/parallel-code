@@ -8,6 +8,7 @@ import { toggleNewTaskPanel } from '../store/navigation';
 import { clearNotification } from '../store/notification';
 import { openBeside } from './board/TaskStatus';
 import { NewTaskPanel } from './NewTaskPanel';
+import { effortInArgs, modelInArgs } from '../lib/agent-args';
 
 vi.mock('../lib/ipc', () => ({ invoke: vi.fn() }));
 
@@ -821,4 +822,89 @@ it('offers the split tip once, after a pause on a long prompt', async () => {
     vi.useRealTimers();
     setStore({ featureHintsEnabled: true, seenFeatureHints: [], taskOrder: [] });
   }
+});
+
+function submitTask(id: string): void {
+  const originalInvoke = vi.mocked(invoke).getMockImplementation();
+  vi.mocked(invoke).mockImplementation((channel, args) =>
+    channel === IPC.CreateTask
+      ? Promise.resolve({ id, branch_name: `task/${id}`, worktree_path: `/project/${id}` })
+      : Promise.resolve(originalInvoke?.(channel, args)),
+  );
+  host
+    .querySelector('form')
+    ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+}
+
+function pickMenuRow(group: string, label: string): void {
+  const trigger = host.querySelector<HTMLButtonElement>('button[aria-label^="Task model"]');
+  if (!trigger) throw new Error('Missing task model menu');
+  trigger.click();
+  const row = [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      `[role="group"][aria-label="${group}"] [role="menuitemradio"]`,
+    ),
+  ].find((item) => item.textContent === label);
+  if (!row) throw new Error(`Missing ${group} row ${label}`);
+  row.click();
+}
+
+it('launches the task with the model and reasoning level picked for it', async () => {
+  await vi.waitFor(() =>
+    expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false),
+  );
+  pickMenuRow('Claude Code', 'opus');
+  pickMenuRow('Reasoning', 'High');
+  expect(host.querySelector('button[aria-label^="Task model"]')?.textContent).toBe('opus · High');
+  submitTask('picked');
+  await vi.waitFor(() => expect(store.tasks.picked).toBeDefined());
+  const args = store.agents[store.tasks.picked.agentIds[0]].def.args;
+  expect(modelInArgs(args)).toBe('opus');
+  expect(effortInArgs(args)).toBe('high');
+});
+
+it('leaves the agent args alone while the model stays on its default', async () => {
+  await vi.waitFor(() =>
+    expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false),
+  );
+  expect(host.querySelector('button[aria-label^="Task model"]')?.textContent).toBe('Default model');
+  submitTask('plain');
+  await vi.waitFor(() => expect(store.tasks.plain).toBeDefined());
+  expect(store.agents[store.tasks.plain.agentIds[0]].def.args).toEqual([]);
+});
+
+it('offers no model for an agent that does not take one', async () => {
+  dispose();
+  host.replaceChildren();
+  setStore('availableAgents', 0, 'command', 'custom-agent');
+  dispose = render(() => <NewTaskPanel open onClose={vi.fn()} />, host);
+  await vi.waitFor(() =>
+    expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false),
+  );
+  expect(host.querySelector('button[aria-label^="Task model"]')).toBeNull();
+});
+
+it('hides agents whose CLI is missing unless one is already selected', async () => {
+  dispose();
+  host.replaceChildren();
+  setStore('availableAgents', (agents) => [
+    ...agents,
+    { ...agents[0], id: 'missing', name: 'Missing CLI', command: 'agy', available: false },
+  ]);
+  dispose = render(() => <NewTaskPanel open onClose={vi.fn()} />, host);
+  await vi.waitFor(() =>
+    expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false),
+  );
+  const agentNames = () =>
+    [...host.querySelectorAll('[data-nav-field="agent"] [role="radio"]')].map(
+      (button) => button.textContent,
+    );
+  expect(agentNames()).toEqual(['Agent']);
+  setStore('lastAgentId', 'missing');
+  dispose();
+  host.replaceChildren();
+  dispose = render(() => <NewTaskPanel open onClose={vi.fn()} />, host);
+  await vi.waitFor(() => expect(agentNames()).toEqual(['Agent', 'Missing CLI(not installed)']));
+
+  setStore('lastAgentId', null);
 });
