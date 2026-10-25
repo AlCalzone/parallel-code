@@ -156,8 +156,10 @@ export function TaskBriefBar(props: TaskBriefBarProps) {
           padding: '5px 12px 5px 16px',
           border: 'none',
           // Full-strength text: the line is read at a glance, so it must not be faint.
-          color: props.task.brief ? theme.fg : theme.fgMuted,
-          'font-size': sf(13),
+          // Before the first brief the line is only a placeholder, so it recedes.
+          color: props.task.brief ? theme.fg : theme.fgSubtle,
+          'font-size': props.task.brief ? sf(13) : sf(11),
+          opacity: props.task.brief ? '1' : '0.6',
           'line-height': '1.4',
           'font-family': 'inherit',
           'text-align': 'left',
