@@ -21,6 +21,7 @@ import { IPC } from '../../electron/ipc/channels';
 import { getTerminalFontFamily } from '../lib/fonts';
 import { TERMINAL_SCROLL_OPTIONS } from '../lib/terminalConstants';
 import { leaveCursorQueriesToMain } from '../lib/terminalQueries';
+import { handleOsc52Writes, trackRecentGesture } from '../lib/terminalClipboard';
 import {
   getTerminalSearchDecorations,
   getTerminalTheme,
@@ -533,6 +534,18 @@ export function TerminalView(props: TerminalViewProps) {
       },
     });
     leaveCursorQueriesToMain(term);
+    // Only right after the user clicks or types in this pane: reattaching replays
+    // raw scrollback, which would otherwise re-copy every earlier selection.
+    const recentGesture = trackRecentGesture(containerRef);
+    handleOsc52Writes(term, {
+      allowed: recentGesture.isRecent,
+      write: (text) => {
+        navigator.clipboard.writeText(text).catch((err: unknown) => {
+          logWarn('terminal.copy', 'OSC 52 clipboard write failed', { err });
+        });
+      },
+    });
+    onCleanup(recentGesture.dispose);
 
     fitAddon = new FitAddon();
     term.loadAddon(fitAddon);

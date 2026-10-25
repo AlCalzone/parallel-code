@@ -402,3 +402,48 @@ it('keeps Second opinion on right-click', () => {
   item?.click();
   expect(onSecondOpinion).toHaveBeenCalledOnce();
 });
+
+describe('OSC 52 clipboard writes', () => {
+  // Claude Code's fullscreen mode captures the mouse, keeps the selection
+  // itself, and copies it with OSC 52; xterm.js then has no selection to copy.
+  const copySequence = (text: string) =>
+    `\x1b]52;c;${Buffer.from(text, 'utf8').toString('base64')}\x07`;
+  const write = (term: Terminal, data: string) =>
+    new Promise<void>((resolve) => term.write(data, resolve));
+
+  it('copies the text a program sends right after the user selects in the pane', async () => {
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    const term = mountTerminal();
+    const screen = term.element?.querySelector<HTMLElement>('.xterm-screen');
+    if (!screen) throw new Error('Missing terminal screen');
+    screen.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, buttons: 1 }));
+    window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+
+    await write(term, copySequence('selected in Claude ✓'));
+    expect(writeText).toHaveBeenCalledExactlyOnceWith('selected in Claude ✓');
+  });
+
+  it('copies after a long drag that started in the pane ends outside it', async () => {
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    let now = 1_000;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const term = mountTerminal();
+    const screen = term.element?.querySelector<HTMLElement>('.xterm-screen');
+    if (!screen) throw new Error('Missing terminal screen');
+    screen.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, buttons: 1 }));
+    now += 10_000;
+    document.body.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+
+    await write(term, copySequence('long drag'));
+    expect(writeText).toHaveBeenCalledExactlyOnceWith('long drag');
+  });
+
+  it('ignores copies replayed or sent without user input', async () => {
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+    const term = mountTerminal();
+    // A click elsewhere in the app must not arm this pane.
+    window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    await write(term, copySequence('stale selection from scrollback'));
+    expect(writeText).not.toHaveBeenCalled();
+  });
+});
