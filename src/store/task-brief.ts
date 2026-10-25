@@ -1,41 +1,22 @@
 import { createEffect, createRoot, untrack } from 'solid-js';
 import { produce } from 'solid-js/store';
-import { TASK_NAME_MODELS } from '../../electron/shared/task-name-model';
+import { BRIEF_MODELS } from '../../electron/shared/task-name-model';
 import { parseConfidencePayload } from '../../electron/shared/task-confidence';
 import { startModelRequest } from '../lib/model-request';
 import { getTaskDiffBaseBranch, loadTaskDiff } from '../lib/load-task-diff';
 import { errMessage, info as logInfo, warn as logWarn } from '../lib/log';
-import {
-  appendBriefTurn,
-  buildTaskBriefPrompt,
-  carryDecisionStates,
-  diffFingerprint,
-  diffPaths,
-  parseTaskBriefResponse,
-  type BriefDecisionState,
-} from '../lib/task-brief';
+import { buildTaskBriefPrompt, diffFingerprint, parseTaskBriefResponse } from '../lib/task-brief';
 import { isAgentChat } from './agent-chat';
 import { getAgentHookStatus } from './agentHookStatus';
 import { store, setStore } from './core';
 import { getProjectPath } from './projects';
 import { getAgentOutputTail, isTaskWorking, normalizeCurrentFrame } from './taskStatus';
-import { sendPrompt } from './tasks';
 import type { Task } from './types';
 
 /** A turn has to stay finished this long before it is summarised. */
 const TURN_SETTLE_MS = 4_000;
 /** Terminal heuristics can flicker between busy and idle; never brief more often than this. */
 const MIN_BRIEF_INTERVAL_MS = 45_000;
-
-/**
- * The naming model, except that Claude briefs run on Sonnet: a brief reads a
- * whole diff, which Haiku summarises vaguely.
- * shortcut: fixed on trial — a brief model setting if Sonnet's briefs earn their cost.
- */
-function briefModelSettings() {
-  const naming = TASK_NAME_MODELS[store.taskNameModel];
-  return naming.provider === 'claude' ? { ...naming, model: 'sonnet' } : naming;
-}
 
 const inFlight = new Map<string, { cancel: () => void }>();
 /** Tasks whose turn ended again while their brief was being written. */
@@ -157,9 +138,6 @@ export async function refreshTaskBrief(
       setStore('tasks', taskId, 'briefStatus', undefined);
       return;
     }
-    // Only a worktree's diff shows all of its work: direct tasks on main lose their
-    // commits to the merge base, and tasks without git have no diff at all.
-    const claimCheck = task.gitIsolation === 'worktree';
     const request = startModelRequest({
       prompt: buildTaskBriefPrompt({
         taskName: task.name,
@@ -167,10 +145,9 @@ export async function refreshTaskBrief(
         previous: previous?.brief,
         agentMessage: message.text,
         rawDiff,
-        claimCheck,
       }),
       cwd: task.worktreePath,
-      settings: briefModelSettings(),
+      settings: BRIEF_MODELS[store.briefModel],
       agentEnvFiles: store.agentEnvFiles,
       purpose: 'brief',
     });
@@ -180,30 +157,12 @@ export async function refreshTaskBrief(
     };
     const response = await request.result;
     if (cancelled || !isLiveTask(store.tasks[taskId])) return;
-    const { brief, turnOutcome } = parseTaskBriefResponse(
-      response,
-      rawDiff === undefined ? undefined : diffPaths(rawDiff),
-    );
-    // Without a readable diff a claim can be neither backed nor flagged.
-    if (!claimCheck || rawDiff === undefined) brief.unbacked = [];
-    const current = store.tasks[taskId].brief;
+    const brief = parseTaskBriefResponse(response);
     setStore('tasks', taskId, 'brief', {
       brief,
       generatedAt: capturedAt,
       fingerprint,
       ...(messageFingerprint && { messageFingerprint }),
-      turns: prompts.length
-        ? appendBriefTurn(current?.turns ?? [], {
-            prompt: prompts.at(-1) ?? '',
-            outcome: turnOutcome || brief.headline,
-            endedAt: capturedAt,
-          })
-        : (current?.turns ?? []),
-      decisions: carryDecisionStates(current?.decisions, brief.decided),
-      // A rewrite that says the same thing is not news.
-      ...((current?.unread || JSON.stringify(brief) !== JSON.stringify(current?.brief)) && {
-        unread: true,
-      }),
     });
     setStore('tasks', taskId, 'briefStatus', undefined);
     logInfo('taskBrief', 'Brief updated', { taskId, durationMs: Date.now() - capturedAt });
@@ -231,7 +190,7 @@ export function noteCodeFingerprint(taskId: string, fingerprint: string, at: num
 
 /**
  * Reads the diff to tell whether a rating is still current. Briefs do this
- * after every turn; the card also calls it when it opens, for changes made between turns.
+ * after every turn; the Finish review also calls it, for changes made between turns.
  */
 export async function refreshCodeFingerprint(taskId: string): Promise<void> {
   const task = store.tasks[taskId];
@@ -308,64 +267,6 @@ export function startTaskBriefWatcher(): () => void {
       dispose();
     };
   });
-}
-
-/** The user opened the brief, so a new one is no longer news. */
-export function markBriefRead(taskId: string): void {
-  if (store.tasks[taskId]?.brief?.unread) setStore('tasks', taskId, 'brief', 'unread', undefined);
-}
-
-function setDecisionState(taskId: string, text: string, state: BriefDecisionState | undefined) {
-  if (!store.tasks[taskId]?.brief) return;
-  setStore('tasks', taskId, 'brief', 'decisions', (prev) => {
-    const next = { ...prev };
-    if (state) next[text] = state;
-    else delete next[text];
-    return next;
-  });
-}
-
-export function keepBriefDecision(taskId: string, text: string): void {
-  setDecisionState(taskId, text, 'kept');
-}
-
-export function reopenBriefDecision(taskId: string, text: string): void {
-  setDecisionState(taskId, text, undefined);
-}
-
-function mainAgentId(task: Task): string | undefined {
-  return task.selectedAgentId && task.agentIds.includes(task.selectedAgentId)
-    ? task.selectedAgentId
-    : task.agentIds[0];
-}
-
-/**
- * Names the agent that decision corrections go to. The card spans
- * every agent pane, so with several it would otherwise be unclear which one is
- * asked; with one agent there is nothing to tell apart.
- */
-export function briefTargetAgentName(task: Task): string | undefined {
-  const agentId = task.agentIds.length > 1 ? mainAgentId(task) : undefined;
-  if (!agentId) return undefined;
-  // Same fallback as the agent tabs, so the label matches what they show.
-  const nameOf = (id: string) =>
-    store.agents[id]?.def.name ?? `Agent ${task.agentIds.indexOf(id) + 1}`;
-  const name = nameOf(agentId);
-  const shared = task.agentIds.filter((id) => nameOf(id) === name).length > 1;
-  return shared ? `${name} · ${task.agentIds.indexOf(agentId) + 1}` : name;
-}
-
-/** Sends the user's correction of a decision to the task's agent, then marks it. */
-export async function changeBriefDecision(
-  taskId: string,
-  text: string,
-  correction: string,
-): Promise<void> {
-  const task = store.tasks[taskId];
-  const agentId = task && mainAgentId(task);
-  if (!agentId) throw new Error('This task has no agent to send the change to.');
-  await sendPrompt(taskId, agentId, correction.trim());
-  setDecisionState(taskId, text, 'sent');
 }
 
 /**

@@ -1,5 +1,4 @@
 import { Show, For, createSignal, createEffect, onMount, onCleanup, untrack } from 'solid-js';
-import type { JSX } from 'solid-js';
 import type { TranscriptMarks } from '../investigation/transcript';
 
 import {
@@ -70,8 +69,6 @@ interface TaskAITerminalProps {
   onReview?: (path?: string) => void;
   /** Opens the tour the agent published through `tour_publish`. */
   onOpenTour?: () => void;
-  /** Task brief bar, shown between the agent header and its output, where people look first. */
-  brief?: JSX.Element;
 }
 
 export function TaskAITerminal(props: TaskAITerminalProps) {
@@ -488,7 +485,6 @@ export function TaskAITerminal(props: TaskAITerminalProps) {
             </div>
           </div>
         </InfoBar>
-        {props.brief}
         <Show when={handoff()} keyed>
           {(request) => (
             <AgentHandoffComposer

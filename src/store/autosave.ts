@@ -46,6 +46,7 @@ function structuralSnapshot(): string {
     modelTaskNames: store.modelTaskNames,
     taskNameModel: store.taskNameModel,
     taskBriefs: store.taskBriefs,
+    briefModel: store.briefModel,
     reviewGuidance: store.reviewGuidance,
     showSidebarTips: store.showSidebarTips,
     showSidebarProgress: store.showSidebarProgress,

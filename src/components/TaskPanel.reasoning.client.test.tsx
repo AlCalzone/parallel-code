@@ -1,13 +1,5 @@
 import { expectDefined } from '../store/test-helpers';
-import {
-  For,
-  Show,
-  createEffect,
-  createSignal,
-  onCleanup,
-  type ComponentProps,
-  type JSX,
-} from 'solid-js';
+import { For, Show, createEffect, createSignal, onCleanup, type ComponentProps } from 'solid-js';
 import { render } from 'solid-js/web';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeAll, expect, it, onTestFinished, vi } from 'vitest';
@@ -126,11 +118,9 @@ vi.mock('./TaskAITerminal', () => ({
   TaskAITerminal: (props: {
     onReview?: (path?: string) => void;
     onOpenInSidePanel?: (path: string) => void;
-    brief?: JSX.Element;
   }) => (
     <div class="test-terminal">
       <button class="test-side-panel" onClick={() => props.onOpenInSidePanel?.('docs/plan.md')} />
-      {props.brief}
       Scrollback
       <button
         class="test-chat-review"
@@ -332,7 +322,7 @@ it('opens a terminal Markdown link in the side panel and moves focus there', asy
   expect(setTaskFocusedPanel).not.toHaveBeenCalledWith('task', 'canvas');
 });
 
-it('hides the brief bar, and with it Rate confidence, while briefs are off', () => {
+it('hides the brief line while briefs are off', () => {
   const task: Task = {
     id: 'task',
     name: 'Task',

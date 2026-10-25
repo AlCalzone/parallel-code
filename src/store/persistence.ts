@@ -35,7 +35,12 @@ import { normalizeReasoningProfile } from '../investigation/profiles';
 import { restoreReasoningWorkspaces } from '../investigation/editing';
 import { isValidSpId } from '../../electron/shared/super-productivity';
 import { parseAgentTourPayload } from '../../electron/shared/agent-tour';
-import { DEFAULT_TASK_NAME_MODEL, isTaskNameModelId } from '../../electron/shared/task-name-model';
+import {
+  DEFAULT_BRIEF_MODEL,
+  DEFAULT_TASK_NAME_MODEL,
+  isBriefModelId,
+  isTaskNameModelId,
+} from '../../electron/shared/task-name-model';
 
 /** A map that fails validation is kept aside rather than crashing load or being overwritten
  *  by the next save; the user is told once. */
@@ -476,6 +481,7 @@ export async function saveState(): Promise<void> {
     modelTaskNames: store.modelTaskNames,
     taskNameModel: store.taskNameModel,
     taskBriefs: store.taskBriefs || undefined,
+    briefModel: store.briefModel,
     reviewGuidance: store.reviewGuidance.trim() || undefined,
     showSidebarTips: store.showSidebarTips,
     showSidebarProgress: store.showSidebarProgress,
@@ -692,6 +698,7 @@ interface LegacyPersistedState {
   modelTaskNames?: unknown;
   taskNameModel?: unknown;
   taskBriefs?: unknown;
+  briefModel?: unknown;
   reviewGuidance?: unknown;
   showSidebarTips?: unknown;
   showSidebarProgress?: unknown;
@@ -969,6 +976,12 @@ export async function loadState(): Promise<void> {
         ? raw.taskNameModel
         : DEFAULT_TASK_NAME_MODEL;
       s.taskBriefs = raw.taskBriefs === true;
+      // Briefs used to follow the naming model, with Claude upgraded to Sonnet.
+      s.briefModel = isBriefModelId(raw.briefModel)
+        ? raw.briefModel
+        : raw.taskNameModel === 'luna'
+          ? 'luna'
+          : DEFAULT_BRIEF_MODEL;
       // Its predecessor confidencePrompt was an instruction to the task's agent, so it is not carried over.
       s.reviewGuidance =
         typeof raw.reviewGuidance === 'string' ? raw.reviewGuidance.slice(0, 4_000) : '';

@@ -194,6 +194,10 @@ export function TaskPanel(props: TaskPanelProps) {
       baseBranch: diffBaseBranch(),
       selectedCommit: selectedCommit(),
     });
+  // A task without agents has no turns to brief. Shown before the first brief
+  // too, so the header keeps one height while a task runs.
+  const showBrief = () => store.taskBriefs && props.task.agentIds.length > 0;
+
   const openOrGenerateTour = () => {
     markFeatureHintSeen('change-tour');
     if (tour.stops().length === 0) return generateTour();
@@ -608,20 +612,6 @@ export function TaskPanel(props: TaskPanelProps) {
         onSelectAgent={setActiveAgent}
         promptHandle={promptHandle}
         onTranscriptMarksReady={handleTranscriptMarks}
-        // Turning briefs off hides the whole card, Rate confidence included; a task
-        // without agents has no one to ask, unless a rating is already there.
-        brief={
-          <Show
-            when={store.taskBriefs && (props.task.agentIds.length > 0 || props.task.confidence)}
-          >
-            <TaskBriefBar
-              task={props.task}
-              onFileClick={(file) => setDiffScrollTarget(file)}
-              onWalkThrough={openOrGenerateTour}
-              walkThroughDisabled={changedFileCount() === 0}
-            />
-          </Show>
-        }
       />
     </div>
   );
@@ -961,7 +951,9 @@ export function TaskPanel(props: TaskPanelProps) {
       <div
         class="task-header-stack"
         style={{
-          flex: '0 0 66px',
+          // Grows with the brief, up to three lines: new content may move the
+          // output down, but nothing else changes the header's height.
+          flex: showBrief() ? '0 0 auto' : '0 0 66px',
           display: 'flex',
           'flex-direction': 'column',
           overflow: 'hidden',
@@ -969,7 +961,8 @@ export function TaskPanel(props: TaskPanelProps) {
       >
         {/* Title + branch bars live outside <Show> so they don't remount on layout flips. */}
         {/* 38px fits the title bar's single 30px row and its 8px vertical
-            padding. The stack total above is this plus the 28px branch bar. */}
+            padding. The stack total above is this plus the 28px branch bar,
+            and the brief while briefs are on. */}
         <div style={{ flex: '0 0 38px', overflow: 'hidden' }}>
           <TaskTitleBar
             task={props.task}
@@ -981,6 +974,16 @@ export function TaskPanel(props: TaskPanelProps) {
             onTitleEditRef={(h) => (titleEditHandle = h)}
           />
         </div>
+        {/* Directly under the title, as its subtitle: the brief describes the whole task. */}
+        <Show when={showBrief()}>
+          <div style={{ flex: '0 0 auto' }}>
+            <TaskBriefBar
+              task={props.task}
+              onWalkThrough={openOrGenerateTour}
+              walkThroughDisabled={changedFileCount() === 0}
+            />
+          </div>
+        </Show>
         <div style={{ flex: '0 0 28px', overflow: 'hidden' }}>
           <TaskBranchInfoBar
             task={props.task}

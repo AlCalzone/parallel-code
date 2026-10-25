@@ -14,7 +14,7 @@ import type { PersistedWindowState, TaskViewportVisibility } from './types';
 import { invoke } from '../lib/ipc';
 import { IPC } from '../../electron/ipc/channels';
 import { defaultAskCodeModel, type AskCodeProvider } from '../../electron/shared/ask-code-models';
-import type { TaskNameModelId } from '../../electron/shared/task-name-model';
+import type { BriefModelId, TaskNameModelId } from '../../electron/shared/task-name-model';
 
 // Set to true after loadCustomThemes() resolves. Sanitization of persisted slot
 // IDs is skipped until then so the startup reactive effect cannot null them out
@@ -183,6 +183,10 @@ export function setTaskNameModel(model: TaskNameModelId): void {
 
 export function setTaskBriefs(enabled: boolean): void {
   setStore('taskBriefs', enabled);
+}
+
+export function setBriefModel(model: BriefModelId): void {
+  setStore('briefModel', model);
 }
 
 export function setReviewGuidance(guidance: string): void {

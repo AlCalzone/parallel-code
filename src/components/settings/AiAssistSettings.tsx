@@ -4,13 +4,19 @@ import {
   type AskCodeProvider,
 } from '../../../electron/shared/ask-code-models';
 import { codexModels, loadCodexModels } from '../../lib/codex-models';
-import { TASK_NAME_MODELS, type TaskNameModelId } from '../../../electron/shared/task-name-model';
+import {
+  BRIEF_MODELS,
+  TASK_NAME_MODELS,
+  type BriefModelId,
+  type TaskNameModelId,
+} from '../../../electron/shared/task-name-model';
 import { theme } from '../../lib/theme';
 import {
   store,
   setModelTaskNames,
   setTaskNameModel,
   setTaskBriefs,
+  setBriefModel,
   setFinishReview,
   setReviewGuidance,
   setReviewModel,
@@ -37,6 +43,32 @@ const ASK_CODE_PROVIDER_HINTS: Record<AskCodeProvider, string> = {
     'Uses MiniMax M2.7 (204K context) via the OpenAI-compatible API — no Claude Code CLI required.',
 };
 
+function ModelSelect(props: {
+  label: string;
+  value: string;
+  choices: Record<string, { label: string }>;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <SettingsCard>
+      <label style={{ display: 'flex', 'align-items': 'center', gap: '10px' }}>
+        <span style={{ 'font-size': '13px', color: theme.fg, 'white-space': 'nowrap' }}>
+          {props.label}
+        </span>
+        <select
+          value={props.value}
+          onChange={(e) => props.onChange(e.currentTarget.value)}
+          style={{ flex: '1', ...settingsFieldStyle, 'font-size': '13px', cursor: 'pointer' }}
+        >
+          <For each={Object.entries(props.choices)}>
+            {([id, choice]) => <option value={id}>{choice.label}</option>}
+          </For>
+        </select>
+      </label>
+    </SettingsCard>
+  );
+}
+
 export function AiAssistSettings() {
   // The Codex model select is filled from the CLI's cache, read on first need.
   createEffect(() => {
@@ -56,30 +88,23 @@ export function AiAssistSettings() {
           label="Write task briefs"
           checked={store.taskBriefs}
           onChange={setTaskBriefs}
-          description="After each agent turn, a model summarises what needs you, what is open, what the agent decided and what changed, and flags claims the diff does not show. Uses Claude Sonnet when the model below is Claude. Sends the turn's prompts, the agent's last message and the diff to that model's provider"
+          description="After each agent turn, a model sums up the goal, the current step and anything the agent needs from you. Sends the turn's prompts, the agent's last message and the diff to that model's provider"
         />
-        <Show when={store.modelTaskNames || store.taskBriefs}>
-          <SettingsCard>
-            <label style={{ display: 'flex', 'align-items': 'center', gap: '10px' }}>
-              <span style={{ 'font-size': '13px', color: theme.fg, 'white-space': 'nowrap' }}>
-                Naming and briefs model
-              </span>
-              <select
-                value={store.taskNameModel}
-                onChange={(e) => setTaskNameModel(e.currentTarget.value as TaskNameModelId)}
-                style={{
-                  flex: '1',
-                  ...settingsFieldStyle,
-                  'font-size': '13px',
-                  cursor: 'pointer',
-                }}
-              >
-                <For each={Object.entries(TASK_NAME_MODELS)}>
-                  {([id, choice]) => <option value={id}>{choice.label}</option>}
-                </For>
-              </select>
-            </label>
-          </SettingsCard>
+        <Show when={store.modelTaskNames}>
+          <ModelSelect
+            label="Naming model"
+            value={store.taskNameModel}
+            choices={TASK_NAME_MODELS}
+            onChange={(id) => setTaskNameModel(id as TaskNameModelId)}
+          />
+        </Show>
+        <Show when={store.taskBriefs}>
+          <ModelSelect
+            label="Briefs model"
+            value={store.briefModel}
+            choices={BRIEF_MODELS}
+            onChange={(id) => setBriefModel(id as BriefModelId)}
+          />
         </Show>
       </SettingsSection>
       <SettingsSection title="Review">

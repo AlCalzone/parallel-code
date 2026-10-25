@@ -2003,6 +2003,22 @@ describe('code Q&A model persistence', () => {
     await loadState();
     expect(store.taskNameModel).toBe('haiku');
   });
+
+  it('keeps a chosen brief model and otherwise follows what briefs used before', async () => {
+    mockInvoke.mockResolvedValueOnce(stateJson({ briefModel: 'terra', taskNameModel: 'luna' }));
+    await loadState();
+    expect(store.briefModel).toBe('terra');
+    expect((await lastSaved()).briefModel).toBe('terra');
+
+    // Before the setting, Codex naming meant Codex briefs and Claude naming meant Sonnet.
+    mockInvoke.mockResolvedValueOnce(stateJson({ taskNameModel: 'luna' }));
+    await loadState();
+    expect(store.briefModel).toBe('luna');
+
+    mockInvoke.mockResolvedValueOnce(stateJson({ briefModel: 'gpt-4', taskNameModel: 'haiku' }));
+    await loadState();
+    expect(store.briefModel).toBe('sonnet');
+  });
 });
 
 describe('active task repair', () => {

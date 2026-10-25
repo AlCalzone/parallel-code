@@ -119,19 +119,9 @@ function baseTask(overrides: Partial<Task> = {}): Task {
     lastPrompt: '',
     gitIsolation: 'worktree',
     brief: {
-      brief: {
-        goal: 'Send people back after sign-in.',
-        headline: '',
-        unbacked: [],
-        changed: [{ text: 'Sign-in lands on the requested page.' }],
-        extra: [{ text: 'Renamed parseNext.' }],
-        open: [{ text: OPEN }],
-        decided: [{ text: 'Cookie lasts 5 minutes.' }],
-      },
+      brief: { goal: 'Send people back after sign-in.', now: '' },
       generatedAt: 2_000,
       fingerprint: 'same',
-      turns: [],
-      decisions: {},
     },
     confidence: {
       scores: [
@@ -148,7 +138,10 @@ function baseTask(overrides: Partial<Task> = {}): Task {
           verified: ['read the login form'],
         },
       ],
-      findings: [],
+      findings: [
+        { kind: 'gap', text: OPEN },
+        { kind: 'extra', text: 'Renamed parseNext.' },
+      ],
       publishedAt: 3_000,
       fingerprint: 'same',
     },
@@ -532,11 +525,8 @@ describe('ReviewSection', () => {
   /** A rating of the current code that finds nothing to act on. */
   function cleanTask(overrides: Partial<Task> = {}): Task {
     const task = baseTask({ codeFingerprint: { fingerprint: 'same', at: 4_000 }, ...overrides });
-    const brief = task.brief;
-    if (!brief) throw new Error('Missing brief');
     return {
       ...task,
-      brief: { ...brief, brief: { ...brief.brief, open: [], extra: [] } },
       confidence: {
         scores: [{ label: 'Correctness', score: 88, why: 'Tested.' }],
         findings: [],
@@ -602,19 +592,6 @@ describe('ReviewSection', () => {
     setState('codeFingerprint', { fingerprint: 'same', at: 4_000 });
     setState('reviewStatus', undefined);
     expect(toggle(root).getAttribute('aria-expanded')).toBe('true');
-  });
-
-  it('opens on its own for a claim the diff does not back, even unrated', () => {
-    const task = baseTask({ confidence: undefined });
-    const brief = task.brief;
-    if (!brief) throw new Error('Missing brief');
-    const unbacked = [{ text: 'Says the tests pass.' }];
-    const { root } = mount({ ...task, brief: { ...brief, brief: { ...brief.brief, unbacked } } });
-    expect(heading(root)).toBe('Review · 2 open risks');
-    expect(toggle(root).getAttribute('aria-expanded')).toBe('true');
-    expect(root.textContent).toContain('Says the tests pass.');
-    button(root, 'Run review').click();
-    expect(mockRate).toHaveBeenCalledWith('task');
   });
 
   it('collects picks into one staged rework prompt', () => {
@@ -706,10 +683,13 @@ describe('ReviewSection', () => {
 
   it('folds long lists behind a show-more button', () => {
     const task = baseTask();
-    const brief = task.brief;
-    if (!brief) throw new Error('Missing brief');
-    const extra = Array.from({ length: 7 }, (_, i) => ({ text: `Extra ${i}.` }));
-    const { root } = mount({ ...task, brief: { ...brief, brief: { ...brief.brief, extra } } });
+    const confidence = task.confidence;
+    if (!confidence) throw new Error('Missing confidence');
+    const findings = Array.from({ length: 7 }, (_, i) => ({
+      kind: 'extra' as const,
+      text: `Extra ${i}.`,
+    }));
+    const { root } = mount({ ...task, confidence: { ...confidence, findings } });
     expand(root);
     expect(buttons(root).filter((b) => b.textContent?.includes('Revert'))).toHaveLength(5);
     button(root, 'Show 2 more').click();
@@ -731,11 +711,8 @@ describe('ReviewSection', () => {
 
   it('shows no rework footer when there is nothing to pick', () => {
     const task = baseTask();
-    const brief = task.brief;
-    if (!brief) throw new Error('Missing brief');
     const { root } = mount({
       ...task,
-      brief: { ...brief, brief: { ...brief.brief, open: [], extra: [] } },
       confidence: { ...task.confidence, scores: [], findings: [], publishedAt: 3_000 },
     });
     expand(root);

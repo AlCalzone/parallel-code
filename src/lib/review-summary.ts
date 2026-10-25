@@ -27,8 +27,6 @@ export interface ReviewItem {
 }
 
 export interface ReviewRisk extends ReviewItem {
-  /** A claim the diff does not back: the one kind of risk that is marked. */
-  urgent: boolean;
   dismissed: boolean;
 }
 
@@ -81,14 +79,6 @@ export function reviewItemId(kind: ReviewItemKind, text: string): string {
   return `${kind}:${text.replace(/\s+/g, ' ').trim().toLowerCase()}`;
 }
 
-/** Whether a brief or rating item was set aside in the review. */
-export function isRiskDismissed(
-  dismissed: Record<string, ReviewDismissal> | undefined,
-  text: string,
-): boolean {
-  return !!dismissed && Object.hasOwn(dismissed, reviewItemId('risk', text));
-}
-
 function item(
   kind: ReviewItemKind,
   text: string,
@@ -137,24 +127,11 @@ export function buildReviewSummary(input: ReviewSummaryInput): ReviewSummary {
   const brief = input.brief?.brief;
   const findings = input.confidence?.findings ?? [];
   const dismissed = input.dismissed;
-  const risk = (entry: ReviewItem, urgent: boolean): ReviewRisk => ({
+  const risk = (entry: ReviewItem): ReviewRisk => ({
     ...entry,
-    urgent,
     dismissed: !!dismissed && Object.hasOwn(dismissed, entry.id),
   });
   const risks = dedupe([
-    ...(brief?.unbacked ?? []).map((entry) =>
-      risk(
-        item(
-          'risk',
-          entry.text,
-          'The agent says so, but the diff doesn’t show it',
-          `Back up or correct this claim: ${entry.text}`,
-          { file: entry.file },
-        ),
-        true,
-      ),
-    ),
     ...findings
       .filter((finding) => finding.kind === 'risk' || finding.kind === 'gap')
       .map((finding) =>
@@ -170,17 +147,8 @@ export function buildReviewSummary(input: ReviewSummaryInput): ReviewSummary {
               : `Address this risk: ${finding.text}`,
             { file: finding.file, axis: finding.axis },
           ),
-          false,
         ),
       ),
-    ...(brief?.open ?? []).map((entry) =>
-      risk(
-        item('risk', entry.text, 'Still open, from the brief', `Finish this: ${entry.text}`, {
-          file: entry.file,
-        }),
-        false,
-      ),
-    ),
   ]);
   // The reviewer reads every prompt, so its reading of the ask wins over a brief's.
   const goal = input.confidence?.asked ?? brief?.goal;
@@ -192,15 +160,6 @@ export function buildReviewSummary(input: ReviewSummaryInput): ReviewSummary {
     risks,
     openRisks: risks.filter((entry) => !entry.dismissed).length,
     extras: dedupe([
-      ...(brief?.extra ?? []).map((entry) =>
-        item(
-          'extra',
-          entry.text,
-          'Not asked for',
-          `Revert this, I didn’t ask for it: ${entry.text}`,
-          { file: entry.file },
-        ),
-      ),
       ...findings
         .filter((finding) => finding.kind === 'extra')
         .map((finding) =>

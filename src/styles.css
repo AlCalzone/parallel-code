@@ -2574,7 +2574,8 @@ textarea::placeholder {
   --task-row-indent: 36px;
 }
 
-/* The brief card is routine, so it is filled only when hovered or open. */
+/* The brief line is routine: it shows its fill and chevron only when hovered or
+   open. The chevron fades rather than appearing, so the text never shifts. */
 .task-brief-bar {
   background: transparent;
 }
@@ -2582,40 +2583,22 @@ textarea::placeholder {
 .task-brief-bar[aria-expanded='true'] {
   background: var(--bg-elevated);
 }
-
-/* File chips repeat what the changed-files list shows and crowd the text, so
-   they float over the row's right edge on hover or keyboard focus. Taken out of
-   flow so revealing them never reflows the card; transparent rather than
-   display:none so they stay focusable. */
-.brief-item {
-  position: relative;
+/* Tinted only when the agent waits on the user; hover still darkens it. */
+.task-brief-bar[data-urgent] {
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
 }
-.brief-item .brief-item-file {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 1;
-  background: var(--bg-elevated) !important; /* beats the chip's inline transparent */
+.task-brief-bar[data-urgent]:hover,
+.task-brief-bar[data-urgent][aria-expanded='true'] {
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+}
+.task-brief-chevron {
   opacity: 0;
-  pointer-events: none;
+  transition: opacity var(--motion-fast) var(--ease-out);
 }
-.brief-item:is(:hover, :focus-within) .brief-item-file {
+.task-brief-bar:hover .task-brief-chevron,
+.task-brief-bar:focus-visible .task-brief-chevron,
+.task-brief-bar[aria-expanded='true'] .task-brief-chevron {
   opacity: 1;
-  pointer-events: auto;
-}
-
-/* Decision Keep/Change buttons appear the same way, so open decisions read as
-   text rather than a wall of buttons. They stay in flow, unlike the chips: an
-   overlay would cover the decision being judged, and swapping it for the
-   shorter "Kept" line would pull the rows below up by a whole row. */
-.brief-item .brief-item-actions {
-  opacity: 0;
-  pointer-events: none;
-}
-.brief-item:is(:hover, :focus-within) .brief-item-actions {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 /* Task names wrap to two lines rather than being cut mid-word — at sidebar
@@ -6198,6 +6181,7 @@ button.tour-save-state:not(:disabled):hover {
 
 /* Keep reduced-motion overrides last so class-based rules win by source order. */
 @media (prefers-reduced-motion: reduce) {
+  .task-brief-chevron,
   .projects-collapser {
     transition: none;
   }

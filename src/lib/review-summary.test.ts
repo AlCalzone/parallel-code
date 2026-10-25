@@ -3,7 +3,6 @@ import {
   buildReviewSummary,
   buildReworkPrompt,
   capReviewDismissals,
-  isRiskDismissed,
   restoreReviewDismissed,
   reviewItemId,
   reviewVerdict,
@@ -16,17 +15,10 @@ import type { TaskConfidence } from './task-confidence';
 const brief: TaskBriefRecord = {
   brief: {
     goal: 'Send people back to where they came from after sign-in.',
-    headline: 'Check remember-me',
-    unbacked: [{ text: 'Session cookie is cleared after the redirect.' }],
-    changed: [{ text: 'Sign-in lands on the requested page.', file: 'src/auth/redirect.ts' }],
-    extra: [{ text: 'Renamed parseNext to readReturnUrl.' }],
-    open: [{ text: 'Remember-me path not handled.' }],
-    decided: [{ text: 'Fallback cookie lasts 5 minutes.' }, { text: 'Kept the old route.' }],
+    now: 'Redirect works; remember-me next.',
   },
   generatedAt: 2_000,
   fingerprint: 'new',
-  turns: [],
-  decisions: { 'Kept the old route.': 'kept' },
 };
 
 const confidence: TaskConfidence = {
@@ -50,20 +42,18 @@ const confidence: TaskConfidence = {
 };
 
 describe('buildReviewSummary', () => {
-  it('collects risks from unbacked claims, rating findings and open items, without repeats', () => {
+  it("collects risks and gaps from the rating, with the brief's goal", () => {
     const summary = buildReviewSummary({ brief, confidence });
     expect(summary.goal).toBe(brief.brief.goal);
-    expect(summary.risks.map((risk) => [risk.text, risk.urgent])).toEqual([
-      ['Session cookie is cleared after the redirect.', true],
-      ['Not tried against a real OAuth provider.', false],
-      ['Remember-me path not handled.', false],
+    expect(summary.risks.map((risk) => risk.text)).toEqual([
+      'Not tried against a real OAuth provider.',
+      'Remember-me path not handled.',
     ]);
-    // The gap found by the rating wins over the same open item, so it keeps its file.
-    expect(summary.risks[2]).toMatchObject({
+    expect(summary.risks[1]).toMatchObject({
       source: 'Gap found by the confidence check',
       file: 'src/auth/remember.ts',
     });
-    expect(summary.openRisks).toBe(3);
+    expect(summary.openRisks).toBe(2);
   });
 
   it('takes what was asked, the changes and the key line from the reviewer, without a brief', () => {
@@ -83,7 +73,7 @@ describe('buildReviewSummary', () => {
     expect(buildReviewSummary({ brief, confidence: reviewed }).goal).toBe(reviewed.asked);
   });
 
-  it('merges extras from both sources', () => {
+  it('takes extras from the rating', () => {
     const summary = buildReviewSummary({ brief, confidence });
     expect(summary.extras.map((entry) => entry.text)).toEqual([
       'Renamed parseNext to readReturnUrl.',
@@ -99,8 +89,8 @@ describe('buildReviewSummary', () => {
         [id]: { text: 'Not tried against a real OAuth provider.', reason: 'CI does it' },
       },
     });
-    expect(summary.risks.map((risk) => risk.dismissed)).toEqual([false, true, false]);
-    expect(summary.openRisks).toBe(2);
+    expect(summary.risks.map((risk) => risk.dismissed)).toEqual([true, false]);
+    expect(summary.openRisks).toBe(1);
   });
 
   it('leads with the weakest score and judges staleness by the newest code read', () => {
@@ -137,9 +127,12 @@ describe('buildReviewSummary', () => {
       reviewItemId('risk', 'no real provider.'),
     );
     const twice = buildReviewSummary({
-      brief: {
-        ...brief,
-        brief: { ...brief.brief, extra: [{ text: 'Used X.' }, { text: 'used  x.' }] },
+      confidence: {
+        ...confidence,
+        findings: [
+          { kind: 'extra', text: 'Used X.' },
+          { kind: 'extra', text: 'used  x.' },
+        ],
       },
     });
     expect(twice.extras).toHaveLength(1);
@@ -149,7 +142,7 @@ describe('buildReviewSummary', () => {
 describe('reviewVerdict', () => {
   it('gives the weakest score and the open count', () => {
     const summary = buildReviewSummary({ brief, confidence });
-    expect(reviewVerdict(summary)).toBe('50% · 3 open');
+    expect(reviewVerdict(summary)).toBe('50% · 2 open');
   });
 
   it('says when nothing has reviewed the task yet', () => {
@@ -166,23 +159,23 @@ describe('reviewVerdict', () => {
   });
 
   it('does not read as clear before anything rated the task', () => {
-    const quiet = { ...brief, brief: { ...brief.brief, unbacked: [], open: [] } };
-    expect(reviewVerdict(buildReviewSummary({ brief: quiet }))).toBe('Not rated yet');
-    expect(reviewVerdict(buildReviewSummary({ brief }))).toBe('2 open risks');
+    expect(reviewVerdict(buildReviewSummary({ brief }))).toBe('Not rated yet');
+    const unscored = { ...confidence, scores: [] };
+    expect(reviewVerdict(buildReviewSummary({ brief, confidence: unscored }))).toBe('2 open risks');
   });
 });
 
 describe('prompts', () => {
   it('builds one rework prompt from the picked items', () => {
     const summary = buildReviewSummary({ brief, confidence });
-    const prompt = buildReworkPrompt([summary.risks[2], summary.extras[0]]);
+    const prompt = buildReworkPrompt([summary.risks[1], summary.extras[0]]);
     expect(prompt).toMatch(
       /^Please rework this task based on my review:\n\n- Fill this gap: Remember-me path not handled\. \(src\/auth\/remember\.ts\)\n- Revert this, I didn’t ask for it: Renamed parseNext to readReturnUrl\.\n\n/,
     );
   });
 
   it('asks the agent to check each item before changing code for it', () => {
-    const prompt = buildReworkPrompt([buildReviewSummary({ brief, confidence }).risks[2]]);
+    const prompt = buildReworkPrompt([buildReviewSummary({ brief, confidence }).risks[1]]);
     expect(prompt).toContain('check it first');
     expect(prompt).toContain('failing test first');
     expect(prompt).toContain('break the code, watch the test fail, then restore it');
@@ -237,12 +230,5 @@ describe('dismissal records', () => {
         'risk:a'
       ],
     ).toEqual({ text: 'x'.repeat(240), reason: 'y'.repeat(300) });
-  });
-
-  it('tells whether a brief item was set aside', () => {
-    const dismissed = { [reviewItemId('risk', 'No real provider.')]: { text: 'x', reason: '' } };
-    expect(isRiskDismissed(dismissed, 'No real provider.')).toBe(true);
-    expect(isRiskDismissed(dismissed, 'Something else.')).toBe(false);
-    expect(isRiskDismissed(undefined, 'No real provider.')).toBe(false);
   });
 });

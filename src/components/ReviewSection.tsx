@@ -159,8 +159,8 @@ function Folded(props: { ids: string[]; children: (id: string) => JSX.Element })
 /**
  * The review half of finishing a task, one follow-up box until asked for.
  * Run review asks a separate reviewer model for a confidence rating; the result lists what is
- * still a risk and what was done without being asked, built from the brief
- * and the rating. Items can be collected into one rework prompt, which is
+ * still a risk and what was done without being asked, built from the brief's
+ * goal and the rating. Items can be collected into one rework prompt, which is
  * staged in the task input for the user to send. Opening the dialog sends
  * nothing.
  */
@@ -198,16 +198,14 @@ export function ReviewSection(props: {
   });
   const risk = (id: string) => byId().get(id) as ReviewRisk | undefined;
 
-  // A claim the diff does not back needs a look even before anything was rated.
-  const urgent = () => summary().risks.some((entry) => entry.urgent && !entry.dismissed);
-  const hasResult = () => !!props.task.confidence || urgent();
+  const hasResult = () => !!props.task.confidence;
   const running = () => props.task.reviewStatus?.state === 'running';
   const failure = () => {
     const status = props.task.reviewStatus;
     return status?.state === 'failed' ? status.message : undefined;
   };
   // Folded by default, so the merge controls stay in reach: the button's verdict
-  // says enough. Only an urgent review opens as the dialog opens; later changes
+  // says enough. Only an unseen, current review opens as the dialog opens; later changes
   // leave it as the user set it, so nothing collapses under them.
   const current = () => {
     const scores = summary().scores;
@@ -215,7 +213,7 @@ export function ReviewSection(props: {
   };
   // A review that finished while the dialog was closed opens too: the user asked for it.
   const [open, setOpenSignal] = createSignal(
-    untrack(() => (takeUnseenReview(props.task.id) && current()) || urgent()),
+    untrack(() => takeUnseenReview(props.task.id) && current()),
   );
   let userToggled = false;
   const setOpen = (next: boolean | ((prev: boolean) => boolean)) => {
@@ -310,9 +308,6 @@ export function ReviewSection(props: {
     if (hasResult()) return open() ? 'Hide the review' : 'Show the review';
     return `Checks the work against what you asked, with ${reviewerName(props.task.id)}`;
   };
-  // A verify failure is said by the readiness row above, so only the review's own urgency warns here.
-  const warn = () => hasResult() && !running() && urgent();
-
   const RiskRow = (rowProps: { id: string }) => {
     const textId = createUniqueId();
     const entry = () => risk(rowProps.id);
@@ -328,13 +323,8 @@ export function ReviewSection(props: {
               <span id={textId} style={{ color: r().dismissed ? theme.fgMuted : theme.fg }}>
                 {r().text}
               </span>
-              <Show when={r().urgent || r().dismissed || r().file}>
+              <Show when={r().dismissed || r().file}>
                 <span style={{ 'font-size': sf(12), color: theme.fgSubtle }}>
-                  <Show when={!r().dismissed && r().urgent}>
-                    {/* An unbacked claim is the one kind of risk worth colour. */}
-                    <span style={{ color: theme.warning }}>{r().source}</span>
-                    <Show when={r().file}> · </Show>
-                  </Show>
                   {[r().dismissed && 'Accepted', r().file].filter(Boolean).join(' · ')}
                 </span>
               </Show>
@@ -443,9 +433,7 @@ export function ReviewSection(props: {
           gap: '22px',
           'margin-top': '8px',
           padding: '18px 20px',
-          border: `1px solid ${
-            urgent() ? `color-mix(in srgb, ${theme.warning} 55%, ${theme.border})` : theme.border
-          }`,
+          border: `1px solid ${theme.border}`,
           'border-radius': 'var(--radius-md)',
         }}
       >
@@ -609,7 +597,6 @@ export function ReviewSection(props: {
           <button
             type="button"
             class="change-tour-action"
-            style={{ color: warn() ? theme.warning : undefined }}
             aria-expanded={actionToggles() ? open() || picking() : undefined}
             aria-controls={actionToggles() && !picking() ? bodyId : undefined}
             title={actionTitle()}

@@ -572,16 +572,6 @@ export function ActivityIcon(props: IconProps): JSX.Element {
   );
 }
 
-export function TargetIcon(props: IconProps): JSX.Element {
-  return (
-    <SvgIcon {...props}>
-      <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5" />
-      <circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.5" />
-      <circle cx="8" cy="8" r="1" />
-    </SvgIcon>
-  );
-}
-
 export function CircleCheckIcon(props: IconProps): JSX.Element {
   return (
     <SvgIcon {...props}>

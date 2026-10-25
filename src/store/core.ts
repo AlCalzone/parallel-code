@@ -2,7 +2,10 @@ import { createStore } from 'solid-js/store';
 import { DEFAULT_TERMINAL_FONT } from '../lib/fonts';
 import { getLocalDateKey } from '../lib/date';
 import { defaultPresetForTone } from '../lib/look';
-import { DEFAULT_TASK_NAME_MODEL } from '../../electron/shared/task-name-model';
+import {
+  DEFAULT_BRIEF_MODEL,
+  DEFAULT_TASK_NAME_MODEL,
+} from '../../electron/shared/task-name-model';
 import { DEFAULT_REVIEW_MODEL } from '../lib/task-review';
 import type { AppStore, UsageState } from './types';
 
@@ -72,6 +75,7 @@ export const [store, setStore] = createStore<AppStore>({
   modelTaskNames: false,
   taskNameModel: DEFAULT_TASK_NAME_MODEL,
   taskBriefs: false,
+  briefModel: DEFAULT_BRIEF_MODEL,
   reviewGuidance: '',
   showSidebarTips: true,
   showSidebarProgress: true,

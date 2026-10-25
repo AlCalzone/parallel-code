@@ -195,7 +195,7 @@ export const CONFIDENCE_TOOLS: ToolDef[] = [
   {
     name: 'confidence_publish',
     description:
-      'Publish a confidence rating of the current changes on your task. The app shows it on the task brief and marks it out of date once the code changes after it. ' +
+      'Publish a confidence rating of the current changes on your task. The app shows it in the Finish dialog review and marks it out of date once the code changes after it. ' +
       'Use it when the user asks you to rate your confidence, or as the last step of a rating or review skill. Do not change code while rating. ' +
       `Send ${confidenceCaps.minScores} to ${confidenceCaps.maxScores} scores; name them as your rating defines them (one "Confidence" score, or dimensions such as "Correct", "Complete", "Minimal"). ` +
       `A score is {label (at most ${confidenceCaps.label} characters), score (0-100), why (one line, at most ${confidenceCaps.why} characters: what keeps it from being higher), verified? (at most ${confidenceCaps.maxVerified} short items, at most ${confidenceCaps.verified} characters each: what you checked directly that backs the score)}. ` +
