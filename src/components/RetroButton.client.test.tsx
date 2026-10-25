@@ -5,7 +5,7 @@ import { setStore, store } from '../store/core';
 import { sendPrompt } from '../store/tasks';
 import { isAgentIdle } from '../store/taskStatus';
 import type { Agent, Task } from '../store/types';
-import { RETRO_PROMPT, RetroButton } from './RetroButton';
+import { RETRO_PROMPT, RetroButton, closeRetroPrompt } from './RetroButton';
 
 vi.mock('../lib/ipc', () => ({ invoke: vi.fn(), fireAndForget: vi.fn() }));
 vi.mock('../store/persistence', () => ({ saveState: vi.fn(() => Promise.resolve()) }));
@@ -109,4 +109,10 @@ it('keeps keyboard focus when the confirmation opens and closes', () => {
   expect(document.activeElement).toBe(button('Cancel'));
   button('Cancel').click();
   expect(document.activeElement).toBe(button('Retro'));
+});
+
+it('warns the close retro about the deleted worktree only when close deletes it', () => {
+  expect(closeRetroPrompt(true)).toContain('worktree will be deleted');
+  expect(closeRetroPrompt(false)).not.toContain('worktree will be deleted');
+  expect(closeRetroPrompt(false)).toContain('before the task is closed');
 });

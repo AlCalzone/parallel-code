@@ -9,21 +9,40 @@ import { sendPrompt } from '../store/tasks';
 import type { Task } from '../store/types';
 import { IdeaIcon } from './icons';
 
+const RETRO_STEPS = `1. Look back at where you or I lost time: failed or repeated commands, wrong assumptions, missing or misleading instructions, slow or flaky checks, permission prompts, and manual steps that could be scripted.
+2. For each real problem, propose one concrete change to our tooling, such as project instructions (AGENTS.md, CLAUDE.md), agent settings or hooks, skills or commands, scripts, tests, or checks. Name the file and show the exact edit.
+3. Rank the proposals by the time they would save. Skip one-off problems that are unlikely to recur.`;
+
+const RETRO_END = `Apply nothing yet; I will tell you which proposals to apply. If the session went smoothly, say so in one line instead of inventing problems.`;
+
 /** Built in rather than a skill, so it works for every agent and every user. */
 export const RETRO_PROMPT = `Run a short retrospective on this session before the task is merged.
 
-1. Look back at where you or I lost time: failed or repeated commands, wrong assumptions, missing or misleading instructions, slow or flaky checks, permission prompts, and manual steps that could be scripted.
-2. For each real problem, propose one concrete change to our tooling, such as project instructions (AGENTS.md, CLAUDE.md), agent settings or hooks, skills or commands, scripts, tests, or checks. Name the file and show the exact edit.
-3. Rank the proposals by the time they would save. Skip one-off problems that are unlikely to recur.
+${RETRO_STEPS}
 
-Apply nothing yet; I will tell you which proposals to apply. If the session went smoothly, say so in one line instead of inventing problems.`;
+${RETRO_END}`;
 
 /**
- * "Before you merge" step that asks the task's main agent for a retrospective.
+ * The retro for a task about to be closed unmerged. Edits applied in a worktree
+ * that close deletes would vanish with it, so the agent is told where they go.
+ */
+export function closeRetroPrompt(deletesWorktree: boolean): string {
+  const target = deletesWorktree
+    ? `\n\nThis task's worktree will be deleted when it closes, so edits made in it would be lost. When I ask you to apply a change to project files, make it in the main checkout instead, or print them for me to carry over; files outside this worktree, such as global agent instructions, can be edited directly.`
+    : '';
+  return `Run a short retrospective on this session before the task is closed.
+
+${RETRO_STEPS}${target}
+
+${RETRO_END}`;
+}
+
+/**
+ * Finish and Close step that asks the task's main agent for a retrospective.
  * The prompt goes to a live session the user may be using, so a click first
  * says where it goes and holds the send while the agent is busy or input is unsent.
  */
-export function RetroButton(props: { task: Task; onSent: () => void }) {
+export function RetroButton(props: { task: Task; prompt?: string; onSent: () => void }) {
   const [confirming, setConfirming] = createSignal(false);
   const [sending, setSending] = createSignal(false);
   const agentId = () => props.task.agentIds[0];
@@ -45,7 +64,9 @@ export function RetroButton(props: { task: Task; onSent: () => void }) {
     if (!id || blocker()) return;
     setSending(true);
     try {
-      await sendPrompt(props.task.id, id, RETRO_PROMPT, { appPrompt: true });
+      await sendPrompt(props.task.id, id, props.prompt ?? RETRO_PROMPT, {
+        appPrompt: true,
+      });
       showNotification(`Retro sent to ${agentName()}.`);
       props.onSent();
     } catch (err) {

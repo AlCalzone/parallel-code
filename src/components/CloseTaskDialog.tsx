@@ -6,6 +6,7 @@ import { store } from '../store/core';
 import { boardSidePanelOpen } from '../store/project-pages';
 import { closeSidePanel } from './BoardSidePanel';
 import { ConfirmDialog } from './ConfirmDialog';
+import { RetroButton, closeRetroPrompt } from './RetroButton';
 import { theme, bannerStyle } from '../lib/theme';
 import type { Task } from '../store/types';
 import type { WorktreeStatus } from '../ipc/types';
@@ -41,6 +42,12 @@ export function CloseTaskDialog(props: CloseTaskDialogProps) {
   );
   const confirmWaitingForStatus = () =>
     shouldDisableCloseTaskConfirm(props.task, worktreeStatus.loading);
+  const deletesWorktree = () =>
+    props.task.gitIsolation === 'worktree' && !props.task.externalWorktree;
+  const agentRunning = () => {
+    const id = props.task.agentIds[0];
+    return !!id && store.agents[id]?.status === 'running';
+  };
 
   return (
     <ConfirmDialog
@@ -155,6 +162,17 @@ export function CloseTaskDialog(props: CloseTaskDialogProps) {
                 </>
               );
             })()}
+          </Show>
+          {/* Abandoned sessions are where the most time was lost, and they never reach Finish. */}
+          <Show when={agentRunning()}>
+            <div style={{ 'margin-top': '16px' }}>
+              <RetroButton
+                task={props.task}
+                prompt={closeRetroPrompt(deletesWorktree())}
+                // The retro happens in the agent's session, so the task stays open.
+                onSent={() => props.onDone()}
+              />
+            </div>
           </Show>
         </div>
       }
