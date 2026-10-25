@@ -909,60 +909,63 @@ function App() {
 
   return (
     <ErrorBoundary
-      fallback={(err, reset) => (
-        <div
-          style={{
-            width: '100vw',
-            height: '100vh',
-            display: 'flex',
-            'flex-direction': 'column',
-            'align-items': 'center',
-            'justify-content': 'center',
-            gap: '16px',
-            background: theme.bg,
-            color: theme.fg,
-            'font-family': "var(--font-ui, 'Sora', sans-serif)",
-          }}
-        >
+      fallback={(err, reset) => {
+        const stale = isStaleBuildError(err);
+        return (
           <div
             style={{
-              'font-size': '19px',
-              'font-weight': '600',
-              color: isStaleBuildError(err) ? theme.fg : theme.error,
-            }}
-          >
-            {isStaleBuildError(err) ? 'Parallel Code was updated' : 'Something went wrong'}
-          </div>
-          <div
-            style={{
-              'max-width': '500px',
-              'text-align': 'center',
-              color: theme.fgMuted,
-              'word-break': 'break-word',
-            }}
-          >
-            {isStaleBuildError(err)
-              ? 'A newer version was installed while the app was running. Restart to load it.'
-              : String(err)}
-          </div>
-          <button
-            class="btn-with-icon"
-            onClick={() => (isStaleBuildError(err) ? restartApp() : reset())}
-            style={{
-              background: theme.bgElevated,
-              border: `1px solid ${theme.border}`,
+              width: '100vw',
+              height: '100vh',
+              display: 'flex',
+              'flex-direction': 'column',
+              'align-items': 'center',
+              'justify-content': 'center',
+              gap: '16px',
+              background: theme.bg,
               color: theme.fg,
-              padding: '8px 24px',
-              'border-radius': 'var(--radius-md)',
-              cursor: 'pointer',
-              'font-size': '15px',
+              'font-family': "var(--font-ui, 'Sora', sans-serif)",
             }}
           >
-            <SyncIcon size={14} />
-            {isStaleBuildError(err) ? 'Restart' : 'Reload'}
-          </button>
-        </div>
-      )}
+            <div
+              style={{
+                'font-size': '19px',
+                'font-weight': '600',
+                color: stale ? theme.fg : theme.error,
+              }}
+            >
+              {stale ? 'Parallel Code was updated' : 'Something went wrong'}
+            </div>
+            <div
+              style={{
+                'max-width': '500px',
+                'text-align': 'center',
+                color: theme.fgMuted,
+                'word-break': 'break-word',
+              }}
+            >
+              {stale
+                ? 'A newer version was installed while the app was running. Restart to load it.'
+                : String(err)}
+            </div>
+            <button
+              class="btn-with-icon"
+              onClick={() => (stale ? restartApp() : reset())}
+              style={{
+                background: theme.bgElevated,
+                border: `1px solid ${theme.border}`,
+                color: theme.fg,
+                padding: '8px 24px',
+                'border-radius': 'var(--radius-md)',
+                cursor: 'pointer',
+                'font-size': '15px',
+              }}
+            >
+              <SyncIcon size={14} />
+              {stale ? 'Restart' : 'Reload'}
+            </button>
+          </div>
+        );
+      }}
     >
       <div
         ref={mainRef}
