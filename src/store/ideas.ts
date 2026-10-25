@@ -49,6 +49,13 @@ export function defaultIdeaProject(): string | null {
   return taskProjectFilter() ?? (lastExists ? last : null);
 }
 
+/** Rewrites an idea's text; an empty edit keeps the old text. */
+export function updateTaskIdea(id: string, text: string): void {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  setStore('taskIdeas', (idea) => idea.id === id, 'text', trimmed);
+}
+
 export function removeTaskIdea(id: string): void {
   setStore('taskIdeas', (ideas) => ideas.filter((idea) => idea.id !== id));
 }

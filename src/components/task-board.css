@@ -219,7 +219,7 @@
 .task-board-card.task-board-idea:hover {
   background: color-mix(in srgb, var(--fg) 4%, transparent);
 }
-.task-board-card.task-board-idea:has(.task-board-title:focus) {
+.task-board-card.task-board-idea:has(.task-board-title:focus, .task-board-idea-edit:focus) {
   box-shadow: inset 0 0 0 1px var(--border-focus);
 }
 .task-board-idea .task-board-title {
@@ -228,6 +228,29 @@
 .task-board-idea .task-board-name {
   white-space: pre-line;
   -webkit-line-clamp: 4;
+}
+/* The field takes the name's place and type, so opening it moves nothing. */
+.task-board-idea-editor {
+  cursor: text;
+}
+.task-board-idea-editor::after {
+  content: none;
+}
+.task-board-idea-edit {
+  flex: 1;
+  min-width: 0;
+  /* The name's four-line clamp; longer ideas scroll instead of growing the card. */
+  max-height: 72px;
+  field-sizing: content;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  resize: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  outline: none;
 }
 .task-board-idea-ring {
   width: 8px;

@@ -47,6 +47,23 @@ const typeIdea = (text: string) => {
     new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
   );
 };
+const editField = () => {
+  const input = document.querySelector<HTMLTextAreaElement>('.task-board-idea-edit');
+  if (!input) throw new Error('no edit field');
+  return input;
+};
+const mouse = (target: Element | undefined, type: string, detail: number) =>
+  target?.dispatchEvent(new MouseEvent(type, { detail, bubbles: true, cancelable: true }));
+const key = (target: Element, name: string, init: KeyboardEventInit = {}) => {
+  const event = new KeyboardEvent('keydown', {
+    key: name,
+    bubbles: true,
+    cancelable: true,
+    ...init,
+  });
+  target.dispatchEvent(event);
+  return event;
+};
 const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
 
 beforeEach(() => {
@@ -117,9 +134,65 @@ describe('Ideas', () => {
     mount();
     button('Delete idea: Faster search')?.click();
     expect(store.taskIdeas.map((idea) => idea.text)).toEqual(['Offline sync']);
-    button('Start a task from idea: Offline sync')?.click();
+    // A double-click's first click opens the editor; the double-click starts.
+    mouse(button('Edit idea: Offline sync'), 'click', 1);
+    mouse(editField(), 'dblclick', 2);
     expect(store.newTaskPrefillPrompt).toMatchObject({ prompt: 'Offline sync' });
     expect(store.showNewTaskPanel).toBe(true);
+    expect(document.querySelector('.task-board-idea-edit')).toBeNull();
+  });
+
+  it('edits an idea in place on click, saving on Enter and keeping it on Escape', () => {
+    addTaskIdea('Offline sync', null);
+    mount();
+    mouse(button('Edit idea: Offline sync'), 'click', 1);
+    expect(document.activeElement).toBe(editField());
+    editField().value = 'Offline sync\nfor notes';
+    const shiftEnter = key(editField(), 'Enter', { shiftKey: true });
+    expect(shiftEnter.defaultPrevented).toBe(false);
+    key(editField(), 'Enter');
+    expect(store.taskIdeas.map((idea) => idea.text)).toEqual(['Offline sync\nfor notes']);
+    expect(store.showNewTaskPanel).toBe(false);
+    expect(document.activeElement).toBe(button('Edit idea: Offline sync\nfor notes'));
+
+    button('Edit idea: Offline sync\nfor notes')?.click();
+    editField().value = 'Something else';
+    key(editField(), 'Escape');
+    expect(document.querySelector('.task-board-idea-edit')).toBeNull();
+    expect(document.activeElement).toBe(button('Edit idea: Offline sync\nfor notes'));
+    expect(store.taskIdeas.map((idea) => idea.text)).toEqual(['Offline sync\nfor notes']);
+  });
+
+  it('saves an edit when the field loses focus, and ignores an emptied one', () => {
+    addTaskIdea('Offline sync', null);
+    mount();
+    button('Edit idea: Offline sync')?.click();
+    editField().value = 'Faster sync';
+    editField().blur();
+    expect(store.taskIdeas.map((idea) => idea.text)).toEqual(['Faster sync']);
+    button('Edit idea: Faster sync')?.click();
+    editField().value = '   ';
+    key(editField(), 'Enter');
+    expect(store.taskIdeas.map((idea) => idea.text)).toEqual(['Faster sync']);
+  });
+
+  it('opens the editor from the keyboard without arming a double-click start', () => {
+    addTaskIdea('Offline sync', null);
+    mount();
+    mouse(button('Edit idea: Offline sync'), 'click', 0);
+    mouse(editField(), 'dblclick', 2);
+    expect(store.showNewTaskPanel).toBe(false);
+    expect(document.querySelector('.task-board-idea-edit')).not.toBeNull();
+  });
+
+  it('selects a word on a double-click inside an open editor instead of starting', () => {
+    addTaskIdea('Offline sync', null);
+    mount();
+    mouse(button('Edit idea: Offline sync'), 'click', 1);
+    mouse(editField(), 'mousedown', 1);
+    mouse(editField(), 'dblclick', 2);
+    expect(store.showNewTaskPanel).toBe(false);
+    expect(document.querySelector('.task-board-idea-edit')).not.toBeNull();
   });
 
   it("starts a task from the card's start button", () => {
@@ -134,11 +207,11 @@ describe('Ideas', () => {
     addTaskIdea('Offline sync', null);
     addTaskIdea('Faster search', null);
     mount();
-    const first = button('Start a task from idea: Faster search');
+    const first = button('Edit idea: Faster search');
     first?.focus();
     first?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
     expect(store.taskIdeas.map((idea) => idea.text)).toEqual(['Offline sync']);
-    expect(document.activeElement).toBe(button('Start a task from idea: Offline sync'));
+    expect(document.activeElement).toBe(button('Edit idea: Offline sync'));
   });
 
   it('drops the lane and its toggle with the last idea', () => {
