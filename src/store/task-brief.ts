@@ -9,6 +9,7 @@ import { buildTaskBriefPrompt, diffFingerprint, parseTaskBriefResponse } from '.
 import { isAgentChat } from './agent-chat';
 import { getAgentHookStatus } from './agentHookStatus';
 import { store, setStore } from './core';
+import { canRetitleFromBrief, retitleFromBrief } from './model-task-name';
 import { getProjectPath } from './projects';
 import { getAgentOutputTail, isTaskWorking, normalizeCurrentFrame } from './taskStatus';
 import type { Task } from './types';
@@ -122,6 +123,7 @@ export async function refreshTaskBrief(
   // Read before the diff is awaited, so a prompt sent meanwhile is left for the next brief.
   const prompts = promptsSince(task, previous?.generatedAt ?? 0);
   const message = latestAgentMessage(task);
+  const withTitle = !previous && canRetitleFromBrief(task);
   // Screen snapshots change constantly, so only a real reply counts as news.
   const messageFingerprint = message.isReply ? diffFingerprint(message.text) : undefined;
   try {
@@ -145,6 +147,7 @@ export async function refreshTaskBrief(
         previous: previous?.brief,
         agentMessage: message.text,
         rawDiff,
+        withTitle,
       }),
       cwd: task.worktreePath,
       settings: BRIEF_MODELS[store.briefModel],
@@ -157,7 +160,9 @@ export async function refreshTaskBrief(
     };
     const response = await request.result;
     if (cancelled || !isLiveTask(store.tasks[taskId])) return;
-    const brief = parseTaskBriefResponse(response);
+    const { brief, title } = parseTaskBriefResponse(response);
+    // Checked again on apply: the user may have renamed the task meanwhile.
+    if (withTitle && title) retitleFromBrief(taskId, title);
     setStore('tasks', taskId, 'brief', {
       brief,
       generatedAt: capturedAt,

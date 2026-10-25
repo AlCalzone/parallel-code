@@ -69,12 +69,12 @@ const button = (label: string) =>
   Array.from(card()?.querySelectorAll('button') ?? []).find((b) => b.textContent === label);
 
 describe('TaskBriefBar', () => {
-  it('leads with the goal', () => {
+  it('stays quiet while nothing needs the user: the title carries the goal', () => {
     const { bar } = mount(baseTask());
-    expect(bar.textContent).toContain('Stop webhook timeouts.');
+    expect(bar.textContent).not.toContain('Stop webhook timeouts.');
     expect(bar.textContent).not.toContain('Two events queued');
-    // Labelled, so the line can be read without opening the card.
-    expect(bar.textContent).toContain('Goal');
+    // Labelled, so the line still reads as the way into the brief.
+    expect(bar.textContent).toContain('Brief');
     expect(bar.getAttribute('aria-expanded')).toBe('false');
   });
 
@@ -107,11 +107,12 @@ describe('TaskBriefBar', () => {
     expect(terms).toEqual(['Goal', 'Now', 'Needs you']);
   });
 
-  it('keeps to the goal when the prompt box shows the question', () => {
+  it('stays quiet when the prompt box shows the question', () => {
     const { bar } = mount(baseTask(), true);
     lastSetState?.('brief', 'brief', 'needsYou', 'Deduplicate by event ID or invoice ID?');
     expect(bar.hasAttribute('data-urgent')).toBe(false);
-    expect(bar.textContent).toContain('Stop webhook timeouts.');
+    expect(bar.textContent).not.toContain('Deduplicate');
+    expect(bar.textContent).not.toContain('Stop webhook timeouts.');
     bar.click();
     const terms = Array.from(card()?.querySelectorAll('dt') ?? []).map((dt) => dt.textContent);
     expect(terms).toEqual(['Goal', 'Now', 'Needs you']);
@@ -123,7 +124,7 @@ describe('TaskBriefBar', () => {
     setWorking(true);
     expect(bar.hasAttribute('data-urgent')).toBe(false);
     expect(bar.textContent).not.toContain('Needs you');
-    expect(bar.textContent).toContain('Stop webhook timeouts.');
+    expect(bar.textContent).not.toContain('Deduplicate');
     bar.click();
     const terms = Array.from(card()?.querySelectorAll('dt') ?? []).map((dt) => dt.textContent);
     expect(terms).toEqual(['Goal', 'Now']);
@@ -161,7 +162,7 @@ describe('TaskBriefBar', () => {
 });
 
 describe('TaskBriefLine', () => {
-  it('shows what the agent needs, else the goal, and nothing without a brief', () => {
+  it('shows what the agent needs, else the current step, and nothing without a brief', () => {
     const root = document.createElement('div');
     document.body.append(root);
     dispose = render(
@@ -183,6 +184,6 @@ describe('TaskBriefLine', () => {
       root,
     );
     const lines = Array.from(root.querySelectorAll('.task-brief-line'), (el) => el.textContent);
-    expect(lines).toEqual(['Stop webhook timeouts.', 'Which queue?']);
+    expect(lines).toEqual(['Two events queued; moving the other nine next.', 'Which queue?']);
   });
 });

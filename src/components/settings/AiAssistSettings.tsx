@@ -83,7 +83,7 @@ export function AiAssistSettings() {
           label="Name tasks with a model"
           checked={store.modelTaskNames}
           onChange={setModelTaskNames}
-          description="Ask a cheap model for a short title when a task is named from its prompt; sends the prompt to that model's provider. The branch keeps its prompt-based name"
+          description="Ask a cheap model for a short title when a task is named from its prompt; sends the prompt to that model's provider. With briefs on, the first brief sharpens the title once from what the agent did. The branch keeps its prompt-based name"
         />
         <SettingsCheckboxRow
           label="Write task briefs"

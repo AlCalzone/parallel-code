@@ -159,7 +159,7 @@ describe('Claude code Q&A deadlines', () => {
 });
 
 describe('Claude code Q&A model', () => {
-  function spawnArgs(model?: string, effort?: string, purpose?: 'review'): string[] {
+  function spawnArgs(model?: string, effort?: string, purpose?: 'review' | 'task-name'): string[] {
     mockProc();
     const win = {
       isDestroyed: () => false,
@@ -188,6 +188,17 @@ describe('Claude code Q&A model', () => {
     expect(review[review.indexOf('--tools') + 1]).toBe('Read,Grep,Glob');
     expect(review).toContain('--strict-mcp-config');
     expect(review).toContain('--restricted');
+  });
+
+  it('names a task without the Claude Code prompt and its repository context', () => {
+    // Appended to that prompt, a vague task prompt reads as a question about the repo.
+    const naming = spawnArgs('haiku', undefined, 'task-name');
+    expect(naming).toContain('--system-prompt');
+    expect(naming).not.toContain('--append-system-prompt');
+    vi.mocked(spawn).mockClear();
+    const answer = spawnArgs('opus');
+    expect(answer).toContain('--append-system-prompt');
+    expect(answer).not.toContain('--system-prompt');
   });
 
   it("gives a review only the login part of the user's Claude settings, which --restricted skips", () => {

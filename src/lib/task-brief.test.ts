@@ -39,6 +39,17 @@ describe('buildTaskBriefPrompt', () => {
     expect(prompt).toContain('diff --git a/src/auth.ts');
   });
 
+  it('asks for a short title only when the task may be retitled', () => {
+    const input = {
+      taskName: 'what should we do next?',
+      prompts: [],
+      agentMessage: 'Done.',
+      rawDiff: DIFF,
+    };
+    expect(buildTaskBriefPrompt(input)).not.toContain('"title"');
+    expect(buildTaskBriefPrompt({ ...input, withTitle: true })).toContain('"title":string');
+  });
+
   it('asks for a glanceable goal, current step and blocker', () => {
     const prompt = buildTaskBriefPrompt({
       taskName: 'Fix login',
@@ -128,7 +139,7 @@ describe('prepareDiffForBrief', () => {
 
 describe('parseTaskBriefResponse', () => {
   it('reads the goal, the current step and what the agent needs', () => {
-    const brief = parseTaskBriefResponse(
+    const { brief } = parseTaskBriefResponse(
       JSON.stringify({
         goal: 'Return people to their page after sign-in.',
         now: '  Saved the target;\n wiring the callback next. ',
@@ -143,12 +154,23 @@ describe('parseTaskBriefResponse', () => {
   });
 
   it('leaves needsYou out when the agent waits on nothing', () => {
-    const brief = parseTaskBriefResponse(JSON.stringify({ goal: 'g', now: 'n', needsYou: '' }));
+    const { brief } = parseTaskBriefResponse(JSON.stringify({ goal: 'g', now: 'n', needsYou: '' }));
     expect(brief).toEqual({ goal: 'g', now: 'n' });
   });
 
+  it('returns the title apart from the brief, which does not keep it', () => {
+    const parsed = parseTaskBriefResponse(
+      JSON.stringify({ title: ' Pick the next marketing step ', goal: 'g', now: 'n' }),
+    );
+    expect(parsed).toEqual({
+      brief: { goal: 'g', now: 'n' },
+      title: 'Pick the next marketing step',
+    });
+    expect(parseTaskBriefResponse(JSON.stringify({ now: 'n' })).title).toBe('');
+  });
+
   it('clips long fields', () => {
-    const brief = parseTaskBriefResponse(JSON.stringify({ now: 'x'.repeat(1000) }));
+    const { brief } = parseTaskBriefResponse(JSON.stringify({ now: 'x'.repeat(1000) }));
     expect(brief.now).toHaveLength(BRIEF_LIMITS.line);
   });
 

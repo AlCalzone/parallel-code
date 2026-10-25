@@ -176,7 +176,10 @@ export function askAboutCode(win: BrowserWindow, args: AskCodeRequest): void {
       args.purpose === 'review' ? 'Read,Grep,Glob' : '',
       ...(args.purpose === 'review' ? ['--restricted', '--strict-mcp-config', ...login.args] : []),
       '--no-session-persistence',
-      '--append-system-prompt',
+      // A title replaces Claude Code's prompt: appended to it, the repository
+      // context there (status, recent commits) leads Haiku to answer a vague
+      // prompt such as "what should we do next?" instead of naming it.
+      args.purpose === 'task-name' ? '--system-prompt' : '--append-system-prompt',
       askCodeSystemPrompt(args.purpose),
     ],
     {

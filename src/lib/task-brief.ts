@@ -160,11 +160,19 @@ export interface TaskBriefPromptInput {
   agentMessage: string;
   /** Undefined when the diff could not be read, which is not the same as no changes. */
   rawDiff: string | undefined;
+  /** Also ask for a short task title; only the first brief of a task the user has not named. */
+  withTitle?: boolean;
 }
 
-const INSTRUCTIONS = `You keep a glanceable status of a coding task for the person supervising the coding agent. They read it in two seconds to know what is going on; for details they ask the agent. Update it after the agent's latest turn.
-Return one JSON object: {"goal":string,"now":string,"needsYou":string}.
-- goal: what the task is for, one short sentence. Keep it stable unless the user changed direction.
+const INSTRUCTIONS_HEAD = `You keep a glanceable status of a coding task for the person supervising the coding agent. They read it in two seconds to know what is going on; for details they ask the agent. Update it after the agent's latest turn.`;
+
+const SHAPE = 'Return one JSON object: {"goal":string,"now":string,"needsYou":string}.';
+
+// Short enough for one sidebar line; the brief's goal says the rest.
+const SHAPE_WITH_TITLE = `Return one JSON object: {"title":string,"goal":string,"now":string,"needsYou":string}.
+- title: a 2 to 5 word title naming what the task is for, such as "Lighten daily summary table border". Plain words, no trailing punctuation.`;
+
+const INSTRUCTIONS_FIELDS = `- goal: what the task is for, one short sentence. Keep it stable unless the user changed direction.
 - now: the step the task is at, one short sentence: what the agent just finished and what comes next, or that the work looks done.
 - needsYou: when the agent asked the user a question or cannot go on without them, that question or blocker in one short sentence. Otherwise an empty string: finished work waiting for review or merge is not a blocker.
 Each field is plain text of at most 15 words, leads with the key fact and names the concrete feature or behaviour, such as "Adding retry backoff to the webhook queue", not "Working on changes". High level only: no file names, no lists, no markdown. Only state what the prompts, the agent's message or the diff show; never claim tests pass without evidence.
@@ -192,7 +200,7 @@ export function fencePrompts(
 export function buildTaskBriefPrompt(input: TaskBriefPromptInput): string {
   const prompts = input.prompts.length ? fencePrompts(input.prompts) : '(none recorded)';
   const sections = [
-    INSTRUCTIONS,
+    [INSTRUCTIONS_HEAD, input.withTitle ? SHAPE_WITH_TITLE : SHAPE, INSTRUCTIONS_FIELDS].join('\n'),
     `## Task name\n${repoContent(input.taskName)}`,
     `## Prompts since the previous brief\n${prompts}`,
     `## Previous brief\n${input.previous ? repoContent(JSON.stringify(input.previous)) : '(none: this is the first brief)'}`,
@@ -206,13 +214,16 @@ export function buildTaskBriefPrompt(input: TaskBriefPromptInput): string {
   return sections.join('\n\n');
 }
 
-/** Parses the model's answer; throws when it is not the requested object. */
-export function parseTaskBriefResponse(response: string): TaskBrief {
+/**
+ * Parses the model's answer; throws when it is not the requested object. The
+ * title, when asked for, comes apart: it renames the task and is not kept.
+ */
+export function parseTaskBriefResponse(response: string): { brief: TaskBrief; title: string } {
   const data = readSingleJsonObject(response, 'now');
   if (!isRecord(data)) throw new Error('The model returned an invalid brief.');
   const brief = parseBriefFields(data);
   if (!brief.now && !brief.goal) throw new Error('The model returned an empty brief.');
-  return brief;
+  return { brief, title: clip(data.title, BRIEF_LIMITS.line) };
 }
 
 /**

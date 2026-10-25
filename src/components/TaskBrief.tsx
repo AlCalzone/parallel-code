@@ -108,16 +108,16 @@ export function TaskBriefBar(props: TaskBriefBarProps) {
   const question = () => (props.questionInPrompt ? '' : needsYouNow(props.task));
   const urgent = () => question() !== '';
 
+  // Only a question earns the header: the title carries the goal, and the chat
+  // below shows the latest step. The card still holds every field.
   const headline = () => {
-    const brief = props.task.brief?.brief;
-    if (brief) return question() || brief.goal || brief.now;
+    if (props.task.brief) return question();
     if (props.task.briefStatus?.state === 'generating') return 'Writing the brief…';
     return 'The brief appears after the agent finishes a turn';
   };
   const headlineLabel = () => {
-    const brief = props.task.brief?.brief;
-    if (!brief) return '';
-    return urgent() ? 'Needs you' : brief.goal ? 'Goal' : 'Now';
+    if (!props.task.brief) return '';
+    return urgent() ? 'Needs you' : 'Brief';
   };
   const statusNote = () => {
     const status = props.task.briefStatus;
@@ -155,11 +155,11 @@ export function TaskBriefBar(props: TaskBriefBarProps) {
           'min-width': '0',
           padding: '5px 12px 5px 16px',
           border: 'none',
-          // Full-strength text: the line is read at a glance, so it must not be faint.
-          // Before the first brief the line is only a placeholder, so it recedes.
-          color: props.task.brief ? theme.fg : theme.fgSubtle,
-          'font-size': props.task.brief ? sf(13) : sf(11),
-          opacity: props.task.brief ? '1' : '0.6',
+          // Full-strength text for a question: it is read at a glance, so it must
+          // not be faint. Otherwise the line is only the way into the brief, so it recedes.
+          color: urgent() ? theme.fg : theme.fgSubtle,
+          'font-size': urgent() ? sf(13) : sf(11),
+          opacity: urgent() ? '1' : '0.6',
           'line-height': '1.4',
           'font-family': 'inherit',
           'text-align': 'left',
@@ -168,7 +168,7 @@ export function TaskBriefBar(props: TaskBriefBarProps) {
           'white-space': 'nowrap',
         }}
       >
-        {/* Names the field shown, so the line reads as Goal or Needs you at a glance. */}
+        {/* Names the line, so it reads as Needs you or as the way into the brief. */}
         <Show when={headlineLabel()}>
           <span
             style={{
@@ -351,11 +351,14 @@ function BriefRow(props: { label: string; text: string | undefined; color?: stri
   );
 }
 
-/** One quiet line for the sidebar row: what the agent needs, else the goal. */
+/**
+ * One quiet line for the sidebar row: what the agent needs, else its current
+ * step, which a row scanned without its chat cannot show otherwise.
+ */
 export function TaskBriefLine(props: { task: Task }) {
   const line = () => {
     const brief = props.task.brief?.brief;
-    return needsYouNow(props.task) || brief?.goal || brief?.now;
+    return needsYouNow(props.task) || brief?.now || brief?.goal;
   };
   return (
     <Show when={line()}>
