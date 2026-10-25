@@ -35,6 +35,37 @@ describe('buildTaskReviewPrompt', () => {
     expect(prompt).toContain('- No real provider. (CI covers it)');
   });
 
+  it('holds the reviewer to an audit: read before claiming, no deduction without a finding', () => {
+    const prompt = buildTaskReviewPrompt(input);
+    expect(prompt).toContain('read what it depends on outside the diff');
+    expect(prompt).toContain('make the strongest case that each score is wrong');
+    expect(prompt).toContain(
+      'Do not run tests, builds or the app yourself; the checks listed below ran',
+    );
+    expect(prompt).not.toContain('Do not run anything');
+    expect(prompt).toContain('with no such finding, the score is 100');
+    expect(prompt).toContain('"verified":string[]');
+    // A test result counts as checked only when the checks section shows it.
+    expect(prompt).not.toContain('unit tests passed');
+    expect(prompt).toContain('a check result only when it is listed under Checks');
+  });
+
+  it('gives the reviewer the results of the checks it ran, as data', () => {
+    const prompt = buildTaskReviewPrompt({
+      ...input,
+      checks: [
+        { name: 'Unit tests', result: 'passed' },
+        { name: 'E2E', result: 'skipped: dirty' },
+      ],
+    });
+    expect(prompt).toMatch(
+      /## Checks run on this code\n<repo-content>[\s\S]*- Unit tests: passed\n- E2E: skipped: dirty[\s\S]*<\/repo-content>/,
+    );
+    expect(buildTaskReviewPrompt(input)).toMatch(
+      /## Checks run on this code\n<repo-content>\s*\(none ran\)/,
+    );
+  });
+
   it('tells an unreadable diff apart from no changes and no prompts', () => {
     expect(buildTaskReviewPrompt({ ...input, rawDiff: undefined })).toContain(
       'the diff could not be read',
@@ -90,6 +121,21 @@ describe('parseTaskReviewResponse', () => {
     expect(rating.scores).toHaveLength(6);
     expect(rating.scores[0].why).toHaveLength(240);
     expect(rating.findings).toHaveLength(10);
+  });
+
+  it('trims what a score was checked against instead of failing', () => {
+    const rating = parseTaskReviewResponse(
+      JSON.stringify({
+        scores: [
+          { label: 'Correct', score: 80, why: 'x', verified: [1, 'a'.repeat(200), 'b', 'c', 'd'] },
+          { label: 'Minimal', score: 90, why: 'x', verified: 'read it' },
+        ],
+        findings: [],
+      }),
+      'Review by opus',
+    );
+    expect(rating.scores[0].verified).toEqual(['a'.repeat(120), 'b', 'c']);
+    expect(rating.scores[1].verified).toBeUndefined();
   });
 
   it('keeps what was asked, the changes and the key line, dropping a broken key line', () => {

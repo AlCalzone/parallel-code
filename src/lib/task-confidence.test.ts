@@ -55,6 +55,23 @@ describe('parseConfidencePayload', () => {
       parseConfidencePayload({ scores: [score], keyLine: { file: 'a.ts', line: 0, why: 'x' } }),
     ).toThrow('positive whole number');
   });
+
+  it('keeps what a score was checked against, dropping blank items', () => {
+    const score = { label: 'Correct', score: 80, why: 'x' };
+    expect(
+      parseConfidencePayload({ scores: [{ ...score, verified: [' read  both callers ', ' '] }] })
+        .scores,
+    ).toEqual([{ ...score, verified: ['read both callers'] }]);
+    expect(parseConfidencePayload({ scores: [{ ...score, verified: [] }] }).scores).toEqual([
+      score,
+    ]);
+    expect(() =>
+      parseConfidencePayload({ scores: [{ ...score, verified: ['a', 'b', 'c', 'd'] }] }),
+    ).toThrow('at most 3 items');
+    expect(() => parseConfidencePayload({ scores: [{ ...score, verified: [1] }] })).toThrow(
+      'must be a string',
+    );
+  });
 });
 
 describe('restoreTaskConfidence', () => {

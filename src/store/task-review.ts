@@ -7,6 +7,7 @@ import { diffFingerprint } from '../lib/task-brief';
 import {
   buildTaskReviewPrompt,
   parseTaskReviewResponse,
+  type ReviewCheckResult,
   type ReviewModelSettings,
 } from '../lib/task-review';
 import { store, setStore } from './core';
@@ -51,17 +52,25 @@ export function reviewerName(taskId: string): string {
 /**
  * Rates a task's work with a model call of its own, apart from the task's
  * agent, which would otherwise grade itself. It reads every prompt the user
- * sent and the branch diff. The review runs in the background: closing the
+ * sent, the branch diff and, once they end, the results of the checks started
+ * with it. The review runs in the background: closing the
  * Finish dialog leaves it running, closing the task stops it. One review per
  * task at a time; a second start while one runs does nothing.
  */
-export async function startTaskReview(taskId: string): Promise<void> {
+export async function startTaskReview(
+  taskId: string,
+  checks?: Promise<ReviewCheckResult[]>,
+): Promise<void> {
   const task = store.tasks[taskId];
   if (!isLiveTask(task) || inFlight.has(taskId)) return;
   let cancelled = false;
   let cancelRequest = () => {};
+  // Checks can run for minutes, so a cancel must not wait for them to end.
+  let stopWaiting = () => {};
+  const stopped = new Promise<undefined>((resolve) => (stopWaiting = () => resolve(undefined)));
   const cancel = () => {
     cancelled = true;
+    stopWaiting();
     cancelRequest();
   };
   inFlight.set(taskId, cancel);
@@ -80,6 +89,8 @@ export async function startTaskReview(taskId: string): Promise<void> {
     if (cancelled) return;
     const fingerprint = rawDiff === undefined ? undefined : diffFingerprint(rawDiff);
     if (fingerprint !== undefined) noteCodeFingerprint(taskId, fingerprint, startedAt);
+    const checkResults = await Promise.race([checks, stopped]);
+    if (cancelled) return;
     const settings = taskReviewModel(taskId);
     const model = modelToRun(settings.provider, settings.model ?? '');
     const reviewer = reviewerName(taskId);
@@ -90,6 +101,7 @@ export async function startTaskReview(taskId: string): Promise<void> {
         rawDiff,
         dismissed: getReviewDismissals(taskId),
         guidance: store.reviewGuidance,
+        ...(checkResults && { checks: checkResults }),
       }),
       cwd: task.worktreePath,
       settings: { ...settings, model: model || undefined },

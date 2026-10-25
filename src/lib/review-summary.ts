@@ -42,6 +42,8 @@ export interface ReviewScore {
   label: string;
   score: number;
   why: string;
+  /** What the rater checked directly, so the reader can tell a grounded score from a guess. */
+  verified?: string[];
 }
 
 export interface ReviewScores {
@@ -112,7 +114,12 @@ function dedupe<T extends ReviewItem>(items: T[]): T[] {
 }
 
 function scoresOf(input: ReviewSummaryInput, confidence: TaskConfidence): ReviewScores {
-  const all = confidence.scores.map(({ label, score, why }) => ({ label, score, why }));
+  const all = confidence.scores.map(({ label, score, why, verified }) => ({
+    label,
+    score,
+    why,
+    ...(verified && { verified }),
+  }));
   const weakest = all.reduce<ReviewScore | undefined>(
     (low, entry) => (!low || entry.score < low.score ? entry : low),
     undefined,
@@ -235,10 +242,25 @@ export function reviewVerdict(summary: ReviewSummary): string {
   return hasReviewContent(summary) ? verdictHead(summary) : 'Not reviewed yet';
 }
 
-/** One line per selected item. */
+// A reviewer can be wrong, and fixing a finding that does not hold adds code
+// nobody needed, so each item is checked before it is acted on, the way a
+// gap-closing pass works through an audit.
+const REWORK_RULES = [
+  'The review can be wrong. For each item:',
+  '- check it first by reading the code or running it once; if it does not hold, say so and change nothing for it',
+  '- for missing or wrong behaviour, write a failing test first, then fix it; if the code is already there, break the code, watch the test fail, then restore it',
+  '- if a fix needs more new code than the change itself, stop and tell me before writing it',
+  '- remove what I did not ask for by deleting or simplifying, never by adding',
+  '- if it is real but not worth fixing now, change nothing for it; say why and leave it for me to decide',
+  'Change only what these items need and name any new problem rather than fixing it. Run the tests for the code you touched, then report each item as checked, fixed or left, with the file or command as evidence.',
+].join('\n');
+
+/** One line per selected item, then how to work through them. */
 export function buildReworkPrompt(items: ReviewItem[]): string {
   const lines = items.map((entry) => `- ${entry.ask}${entry.file ? ` (${entry.file})` : ''}`);
-  return ['Please rework this task based on my review:', lines.join('\n')].join('\n\n');
+  return ['Please rework this task based on my review:', lines.join('\n'), REWORK_RULES].join(
+    '\n\n',
+  );
 }
 
 /**

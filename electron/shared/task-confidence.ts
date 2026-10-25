@@ -12,6 +12,8 @@ export interface ConfidenceScore {
   /** 0 to 100. */
   score: number;
   why: string;
+  /** What the rater checked directly that backs the score, e.g. "read both callers". */
+  verified?: string[];
 }
 
 export interface ConfidenceFinding {
@@ -56,6 +58,8 @@ export const CONFIDENCE_LIMITS = {
   maxScores: 6,
   label: 32,
   why: 240,
+  maxVerified: 3,
+  verified: 120,
   maxFindings: 10,
   findingText: 240,
   file: 300,
@@ -91,16 +95,29 @@ function optionalText(value: unknown, field: string, max: number): string | unde
   return text || undefined;
 }
 
+function parseVerified(value: unknown, index: number): string[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  const { maxVerified, verified: max } = CONFIDENCE_LIMITS;
+  if (!Array.isArray(value) || value.length > maxVerified)
+    throw new Error(`scores[${index}].verified must be an array of at most ${maxVerified} items.`);
+  const items = value
+    .map((entry, at) => optionalText(entry, `scores[${index}].verified[${at}]`, max))
+    .filter((entry): entry is string => !!entry);
+  return items.length > 0 ? items : undefined;
+}
+
 function parseScore(value: unknown, index: number): ConfidenceScore {
   const record = asRecord(value);
   if (!record) throw new Error(`scores[${index}] must be an object.`);
   const score = record.score;
   if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 100)
     throw new Error(`scores[${index}].score must be a number from 0 to 100.`);
+  const verified = parseVerified(record.verified, index);
   return {
     label: requiredText(record.label, `scores[${index}].label`, CONFIDENCE_LIMITS.label),
     score: Math.round(score),
     why: requiredText(record.why, `scores[${index}].why`, CONFIDENCE_LIMITS.why),
+    ...(verified && { verified }),
   };
 }
 

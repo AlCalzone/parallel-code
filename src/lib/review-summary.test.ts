@@ -175,13 +175,21 @@ describe('reviewVerdict', () => {
 describe('prompts', () => {
   it('builds one rework prompt from the picked items', () => {
     const summary = buildReviewSummary({ brief, confidence });
-    expect(buildReworkPrompt([summary.risks[2], summary.extras[0]])).toBe(
-      [
-        'Please rework this task based on my review:',
-        '- Fill this gap: Remember-me path not handled. (src/auth/remember.ts)\n' +
-          '- Revert this, I didn’t ask for it: Renamed parseNext to readReturnUrl.',
-      ].join('\n\n'),
+    const prompt = buildReworkPrompt([summary.risks[2], summary.extras[0]]);
+    expect(prompt).toMatch(
+      /^Please rework this task based on my review:\n\n- Fill this gap: Remember-me path not handled\. \(src\/auth\/remember\.ts\)\n- Revert this, I didn’t ask for it: Renamed parseNext to readReturnUrl\.\n\n/,
     );
+  });
+
+  it('asks the agent to check each item before changing code for it', () => {
+    const prompt = buildReworkPrompt([buildReviewSummary({ brief, confidence }).risks[2]]);
+    expect(prompt).toContain('check it first');
+    expect(prompt).toContain('failing test first');
+    expect(prompt).toContain('break the code, watch the test fail, then restore it');
+    expect(prompt).toContain('stop and tell me before writing it');
+    expect(prompt).toContain('never by adding');
+    expect(prompt).toContain('say why and leave it for me to decide');
+    expect(prompt).toContain('evidence');
   });
 
   it('tells the next rating what the user set aside', () => {

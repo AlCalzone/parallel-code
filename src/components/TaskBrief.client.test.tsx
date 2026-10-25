@@ -66,7 +66,7 @@ function baseTask(overrides: Partial<Task> = {}): Task {
     },
     confidence: {
       scores: [
-        { label: 'Correct', score: 70, why: 'Happy path tested.' },
+        { label: 'Correct', score: 70, why: 'Happy path tested.', verified: ['read the worker'] },
         { label: 'Complete', score: 40, why: 'No dedupe.' },
       ],
       findings: [{ kind: 'extra', text: 'Added Redis to production compose.' }],
@@ -156,6 +156,7 @@ describe('TaskBriefBar', () => {
     const text = card()?.textContent ?? '';
     expect(text).toContain('Stop webhook timeouts.');
     expect(text).toContain('Added Redis to production compose.');
+    expect(text).toContain('Happy path tested. Checked: read the worker');
     expect(card()?.querySelector('title')?.textContent).toBe('From the confidence rating');
     const headings = Array.from(card()?.querySelectorAll('h3') ?? []).map((h) =>
       h.getAttribute('aria-label'),

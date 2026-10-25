@@ -129,8 +129,18 @@ function baseTask(overrides: Partial<Task> = {}): Task {
     },
     confidence: {
       scores: [
-        { label: 'Correctness', score: 88, why: 'Tested.' },
-        { label: 'Completeness', score: 50, why: 'Misses remember-me.' },
+        {
+          label: 'Correctness',
+          score: 88,
+          why: 'Tested.',
+          verified: ['read both callers', 'unit tests passed'],
+        },
+        {
+          label: 'Completeness',
+          score: 50,
+          why: 'Misses remember-me.',
+          verified: ['read the login form'],
+        },
       ],
       findings: [],
       publishedAt: 3_000,
@@ -465,12 +475,13 @@ describe('ReviewSection', () => {
     toggle(root).click();
     expect(toggle(root).getAttribute('aria-expanded')).toBe('true');
     // The weakest score stands for the whole and says why; a score above the bar keeps its reason on hover.
+    // Each reason carries what backs it.
     const card = root.querySelector('[aria-label="Confidence"]');
     expect(card?.textContent).toContain('50%confident · held back by Completeness');
-    expect(card?.textContent).toContain('Misses remember-me.');
+    expect(card?.textContent).toContain('Misses remember-me. Checked: read the login form');
     const others = [...(card?.querySelectorAll('[aria-label="Other scores"] li') ?? [])];
     expect(others.map((li) => [li.textContent, li.getAttribute('title')])).toEqual([
-      ['Correctness 88%', 'Tested.'],
+      ['Correctness 88%', 'Tested. Checked: read both callers; unit tests passed'],
     ]);
     expect(card?.textContent).not.toContain('Tested.');
     expect(root.textContent).not.toContain('Cookie lasts 5 minutes.');

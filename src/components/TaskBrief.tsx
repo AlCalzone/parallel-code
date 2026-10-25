@@ -837,6 +837,14 @@ function TaskBriefCard(props: {
                       style={{ 'font-size': sf(11), color: theme.fgMuted, 'line-height': '1.4' }}
                     >
                       {score.why}
+                      <Show when={score.verified}>
+                        {(verified) => (
+                          <span style={{ color: theme.fgSubtle }}>
+                            {' '}
+                            Checked: {verified().join('; ')}
+                          </span>
+                        )}
+                      </Show>
                     </span>
                   </div>
                 )}

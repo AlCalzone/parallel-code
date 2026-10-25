@@ -67,8 +67,8 @@ describe('stageRework', () => {
   it('stages one prompt in the task input and refuses an empty one', () => {
     expect(stageRework('t1', [])).toBe(false);
     expect(stageRework('t1', [risk('No real provider.')])).toBe(true);
-    expect(store.tasks.t1.prefillPrompt).toBe(
-      'Please rework this task based on my review:\n\n- Address this risk: No real provider.',
+    expect(store.tasks.t1.prefillPrompt).toMatch(
+      /^Please rework this task based on my review:\n\n- Address this risk: No real provider\.\n/,
     );
     expect(store.showPromptInput).toBe(true);
   });

@@ -4,6 +4,7 @@ import { store } from './core';
 import { buildEvidence } from './evidence';
 import { getTaskChecks } from './evidence-state';
 import { getProject, updateProject } from './projects';
+import type { ReviewCheckResult } from '../lib/task-review';
 import { startTaskReview } from './task-review';
 
 /**
@@ -28,9 +29,31 @@ export function setReviewChecks(
 }
 
 /**
- * Starts a review: the reviewer model, plus the checks picked for the project
- * as one evidence build, so the gate that holds risky checks back still
- * decides what runs. Both run in the background.
+ * How each picked check ended in the build just run; one still running is left
+ * out. A build that stopped before making its package (a failed scan) leaves
+ * the previous one, from older code, which must not pass as this code's result.
+ */
+function checkResults(
+  taskId: string,
+  only: readonly string[],
+  previousId: string | undefined,
+): ReviewCheckResult[] {
+  const pkg = store.tasks[taskId]?.evidence;
+  if (!pkg || pkg.id === previousId) return [];
+  const ran = (pkg.checks ?? [])
+    .filter((run) => only.includes(run.checkId) && run.status !== 'running')
+    .map((run) => ({ name: run.name, result: run.status.replace('_', ' ') }));
+  const skipped = (pkg.skipped ?? [])
+    .filter((check) => only.includes(check.checkId))
+    .map((check) => ({ name: check.name, result: `skipped: ${check.reason}` }));
+  return [...ran, ...skipped];
+}
+
+/**
+ * Starts a review: the checks picked for the project as one evidence build, so
+ * the gate that holds risky checks back still decides what runs, and the
+ * reviewer model, which waits for their results so it can weigh them. Both run
+ * in the background.
  */
 export function startReview(taskId: string): void {
   const task = store.tasks[taskId];
@@ -40,9 +63,16 @@ export function startReview(taskId: string): void {
   const only = getTaskChecks(taskId)
     .map((check) => check.id)
     .filter((id) => picked.includes(id));
-  if (only.length > 0)
-    buildEvidence(taskId, { trigger: 'manual', only }).catch((error: unknown) => {
-      logWarn('taskReview', 'Review checks failed', { taskId, error: errMessage(error) });
-    });
-  void startTaskReview(taskId);
+  const previousId = task.evidence?.id;
+  const checks =
+    only.length > 0
+      ? buildEvidence(taskId, { trigger: 'manual', only }).then(
+          () => checkResults(taskId, only, previousId),
+          (error: unknown) => {
+            logWarn('taskReview', 'Review checks failed', { taskId, error: errMessage(error) });
+            return [];
+          },
+        )
+      : undefined;
+  void startTaskReview(taskId, checks);
 }

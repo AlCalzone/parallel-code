@@ -111,6 +111,33 @@ describe('startTaskReview', () => {
     expect(mockNotify).toHaveBeenCalledWith(expect.stringContaining('“Fix login” is ready'));
   });
 
+  it('asks the reviewer only once the checks started with it have ended', async () => {
+    let finishChecks: (results: { name: string; result: string }[]) => void = () => {};
+    const checks = new Promise<{ name: string; result: string }[]>(
+      (resolve) => (finishChecks = resolve),
+    );
+    mockStartRequest.mockReturnValue({
+      result: Promise.resolve(JSON.stringify(RATING)),
+      cancel: vi.fn(),
+    });
+    const run = startTaskReview('t1', checks);
+    await settle();
+    expect(mockStartRequest).not.toHaveBeenCalled();
+    expect(task().reviewStatus?.state).toBe('running');
+    finishChecks([{ name: 'Unit tests', result: 'failed' }]);
+    await run;
+    expect(mockStartRequest.mock.calls[0][0].prompt).toContain('- Unit tests: failed');
+  });
+
+  it('stops without asking the reviewer when cancelled while the checks run', async () => {
+    const run = startTaskReview('t1', new Promise(() => {}));
+    await settle();
+    cancelTaskReview('t1');
+    await run;
+    expect(mockStartRequest).not.toHaveBeenCalled();
+    expect(task().reviewStatus).toBeUndefined();
+  });
+
   it("runs on the task's own reviewer when it has one", async () => {
     setTaskReviewModel('t1', { provider: 'codex', model: 'gpt-5', effort: 'high' });
     mockStartRequest.mockReturnValue({

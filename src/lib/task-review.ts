@@ -11,8 +11,9 @@ import { readSingleJsonObject } from './tour-json';
 
 /**
  * The review that rates a task's work: a separate model call that reads what
- * the user asked for and the branch diff, never the task agent's own session,
- * so the agent does not grade itself. It returns the same rating an agent can
+ * the user asked for, the branch diff and the results of the checks it ran,
+ * never the task agent's own session, so the agent does not grade itself. It
+ * can read the repository to trace callers and tests outside the diff. It returns the same rating an agent can
  * publish with `confidence_publish`.
  */
 
@@ -46,13 +47,15 @@ export function restoreReviewModel(value: unknown): ReviewModelSettings {
 
 const INSTRUCTIONS = `You review a coding agent's work for the person who decides whether to merge it. You did not write this code.
 Judge the branch diff against what the user asked for in their prompts, later corrections included, not against what the agent says it did.
-Return one JSON object: {"asked":string,"changes":[{"now":string,"before"?:string,"tested"?:string}],"keyLine"?:{"file":string,"line"?:number,"why":string},"scores":[{"label":string,"score":number,"why":string}],"findings":[{"kind":"gap"|"extra"|"risk","axis":"Correct"|"Complete"|"Minimal","text":string,"file"?:string}]}.
+Return one JSON object: {"asked":string,"changes":[{"now":string,"before"?:string,"tested"?:string}],"keyLine"?:{"file":string,"line"?:number,"why":string},"scores":[{"label":string,"score":number,"why":string,"verified":string[]}],"findings":[{"kind":"gap"|"extra"|"risk","axis":"Correct"|"Complete"|"Minimal","text":string,"file"?:string}]}.
 - asked: what the user asked for, later corrections included, in one plain sentence of at most 25 words.
 - changes: at most ${CONFIDENCE_LIMITS.maxChanges} changes in behaviour someone using the software would notice, most important first; a refactor that changes nothing they see is not one. now: what happens now, as the start of a sentence, e.g. "After sign-in you land where you were going". before: how that differs from before, e.g. "instead of always on /dashboard"; omit it for something new. tested: the kinds of tests in the diff that cover it, e.g. "unit, integration"; omit it when no test does. Return [] when nothing visible changed.
 - keyLine: the one changed line the change depends on most, which the person should read first. file: a repository-relative path from the diff. line: its line number in the changed file, from the diff hunk; omit it when unsure. why: at most 20 words. Omit keyLine when no line stands out.
-- scores: exactly three, labelled "Correct", "Complete" and "Minimal", each from 0 to 100. Correct: the change works as intended, judged from the code. Complete: every request is handled, including the cases it implies. Minimal: nothing was changed that the requests did not need. why: one line of at most 25 words naming what keeps the score from being higher.
-- findings: at most ${CONFIDENCE_LIMITS.maxFindings}, only what the person should act on, most important first. "gap": something asked for that is missing or wrong. "extra": a change nobody asked for. "risk": something likely to break, such as an unhandled case or untested behaviour. axis: the score it lowers most. text: one short sentence of at most 25 words that names the concrete function, setting or behaviour. file: a repository-relative path from the diff that the finding is about; omit it when unsure, never invent one. Return [] when there is nothing.
-You cannot run the code or its tests, so count only what the diff shows: a change without a test lowers Correct, and the agent's word is not evidence.
+- scores: exactly three, labelled "Correct", "Complete" and "Minimal", each from 0 to 100. Correct: the change works as intended, judged from the code. Complete: every request is handled, including the cases it implies. Minimal: nothing was changed that the requests did not need. why: one line of at most 25 words naming what keeps the score from being higher. verified: at most ${CONFIDENCE_LIMITS.maxVerified} things you checked yourself that back the score, each at most 15 words, e.g. "read both callers of parseNext"; count a check result only when it is listed under Checks below, and leave out anything you only assumed.
+- findings: at most ${CONFIDENCE_LIMITS.maxFindings}, only what the person should act on, most important first. "gap": something asked for that is missing or wrong. "extra": a change nobody asked for. "risk": something likely to break, such as an unhandled case or untested behaviour. axis: the score it lowers most. text: one short sentence of at most 25 words that names the concrete function, setting or behaviour, never a vague caveat such as "coverage may be incomplete". file: a repository-relative path from the diff that the finding is about; omit it when unsure, never invent one. Return [] when there is nothing.
+You can read the repository with read-only tools. Before you report a gap or a risk, read what it depends on outside the diff, such as the callers of a changed function and the tests of a changed file; something you could settle by reading a file is not a finding until you read it.
+Do not run tests, builds or the app yourself; the checks listed below ran on this code, so take their results as fact, and a failed one lowers Correct. Passing checks do not prove the new behaviour is tested, so ask what could still be wrong with every check green: behaviour no test covers, or a test that still asserts the old behaviour. The agent's word is not evidence.
+Before you score, make the strongest case that each score is wrong. Every point taken off a score must come from a finding on that axis; with no such finding, the score is 100.
 The diff opens with a list of every changed file and its added and removed lines. Lockfiles are left out and long files are cut short; do not report a gap only because a file was cut.`;
 
 export interface TaskReviewPromptInput {
@@ -65,6 +68,14 @@ export interface TaskReviewPromptInput {
   dismissed: ReviewDismissal[];
   /** The user's own review guidance from Settings, if any. */
   guidance?: string;
+  /** Checks this review ran on the code, with how each ended. */
+  checks?: readonly ReviewCheckResult[];
+}
+
+/** A check the review ran: its name and how it ended, e.g. "passed" or "skipped: dirty". */
+export interface ReviewCheckResult {
+  name: string;
+  result: string;
 }
 
 export function buildTaskReviewPrompt(input: TaskReviewPromptInput): string {
@@ -83,9 +94,13 @@ export function buildTaskReviewPrompt(input: TaskReviewPromptInput): string {
             ? prepareDiffForBrief(input.rawDiff, REVIEW_LIMITS.diffChars)
             : '(no changes)',
         );
+  const checks = input.checks?.length
+    ? input.checks.map(({ name, result }) => `- ${name}: ${result}`).join('\n')
+    : '(none ran)';
   return [
     withReviewNotes(head, input.dismissed),
     `## Task name\n${repoContent(input.taskName)}`,
+    `## Checks run on this code\n${repoContent(checks)}`,
     `## What the user asked for, oldest first\n${prompts}`,
     `## Branch diff against its base\n${diff}`,
   ].join('\n\n');
@@ -121,6 +136,12 @@ function fitToLimits(data: Record<string, unknown>): Record<string, unknown> {
       ...score,
       label: clip(score.label, CONFIDENCE_LIMITS.label),
       why: clip(score.why, CONFIDENCE_LIMITS.why),
+      verified: Array.isArray(score.verified)
+        ? score.verified
+            .filter((entry: unknown): entry is string => typeof entry === 'string')
+            .slice(0, CONFIDENCE_LIMITS.maxVerified)
+            .map((entry) => clip(entry, CONFIDENCE_LIMITS.verified))
+        : undefined,
     })),
     findings: items(data.findings, CONFIDENCE_LIMITS.maxFindings).map((finding) => ({
       ...finding,

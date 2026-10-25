@@ -30,18 +30,54 @@ function setup(reviewChecks: string[] | undefined, task: Partial<Task> = {}) {
 beforeEach(() => vi.clearAllMocks());
 
 describe('startReview', () => {
-  it('runs the picked checks that still exist alongside the reviewer', () => {
-    setup(['e2e', 'removed']);
+  it('runs the picked checks that still exist and hands the reviewer how they ended', async () => {
+    setup(['e2e', 'verify', 'removed']);
+    mockBuild.mockImplementationOnce(() => {
+      setStore('tasks', 't1', 'evidence', {
+        id: 'new',
+        checks: [
+          { checkId: 'e2e', name: 'E2E', status: 'failed' },
+          { checkId: 'other', name: 'Other', status: 'passed' },
+        ],
+        skipped: [{ checkId: 'verify', name: 'Verify', reason: 'dirty' }],
+      } as unknown as Task['evidence']);
+      return Promise.resolve();
+    });
     startReview('t1');
-    expect(mockBuild).toHaveBeenCalledWith('t1', { trigger: 'manual', only: ['e2e'] });
-    expect(mockReview).toHaveBeenCalledWith('t1');
+    expect(mockBuild).toHaveBeenCalledWith('t1', { trigger: 'manual', only: ['verify', 'e2e'] });
+    const checks = (mockReview.mock.calls[0] as unknown[])[1] as Promise<unknown>;
+    await expect(checks).resolves.toEqual([
+      { name: 'E2E', result: 'failed' },
+      { name: 'Verify', result: 'skipped: dirty' },
+    ]);
+  });
+
+  it('hands the reviewer no results when the build made no package, not older ones', async () => {
+    setup(['e2e'], {
+      evidence: {
+        id: 'old',
+        checks: [{ checkId: 'e2e', name: 'E2E', status: 'passed' }],
+        skipped: [],
+      } as unknown as Task['evidence'],
+    });
+    startReview('t1');
+    const checks = (mockReview.mock.calls[0] as unknown[])[1] as Promise<unknown>;
+    await expect(checks).resolves.toEqual([]);
+  });
+
+  it('still reviews when the checks fail to run, saying none ran', async () => {
+    setup(['e2e']);
+    mockBuild.mockImplementationOnce(() => Promise.reject(new Error('boom')));
+    startReview('t1');
+    const checks = (mockReview.mock.calls[0] as unknown[])[1] as Promise<unknown>;
+    await expect(checks).resolves.toEqual([]);
   });
 
   it('runs the reviewer alone when nothing is picked', () => {
     setup([]);
     startReview('t1');
     expect(mockBuild).not.toHaveBeenCalled();
-    expect(mockReview).toHaveBeenCalledWith('t1');
+    expect(mockReview).toHaveBeenCalledWith('t1', undefined);
   });
 
   it('starts nothing while a review runs', () => {

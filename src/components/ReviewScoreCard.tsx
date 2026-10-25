@@ -6,6 +6,19 @@ import { theme } from '../lib/theme';
 
 const tabular = { 'font-weight': '600', 'font-variant-numeric': 'tabular-nums' } as const;
 
+/** What backs a score, so a grounded score reads apart from a guess. */
+function checkedText(entry: ReviewScore): string {
+  return entry.verified ? `Checked: ${entry.verified.join('; ')}` : '';
+}
+
+function Checked(props: { entry: ReviewScore }) {
+  return (
+    <Show when={checkedText(props.entry)}>
+      {(text) => <span style={{ 'font-size': sf(12), color: theme.fgSubtle }}> {text()}</span>}
+    </Show>
+  );
+}
+
 /**
  * The rating at a glance, as a confidence audit reads: the weakest score
  * stands for the whole and says why it is not higher. Other scores keep their
@@ -75,8 +88,13 @@ export function ReviewScoreCard(props: {
             .join(' · ')}
         </span>
       </div>
-      <Show when={weakest()?.why}>
-        {(why) => <p style={{ margin: '0', color: theme.fgMuted }}>{why()}</p>}
+      <Show when={weakest()}>
+        {(entry) => (
+          <p style={{ margin: '0', color: theme.fgMuted }}>
+            {entry().why}
+            <Checked entry={entry()} />
+          </p>
+        )}
       </Show>
       <Show when={low().length > 0}>
         <ul style={{ margin: '0', padding: '0', 'list-style': 'none' }}>
@@ -85,6 +103,7 @@ export function ReviewScoreCard(props: {
               <li style={{ color: theme.fgMuted }}>
                 <span style={{ color: theme.fg }}>{entry.label}</span> {scoreText(entry)} ·{' '}
                 {entry.why}
+                <Checked entry={entry} />
               </li>
             )}
           </For>
@@ -106,7 +125,7 @@ export function ReviewScoreCard(props: {
         >
           <For each={fine()}>
             {(entry) => (
-              <li title={entry.why}>
+              <li title={[entry.why, checkedText(entry)].filter(Boolean).join(' ')}>
                 {entry.label} {scoreText(entry)}
               </li>
             )}

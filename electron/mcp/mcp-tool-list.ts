@@ -199,7 +199,7 @@ export const CONFIDENCE_TOOLS: ToolDef[] = [
       'Publish a confidence rating of the current changes on your task. The app shows it on the task brief and marks it out of date once the code changes after it. ' +
       'Use it when the user asks you to rate your confidence, or as the last step of a rating or review skill. Do not change code while rating. ' +
       `Send ${confidenceCaps.minScores} to ${confidenceCaps.maxScores} scores; name them as your rating defines them (one "Confidence" score, or dimensions such as "Correct", "Complete", "Minimal"). ` +
-      `A score is {label (at most ${confidenceCaps.label} characters), score (0-100), why (one line, at most ${confidenceCaps.why} characters: what keeps it from being higher)}. ` +
+      `A score is {label (at most ${confidenceCaps.label} characters), score (0-100), why (one line, at most ${confidenceCaps.why} characters: what keeps it from being higher), verified? (at most ${confidenceCaps.maxVerified} short items, at most ${confidenceCaps.verified} characters each: what you checked directly that backs the score)}. ` +
       `Optional findings, at most ${confidenceCaps.maxFindings}: {kind: "gap" (missing or unverified), "extra" (change the task did not ask for) or "risk", text (a short phrase that leads with the key fact, at most ${confidenceCaps.findingText} characters), file? (repository-relative), axis? (the label of the score it lowers most)}. ` +
       `Optional "source" names who rated, such as a skill name, at most ${confidenceCaps.source} characters.`,
     inputSchema: {
@@ -215,6 +215,11 @@ export const CONFIDENCE_TOOLS: ToolDef[] = [
               label: { type: 'string', maxLength: confidenceCaps.label },
               score: { type: 'number', minimum: 0, maximum: 100 },
               why: { type: 'string', maxLength: confidenceCaps.why },
+              verified: {
+                type: 'array',
+                maxItems: confidenceCaps.maxVerified,
+                items: { type: 'string', maxLength: confidenceCaps.verified },
+              },
             },
             required: ['label', 'score', 'why'],
           },

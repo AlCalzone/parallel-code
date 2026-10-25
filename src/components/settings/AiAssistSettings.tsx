@@ -87,7 +87,7 @@ export function AiAssistSettings() {
           label="Offer a review when finishing a task"
           checked={store.finishReview}
           onChange={setFinishReview}
-          description="Adds a Review line to the Finish dialog. Nothing runs until you click Run review, which sends your prompts and the branch diff to a separate reviewer model, so the task's agent never rates its own work"
+          description="Adds a Review line to the Finish dialog. Nothing runs until you click Run review, which sends your prompts, the branch diff and the picked checks' results to a separate reviewer model that can read but not change the repository, so the task's agent never rates its own work"
         />
         <Show when={store.finishReview}>
           <SettingsCard>
