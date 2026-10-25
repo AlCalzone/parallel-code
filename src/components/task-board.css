@@ -467,6 +467,15 @@ html[data-look^='islands-'] .task-board {
   border-radius: 1px;
   background: var(--border);
 }
+/* Names the coordinator above its subtasks when it sits in another lane. */
+.task-board-family {
+  margin: 4px 0 -2px 2px;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 /* A closing task fades while its teardown runs; the card stays put. */
 .task-board-card.closing {
   opacity: 0.55;

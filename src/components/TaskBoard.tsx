@@ -22,7 +22,12 @@ import { IdeasLane } from './TaskBoardIdeasLane';
 import { forgetWorkingHolds } from './task-board-hold';
 import { boardQuery, setBoardQuery } from './BoardSearch';
 import { useCardMotion } from './task-board-motion';
-import { boardLanes, boardTasks, type BoardLane as LaneData } from './task-board-lanes';
+import {
+  boardLanes,
+  boardTasks,
+  headingParentAt,
+  type BoardLane as LaneData,
+} from './task-board-lanes';
 import {
   BOARD_KEY_MOVES,
   boardHasFocus,
@@ -47,9 +52,31 @@ function Lane(props: { lane: LaneData }) {
       count={props.lane.tasks.length}
     >
       <For each={props.lane.tasks}>
-        {(task) => <TaskBoardCard task={task} lane={props.lane.id} />}
+        {(task, index) => (
+          <>
+            <Show when={headingParentAt(props.lane.tasks, index())}>
+              {(parentId) => <SubtaskHeading parentId={parentId()} />}
+            </Show>
+            <TaskBoardCard task={task} lane={props.lane.id} />
+          </>
+        )}
       </For>
     </BoardLane>
+  );
+}
+
+/** Names the coordinator once above a block of its subtasks in another lane. */
+function SubtaskHeading(props: { parentId: string }) {
+  return (
+    <Show when={store.tasks[props.parentId]}>
+      {(parent) => (
+        <li class="task-board-family" title={`Subtasks of ${parent().name}`}>
+          <span aria-hidden="true">↳ </span>
+          <span class="dialog-sr-only">Subtasks of </span>
+          {parent().name}
+        </li>
+      )}
+    </Show>
   );
 }
 

@@ -102,6 +102,17 @@ export function groupSubtasks(tasks: Task[]): Task[] {
   return [...families.values()].flat();
 }
 
+/**
+ * The coordinator to name above a lane's `index`th task: set where a block of
+ * its subtasks starts without it directly above, so each block names it once.
+ */
+export function headingParentAt(tasks: Task[], index: number): string | undefined {
+  const parentId = tasks[index]?.coordinatedBy;
+  const above = tasks[index - 1];
+  if (!parentId || above?.id === parentId || above?.coordinatedBy === parentId) return undefined;
+  return parentId;
+}
+
 export function boardLanes(tasks: Task[]): BoardLane[] {
   const lanes = (Object.keys(LANE_TITLES) as BoardLaneId[]).map((id) => ({
     id,
