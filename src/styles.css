@@ -2364,9 +2364,14 @@ button {
   cursor: pointer;
 }
 
-.change-tour-model:hover {
+.change-tour-model:hover:not(:disabled) {
   background: var(--bg-hover);
   color: var(--fg);
+}
+
+.change-tour-model:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .change-tour-action {

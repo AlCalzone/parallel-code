@@ -27,17 +27,20 @@ import {
   stageRework,
 } from '../store/review';
 import { refreshCodeFingerprint } from '../store/task-brief';
-import { reviewCheckRows } from '../lib/review-checks';
-import { VERIFY_CHECK_ID } from '../../electron/shared/evidence';
-import { getProjectChecks } from '../store/evidence-state';
 import { getProject } from '../store/projects';
 import { startReview } from '../store/review-run';
-import { cancelTaskReview, reviewerName } from '../store/task-review';
+import {
+  cancelTaskReview,
+  reviewerName,
+  setTaskReviewModel,
+  taskReviewModel,
+} from '../store/task-review';
 import type { Task } from '../store/types';
 import { CheckIcon, PlusIcon, ReviewIcon } from './icons';
 import { createHeightTransition } from './understanding/create-height-transition';
 import { FollowUps } from './FollowUps';
 import { ReviewChecksPicker } from './ReviewChecksPicker';
+import { ReviewerMenu } from './ReviewerMenu';
 import { ReviewScoreCard } from './ReviewScoreCard';
 
 const quietButton: JSX.CSSProperties = {
@@ -215,7 +218,7 @@ export function ReviewSection(props: {
   const openUnlessToggled = () => {
     if (!userToggled && current()) setOpenSignal(true);
   };
-  // A review the user watched finish is of the code as it is now.
+  // A review the user watched finish is of the code as it is now, and they asked for it.
   createEffect(
     on(running, (now, was) => {
       if (was && !now) openUnlessToggled();
@@ -263,18 +266,14 @@ export function ReviewSection(props: {
       return next;
     });
 
-  // A task's first review asks what to run and on which reviewer; later ones run the saved pick.
+  // A project's first review asks what to run and on which reviewer; later ones run
+  // the saved pick at once. The chevron beside the button switches the reviewer, and
+  // Change settings is there for the odd task whose checks differ.
   const [picking, setPicking] = createSignal(false);
   const pickedChecks = () => getProject(props.task.projectId)?.reviewChecks;
-  const checkRows = () =>
-    reviewCheckRows(
-      pickedChecks() ?? [],
-      getProjectChecks(props.task.projectId),
-      props.task.evidence,
-    );
   // The review runs in the store, so closing the dialog leaves it running.
   const rate = () => {
-    if (!props.task.confidence || pickedChecks() === undefined) setPicking(true);
+    if (pickedChecks() === undefined) setPicking(true);
     else startReview(props.task.id);
   };
   const rateLabel = () => {
@@ -304,15 +303,6 @@ export function ReviewSection(props: {
   // A verify failure is said by the readiness row above, so only the review's own urgency warns here.
   const warn = () => hasResult() && !running() && urgent();
 
-  const failedChecks = () => {
-    const names = checkRows()
-      .filter((row) => row.failed)
-      .map((row) => row.name);
-    const verifyListed = checkRows().some((row) => row.id === VERIFY_CHECK_ID && row.failed);
-    return props.verifyFailed && !verifyListed ? ['Verify', ...names] : names;
-  };
-  const untested = () => summary().changes.filter((change) => !change.tested).length;
-
   const RiskRow = (rowProps: { id: string }) => {
     const textId = createUniqueId();
     const entry = () => risk(rowProps.id);
@@ -321,25 +311,23 @@ export function ReviewSection(props: {
         {(r) => (
           <li style={rowGrid}>
             <div
-              title={r().source}
+              // Where it came from and the score it lowers help weigh it, but only on a closer look.
+              title={[r().source, r().axis && `Lowers ${r().axis}`].filter(Boolean).join(' · ')}
               style={{ display: 'flex', 'flex-direction': 'column', gap: '2px', 'min-width': '0' }}
             >
               <span id={textId} style={{ color: r().dismissed ? theme.fgMuted : theme.fg }}>
                 {r().text}
               </span>
-              <span style={{ 'font-size': sf(12), color: theme.fgSubtle }}>
-                <Show when={!r().dismissed && r().urgent}>
-                  {/* An unbacked claim is the one kind of risk worth colour. */}
-                  <span style={{ color: theme.warning }}>{r().source}</span>
-                  <Show when={r().file}> · </Show>
-                </Show>
-                {[
-                  r().dismissed ? 'Accepted' : !r().urgent && r().axis && `Lowers ${r().axis}`,
-                  r().file,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </span>
+              <Show when={r().urgent || r().dismissed || r().file}>
+                <span style={{ 'font-size': sf(12), color: theme.fgSubtle }}>
+                  <Show when={!r().dismissed && r().urgent}>
+                    {/* An unbacked claim is the one kind of risk worth colour. */}
+                    <span style={{ color: theme.warning }}>{r().source}</span>
+                    <Show when={r().file}> · </Show>
+                  </Show>
+                  {[r().dismissed && 'Accepted', r().file].filter(Boolean).join(' · ')}
+                </span>
+              </Show>
             </div>
             <Show
               when={r().dismissed}
@@ -451,39 +439,8 @@ export function ReviewSection(props: {
           'border-radius': 'var(--radius-md)',
         }}
       >
-        <Show when={summary().goal}>
-          {(goal) => (
-            <p style={{ margin: '0', color: theme.fg }}>
-              <span style={{ color: theme.fgSubtle }}>Asked</span> {goal()}
-            </p>
-          )}
-        </Show>
         <Show when={summary().scores}>
-          {(scores) => (
-            <ReviewScoreCard
-              scores={scores()}
-              failedChecks={failedChecks()}
-              open={summary().openRisks}
-              urgent={urgent()}
-            />
-          )}
-        </Show>
-        <Show when={summary().keyLine}>
-          {(key) => (
-            <p style={{ margin: '0', 'font-size': sf(12), color: theme.fgMuted }}>
-              <span style={{ color: theme.fgSubtle }}>Read first</span>{' '}
-              <button
-                type="button"
-                style={{ ...linkButton, 'font-family': "'JetBrains Mono', monospace" }}
-                title="Open the diff at this line"
-                onClick={() => props.onOpenFile(key().file, key().line)}
-              >
-                {key().file}
-                {key().line ? `:${key().line}` : ''}
-              </button>{' '}
-              · {key().why}
-            </p>
-          )}
+          {(scores) => <ReviewScoreCard scores={scores()} goal={summary().goal} />}
         </Show>
 
         <Show when={summary().risks.length > 0}>
@@ -519,16 +476,15 @@ export function ReviewSection(props: {
           </div>
         </Show>
 
+        {/* Open, not folded: what a user will notice is what the merge is about. */}
         <Show when={summary().changes.length > 0}>
-          <details>
-            <summary style={{ ...heading4, cursor: 'pointer' }}>
-              What changed · {summary().changes.length}
-              <Show when={untested() > 0}> · {untested()} untested</Show>
-            </summary>
-            <ol style={{ ...list, 'padding-top': '8px' }}>
+          <div style={{ display: 'flex', 'flex-direction': 'column', gap: '10px' }}>
+            <h4 style={heading4}>What changed</h4>
+            <ol style={list}>
               <For each={summary().changes}>
                 {(change) => (
                   <li
+                    title={change.tested ? `Tested: ${change.tested}` : undefined}
                     style={{
                       display: 'grid',
                       'grid-template-columns': 'minmax(0, 1fr) auto',
@@ -542,18 +498,39 @@ export function ReviewSection(props: {
                         {(before) => <span style={{ color: theme.fgMuted }}> {before()}</span>}
                       </Show>
                     </span>
-                    <span style={{ 'font-size': sf(12), color: theme.fgSubtle }}>
-                      {change.tested ?? 'untested'}
-                    </span>
+                    {/* Only the gap is worth a word; which tests cover the rest is on hover. */}
+                    <Show when={!change.tested}>
+                      <span style={{ 'font-size': sf(12), color: theme.fgSubtle }}>untested</span>
+                    </Show>
                   </li>
                 )}
               </For>
             </ol>
-          </details>
+          </div>
+        </Show>
+
+        <Show when={summary().keyLine}>
+          {(key) => (
+            <p style={{ margin: '0', 'font-size': sf(12), color: theme.fgMuted }}>
+              <span style={{ color: theme.fgSubtle }}>Read first</span>{' '}
+              <button
+                type="button"
+                style={{ ...linkButton, 'font-family': "'JetBrains Mono', monospace" }}
+                title="Open the diff at this line"
+                onClick={() => props.onOpenFile(key().file, key().line)}
+              >
+                {key().file}
+                {key().line ? `:${key().line}` : ''}
+              </button>{' '}
+              · {key().why}
+            </p>
+          )}
         </Show>
 
         <div style={{ display: 'flex', 'flex-direction': 'column', gap: '4px' }}>
-          <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '12px' }}>
+          <div
+            style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '12px', 'align-items': 'center' }}
+          >
             <button type="button" style={linkButton} disabled={running()} onClick={rate}>
               {rateLabel()}
             </button>
@@ -566,6 +543,24 @@ export function ReviewSection(props: {
             >
               Change settings
             </button>
+            <Show when={canRework()}>
+              <button
+                type="button"
+                style={{
+                  ...dialogButtonStyle(false, pickedItems().length === 0),
+                  'margin-left': 'auto',
+                }}
+                disabled={pickedItems().length === 0}
+                title={
+                  pickedItems().length > 0
+                    ? 'Puts one prompt in the task input for you to edit and send'
+                    : 'Pick Fix or Revert above to ask the agent for changes'
+                }
+                onClick={stage}
+              >
+                Rework ({pickedItems().length})
+              </button>
+            </Show>
           </div>
           <Show when={props.task.confidence && failure()}>
             {(message) => (
@@ -575,32 +570,6 @@ export function ReviewSection(props: {
             )}
           </Show>
         </div>
-
-        <Show when={canRework()}>
-          <div
-            style={{
-              display: 'flex',
-              gap: '12px',
-              'align-items': 'center',
-              'padding-top': '12px',
-              'border-top': `1px solid ${theme.borderSubtle}`,
-            }}
-          >
-            <span style={{ flex: '1', 'font-size': sf(12), color: theme.fgSubtle }}>
-              {pickedItems().length > 0
-                ? 'Puts one prompt in the task input for you to edit and send.'
-                : 'Pick items above to ask the agent for changes.'}
-            </span>
-            <button
-              type="button"
-              style={dialogButtonStyle(false, pickedItems().length === 0)}
-              disabled={pickedItems().length === 0}
-              onClick={stage}
-            >
-              Rework ({pickedItems().length})
-            </button>
-          </div>
-        </Show>
       </div>
     </Show>
   );
@@ -654,6 +623,14 @@ export function ReviewSection(props: {
               </Show>
             </span>
           </button>
+          {/* Like the tour's model; waits while a review runs or the settings carry their own pick. */}
+          <ReviewerMenu
+            class="change-tour-model"
+            chevronOnly
+            disabled={running() || picking()}
+            value={taskReviewModel(props.task.id)}
+            onChange={(model) => setTaskReviewModel(props.task.id, model)}
+          />
         </div>
         <Show when={!props.task.confidence && failure()}>
           {(message) => (

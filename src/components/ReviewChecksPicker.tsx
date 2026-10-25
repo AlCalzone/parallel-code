@@ -55,8 +55,8 @@ const row: JSX.CSSProperties = {
 const hint: JSX.CSSProperties = { 'font-size': sf(12), color: theme.fgSubtle };
 
 /**
- * Picks what a review runs in this project, shown before the first review
- * and from the chevron on the review button after. The reviewer always runs: the review is
+ * Picks what a review runs in this project, shown before the project's first
+ * review and from Change settings after. The reviewer always runs: the review is
  * built from it. Checks that run on their own start picked; on-demand ones,
  * usually slow, start unpicked.
  */
