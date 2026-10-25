@@ -704,7 +704,11 @@ describe('ReviewSection', () => {
     expect(mockRate).toHaveBeenCalledWith('task');
     setState('reviewStatus', { state: 'running', startedAt: 5_000 });
     expect(heading(root)).toBe('Reviewing with opus');
-    expect(button(root, 'Reviewing…').hasAttribute('disabled')).toBe(true);
+    // The old review is not shown while it is being redone.
+    expect(root.textContent).not.toContain('the code changed since');
+    expect(buttons(root).some((b) => b.textContent === 'Run review again')).toBe(false);
+    setState('reviewStatus', undefined);
+    expect(root.textContent).toContain('the code changed since');
   });
 
   it('shows no rework footer when there is nothing to pick', () => {

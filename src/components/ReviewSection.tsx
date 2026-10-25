@@ -275,10 +275,7 @@ export function ReviewSection(props: {
     if (pickedChecks() === undefined) setPicking(true);
     else startReview(props.task.id);
   };
-  const rateLabel = () => {
-    if (running()) return 'Reviewing…';
-    return props.task.confidence ? 'Run review again' : 'Run review';
-  };
+  const rateLabel = () => (props.task.confidence ? 'Run review again' : 'Run review');
 
   const stage = () => {
     if (stageRework(props.task.id, pickedItems())) {
@@ -414,8 +411,9 @@ export function ReviewSection(props: {
     );
   };
 
+  // A review being redone hides the old one: its scores are about to be replaced.
   const body = () => (
-    <Show when={open() && hasResult()}>
+    <Show when={open() && hasResult() && !running()}>
       <div
         id={bodyId}
         style={{
@@ -520,13 +518,12 @@ export function ReviewSection(props: {
           <div
             style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '12px', 'align-items': 'center' }}
           >
-            <button type="button" style={linkButton} disabled={running()} onClick={rate}>
+            <button type="button" style={linkButton} onClick={rate}>
               {rateLabel()}
             </button>
             <button
               type="button"
               style={linkButton}
-              disabled={running()}
               title={`Checks and reviewer (${reviewerName(props.task.id)})`}
               onClick={() => setPicking(true)}
             >
