@@ -199,6 +199,10 @@ export function TaskPanel(props: TaskPanelProps) {
   // too, so the header keeps one height while a task runs.
   const showBrief = () => store.taskBriefs && props.task.agentIds.length > 0;
 
+  const finishTour = () => {
+    const basis = tour.basis();
+    return basis && { ...basis, stops: tour.stops().length };
+  };
   const openOrGenerateTour = () => {
     markFeatureHintSeen('change-tour');
     if (tour.stops().length === 0) return generateTour();
@@ -984,6 +988,7 @@ export function TaskPanel(props: TaskPanelProps) {
             onFinish={() => openFinish('merge')}
             pushing={pushing()}
             pushSuccess={pushSuccess()}
+            tour={finishTour()}
             onTitleEditRef={(h) => (titleEditHandle = h)}
           />
         </div>

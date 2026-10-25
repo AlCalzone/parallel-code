@@ -1,4 +1,4 @@
-import { createSignal, createEffect, Show } from 'solid-js';
+import { createRoot, createSignal, createEffect, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '../lib/ipc';
@@ -7,6 +7,7 @@ import { parseUnifiedDiff } from '../lib/unified-diff-parser';
 import { ChangeTour } from './ChangeTour';
 import { ChangeTourButton } from './ChangeTourButton';
 import { createChangeTour } from '../lib/create-change-tour';
+import { diffFingerprint } from '../lib/task-brief';
 import { info as logInfo } from '../lib/log';
 import { setAskCodeModel, setAskCodeProvider, store } from '../store/store';
 import {
@@ -65,6 +66,7 @@ function mount(initialDiff = diff, initiallyDisabled = false) {
   const [raw, setRaw] = createSignal(initialDiff);
   const [disabled, setDisabled] = createSignal(initiallyDisabled);
   const [readerOpen, setReaderOpen] = createSignal(false);
+  const [outdated, setOutdated] = createSignal(false);
   const navigate = vi.fn();
   const host = document.createElement('div');
   document.body.append(host);
@@ -77,6 +79,7 @@ function mount(initialDiff = diff, initiallyDisabled = false) {
           <ChangeTourButton
             tour={tour}
             disabled={disabled()}
+            outdated={outdated()}
             onClick={() => {
               if (tour.stops().length) setReaderOpen(true);
               else
@@ -100,7 +103,7 @@ function mount(initialDiff = diff, initiallyDisabled = false) {
       );
     }, host),
   );
-  return { host, setRaw, navigate, setReaderOpen, setDisabled };
+  return { host, setRaw, navigate, setReaderOpen, setDisabled, setOutdated };
 }
 function complete(index = 0, filePath = 'file.ts', questions?: string[]) {
   const stop = {
@@ -547,6 +550,35 @@ describe('guided tour', () => {
     items[1].querySelector('button')?.click();
     expect(host.querySelector('.understanding-overview')).toBeNull();
     expect(progressText(host)).toContain('2 / 2');
+  });
+
+  it('marks a ready tour of older code as out of date', () => {
+    const { host, setOutdated } = mount();
+    host.querySelector('button')?.click();
+    complete();
+    setOutdated(true);
+    expect(host.querySelector('button')?.textContent).toContain('Start tour · out of date');
+  });
+
+  it('drops the stop count from a resumed tour of older code', () => {
+    const { host, setReaderOpen, setOutdated } = openTour();
+    buttonByText(host, 'Next').click();
+    setReaderOpen(false);
+    setOutdated(true);
+    expect(host.querySelector('button')?.textContent).toContain('Resume tour · out of date');
+    expect(host.querySelector('button')?.textContent).not.toContain('2/2');
+  });
+
+  it('records the diff a whole-task tour explains, but not a single commit’s', async () => {
+    vi.mocked(invoke).mockResolvedValue(diff);
+    await createRoot(async (dispose) => {
+      const tour = createChangeTour();
+      await tour.generateForTask({ worktreePath: '/repo', taskName: 'Task' });
+      expect(tour.basis()?.fingerprint).toBe(diffFingerprint(diff));
+      await tour.generateForTask({ worktreePath: '/repo', taskName: 'Task', selectedCommit: 'c1' });
+      expect(tour.basis()).toBeUndefined();
+      dispose();
+    });
   });
 
   it('offers to resume a tour the reader left midway', () => {

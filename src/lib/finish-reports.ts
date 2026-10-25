@@ -1,12 +1,19 @@
 import { isConfidenceOutdated, type TaskConfidence } from './task-confidence';
 import type { TaskBriefRecord } from './task-brief';
 
-export type FinishReportKind = 'review' | 'screens';
+export type FinishReportKind = 'review' | 'tour' | 'screens';
 
-/** A report Finish can show that still describes the task's latest code. */
+/** A report Finish can show, and whether the code moved on since it was made. */
 export interface FinishReport {
   kind: FinishReportKind;
   label: string;
+  outdated: boolean;
+}
+
+/** When a change tour was generated, and the diff it explains. */
+export interface TourBasis {
+  generatedAt: number;
+  fingerprint: string;
 }
 
 export interface FinishReportsInput {
@@ -15,6 +22,8 @@ export interface FinishReportsInput {
   brief?: TaskBriefRecord;
   /** The latest finished capture, and how many screens it took. */
   screens?: CapturedScreens & { count: number };
+  /** The ready change tour of the whole task, and how many stops it has. */
+  tour?: TourBasis & { stops: number };
   /** The task's current commit; unknown counts as unchanged, as for verify runs. */
   headSha?: string | null;
 }
@@ -44,29 +53,59 @@ function reviewLabel(confidence: TaskConfidence): string {
   return scores.length ? `Review (lowest score ${Math.min(...scores)}%)` : 'Review';
 }
 
-/** The reports that are current for the task's latest code, in Finish's order. */
+/** Whether the task's diff changed since the tour was generated. Unknown counts as unchanged. */
+export function isTourOutdated(
+  tour: TourBasis,
+  code: Pick<FinishReportsInput, 'codeFingerprint' | 'brief'>,
+): boolean {
+  const generated = { publishedAt: tour.generatedAt, fingerprint: tour.fingerprint };
+  return isConfidenceOutdated(generated, code.codeFingerprint, code.brief);
+}
+
+/** The reports Finish can show for the task, in Finish's order. */
 export function finishReports(input: FinishReportsInput): FinishReport[] {
   const reports: FinishReport[] = [];
-  const { confidence, screens } = input;
-  if (confidence && !isConfidenceOutdated(confidence, input.codeFingerprint, input.brief)) {
-    reports.push({ kind: 'review', label: reviewLabel(confidence) });
+  const { confidence, tour, screens } = input;
+  if (confidence) {
+    reports.push({
+      kind: 'review',
+      label: reviewLabel(confidence),
+      outdated: isConfidenceOutdated(confidence, input.codeFingerprint, input.brief),
+    });
   }
-  if (screens && screens.count > 0 && !areScreensOutdated(screens, input)) {
+  if (tour && tour.stops > 0) {
+    const noun = tour.stops === 1 ? 'stop' : 'stops';
+    reports.push({
+      kind: 'tour',
+      label: `Tour (${tour.stops} ${noun})`,
+      outdated: isTourOutdated(tour, input),
+    });
+  }
+  if (screens && screens.count > 0) {
     const noun = screens.count === 1 ? 'screen' : 'screens';
-    reports.push({ kind: 'screens', label: `Before & after (${screens.count} ${noun})` });
+    reports.push({
+      kind: 'screens',
+      label: `Before & after (${screens.count} ${noun})`,
+      outdated: areScreensOutdated(screens, input),
+    });
   }
   return reports;
 }
 
-/** The Finish button's tooltip: the reports that are still current, and those being generated. */
+/** The Finish button's tooltip: the current reports, the outdated ones, and those being generated. */
 export function finishReportsTitle(
   base: string,
   reports: FinishReport[],
   generating: string[] = [],
 ): string {
   const lines = [base];
-  if (reports.length) {
-    lines.push('Current for the latest commit:', ...reports.map((r) => `· ${r.label}`));
+  const current = reports.filter((r) => !r.outdated);
+  const outdated = reports.filter((r) => r.outdated);
+  if (current.length) {
+    lines.push('Current for the latest commit:', ...current.map((r) => `· ${r.label}`));
+  }
+  if (outdated.length) {
+    lines.push('Out of date, the code changed since:', ...outdated.map((r) => `· ${r.label}`));
   }
   if (generating.length) lines.push(`Generating: ${generating.join(', ')}`);
   return lines.join('\n');

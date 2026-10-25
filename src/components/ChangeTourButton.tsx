@@ -11,7 +11,7 @@ import {
 } from '../lib/floating';
 import { store } from '../store/store';
 import { activeFeatureHint } from '../store/onboarding';
-import { CloseIcon } from './icons';
+import { CloseIcon, TourIcon } from './icons';
 import { askCodeLabel } from './understanding/ask-code-label';
 import { TourModelMenu } from './understanding/TourModelMenu';
 
@@ -22,15 +22,21 @@ export function ChangeTourButton(props: {
   tour: ChangeTourController;
   onClick: () => void;
   disabled?: boolean;
+  /** The ready tour explains code that has changed since. */
+  outdated?: boolean;
   /** Extra actions shown as segments between the tour action and the model menu. */
   children?: JSX.Element;
 }) {
   const ready = () => props.tour.stops().length > 0;
   /** A reader who closed the tour midway picks it up where they left. */
-  const resumeLabel = () =>
-    props.tour.step() > 0
-      ? `Resume tour · ${props.tour.step() + 1}/${props.tour.stops().length}`
-      : 'Start tour';
+  const resumeLabel = () => {
+    const verb = props.tour.step() > 0 ? 'Resume tour' : 'Start tour';
+    // The stop count gives way, so the one-line label in Finish keeps "out of date" in view.
+    if (props.outdated) return `${verb} · out of date`;
+    return props.tour.step() > 0
+      ? `${verb} · ${props.tour.step() + 1}/${props.tour.stops().length}`
+      : verb;
+  };
   const helpId = createUniqueId();
   const help = createHeldSignal<boolean>(150);
   // A first-use tip about the tour already explains it in the same spot.
@@ -135,9 +141,12 @@ export function ChangeTourButton(props: {
                   ? undefined
                   : props.tour.error() ||
                     (ready()
-                      ? props.tour.step() > 0
-                        ? `Resume guided tour at stop ${props.tour.step() + 1} of ${props.tour.stops().length}`
-                        : 'Start guided tour'
+                      ? (props.tour.step() > 0
+                          ? `Resume guided tour at stop ${props.tour.step() + 1} of ${props.tour.stops().length}`
+                          : 'Start guided tour') +
+                        (props.outdated
+                          ? '. Made before the latest changes; regenerate to cover them.'
+                          : '')
                       : undefined)
               }
               onClick={(event) => {
@@ -149,30 +158,11 @@ export function ChangeTourButton(props: {
               <Show
                 when={props.tour.loading()}
                 fallback={
-                  <Show
-                    when={ready()}
-                    fallback={
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.25"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <circle cx="4" cy="3" r="1.5" />
-                        <circle cx="12" cy="13" r="1.5" />
-                        <path d="M5.5 3h5a2.5 2.5 0 0 1 0 5h-5a2.5 2.5 0 0 0 0 5h5" />
-                      </svg>
-                    }
-                  >
+                  <Show when={ready()} fallback={<TourIcon size={14} />}>
                     <span
                       aria-label="Tour ready"
                       style={{
-                        color: theme.success,
+                        color: props.outdated ? theme.fgMuted : theme.success,
                         width: '14px',
                         'flex-shrink': '0',
                         'text-align': 'center',

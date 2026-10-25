@@ -79,7 +79,16 @@ vi.mock('./ConfirmDialog', () => ({
 }));
 vi.mock('./ChangeTourButton', () => ({
   // Renders its extra segments, where the dialog puts Regenerate.
-  ChangeTourButton: (props: { children?: JSX.Element }) => <span>tour{props.children}</span>,
+  ChangeTourButton: (props: { children?: JSX.Element; outdated?: boolean }) => (
+    <span data-testid="tour" data-outdated={String(!!props.outdated)}>
+      tour{props.children}
+    </span>
+  ),
+}));
+const refreshCodeFingerprint = vi.hoisted(() => vi.fn(() => Promise.resolve()));
+vi.mock('../store/task-brief', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../store/task-brief')>()),
+  refreshCodeFingerprint,
 }));
 vi.mock('./ChangedFilesList', () => ({ ChangedFilesList: () => null }));
 // Covered by its own tests; its store imports reach past this file's mocks.
@@ -203,10 +212,14 @@ function task(overrides: Partial<Task> = {}): Task {
   };
 }
 
-function tour(stops = 0): ChangeTourController {
+function tour(
+  stops = 0,
+  basis?: { generatedAt: number; fingerprint: string },
+): ChangeTourController {
   return {
     stops: () => Array.from({ length: stops }),
     loading: () => false,
+    basis: () => basis,
   } as unknown as ChangeTourController;
 }
 
@@ -727,6 +740,28 @@ describe('FinishDialog tour', () => {
     );
     regenerate?.click();
     expect(handlers.onRegenerateTour).toHaveBeenCalled();
+  });
+
+  it('marks a tour of code that changed since as out of date, after reading the code', async () => {
+    const basis = { generatedAt: 100, fingerprint: 'a' };
+    refreshCodeFingerprint.mockClear();
+    mount({ tour: tour(2, basis), task: task({ codeFingerprint: { fingerprint: 'b', at: 200 } }) });
+    expect(document.querySelector<HTMLElement>('[data-testid="tour"]')?.dataset.outdated).toBe(
+      'true',
+    );
+    expect(refreshCodeFingerprint).toHaveBeenCalledWith('parent');
+    dispose?.();
+    document.body.replaceChildren();
+    mount({ tour: tour(2, basis), task: task({ codeFingerprint: { fingerprint: 'a', at: 200 } }) });
+    expect(document.querySelector<HTMLElement>('[data-testid="tour"]')?.dataset.outdated).toBe(
+      'false',
+    );
+  });
+
+  it('does not read the code for a dialog without a tour', () => {
+    refreshCodeFingerprint.mockClear();
+    mount();
+    expect(refreshCodeFingerprint).not.toHaveBeenCalled();
   });
 
   it("offers the tour from the dialog's own status, not the task panel", async () => {

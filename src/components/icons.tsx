@@ -385,6 +385,25 @@ export function MentionIcon(props: IconProps): JSX.Element {
   );
 }
 
+/** A winding route between two stops, for the change tour. */
+export function TourIcon(props: IconProps): JSX.Element {
+  return (
+    <SvgIcon {...props}>
+      <g
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.25"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="4" cy="3" r="1.5" />
+        <circle cx="12" cy="13" r="1.5" />
+        <path d="M5.5 3h5a2.5 2.5 0 0 1 0 5h-5a2.5 2.5 0 0 0 0 5h5" />
+      </g>
+    </SvgIcon>
+  );
+}
+
 /** Clipboard with a check, for the review; hairline like the change tour's icon beside it. */
 export function ReviewIcon(props: IconProps): JSX.Element {
   return (

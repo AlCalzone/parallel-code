@@ -32,6 +32,7 @@ let container: HTMLDivElement;
 let dispose: () => void;
 const [pushing, setPushing] = createSignal(false);
 const [pushSuccess, setPushSuccess] = createSignal(false);
+const [tour, setTour] = createSignal<{ generatedAt: number; fingerprint: string; stops: number }>();
 const onFinish = vi.fn();
 
 beforeEach(() => {
@@ -43,6 +44,7 @@ beforeEach(() => {
   setStore('focusMode', false);
   setPushing(false);
   setPushSuccess(false);
+  setTour(undefined);
   onFinish.mockClear();
   container = document.createElement('div');
   document.body.append(container);
@@ -55,6 +57,7 @@ beforeEach(() => {
         onFinish={onFinish}
         pushing={pushing()}
         pushSuccess={pushSuccess()}
+        tour={tour()}
         onTitleEditRef={() => undefined}
       />
     ),
@@ -86,7 +89,7 @@ it('offers Finish as a labelled action that reflects push progress', () => {
   expect(finish?.dataset.state).toBe('pushed');
 });
 
-it('marks Finish with the reports that are current for the latest code', () => {
+it('marks Finish with its reports, fading those of older code', () => {
   const finish = container.querySelector<HTMLButtonElement>('.task-finish-btn');
   expect(finish?.querySelector('.task-finish-reports')).toBeNull();
   setStore('tasks', 'one', 'confidence', {
@@ -97,10 +100,26 @@ it('marks Finish with the reports that are current for the latest code', () => {
   });
   expect(finish?.querySelectorAll('.task-finish-reports svg')).toHaveLength(1);
   expect(finish?.title).toContain('Current for the latest commit:\n· Review (lowest score 82%)');
-  // A later read of different code makes the review outdated.
+  expect(finish?.querySelector('.task-finish-report-outdated')).toBeNull();
+  // A later read of different code makes the review outdated: still shown, but named so.
   setStore('tasks', 'one', 'codeFingerprint', { fingerprint: 'b', at: 200 });
-  expect(finish?.querySelector('.task-finish-reports')).toBeNull();
-  expect(finish?.title).toBe('Finish: merge into main (locally or via PR) or push');
+  expect(finish?.querySelectorAll('.task-finish-reports svg')).toHaveLength(1);
+  expect(finish?.querySelector('.task-finish-report-outdated')).not.toBeNull();
+  expect(finish?.title).toBe(
+    'Finish: merge into main (locally or via PR) or push\n' +
+      'Out of date, the code changed since:\n· Review (lowest score 82%)',
+  );
+  expect(finish?.getAttribute('aria-label')).toBe('Finish, out of date: Review (lowest score 82%)');
+});
+
+it('marks Finish with a ready tour, outdated once the diff changes', () => {
+  const finish = container.querySelector<HTMLButtonElement>('.task-finish-btn');
+  setTour({ generatedAt: 100, fingerprint: 'a', stops: 4 });
+  expect(finish?.querySelectorAll('.task-finish-reports svg')).toHaveLength(1);
+  expect(finish?.getAttribute('aria-label')).toBe('Finish, current: Tour (4 stops)');
+  setStore('tasks', 'one', 'codeFingerprint', { fingerprint: 'b', at: 200 });
+  expect(finish?.querySelector('.task-finish-report-outdated')).not.toBeNull();
+  expect(finish?.getAttribute('aria-label')).toBe('Finish, out of date: Tour (4 stops)');
 });
 
 it('shows a small spinner on Finish while a report is being generated', () => {

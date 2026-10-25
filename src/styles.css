@@ -278,6 +278,11 @@ body.font-smoothing {
   color: var(--fg-subtle);
 }
 
+/* Faded rather than hidden: the report exists, but describes older code. */
+.task-finish-reports > .task-finish-report-outdated {
+  opacity: 0.45;
+}
+
 /* Glyph-sized, so a running review or capture reads as background work, not as Finish loading. */
 .task-finish-reports > .task-finish-generating {
   width: 9px;
@@ -2560,6 +2565,14 @@ button {
   min-height: 32px;
   padding: 6px 14px;
   color: var(--fg);
+}
+
+/* One line, so "out of date" arriving after the code is re-read cannot grow the
+   row; the button's tooltip carries the full text. */
+.finish-followup .change-tour-action-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* An optional extra about the session, not the change, so it sits a step below

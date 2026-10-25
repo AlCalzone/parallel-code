@@ -29,6 +29,9 @@ import { store } from '../store/core';
 import { canCaptureScreens, taskScreens } from '../store/task-screens';
 import { theme } from '../lib/theme';
 import { isVerificationStale, summarizeVerificationRun } from '../lib/verification-run';
+import { isTourOutdated } from '../lib/finish-reports';
+import { errMessage, warn as logWarn } from '../lib/log';
+import { refreshCodeFingerprint } from '../store/task-brief';
 import { GitMergeIcon, SyncIcon, UploadIcon } from './icons';
 
 export type FinishAction = 'merge' | 'push';
@@ -80,6 +83,18 @@ export function FinishDialog(props: FinishDialogProps) {
   createEffect(() => {
     if (!props.open) setReviewLocation(undefined);
   });
+  // A tour is judged against the code as it is now, edits since the last turn included.
+  createEffect(
+    on(
+      () => props.open && !!props.tour.basis(),
+      (check) => {
+        if (!check) return;
+        refreshCodeFingerprint(props.task.id).catch((error: unknown) =>
+          logWarn('changeTour', 'Reading the code failed', { error: errMessage(error) }),
+        );
+      },
+    ),
+  );
   const push = createPushRun({
     get task() {
       return props.task;
@@ -228,11 +243,20 @@ export function FinishDialog(props: FinishDialogProps) {
     const status = merge.worktreeStatus();
     return !!status && !status.has_committed_changes && !status.has_uncommitted_changes;
   };
+  const tourOutdated = () => {
+    const basis = props.tour.basis();
+    return !!basis && isTourOutdated(basis, props.task);
+  };
   // A disabled tour with nothing to show or cancel would be an empty box.
   const tourShown = () => !tourDisabled() || props.tour.loading() || props.tour.stops().length > 0;
   const tourBox = () => (
     <div class="finish-followup">
-      <ChangeTourButton tour={props.tour} onClick={props.onTourClick} disabled={tourDisabled()}>
+      <ChangeTourButton
+        tour={props.tour}
+        onClick={props.onTourClick}
+        disabled={tourDisabled()}
+        outdated={tourOutdated()}
+      >
         <Show when={props.tour.stops().length > 0 && !props.tour.loading()}>
           <button
             type="button"

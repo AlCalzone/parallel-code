@@ -1,5 +1,5 @@
 import { For, Show, createSignal, onCleanup, onMount } from 'solid-js';
-import { Portal } from 'solid-js/web';
+import { Dynamic, Portal } from 'solid-js/web';
 import {
   store,
   reorderTask,
@@ -18,8 +18,13 @@ import { EditableText, type EditableTextHandle } from './EditableText';
 import { IconButton } from './IconButton';
 import { MoreMenu } from './chat/MoreMenu';
 import { StatusDot, getDotTooltip } from './StatusDot';
-import { ClockIcon, CloseIcon, ImageIcon, ReviewIcon } from './icons';
-import { finishReports, finishReportsTitle } from '../lib/finish-reports';
+import { ClockIcon, CloseIcon, ImageIcon, ReviewIcon, TourIcon } from './icons';
+import {
+  finishReports,
+  finishReportsTitle,
+  type FinishReportKind,
+  type FinishReportsInput,
+} from '../lib/finish-reports';
 import { taskScreens } from '../store/task-screens';
 import { withViewTransition } from '../lib/viewTransition';
 import { handleDragReorder } from '../lib/dragReorder';
@@ -36,6 +41,8 @@ interface TaskTitleBarProps {
   onFinish: () => void;
   pushing: boolean;
   pushSuccess: boolean;
+  /** The ready change tour, if one was generated for the whole task. */
+  tour?: FinishReportsInput['tour'];
   onTitleEditRef: (h: EditableTextHandle) => void;
 }
 
@@ -58,11 +65,12 @@ export function TaskTitleBar(props: TaskTitleBarProps) {
     }
     return displayTaskNameFromPrompt(initialPrompt) || props.task.name;
   };
-  // Reports for older code would mislead, so only current ones show on the button.
+  // Reports for older code still show, dimmed and named as out of date, so they are not mistaken for current ones.
   const reports = () => {
     const screens = taskScreens(props.task.id);
     return finishReports({
       confidence: props.task.confidence,
+      tour: props.tour,
       codeFingerprint: props.task.codeFingerprint,
       brief: props.task.brief,
       ...(screens?.state === 'done' && {
@@ -93,11 +101,14 @@ export function TaskTitleBar(props: TaskTitleBarProps) {
         );
   };
   const finishLabel = () => {
+    const named = (outdated: boolean) =>
+      reports()
+        .filter((report) => report.outdated === outdated)
+        .map((report) => report.label)
+        .join(', ');
     const parts = [
-      reports().length &&
-        `current: ${reports()
-          .map((report) => report.label)
-          .join(', ')}`,
+      named(false) && `current: ${named(false)}`,
+      named(true) && `out of date: ${named(true)}`,
       generating().length && `generating: ${generating().join(', ')}`,
     ].filter(Boolean);
     return !props.pushing && parts.length ? `Finish, ${parts.join('; ')}` : undefined;
@@ -177,9 +188,13 @@ export function TaskTitleBar(props: TaskTitleBarProps) {
               <Show when={!props.pushing && (reports().length > 0 || generating().length > 0)}>
                 <span class="task-finish-reports" aria-hidden="true">
                   <For each={reports()}>
-                    {(report) =>
-                      report.kind === 'review' ? <ReviewIcon size={11} /> : <ImageIcon size={11} />
-                    }
+                    {(report) => (
+                      <Dynamic
+                        component={REPORT_ICONS[report.kind]}
+                        size={11}
+                        class={report.outdated ? 'task-finish-report-outdated' : undefined}
+                      />
+                    )}
                   </For>
                   <Show when={generating().length > 0}>
                     <span class="inline-spinner task-finish-generating" />
@@ -258,6 +273,12 @@ function hintPosition(rect: DOMRect): Record<string, string> {
   }
   return { left: `${rect.left}px`, bottom: `${window.innerHeight - rect.top + HINT_GAP}px` };
 }
+
+const REPORT_ICONS: Record<FinishReportKind, typeof ReviewIcon> = {
+  review: ReviewIcon,
+  tour: TourIcon,
+  screens: ImageIcon,
+};
 
 /**
  * The header shows the status as an icon only; hovering it names the state at
