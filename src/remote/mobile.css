@@ -432,6 +432,52 @@ textarea.mobile-input {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.agent-pr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg-muted);
+}
+.agent-pr-chip,
+.agent-pr-babysit {
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+  flex-shrink: 0;
+}
+.agent-pr-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.agent-pr.ready .agent-pr-chip {
+  color: var(--success);
+  font-weight: 600;
+}
+/* GitHub's merged purple, as on the desktop board's PR chip. */
+.agent-pr.merged .agent-pr-chip {
+  color: #8957e5;
+  font-weight: 600;
+}
+.agent-pr.failed {
+  color: var(--error);
+  font-weight: 600;
+}
+.agent-pr.failed .agent-pr-chip {
+  background: color-mix(in srgb, var(--error) 14%, transparent);
+}
+/* A pressed toggle on the desktop, so it may carry the accent. */
+.agent-pr-babysit {
+  color: var(--accent);
+  font-weight: 400;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
 .mobile-footer {
   padding: 12px 16px max(12px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);

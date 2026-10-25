@@ -211,3 +211,39 @@ it('groups tasks under the desktop board lanes and names a ready task by its che
   expect(host.textContent).toContain('2 tasks need your attention');
   expect(group('In pull request')?.querySelector('.agent-card.attention')).not.toBeNull();
 });
+
+it("shows a task's PR row like the board card, without repeating its checks in the status", () => {
+  const base = { status: 'running', exitCode: null, lastLine: '', lane: 'pr' } as const;
+  const list: RemoteAgent[] = [
+    {
+      ...base,
+      agentId: 'a1',
+      taskId: 't1',
+      taskName: 'Red PR',
+      attention: 'idle',
+      ci: 'failure',
+      pr: {
+        url: 'https://github.com/o/r/pull/42',
+        label: 'CI failed',
+        kind: 'failed',
+        babysit: true,
+      },
+    },
+    { ...base, agentId: 'a2', taskId: 't2', taskName: 'No PR', attention: 'idle' },
+  ];
+  Socket.current.onmessage?.({ data: JSON.stringify({ type: 'agents', list }) });
+  dispose = render(
+    () => <AgentList onSelect={() => {}} onNewTask={() => {}} onPair={() => {}} />,
+    host,
+  );
+  const [red, plain] = host.querySelectorAll('.agent-card');
+  const row = red?.querySelector('.agent-pr');
+  expect(row?.textContent).toContain('PR #42');
+  expect(row?.textContent).toContain('CI failed');
+  expect(row?.textContent).toContain('Babysitting');
+  expect(row?.classList.contains('failed')).toBe(true);
+  expect(red?.querySelector('.agent-status')?.textContent).not.toContain('CI failed');
+  // Failed CI still needs the user even though the PR row, not the pill, says so.
+  expect(red?.classList.contains('attention')).toBe(true);
+  expect(plain?.querySelector('.agent-pr')).toBeNull();
+});

@@ -2,6 +2,7 @@ import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { agents, status, canControl } from './ws';
 import { agentStatusDisplay, isCiFailed } from './attention';
 import { ConnectionBanner } from './ConnectionBanner';
+import { TaskPr } from './TaskPr';
 import { NotificationSettings } from './NotificationSettings';
 import { readLocal, writeLocal } from './storage';
 import { ProjectSwatch } from '../components/ProjectSwatch';
@@ -189,7 +190,9 @@ export function AgentList(props: AgentListProps) {
                   </h2>
                   <For each={items()}>
                     {(agent: RemoteAgent) => {
-                      const display = () => agentStatusDisplay(agent);
+                      // The PR row already spells out what the checks say, so the status does not repeat it.
+                      const display = () =>
+                        agentStatusDisplay(agent.pr?.label ? { ...agent, ci: undefined } : agent);
                       return (
                         <button
                           class="agent-card"
@@ -226,6 +229,7 @@ export function AgentList(props: AgentListProps) {
                               {agent.lastLine}
                             </p>
                           </Show>
+                          <Show when={agent.pr}>{(pr) => <TaskPr pr={pr()} />}</Show>
                         </button>
                       );
                     }}
