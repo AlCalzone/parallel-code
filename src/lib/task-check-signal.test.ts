@@ -158,7 +158,7 @@ describe('taskCheckSignal', () => {
   });
 
   it('falls back to the verify run without evidence', () => {
-    expect(runSignal({ status: 'failed', exitCode: 1 })?.label).toBe('Fix failing verify');
+    expect(runSignal({ status: 'failed', exitCode: 1 })?.label).toBe('Verify failed');
     expect(runSignal({}, 'b'.repeat(40))?.label).toBe('Re-run verify');
     expect(runSignal({ dirty: true })?.label).toBe('Re-run verify');
   });
@@ -189,7 +189,7 @@ describe('taskCheckSignal', () => {
       verifyCommandConfigured: false,
       headSha: HEAD,
     });
-    expect(signal?.label).toBe('Fix failing verify');
+    expect(signal?.label).toBe('Verify failed');
   });
 
   it('uses the agent report only when no verify command or run exists', () => {
