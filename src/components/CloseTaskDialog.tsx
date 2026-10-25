@@ -23,6 +23,14 @@ export function shouldDisableCloseTaskConfirm(
   return worktreeStatusLoading && task.gitIsolation === 'worktree' && !task.externalWorktree;
 }
 
+/** Closes the task without asking; callers have already confirmed or checked it is safe. */
+export function closeTaskNow(taskId: string, kind: 'merged' | 'closed'): void {
+  // The board's side panel goes at once; the card shows the teardown.
+  if (boardSidePanelOpen() && store.activeTaskId === taskId) closeSidePanel();
+  armSpCompletion(taskId, { kind });
+  void closeTask(taskId);
+}
+
 export function CloseTaskDialog(props: CloseTaskDialogProps) {
   const [worktreeStatus] = createResource(
     () =>
@@ -160,10 +168,7 @@ export function CloseTaskDialog(props: CloseTaskDialogProps) {
       danger={props.task.gitIsolation === 'worktree' && !props.task.externalWorktree}
       onConfirm={() => {
         props.onDone();
-        // The board's side panel goes at once; the card shows the teardown.
-        if (boardSidePanelOpen() && store.activeTaskId === props.task.id) closeSidePanel();
-        armSpCompletion(props.task.id, { kind: 'closed' });
-        closeTask(props.task.id);
+        closeTaskNow(props.task.id, 'closed');
       }}
       onCancel={() => props.onDone()}
     />
