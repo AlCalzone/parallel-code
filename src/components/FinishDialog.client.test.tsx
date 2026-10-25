@@ -1,6 +1,7 @@
 import { Show, type JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { closeTaskNow } from './CloseTaskDialog';
 import { FinishDialog } from './FinishDialog';
 import { invoke } from '../lib/ipc';
 import { setStore } from '../store/core';
@@ -91,6 +92,7 @@ vi.mock('./EvidencePanel', () => ({
   ),
 }));
 vi.mock('../store/tasks', () => ({ sendPrompt: vi.fn() }));
+vi.mock('./CloseTaskDialog', () => ({ closeTaskNow: vi.fn() }));
 vi.mock('../store/notification', () => ({ showNotification: vi.fn() }));
 vi.mock('../store/github', () => ({
   getPullRequestDetails: vi.fn(),
@@ -547,6 +549,12 @@ describe('FinishDialog GitHub', () => {
 const PR_URL = 'https://github.com/o/r/pull/42';
 const bypassCheckbox = () =>
   document.querySelector<HTMLInputElement>('[data-testid="bypass-protection"]');
+const closeAfterMergeCheckbox = () =>
+  [...document.querySelectorAll('label')]
+    .find((label) => label.textContent === 'Close task after merge')
+    ?.querySelector('input');
+// Keeps the task open after the PR merges, so the footer offers Close task.
+const optOutOfClose = () => closeAfterMergeCheckbox()?.click();
 
 function prDetails(overrides: Partial<PullRequestDetails> = {}): PullRequestDetails {
   return {
@@ -567,7 +575,52 @@ function prDetails(overrides: Partial<PullRequestDetails> = {}): PullRequestDeta
 }
 
 describe('FinishDialog with an open PR', () => {
-  it('merges the PR on GitHub, then offers to close the task', async () => {
+  it('merges the PR on GitHub and closes the task', async () => {
+    vi.mocked(getPullRequestDetails).mockResolvedValue(prDetails());
+    vi.mocked(mergePullRequestForTask).mockResolvedValueOnce(true);
+    const handlers = mount({ task: task({ prUrl: PR_URL }) });
+    await flush();
+    expect(closeAfterMergeCheckbox()?.checked).toBe(true);
+    confirmButton()?.click();
+    await flush();
+    expect(handlers.onClose).toHaveBeenCalled();
+    expect(closeTaskNow).toHaveBeenCalledWith('parent', 'merged');
+    expect(handlers.onCloseTask).not.toHaveBeenCalled();
+  });
+
+  it('asks before closing a merged task with uncommitted changes', async () => {
+    mockInvoke((channel) => {
+      if (channel === IPC.GetBranchLog) return '';
+      if (channel === IPC.CheckMergeStatus) return { conflicting_files: [], main_ahead_count: 0 };
+      return {
+        current_branch: 'task/parent',
+        has_committed_changes: true,
+        has_uncommitted_changes: true,
+        head_sha: 'local',
+      };
+    });
+    vi.mocked(getPullRequestDetails).mockResolvedValue(prDetails());
+    vi.mocked(mergePullRequestForTask).mockResolvedValueOnce(true);
+    const handlers = mount({ task: task({ prUrl: PR_URL }) });
+    await flush();
+    confirmButton()?.click();
+    await flush();
+    expect(closeTaskNow).not.toHaveBeenCalled();
+    expect(handlers.onCloseTask).toHaveBeenCalled();
+  });
+
+  it('offers no close opt-out for a parent, which closes separately', async () => {
+    vi.mocked(getPullRequestDetails).mockResolvedValue(prDetails());
+    vi.mocked(mergePullRequestForTask).mockResolvedValueOnce(true);
+    mount({ task: task({ prUrl: PR_URL, coordinatorMode: true }) });
+    await flush();
+    expect(closeAfterMergeCheckbox()).toBeUndefined();
+    confirmButton()?.click();
+    await flush();
+    expect(closeTaskNow).not.toHaveBeenCalled();
+  });
+
+  it('merges the PR on GitHub, then offers to close the task when opted out', async () => {
     vi.mocked(getPullRequestDetails).mockResolvedValueOnce(prDetails());
     vi.mocked(getPullRequestDetails).mockResolvedValueOnce(prDetails({ state: 'MERGED' }));
     vi.mocked(mergePullRequestForTask).mockResolvedValueOnce(true);
@@ -576,6 +629,7 @@ describe('FinishDialog with an open PR', () => {
     expect(confirmButton()?.textContent).toBe('Squash and merge');
     // Local merge options would describe a merge that will not happen.
     expect(document.body.textContent).not.toContain('Squash commits');
+    optOutOfClose();
     confirmButton()?.click();
     await flush();
     await flush();
@@ -708,6 +762,7 @@ describe('FinishDialog with an open PR', () => {
     vi.mocked(mergePullRequestForTask).mockResolvedValueOnce(true);
     mount({ task: task({ prUrl: PR_URL }) });
     await flush();
+    optOutOfClose();
     confirmButton()?.click();
     await flush();
     await flush();
