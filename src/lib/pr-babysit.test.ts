@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_BABYSIT_ATTEMPTS, nextBabysitStep, type BabysitChecks } from './pr-babysit';
+import {
+  MAX_BABYSIT_ATTEMPTS,
+  babysitCiWaitReason,
+  nextBabysitStep,
+  type BabysitChecks,
+} from './pr-babysit';
 
 const failed = (headSha: string): BabysitChecks => ({ overall: 'failure', headSha });
 
@@ -44,5 +49,29 @@ describe('nextBabysitStep', () => {
     expect(
       nextBabysitStep({ attempts: 1 }, { overall: 'failure', headSha: 'a', merged: true }),
     ).toEqual({ kind: 'done' });
+  });
+});
+
+describe('babysitCiWaitReason', () => {
+  it('names what CI is still doing', () => {
+    expect(babysitCiWaitReason({ attempts: 0 }, undefined)).toBe(
+      'Waiting for the PR checks to load',
+    );
+    expect(babysitCiWaitReason({ attempts: 0 }, { overall: 'pending', headSha: 'a' })).toBe(
+      'Waiting for CI to finish',
+    );
+    expect(babysitCiWaitReason({ attempts: 0 }, { overall: 'success', headSha: 'a' })).toBe(
+      'CI is passing',
+    );
+  });
+
+  it('waits for a push once a failing commit was handled', () => {
+    expect(babysitCiWaitReason({ attempts: 1, lastSentSha: 'a' }, failed('a'))).toBe(
+      'Waiting for a new push',
+    );
+  });
+
+  it('leaves a new failure to the agent check', () => {
+    expect(babysitCiWaitReason({ attempts: 1, lastSentSha: 'a' }, failed('b'))).toBeNull();
   });
 });

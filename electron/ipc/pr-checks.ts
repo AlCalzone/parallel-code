@@ -35,6 +35,8 @@ interface TaskEntry {
   taskId: string;
   taskName: string;
   prUrl: string;
+  /** Babysat PRs keep polling while the window is hidden, so their failures still reach the agent. */
+  babysit: boolean;
   overall: PrChecksOverall;
   isDraft: boolean;
   reviewDecision: PrReviewDecision | null;
@@ -65,7 +67,8 @@ let disabledReason: 'missing' | 'auth' | null = null;
  *  We do NOT pause polling on `blur` — the point of OS notifications is to tell
  *  the user something finished while they were doing something else. We only
  *  pause if the window is actually hidden (minimised / cmd-H), which is the
- *  real "user isn't looking" signal. */
+ *  real "user isn't looking" signal. Babysat PRs are the exception: the agent,
+ *  not the user, acts on their failures. */
 export function initPrChecks(mainWindow: BrowserWindow): void {
   win = mainWindow;
   mainWindow.on('show', () => {
@@ -74,12 +77,8 @@ export function initPrChecks(mainWindow: BrowserWindow): void {
       runTick().catch((err) => console.warn('[pr-checks] show tick failed:', err));
     }
   });
-  mainWindow.on('hide', () => {
-    clearTickInterval();
-  });
-  mainWindow.on('minimize', () => {
-    clearTickInterval();
-  });
+  mainWindow.on('hide', pauseUnlessBabysitting);
+  mainWindow.on('minimize', pauseUnlessBabysitting);
   mainWindow.on('restore', () => {
     if (tasks.size > 0 && !disabled) {
       ensureInterval();
@@ -101,6 +100,7 @@ export function startPrChecksWatcher(args: {
   prUrl: string;
   taskName: string;
   watchId: string;
+  babysit: boolean;
 }): void {
   if (disabled) return;
   if (!isPrUrl(args.prUrl)) return;
@@ -112,12 +112,14 @@ export function startPrChecksWatcher(args: {
   // not leak into the new one. A rename-only update (same URL) just updates
   // the display name.
   const isFreshSubscription = !existing || existing.prUrl !== args.prUrl;
+  const { babysit } = args;
   const next: TaskEntry = isFreshSubscription
     ? {
         watchId,
         taskId: args.taskId,
         taskName: args.taskName,
         prUrl: args.prUrl,
+        babysit,
         overall: 'pending',
         isDraft: false,
         reviewDecision: null,
@@ -133,7 +135,7 @@ export function startPrChecksWatcher(args: {
         lastNotifiedOutcome: null,
         postPushRefreshUntil: null,
       }
-    : { ...existing, taskName: args.taskName };
+    : { ...existing, taskName: args.taskName, babysit };
   tasks.set(watchId, next);
   ensureInterval();
   if (isFreshSubscription) {
@@ -182,11 +184,26 @@ function windowIsVisible(): boolean {
   return !!win && !win.isDestroyed() && win.isVisible();
 }
 
+function hasBabysitEntry(): boolean {
+  for (const entry of tasks.values()) if (entry.babysit) return true;
+  return false;
+}
+
+function pauseUnlessBabysitting(): void {
+  if (!hasBabysitEntry()) clearTickInterval();
+}
+
 function ensureInterval(): void {
   if (tickHandle || disabled) return;
-  if (!windowIsVisible()) return;
+  if (!windowIsVisible() && !hasBabysitEntry()) return;
   tickHandle = setInterval(() => {
-    runTick().catch((err) => console.warn('[pr-checks] tick failed:', err));
+    const hidden = !windowIsVisible();
+    // Babysitting was turned off while hidden; nothing else polls until shown again.
+    if (hidden && !hasBabysitEntry()) {
+      clearTickInterval();
+      return;
+    }
+    runTick(hidden).catch((err) => console.warn('[pr-checks] tick failed:', err));
   }, TICK_MS);
   tickHandle.unref();
 }
@@ -198,13 +215,15 @@ function clearTickInterval(): void {
   }
 }
 
-async function runTick(): Promise<void> {
+/** `babysatOnly` skips the PRs nobody acts on while the window is hidden. */
+async function runTick(babysatOnly = false): Promise<void> {
   if (disabled || isRefreshing) return;
   isRefreshing = true;
   try {
     const now = Date.now();
     const due: string[] = [];
     for (const entry of tasks.values()) {
+      if (babysatOnly && !entry.babysit) continue;
       if (entry.overall === 'pending') {
         due.push(entry.watchId);
       } else if (now - entry.lastRefreshedAt >= SETTLED_REFRESH_MS) {

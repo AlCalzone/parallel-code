@@ -245,6 +245,7 @@ describe('startPrChecksSubscription branch PR detection', () => {
       watchId: 'task-1',
       prUrl: 'https://github.com/acme/app/pull/12',
       taskName: 'Task',
+      babysit: false,
     });
     disposeRoot?.();
   });
@@ -433,12 +434,14 @@ describe('startPrChecksSubscription additional PRs', () => {
       watchId: 'task-1',
       prUrl: primaryUrl,
       taskName: 'Task',
+      babysit: false,
     });
     expect(mockFireAndForget).toHaveBeenCalledWith(IPC.StartPrChecksWatcher, {
       taskId: 'task-1',
       watchId: apiWatchId,
       prUrl: apiUrl,
       taskName: 'Task · api #7',
+      babysit: false,
     });
     dispose();
   });
@@ -614,6 +617,7 @@ describe('startPrChecksSubscription additional PRs', () => {
       watchId: 'task-1',
       prUrl: nextUrl,
       taskName: 'Task',
+      babysit: false,
     });
     dispose();
   });

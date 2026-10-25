@@ -103,12 +103,15 @@ interface ActiveWatcher {
   taskId: string;
   prUrl: string;
   taskName: string;
+  /** Asks the main process to keep polling while the window is hidden. */
+  babysit: boolean;
 }
 
 export function startPrChecksSubscription(): () => void {
   // Track which PRs we currently have a watcher registered for, by watcher ID
   // (the task ID for a task's primary PR). Stores both the PR URL and the
-  // notification name so a rename-only change refreshes the watcher's name.
+  // notification name so a rename-only change refreshes the watcher's name,
+  // and the babysit flag so toggling it reaches the main process.
   const activeByWatchId = new Map<string, ActiveWatcher>();
   const branchProbeByTaskId = new Map<string, { key: string; attemptedAt: number }>();
   const pendingBranchProbes = new Set<string>();
@@ -120,7 +123,13 @@ export function startPrChecksSubscription(): () => void {
 
   const startWatcher = (watchId: string, watcher: ActiveWatcher): void => {
     const prev = activeByWatchId.get(watchId);
-    if (prev && prev.prUrl === watcher.prUrl && prev.taskName === watcher.taskName) return;
+    if (
+      prev &&
+      prev.prUrl === watcher.prUrl &&
+      prev.taskName === watcher.taskName &&
+      prev.babysit === watcher.babysit
+    )
+      return;
     activeByWatchId.set(watchId, watcher);
     fireAndForget(IPC.StartPrChecksWatcher, { ...watcher, watchId });
   };
@@ -309,7 +318,12 @@ export function startPrChecksSubscription(): () => void {
       const prUrl = taskPrUrl(task);
       if (prUrl && closedPrimaryByTaskId.get(taskId) !== prUrl) {
         seen.add(taskId);
-        startWatcher(taskId, { taskId, prUrl, taskName: task.name });
+        startWatcher(taskId, {
+          taskId,
+          prUrl,
+          taskName: task.name,
+          babysit: task.prBabysit !== undefined,
+        });
       }
       for (const pr of getTaskExtraPrs(taskId)) {
         const watchId = extraPrWatchId(taskId, pr.url);
@@ -318,6 +332,8 @@ export function startPrChecksSubscription(): () => void {
           taskId,
           prUrl: pr.url,
           taskName: `${task.name} · ${extraPrLabel(pr)}`,
+          // Babysitting follows the primary PR only.
+          babysit: false,
         });
       }
     }

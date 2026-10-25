@@ -2,7 +2,13 @@ import { createSignal } from 'solid-js';
 import { errMessage } from '../lib/log';
 import { MAX_BABYSIT_ATTEMPTS } from '../lib/pr-babysit';
 import { showNotification } from '../store/store';
-import { getPrBabysit, startPrBabysit, stopPrBabysit } from '../store/pr-babysit';
+import {
+  babysitAgentBlocker,
+  getPrBabysit,
+  prBabysitStatus,
+  startPrBabysit,
+  stopPrBabysit,
+} from '../store/pr-babysit';
 import { EyeIcon } from './icons';
 
 /** Toggles automatic hand-off of the PR's CI failures to the task's agent.
@@ -13,7 +19,7 @@ export function BabysitButton(props: { taskId: string; class?: string }) {
   const title = () => {
     const attempts = getPrBabysit(props.taskId)?.attempts ?? 0;
     return on()
-      ? `Babysitting: CI failures go to the agent automatically (${attempts}/${MAX_BABYSIT_ATTEMPTS} fix attempts used). Click to stop.`
+      ? `Babysitting: CI failures go to the agent automatically (${attempts}/${MAX_BABYSIT_ATTEMPTS} fix attempts used). ${prBabysitStatus(props.taskId) ?? ''}. Click to stop.`
       : 'Send CI failures to the agent automatically until the checks pass';
   };
   const toggle = async () => {
@@ -24,7 +30,13 @@ export function BabysitButton(props: { taskId: string; class?: string }) {
     setBusy(true);
     try {
       if (await startPrBabysit(props.taskId)) {
-        showNotification('Babysitting: CI failures will go to the agent automatically.');
+        // A busy agent frees up by itself; other holds need the user, so name them now.
+        const blocker = babysitAgentBlocker(props.taskId);
+        showNotification(
+          blocker && blocker !== 'The agent is busy'
+            ? `Babysitting, but failures wait until this clears: ${blocker}.`
+            : 'Babysitting: CI failures will go to the agent automatically.',
+        );
       }
     } catch (err) {
       showNotification(`Could not start babysitting: ${errMessage(err)}`);
