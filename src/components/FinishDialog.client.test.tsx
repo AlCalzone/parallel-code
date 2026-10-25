@@ -198,7 +198,9 @@ function tour(stops = 0): ChangeTourController {
   } as unknown as ChangeTourController;
 }
 
-function mount(options: { task?: Task; tour?: ChangeTourController } = {}) {
+function mount(
+  options: { task?: Task; tour?: ChangeTourController; initialCleanup?: boolean } = {},
+) {
   const handlers = {
     onClose: vi.fn(),
     onCloseTask: vi.fn(),
@@ -212,7 +214,7 @@ function mount(options: { task?: Task; tour?: ChangeTourController } = {}) {
       <FinishDialog
         open
         task={options.task ?? task()}
-        initialCleanup
+        initialCleanup={options.initialCleanup ?? true}
         tour={options.tour ?? tour()}
         tourDisabled={false}
         onTourClick={() => {}}
@@ -586,6 +588,39 @@ describe('FinishDialog with an open PR', () => {
     expect(handlers.onClose).toHaveBeenCalled();
     expect(closeTaskNow).toHaveBeenCalledWith('parent', 'merged');
     expect(handlers.onCloseTask).not.toHaveBeenCalled();
+  });
+
+  it('closes after the merge even where branches are kept on close', async () => {
+    vi.mocked(getPullRequestDetails).mockResolvedValue(prDetails());
+    vi.mocked(mergePullRequestForTask).mockResolvedValueOnce(true);
+    mount({ task: task({ prUrl: PR_URL }), initialCleanup: false });
+    await flush();
+    expect(closeAfterMergeCheckbox()?.checked).toBe(true);
+    confirmButton()?.click();
+    await flush();
+    expect(closeTaskNow).toHaveBeenCalledWith('parent', 'merged');
+  });
+
+  it('asks before closing when the worktree status cannot be read', async () => {
+    mockInvoke((channel) => {
+      if (channel === IPC.GetBranchLog) return '';
+      if (channel === IPC.CheckMergeStatus) return { conflicting_files: [], main_ahead_count: 0 };
+      if (
+        channel === IPC.GetWorktreeStatus &&
+        vi.mocked(mergePullRequestForTask).mock.calls.length > 0
+      )
+        throw new Error('worktree gone');
+      return { current_branch: 'task/parent', has_committed_changes: true, head_sha: 'local' };
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(getPullRequestDetails).mockResolvedValue(prDetails());
+    vi.mocked(mergePullRequestForTask).mockResolvedValueOnce(true);
+    const handlers = mount({ task: task({ prUrl: PR_URL }) });
+    await flush();
+    confirmButton()?.click();
+    await flush();
+    expect(closeTaskNow).not.toHaveBeenCalled();
+    expect(handlers.onCloseTask).toHaveBeenCalled();
   });
 
   it('asks before closing a merged task with uncommitted changes', async () => {

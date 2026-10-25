@@ -192,18 +192,22 @@ export function MergeChanges(props: MergeSectionProps & { children?: JSX.Element
 }
 
 /** Opt-out of removing the task once it merged, locally or through its PR. */
-export function CleanupOption(
-  props: Pick<MergeSectionProps, 'task' | 'state'> & { children: JSX.Element },
-) {
+export function CleanupOption(props: {
+  task: Task;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+  children: JSX.Element;
+}) {
   return (
     // Imported worktrees are user-owned — never offer to delete them or their branch.
     <Show when={!props.task.externalWorktree}>
       <label style={optionStyle}>
         <input
           type="checkbox"
-          checked={!props.state.requiresSeparateClose() && props.state.cleanupAfterMerge()}
-          disabled={props.state.requiresSeparateClose()}
-          onChange={(e) => props.state.setCleanupAfterMerge(e.currentTarget.checked)}
+          checked={props.checked}
+          disabled={props.disabled}
+          onChange={(e) => props.onChange(e.currentTarget.checked)}
           style={{ cursor: 'pointer' }}
         />
         {props.children}
@@ -217,7 +221,12 @@ export function MergeOptions(props: Pick<MergeSectionProps, 'task' | 'state'>) {
   return (
     <>
       <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '6px 20px' }}>
-        <CleanupOption task={props.task} state={props.state}>
+        <CleanupOption
+          task={props.task}
+          checked={!props.state.requiresSeparateClose() && props.state.cleanupAfterMerge()}
+          disabled={props.state.requiresSeparateClose()}
+          onChange={(checked) => props.state.setCleanupAfterMerge(checked)}
+        >
           Delete branch and worktree after merge
         </CleanupOption>
         <label style={optionStyle}>

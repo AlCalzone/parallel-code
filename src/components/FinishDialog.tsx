@@ -1,7 +1,9 @@
 import { Show, createEffect, createSignal, on } from 'solid-js';
 import type { ChangeTourController } from '../lib/create-change-tour';
 import type { Task } from '../store/types';
-import type { ChangedFile } from '../ipc/types';
+import type { ChangedFile, WorktreeStatus } from '../ipc/types';
+import { IPC } from '../../electron/ipc/channels';
+import { invoke } from '../lib/ipc';
 import { ChangeTourButton } from './ChangeTourButton';
 import { CompletionReport } from './CompletionReport';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -91,6 +93,8 @@ export function FinishDialog(props: FinishDialogProps) {
     headSha: () => (merge.worktreeStatus.error ? null : merge.worktreeStatus()?.head_sha),
   });
   const prMerging = () => pr.busy() === 'merge';
+  // Not the local cleanup flag: that follows deleteBranchOnClose, which closeTask applies itself.
+  const [closeAfterPrMerge, setCloseAfterPrMerge] = createSignal(true);
 
   // Tracks only `open`: reset reads `pushing`, and re-running when a push ends
   // would wipe the error it just reported.
@@ -98,7 +102,9 @@ export function FinishDialog(props: FinishDialogProps) {
     on(
       () => props.open,
       (open) => {
-        if (open) push.reset();
+        if (!open) return;
+        push.reset();
+        setCloseAfterPrMerge(true);
       },
     ),
   );
@@ -143,11 +149,18 @@ export function FinishDialog(props: FinishDialogProps) {
       return;
     }
     showNotification(`Merged PR #${number}`);
-    if (!merge.requiresSeparateClose() && merge.cleanupAfterMerge()) {
+    if (!merge.requiresSeparateClose() && closeAfterPrMerge()) {
+      const { id, worktreePath } = props.task;
       props.onClose();
+      // Fetched now, not on open: a running agent may have written files since.
+      const status = await invoke<WorktreeStatus>(IPC.GetWorktreeStatus, { worktreePath }).catch(
+        (err: unknown) => {
+          console.error('Worktree status before closing failed:', err);
+          return undefined;
+        },
+      );
       // Unsaved edits would be lost silently, so those go through the close warning.
-      const status = merge.worktreeStatus.error ? undefined : merge.worktreeStatus();
-      if (status && !status.has_uncommitted_changes) closeTaskNow(props.task.id, 'merged');
+      if (status && !status.has_uncommitted_changes) closeTaskNow(id, 'merged');
       else props.onCloseTask();
       return;
     }
@@ -287,7 +300,11 @@ export function FinishDialog(props: FinishDialogProps) {
             {/* Parents close separately to detach their children, so they get no opt-out. */}
             <Show when={pr.mode() === 'pr' && pr.pr() && !merge.requiresSeparateClose()}>
               <div style={{ 'margin-top': '12px' }}>
-                <CleanupOption task={props.task} state={merge}>
+                <CleanupOption
+                  task={props.task}
+                  checked={closeAfterPrMerge()}
+                  onChange={setCloseAfterPrMerge}
+                >
                   Close task after merge
                 </CleanupOption>
               </div>
