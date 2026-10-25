@@ -37,6 +37,7 @@ import { branchSnapshot } from './navigate';
 import { InvestigationInspector } from './InvestigationInspector';
 import { OptionsComparison } from './OptionsComparison';
 import { NodeBadges } from './NodeBadges';
+import type { ChangeMark } from './seen';
 import { noteTypes } from './presentation';
 import { exportReasoningGraphAs } from './export';
 import { exportFormats, type ExportFormat } from '../graph/graphExport';
@@ -86,6 +87,8 @@ interface Props {
   onBranchRequest?: (request: BranchRequest) => void;
   taskActions?: (id: string, map: MapData & { revision: number }) => NodeAction[];
   renderTaskBadge?: (id: string) => JSX.Element;
+  /** Agent changes the user has not yet marked as seen. */
+  changeMark?: (id: string) => ChangeMark | undefined;
   workspace?: ReasoningWorkspace;
   onWorkspace?: (workspace: ReasoningWorkspace) => void;
   onCommit?: (base: Snapshot, operations: MapOperation[]) => Promise<Snapshot>;
@@ -125,6 +128,11 @@ interface Removal {
   record: InvestigationRecord;
   count: number;
 }
+
+const changeMarkLabel: Record<ChangeMark, string> = {
+  new: 'New since you last looked',
+  changed: 'Changed since you last looked',
+};
 
 function descendants(records: InvestigationRecord[], id: string): number {
   return records
@@ -1087,6 +1095,17 @@ export function ReasoningGraph(props: Props) {
                       renderNodeExtra={(id) => (
                         <>
                           {props.renderTaskBadge?.(id)}
+                          <Show when={props.changeMark?.(id)}>
+                            {(mark) => (
+                              <span
+                                class="reasoning-change-mark"
+                                data-mark={mark()}
+                                role="img"
+                                title={changeMarkLabel[mark()]}
+                                aria-label={changeMarkLabel[mark()]}
+                              />
+                            )}
+                          </Show>
                           {/* Counts stay off resting cards; the selected note shows them. */}
                           <Show when={selected() === id && recordOf(id)}>
                             {(record) => (

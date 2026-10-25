@@ -754,3 +754,20 @@
   color: var(--fg);
   font-weight: 600;
 }
+/* Unseen agent changes: a static corner dot, so it neither moves the card nor competes with
+   the working pulse. New is filled; changed is a ring. */
+.reasoning-change-mark {
+  position: absolute;
+  z-index: 1;
+  top: -4px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--info);
+  background: var(--info);
+  pointer-events: auto;
+}
+.reasoning-change-mark[data-mark='changed'] {
+  background: var(--task-panel-bg);
+}
