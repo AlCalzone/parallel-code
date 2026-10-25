@@ -5,7 +5,11 @@
  * exists, the brief), so nothing here reads code or calls a model. Pure helpers only.
  */
 
-import type { ConfidenceChange, ConfidenceKeyLine } from '../../electron/shared/task-confidence';
+import type {
+  ConfidenceChange,
+  ConfidenceFindingKind,
+  ConfidenceKeyLine,
+} from '../../electron/shared/task-confidence';
 import { countLabel } from './plural';
 import type { TaskBriefRecord } from './task-brief';
 import { LOW_CONFIDENCE_SCORE, isConfidenceOutdated, type TaskConfidence } from './task-confidence';
@@ -24,6 +28,8 @@ export interface ReviewItem {
   axis?: string;
   /** The line the rework prompt sends for it. */
   ask: string;
+  /** The rater suspects it but did not confirm it by reading the code. */
+  unconfirmed?: boolean;
 }
 
 export interface ReviewRisk extends ReviewItem {
@@ -123,6 +129,19 @@ function scoresOf(input: ReviewSummaryInput, confidence: TaskConfidence): Review
   };
 }
 
+/**
+ * Findings listed as risks. A doubt the rater did not confirm goes to the agent
+ * as something to check first, so a wrong guess is not "fixed" into the code.
+ */
+const RISK_WORDING: Partial<Record<ConfidenceFindingKind, { source: string; ask: string }>> = {
+  gap: { source: 'Gap found by the confidence check', ask: 'Fill this gap: ' },
+  risk: { source: 'From the confidence check', ask: 'Address this risk: ' },
+  unverified: {
+    source: 'Not confirmed by the confidence check',
+    ask: 'Check whether this holds and fix it only if it does: ',
+  },
+};
+
 export function buildReviewSummary(input: ReviewSummaryInput): ReviewSummary {
   const brief = input.brief?.brief;
   const findings = input.confidence?.findings ?? [];
@@ -132,23 +151,13 @@ export function buildReviewSummary(input: ReviewSummaryInput): ReviewSummary {
     dismissed: !!dismissed && Object.hasOwn(dismissed, entry.id),
   });
   const risks = dedupe([
-    ...findings
-      .filter((finding) => finding.kind === 'risk' || finding.kind === 'gap')
-      .map((finding) =>
-        risk(
-          item(
-            'risk',
-            finding.text,
-            finding.kind === 'gap'
-              ? 'Gap found by the confidence check'
-              : 'From the confidence check',
-            finding.kind === 'gap'
-              ? `Fill this gap: ${finding.text}`
-              : `Address this risk: ${finding.text}`,
-            { file: finding.file, axis: finding.axis },
-          ),
-        ),
-      ),
+    ...findings.flatMap((finding) => {
+      const as = RISK_WORDING[finding.kind];
+      if (!as) return [];
+      const where = { file: finding.file, axis: finding.axis };
+      const entry = item('risk', finding.text, as.source, `${as.ask}${finding.text}`, where);
+      return [risk(finding.kind === 'unverified' ? { ...entry, unconfirmed: true } : entry)];
+    }),
   ]);
   // The reviewer reads every prompt, so its reading of the ask wins over a brief's.
   const goal = input.confidence?.asked ?? brief?.goal;

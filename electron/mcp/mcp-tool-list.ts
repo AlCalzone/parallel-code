@@ -199,7 +199,7 @@ export const CONFIDENCE_TOOLS: ToolDef[] = [
       'Use it when the user asks you to rate your confidence, or as the last step of a rating or review skill. Do not change code while rating. ' +
       `Send ${confidenceCaps.minScores} to ${confidenceCaps.maxScores} scores; name them as your rating defines them (one "Confidence" score, or dimensions such as "Correct", "Complete", "Minimal"). ` +
       `A score is {label (at most ${confidenceCaps.label} characters), score (0-100), why (one line, at most ${confidenceCaps.why} characters: what keeps it from being higher), verified? (at most ${confidenceCaps.maxVerified} short items, at most ${confidenceCaps.verified} characters each: what you checked directly that backs the score)}. ` +
-      `Optional findings, at most ${confidenceCaps.maxFindings}: {kind: "gap" (missing or unverified), "extra" (change the task did not ask for) or "risk", text (a short phrase that leads with the key fact, at most ${confidenceCaps.findingText} characters), file? (repository-relative), axis? (the label of the score it lowers most)}. ` +
+      `Optional findings, at most ${confidenceCaps.maxFindings}: {kind: "gap" (missing), "extra" (change the task did not ask for), "risk" (something you confirmed is likely to break) or "unverified" (a doubt you did not confirm by reading the code), text (a short phrase that leads with the key fact, at most ${confidenceCaps.findingText} characters), file? (repository-relative), axis? (the label of the score it lowers most)}. ` +
       `Optional "source" names who rated, such as a skill name, at most ${confidenceCaps.source} characters.`,
     inputSchema: {
       type: 'object',
@@ -229,7 +229,7 @@ export const CONFIDENCE_TOOLS: ToolDef[] = [
           items: {
             type: 'object',
             properties: {
-              kind: { type: 'string', enum: ['gap', 'extra', 'risk'] },
+              kind: { type: 'string', enum: ['gap', 'extra', 'risk', 'unverified'] },
               text: { type: 'string', maxLength: confidenceCaps.findingText },
               file: { type: 'string', maxLength: confidenceCaps.file },
               axis: { type: 'string', maxLength: confidenceCaps.label },

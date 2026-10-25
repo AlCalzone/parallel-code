@@ -8,6 +8,7 @@ import {
   buildTaskReviewPrompt,
   parseTaskReviewResponse,
   type ReviewCheckResult,
+  withReviewEffort,
   type ReviewModelSettings,
 } from '../lib/task-review';
 import { store, setStore } from './core';
@@ -120,7 +121,8 @@ export async function startTaskReview(
     if (fingerprint !== undefined) noteCodeFingerprint(taskId, fingerprint, startedAt);
     const checkResults = await Promise.race([checks, stopped]);
     if (cancelled) return;
-    const settings = taskReviewModel(taskId);
+    // The review's own level, not the Q&A default: it must read before it reports.
+    const settings = withReviewEffort(taskReviewModel(taskId));
     const model = modelToRun(settings.provider, settings.model ?? '');
     const reviewer = reviewerName(taskId);
     const request = startModelRequest({

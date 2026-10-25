@@ -2,7 +2,7 @@ import { ASK_CODE_CLAUDE_MODELS, askCodeEfforts } from '../../electron/shared/as
 import { reasoningEffortLabel } from '../../electron/shared/chat-messages';
 import { effortToRun, modelToRun } from '../lib/ask-code-model';
 import { codexModels, loadCodexModels } from '../lib/codex-models';
-import type { ReviewModelSettings } from '../lib/task-review';
+import { withReviewEffort, type ReviewModelSettings } from '../lib/task-review';
 import { ModelMenu } from './ModelMenu';
 
 /** Picks the model a review runs on: provider, model and reasoning level in one menu. */
@@ -16,7 +16,8 @@ export function ReviewerMenu(props: {
 }) {
   const provider = () => props.value.provider;
   const model = () => modelToRun(provider(), props.value.model ?? '');
-  const effort = () => effortToRun(provider(), model(), props.value.effort ?? '');
+  // A pick with no level runs at the review's own level, so the menu names that one.
+  const effort = () => effortToRun(provider(), model(), withReviewEffort(props.value).effort ?? '');
   return (
     <ModelMenu
       label="Reviewer model"

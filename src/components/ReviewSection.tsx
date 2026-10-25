@@ -311,9 +311,11 @@ export function ReviewSection(props: {
               <span id={textId} style={{ color: r().dismissed ? theme.fgMuted : theme.fg }}>
                 {r().text}
               </span>
-              <Show when={r().dismissed || r().file}>
+              <Show when={r().dismissed || r().unconfirmed || r().file}>
                 <span style={{ 'font-size': sf(12), color: theme.fgSubtle }}>
-                  {[r().dismissed && 'Accepted', r().file].filter(Boolean).join(' · ')}
+                  {[r().dismissed && 'Accepted', r().unconfirmed && 'Not confirmed', r().file]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </span>
               </Show>
             </div>

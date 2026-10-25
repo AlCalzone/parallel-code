@@ -4,6 +4,7 @@ import {
   buildTaskReviewPrompt,
   parseTaskReviewResponse,
   restoreReviewModel,
+  withReviewEffort,
 } from './task-review';
 
 const DIFF =
@@ -37,7 +38,10 @@ describe('buildTaskReviewPrompt', () => {
 
   it('holds the reviewer to an audit: read before claiming, no deduction without a finding', () => {
     const prompt = buildTaskReviewPrompt(input);
-    expect(prompt).toContain('read what it depends on outside the diff');
+    expect(prompt).toContain(
+      'Report a gap or a risk only once you have read the code that shows it',
+    );
+    expect(prompt).toContain('A doubt you did not confirm that way is "unverified"');
     expect(prompt).toContain('make the strongest case that each score is wrong');
     expect(prompt).toContain(
       'Do not run tests, builds or the app yourself; the checks listed below ran',
@@ -103,6 +107,21 @@ describe('parseTaskReviewResponse', () => {
     expect(rating.findings).toEqual([
       { kind: 'gap', axis: 'Complete', text: 'No .env.example.' },
       { kind: 'risk', text: 'Key is logged.' },
+    ]);
+  });
+
+  it('keeps a doubt the reviewer did not confirm apart from gaps and risks', () => {
+    const rating = parseTaskReviewResponse(
+      JSON.stringify({
+        scores: [{ label: 'Correct', score: 85, why: 'x' }],
+        findings: [
+          { kind: 'unverified', axis: 'Correct', text: 'Retry only runs on a real network.' },
+        ],
+      }),
+      'Review by opus',
+    );
+    expect(rating.findings).toEqual([
+      { kind: 'unverified', axis: 'Correct', text: 'Retry only runs on a real network.' },
     ]);
   });
 
@@ -179,5 +198,20 @@ describe('restoreReviewModel', () => {
     expect(restoreReviewModel(undefined)).toEqual(DEFAULT_REVIEW_MODEL);
     expect(restoreReviewModel(['claude'])).toEqual(DEFAULT_REVIEW_MODEL);
     expect(restoreReviewModel({ provider: 'other', model: 7 })).toEqual({ provider: 'claude' });
+  });
+});
+
+describe('withReviewEffort', () => {
+  it('runs a Claude reviewer with no level chosen at high, leaving a chosen level and Codex alone', () => {
+    expect(withReviewEffort({ provider: 'claude', model: 'opus' })).toEqual({
+      provider: 'claude',
+      model: 'opus',
+      effort: 'high',
+    });
+    expect(withReviewEffort({ provider: 'claude', effort: 'low' })).toEqual({
+      provider: 'claude',
+      effort: 'low',
+    });
+    expect(withReviewEffort({ provider: 'codex' })).toEqual({ provider: 'codex' });
   });
 });

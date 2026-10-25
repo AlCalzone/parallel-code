@@ -5,7 +5,8 @@
  * Kept free of Node and Electron imports so both processes can use it.
  */
 
-export type ConfidenceFindingKind = 'gap' | 'extra' | 'risk';
+/** `unverified`: a doubt the rater did not confirm by reading the code, kept apart from confirmed gaps and risks. */
+export type ConfidenceFindingKind = 'gap' | 'extra' | 'risk' | 'unverified';
 
 export interface ConfidenceScore {
   label: string;
@@ -72,7 +73,7 @@ export const CONFIDENCE_LIMITS = {
   payloadBytes: 32 * 1024,
 } as const;
 
-const FINDING_KINDS: readonly ConfidenceFindingKind[] = ['gap', 'extra', 'risk'];
+const FINDING_KINDS: readonly ConfidenceFindingKind[] = ['gap', 'extra', 'risk', 'unverified'];
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)

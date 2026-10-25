@@ -141,6 +141,19 @@ describe('startTaskReview', () => {
     expect(task().reviewStatus).toBeUndefined();
   });
 
+  it('asks Claude to review at high when no level is chosen, without saving that level', async () => {
+    mockStartRequest.mockReturnValue({
+      result: Promise.resolve(JSON.stringify(RATING)),
+      cancel: vi.fn(),
+    });
+    await startTaskReview('t1');
+    expect(mockStartRequest.mock.calls[0][0].settings).toMatchObject({
+      provider: 'claude',
+      effort: 'high',
+    });
+    expect(store.reviewModel).toEqual({ provider: 'claude', model: 'opus' });
+  });
+
   it("runs on the task's own reviewer when it has one", async () => {
     setTaskReviewModel('t1', { provider: 'codex', model: 'gpt-5', effort: 'high' });
     mockStartRequest.mockReturnValue({

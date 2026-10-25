@@ -73,6 +73,24 @@ describe('buildReviewSummary', () => {
     expect(buildReviewSummary({ brief, confidence: reviewed }).goal).toBe(reviewed.asked);
   });
 
+  it('lists a doubt the rater did not confirm as a risk to check, not one to fix', () => {
+    const summary = buildReviewSummary({
+      confidence: {
+        ...confidence,
+        findings: [{ kind: 'unverified', text: 'Retry only runs on a real network.' }],
+      },
+    });
+    expect(summary.risks).toEqual([
+      expect.objectContaining({
+        text: 'Retry only runs on a real network.',
+        unconfirmed: true,
+        source: 'Not confirmed by the confidence check',
+        ask: 'Check whether this holds and fix it only if it does: Retry only runs on a real network.',
+      }),
+    ]);
+    expect(summary.openRisks).toBe(1);
+  });
+
   it('takes extras from the rating', () => {
     const summary = buildReviewSummary({ brief, confidence });
     expect(summary.extras.map((entry) => entry.text)).toEqual([

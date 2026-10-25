@@ -25,6 +25,7 @@ import {
   setMinimaxApiKey,
 } from '../../store/store';
 import { modelToRun } from '../../lib/ask-code-model';
+import { withReviewEffort } from '../../lib/task-review';
 import { ReviewModelFields } from '../ReviewModelFields';
 import {
   SettingsCard,
@@ -123,7 +124,7 @@ export function AiAssistSettings() {
                 Reviewer model
               </span>
               <ReviewModelFields
-                value={store.reviewModel}
+                value={withReviewEffort(store.reviewModel)}
                 onChange={(change) => setReviewModel({ ...store.reviewModel, ...change })}
                 style={{ ...settingsFieldStyle, 'font-size': '13px', cursor: 'pointer' }}
               />
