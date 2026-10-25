@@ -9,7 +9,12 @@ import { triggerFocus, getTaskFocusedPanel } from './focused-panel';
 import type { Terminal } from './types';
 import { warn as logWarn } from '../lib/log';
 import { prefersMotion } from '../lib/reducedMotion';
-import { closeProjectPages } from './project-pages';
+import {
+  boardCoversWorkspace,
+  boardSidePanelOpen,
+  closeBoardSidePanel,
+  closeProjectPages,
+} from './project-pages';
 
 let terminalCounter = 0;
 let lastCreateTime = 0;
@@ -54,6 +59,9 @@ export async function closeTerminal(terminalId: string): Promise<void> {
 
   // Set closing status synchronously to prevent concurrent close calls
   setStore('terminals', terminalId, 'closingStatus', 'closing');
+  // As for a closed task, the board's side panel goes at once: it was opened
+  // for this terminal and must not land on an unrelated neighbour.
+  if (boardSidePanelOpen() && store.activeTaskId === terminalId) closeBoardSidePanel();
 
   await invoke(IPC.KillAgent, { agentId: terminal.agentId }).catch((err) => {
     logWarn('terminals.close', 'KillAgent failed', { err });
@@ -70,6 +78,8 @@ export async function closeTerminal(terminalId: string): Promise<void> {
     setStore('activeTaskId', neighbor);
     const neighborTask = neighbor ? store.tasks[neighbor] : null;
     setStore('activeAgentId', neighborTask ? effectiveAgentId(neighborTask) : null);
+    // The closed panel took the keyboard with it; the board's cards get it back.
+    if (boardCoversWorkspace()) triggerFocus('task-board');
   }
 
   // Phase 1: mark as removing so UI can animate
@@ -92,7 +102,8 @@ export async function closeTerminal(terminalId: string): Promise<void> {
     );
 
     const activeId = store.activeTaskId;
-    if (activeId) {
+    // Behind the board the neighbour's panel is hidden and must not take the keyboard.
+    if (activeId && !boardCoversWorkspace()) {
       const panel = getTaskFocusedPanel(activeId);
       requestAnimationFrame(() => triggerFocus(`${activeId}:${panel}`));
     }

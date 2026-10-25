@@ -19,6 +19,7 @@ import { FeatureHint } from './FeatureHint';
 import { useBoardClock } from './board/task-state';
 import { TaskBoardCard } from './TaskBoardCard';
 import { IdeasLane } from './TaskBoardIdeasLane';
+import { TerminalsLane, boardTerminals } from './TaskBoardTerminals';
 import { forgetWorkingHolds } from './task-board-hold';
 import { boardQuery, setBoardQuery } from './BoardSearch';
 import { useCardMotion } from './task-board-motion';
@@ -210,12 +211,13 @@ function useBoardFocus(): void {
 export function TaskBoard() {
   const tasks = createMemo(() => boardTasks(boardQuery()));
   const lanes = createMemo(() => boardLanes(tasks()));
+  const terminals = createMemo(() => boardTerminals(boardQuery()));
   let lanesEl: HTMLDivElement | undefined;
-  // Ideas share the motion: adding or removing one, or showing their lane,
-  // fades cards in and out and glides the lanes beside them.
+  // Ideas and terminals share the motion: adding or removing one, or showing
+  // their lane, fades cards in and out and glides the lanes beside them.
   useCardMotion(
     () => lanesEl,
-    () => [lanes(), ideasLaneShown() && boardIdeas(boardQuery())],
+    () => [lanes(), terminals(), ideasLaneShown() && boardIdeas(boardQuery())],
   );
   onCleanup(useBoardClock());
   onCleanup(forgetWorkingHolds);
@@ -237,7 +239,7 @@ export function TaskBoard() {
         Running tasks
       </h2>
       <div class="task-board-lanes" ref={lanesEl}>
-        <Show when={tasks().length === 0}>
+        <Show when={tasks().length === 0 && terminals().length === 0}>
           <BoardEmpty />
         </Show>
         <IdeasLane query={boardQuery()} />
@@ -246,6 +248,8 @@ export function TaskBoard() {
         <Index each={lanes()}>
           {(lane) => (
             <Show when={lane().id === 'snoozed'} fallback={<Lane lane={lane()} />}>
+              {/* Terminals sit past the task lanes, with the snoozed rail kept at the edge. */}
+              <TerminalsLane terminals={terminals()} />
               <Show when={lane().tasks.length > 0}>
                 <SnoozedLane lane={lane()} />
               </Show>

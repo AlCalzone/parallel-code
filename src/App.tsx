@@ -1,6 +1,7 @@
 import { GitHubIssuesPage } from './components/GitHubIssuesPage';
 import { KanbanPage } from './components/KanbanPage';
 import { TaskBoard } from './components/TaskBoard';
+import { openBesideBoard } from './components/board/TaskStatus';
 import { navigateBoard, navigateBoardTask } from './components/task-board-keys';
 import { openNextAttentionTask, openPreviousAttentionTask } from './components/next-attention-task';
 import {
@@ -786,7 +787,10 @@ function App() {
         if (!projectPageOpen()) sendActivePrompt();
       },
       createTerminal: (e) => {
-        if (!e.repeat) createTerminal();
+        if (e.repeat) return;
+        // On the board the new terminal opens in its side panel, not the tiled view.
+        if (boardShown()) openBesideBoard(null, createTerminal);
+        else createTerminal();
       },
       newTask: () => withViewTransition(() => toggleNewTaskPanel(true)),
       addIdea: () => toggleIdeaDialog(),

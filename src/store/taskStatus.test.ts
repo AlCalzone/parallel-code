@@ -7,6 +7,7 @@ let mockAutoTrustFolders = false;
 let mockActiveTaskId: string | null = null;
 let mockTasks: Record<string, unknown> = {};
 let mockAgents: Record<string, unknown> = {};
+let mockTerminals: Record<string, unknown> = {};
 let mockTaskGitStatus: Record<string, unknown> = {};
 let mockPrChecks: Record<string, { overall: string; failing: number }> = {};
 const core = vi.hoisted(() => ({
@@ -16,6 +17,7 @@ const core = vi.hoisted(() => ({
         activeTaskId: string | null;
         tasks: Record<string, unknown>;
         agents: Record<string, unknown>;
+        terminals: Record<string, unknown>;
         taskGitStatus: Record<string, unknown>;
       }>
     | undefined,
@@ -46,6 +48,12 @@ vi.mock('./core', async () => {
     },
     set agents(next) {
       mockAgents = next;
+    },
+    get terminals() {
+      return mockTerminals;
+    },
+    set terminals(next) {
+      mockTerminals = next;
     },
     get taskGitStatus() {
       return mockTaskGitStatus;
@@ -184,6 +192,7 @@ beforeEach(() => {
   mockActiveTaskId = 'task-1';
   mockTasks = {};
   mockAgents = {};
+  mockTerminals = {};
   mockTaskGitStatus = {};
   mockPrChecks = {};
 });
@@ -1282,6 +1291,17 @@ describe('terminal redraw activity', () => {
 
       vi.advanceTimersByTime(13_000);
       expect(getTaskAttentionState('task-1')).toBe('idle');
+    });
+
+    it('treats a standalone terminal as a shell too', () => {
+      mockTerminals['term-1'] = { id: 'term-1', name: 'Terminal 1', agentId: 'shell-1' };
+
+      markAgentOutput('shell-1', encode('-- INSERT --\r\nsome buffer text'), 'term-1');
+      vi.advanceTimersByTime(2_000);
+      expect(isAgentIdle('shell-1')).toBe(false);
+
+      vi.advanceTimersByTime(13_000);
+      expect(isAgentIdle('shell-1')).toBe(true);
     });
   });
 });

@@ -420,6 +420,14 @@ html[data-look^='islands-'] .task-board {
   writing-mode: vertical-rl;
 }
 
+/* A plain terminal's card: dashed, unfilled and square-cornered like a
+   terminal pane, so it reads as a different kind of thing from a task. */
+.task-board-card.task-board-terminal-card {
+  border: 1px dashed var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+
 /* Too narrow for lanes side by side: stack them in one scrolling column.
    task-board-keys reads this flex-direction to step arrows across lanes. */
 @container task-board (max-width: 550px) {

@@ -975,7 +975,12 @@ export function markAgentOutput(agentId: string, data: Uint8Array, taskId?: stri
   // Plain shells aren't agent composers — a Vim "-- INSERT --" status line or
   // a Starship "❯" prompt can match AGENT_READY_TAIL_PATTERNS without the
   // shell being between turns, so they keep the normal 15s idle timeout.
-  const isShellTerminal = !!(taskId && store.tasks[taskId]?.shellAgentIds.includes(agentId));
+  // Standalone terminals pass their own id as the task id.
+  const isShellTerminal = !!(
+    taskId &&
+    (store.tasks[taskId]?.shellAgentIds.includes(agentId) ||
+      store.terminals[taskId]?.agentId === agentId)
+  );
   if (readiness.ready && !isShellTerminal && !WORKING_CANCEL_HINT_PATTERN.test(composerOutput)) {
     addToActive(agentId);
     resetIdleTimer(agentId, PROMPT_IDLE_CONFIRM_MS);

@@ -29,10 +29,14 @@ function prNumber(url: string): string {
   return url.match(/\/pull\/(\d+)/)?.[1] ?? '';
 }
 
-/** Opens the task in the board's side panel, moving the panel across first when asked. */
-export function openBeside(task: Task, otherSide = false, panel?: string | null): void {
-  // Only a panel that stays put swaps its task; opening or moving it has its own motion.
-  const switching = !otherSide && boardSidePanelOpen() && store.activeTaskId !== task.id;
+/**
+ * Shows `id` in the board's side panel, moving the panel across first when
+ * asked; `open` makes it the active item, `null` naming one it creates. The
+ * board stays, so it never jumps to the tiled view.
+ */
+export function openBesideBoard(id: string | null, open: () => void, otherSide = false): void {
+  // Only a panel that stays put swaps its item; opening or moving it has its own motion.
+  const switching = !otherSide && boardSidePanelOpen() && store.activeTaskId !== id;
   withViewTransition(
     () =>
       batch(() => {
@@ -43,10 +47,15 @@ export function openBeside(task: Task, otherSide = false, panel?: string | null)
         }
         if (otherSide) toggleBoardSidePanelSide();
         openBoardSidePanel();
-        openTask(task, panel);
+        open();
       }),
     switching ? ['task-switch'] : [],
   );
+}
+
+/** Opens the task in the board's side panel, moving the panel across first when asked. */
+export function openBeside(task: Task, otherSide = false, panel?: string | null): void {
+  openBesideBoard(task.id, () => openTask(task, panel), otherSide);
 }
 
 /** The task's status dot, the same glyph as the title-bar pills, which the board hides. */
