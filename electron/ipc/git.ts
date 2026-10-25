@@ -2764,8 +2764,26 @@ export async function mergeTask(
           throw new Error(`Commit failed: ${gitErrorText(e)}`);
         }
       } else {
+        // A base that moved on since the task branched would get a merge commit;
+        // replaying the task onto it first keeps the base's history linear.
+        // Without a worktree there is nowhere to rebase, so it merges as before.
+        const rebased = fs.existsSync(checkWorktreePath);
+        if (rebased) {
+          let failed: Awaited<ReturnType<typeof syncWithBaseUnlocked>>;
+          try {
+            failed = await syncWithBaseUnlocked(checkWorktreePath, mainBranch, 'rebase');
+          } catch (e) {
+            await restoreBranch();
+            throw e;
+          }
+          if (failed) {
+            await restoreBranch();
+            throw mergeFailure('Merge', failed.conflicts, failed.error);
+          }
+        }
         try {
-          await exec('git', ['merge', '--', branchName], { cwd: mergeRoot });
+          const ff = rebased ? ['--ff-only'] : [];
+          await exec('git', ['merge', ...ff, '--', branchName], { cwd: mergeRoot });
         } catch (e) {
           const conflicts = await conflictedFiles(mergeRoot);
           await exec('git', ['merge', '--abort'], { cwd: mergeRoot }).catch((recoverErr) =>
@@ -2956,33 +2974,48 @@ async function syncWithBase(
 
   return withWorktreeLock(lockKey, async () => {
     const mainBranch = baseBranch ?? (await detectMainBranch(worktreePath));
-    // Otherwise the autostash would come back with conflict markers in them.
-    const { overlap } = await uncommittedOverlap(worktreePath, 'HEAD', mainBranch);
-    if (overlap.length)
-      throw new Error(
-        `Commit or stash your changes to ${fileList(overlap)} first: ${mainBranch} changed them too.`,
-      );
-    const args =
-      operation === 'merge'
-        ? ['merge', '--no-edit', '--autostash', mainBranch]
-        : ['rebase', '--autostash', mainBranch];
-    try {
-      await exec('git', args, { cwd: worktreePath });
-    } catch (e) {
-      const conflicts = await conflictedFiles(worktreePath);
-      // --abort also puts the autostash back.
-      await exec('git', [operation, '--abort'], { cwd: worktreePath }).catch((recoverErr) =>
-        console.warn(`git ${operation} --abort failed:`, recoverErr),
-      );
-      const label = operation === 'merge' ? 'Merge' : 'Rebase';
-      throw new Error(
-        conflicts.length
-          ? `${label} stopped on conflicts in ${fileList(conflicts)} and was undone; the branch is unchanged.`
-          : `${label} failed: ${gitErrorText(e)}`,
-      );
-    }
-    invalidateDiffBaseCache();
+    const failed = await syncWithBaseUnlocked(worktreePath, mainBranch, operation);
+    if (!failed) return;
+    const label = operation === 'merge' ? 'Merge' : 'Rebase';
+    throw new Error(
+      failed.conflicts.length
+        ? `${label} stopped on conflicts in ${fileList(failed.conflicts)} and was undone; the branch is unchanged.`
+        : `${label} failed: ${gitErrorText(failed.error)}`,
+    );
   });
+}
+
+/**
+ * `syncWithBase` for callers that already hold the repo's worktree lock.
+ * Returns an aborted operation's failure, so each caller can word it.
+ */
+async function syncWithBaseUnlocked(
+  worktreePath: string,
+  mainBranch: string,
+  operation: 'rebase' | 'merge',
+): Promise<{ conflicts: string[]; error: unknown } | null> {
+  // Otherwise the autostash would come back with conflict markers in them.
+  const { overlap } = await uncommittedOverlap(worktreePath, 'HEAD', mainBranch);
+  if (overlap.length)
+    throw new Error(
+      `Commit or stash your changes to ${fileList(overlap)} first: ${mainBranch} changed them too.`,
+    );
+  const args =
+    operation === 'merge'
+      ? ['merge', '--no-edit', '--autostash', mainBranch]
+      : ['rebase', '--autostash', mainBranch];
+  try {
+    await exec('git', args, { cwd: worktreePath });
+  } catch (e) {
+    const conflicts = await conflictedFiles(worktreePath);
+    // --abort also puts the autostash back.
+    await exec('git', [operation, '--abort'], { cwd: worktreePath }).catch((recoverErr) =>
+      console.warn(`git ${operation} --abort failed:`, recoverErr),
+    );
+    return { conflicts, error: e };
+  }
+  invalidateDiffBaseCache();
+  return null;
 }
 
 export function rebaseTask(worktreePath: string, baseBranch?: string): Promise<void> {
