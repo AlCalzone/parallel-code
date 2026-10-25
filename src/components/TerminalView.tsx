@@ -53,7 +53,11 @@ import { dataTransferToShellArgs, escapePath } from '../lib/terminalDrop';
 import { cleanCopiedTerminalText } from '../lib/copy-text';
 import { hasTerminalUserActivity, nextTerminalInputPending } from '../lib/terminalInputPending';
 import { isEditableDocumentPath } from '../lib/document-path';
-import { computeWrappedPathLinks, createTerminalHttpLinkHandler } from '../lib/terminalLinks';
+import {
+  computeWrappedPathLinks,
+  createTerminalHttpLinkHandler,
+  terminalLinkFilePath,
+} from '../lib/terminalLinks';
 import { recordSharedWebglContextLoss, WEBGL_REATTACH_DELAY_MS } from '../lib/webglContextLoss';
 import { isTerminalPaneOnScreen, WEBGL_DETACH_DELAY_MS } from '../lib/terminalPaneVisibility';
 import type { PtyOutput } from '../ipc/types';
@@ -259,7 +263,7 @@ export function TerminalView(props: TerminalViewProps) {
    * the main process expands ~/ because the renderer doesn't know the home directory.
    */
   function resolveLinkPath(text: string): string {
-    const filePath = text.replace(/:\d+(:\d+)?$/, '');
+    const filePath = terminalLinkFilePath(text);
     return /^~?\//.test(filePath) ? filePath : `${props.cwd}/${filePath}`;
   }
   const [hasHandoffSelection, setHasHandoffSelection] = createSignal(false);

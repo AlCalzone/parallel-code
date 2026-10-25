@@ -4,6 +4,7 @@ import {
   createTerminalHttpLinkHandler,
   matchTerminalPaths,
   normalizeHttpUrl,
+  terminalLinkFilePath,
   type TerminalBuffer,
   type TerminalBufferCell,
 } from './terminalLinks';
@@ -203,6 +204,23 @@ describe('matchTerminalPaths', () => {
   it('strips trailing punctuation and ignores dot-less directories', () => {
     expect(matchTerminalPaths('at (src/a.ts).')).toEqual([{ index: 4, text: 'src/a.ts' }]);
     expect(matchTerminalPaths('cd src/store/ then')).toEqual([]);
+  });
+
+  it('keeps the file:// scheme as part of the link', () => {
+    expect(matchTerminalPaths('open file:///home/a/.tmp/index.html now')).toEqual([
+      { index: 5, text: 'file:///home/a/.tmp/index.html' },
+    ]);
+  });
+});
+
+describe('terminalLinkFilePath', () => {
+  it('strips line:col suffixes', () => {
+    expect(terminalLinkFilePath('/home/a/b.ts:42:10')).toBe('/home/a/b.ts');
+    expect(terminalLinkFilePath('src/a.ts:3')).toBe('src/a.ts');
+  });
+
+  it('turns file:// URLs into absolute paths', () => {
+    expect(terminalLinkFilePath('file:///home/a/.tmp/index.html')).toBe('/home/a/.tmp/index.html');
   });
 });
 

@@ -74,8 +74,10 @@ export interface TerminalPathLink {
 
 // Match file paths: absolute, ~/ home-relative, ./ or ../ relative, and bare
 // relative with a slash. Supports @scoped packages and line:col suffixes like foo.ts:42:10.
+// A file:// prefix belongs to the link; without it the match would start at the
+// slashes and leave "file:" unclickable.
 const PATH_REGEX =
-  /(?:~?\/[\w@./-]+|\.{1,2}\/[\w@./-]+|[\w@.][\w@./-]*\/[\w@./-]+)(?::\d+(?::\d+)?)?/g;
+  /(?:(?:file:\/\/(?=\/))?~?\/[\w@./-]+|\.{1,2}\/[\w@./-]+|[\w@.][\w@./-]*\/[\w@./-]+)(?::\d+(?::\d+)?)?/g;
 
 /** Find file-path matches within a single (already-joined) line of text. */
 export function matchTerminalPaths(line: string): PathMatch[] {
@@ -91,6 +93,11 @@ export function matchTerminalPaths(line: string): PathMatch[] {
     matches.push({ index: match.index, text });
   }
   return matches;
+}
+
+/** The filesystem path a matched link points at, without file:// or line:col. */
+export function terminalLinkFilePath(text: string): string {
+  return text.replace(/^file:\/\//, '').replace(/:\d+(:\d+)?$/, '');
 }
 
 // Cap how far we scan across wrapped rows, matching xterm's own guard.
