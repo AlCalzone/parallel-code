@@ -132,9 +132,12 @@ it('filters terminals by the board search and hides closing ones', () => {
   expect(cardNames('Terminals')).toEqual(['Scratch']);
 });
 
-it('shows no empty-board message while terminals are open', () => {
+it('still says why the task lanes are empty while terminals are open', () => {
   setStore('tasks', reconcile({}));
-  expect(host.querySelector('.task-board-empty')).toBeNull();
+  setStore('taskProjectFilter', 'web');
+  expect(host.querySelector('.task-board-empty')?.textContent).toContain(
+    'No running tasks in Website',
+  );
   expect(cardNames('Terminals')).toEqual(['Scratch', 'Dev server']);
 });
 

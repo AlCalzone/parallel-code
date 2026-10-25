@@ -239,7 +239,7 @@ export function TaskBoard() {
         Running tasks
       </h2>
       <div class="task-board-lanes" ref={lanesEl}>
-        <Show when={tasks().length === 0 && terminals().length === 0}>
+        <Show when={tasks().length === 0}>
           <BoardEmpty />
         </Show>
         <IdeasLane query={boardQuery()} />

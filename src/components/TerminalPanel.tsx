@@ -10,6 +10,7 @@ import {
   setTaskFocusedPanel,
   isPanelFocused,
   markAgentOutput,
+  clearAgentActivity,
 } from '../store/store';
 import { EditableText, type EditableTextHandle } from './EditableText';
 import { IconButton } from './IconButton';
@@ -148,6 +149,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
           // Feeds the board's Running label. The terminal id makes it a shell, and
           // background terminals use the slower analysis cadence.
           onData={(data) => markAgentOutput(props.terminal.agentId, data, props.terminal.id)}
+          onExit={() => clearAgentActivity(props.terminal.agentId)}
           onReady={(focusFn) => registerFocusFn(`${props.terminal.id}:terminal`, focusFn)}
           autoFocus
         />
