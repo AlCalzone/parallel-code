@@ -894,6 +894,30 @@ html[data-look='parallel-code'] .task-title-bar {
   font-size: 17px;
 }
 
+/* Board cards one step up, so their text reads at the size of the 13px
+   terminal beside them; Inter at the base sizes looked a size smaller. */
+html[data-look='parallel-code'] .task-board-card {
+  font-size: 14px;
+}
+
+html[data-look='parallel-code']
+  :is(
+    .task-board-meta,
+    .task-board-ask,
+    .task-board-card .task-board-act,
+    .plan-card-body,
+    .kanban-checklist,
+    .kanban-blocked,
+    .plan-task-open
+  ) {
+  font-size: 13px;
+}
+
+html[data-look='parallel-code']
+  :is(.task-board-activity, .task-board-row, .task-board-chip, .kanban-progress, .kanban-chip) {
+  font-size: 12px;
+}
+
 html[data-look='parallel-code'] :is(.prompt-textarea, .input-field, .project-select):focus {
   border-color: var(--border-focus) !important;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
