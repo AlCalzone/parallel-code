@@ -4525,7 +4525,7 @@ html[data-look='islands-light'] .window-title-icon {
 
 .task-switcher-option {
   display: grid;
-  grid-template-columns: 14px minmax(0, auto) minmax(0, 1fr);
+  grid-template-columns: 14px minmax(0, auto) minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   padding: 7px 8px;
@@ -4554,6 +4554,26 @@ html[data-look='islands-light'] .window-title-icon {
 
 .task-switcher-empty {
   margin: 4px 8px;
+}
+
+.task-switcher-group {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-switcher-heading {
+  padding: 8px 8px 4px;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+/* Shown to teach the key, so it reads as a plain hint, not a control. */
+.task-switcher-shortcut {
+  color: var(--fg-muted);
+  font-family: inherit;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 /* macOS native titlebar spacer (overlay style). Its height is mirrored by

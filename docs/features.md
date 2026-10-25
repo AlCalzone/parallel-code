@@ -7,6 +7,7 @@ Everything beyond the core loop (create a task, review its diff, merge or discar
 - Tiled panel layout with drag-to-reorder
 - **Focus mode** — single-task layout with a clean two-column view on wide screens (`Ctrl+Shift+F`)
 - **Board** — every open task across projects in lanes by what it needs: Needs you, Stopped, Working, In pull request, Snoozed & minimized (`Ctrl+Shift+G`). A task you click, or a new one, opens in a side panel beside the board; switch between Focus, Tiles and Board from the title bar. New installs open on a welcome screen that links the first project, then start on the Board. On the board, arrow keys (or `hjkl`) move between cards, `Enter` opens one beside it, `/` filters, and `Alt+Arrows` cross into the sidebar and the side panel. In the side panel, `Alt+Arrows` move between the task's panes and, past their edge, on to the next card that way; `Cmd+Opt+Up/Down` (macOS) or `Ctrl+Alt+Up/Down` and `Alt+PageUp/PageDown` (Linux) jump straight to the card above or below. `Ctrl+Tab` (also on macOS) goes to the next task that needs you, then to stopped ones, from anywhere in the app; `Ctrl+Shift+Tab` goes back up the same list
+- **Command palette** — `Cmd+K` (macOS) or `Ctrl+Shift+J` (Linux) jumps to any open task or runs any shortcut action by name, including ones you have unbound. Each action shows its key, recently run actions come first, and a leading `>` searches actions only
 - Shell terminals per task, scoped to the worktree
 - State persists across restarts
 
@@ -75,8 +76,8 @@ The bundled image still ships the `agy` binary, and `~/.gemini/antigravity-cli` 
 | **Navigation**         |                                    |
 | `Alt+Arrows`           | Focus pane/task in arrow direction |
 | `Alt+Shift+Left/Right` | Move task (macOS: `Ctrl+Shift`)    |
-| `Ctrl+Shift+J`         | Switch task by name (Linux)        |
-| `Cmd+K`                | Switch task by name (macOS)        |
+| `Ctrl+Shift+J`         | Switch task or run action (Linux)  |
+| `Cmd+K`                | Switch task or run action (macOS)  |
 | `Ctrl+B`               | Toggle sidebar                     |
 | `Ctrl+Shift+F`         | Toggle focus mode                  |
 | `Ctrl+Shift+G`         | Toggle the board of running tasks  |

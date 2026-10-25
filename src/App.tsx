@@ -37,6 +37,7 @@ import {
   Show,
   ErrorBoundary,
   createSignal,
+  createMemo,
   lazy,
 } from 'solid-js';
 import { invoke } from './lib/ipc';
@@ -119,7 +120,14 @@ import {
   registerJumpToTaskShortcuts,
   registerZoomShortcuts,
 } from './lib/shortcuts';
-import { resolvedBindings, loadKeybindings, dismissMigrationBanner } from './store/keybindings';
+import {
+  allBindings,
+  resolvedBindings,
+  loadKeybindings,
+  dismissMigrationBanner,
+} from './store/keybindings';
+import { switcherActions } from './lib/switcher-actions';
+import { openItemName } from './store/navigation';
 import { setupAutosave } from './store/autosave';
 import { buildCustomThemeCss } from './lib/custom-theme';
 import { osIsDark } from './lib/os-appearance';
@@ -243,6 +251,25 @@ function App() {
   // nothing flashes up before the saved state says whether it is one. An
   // unreadable state is no first run: its projects would not be saved.
   const welcome = () => stateRestored() && store.projects.length === 0;
+  // The welcome screen hides the workspace; only shortcuts that open their own UI work there.
+  const fitsScreen = (binding: { action?: string }) =>
+    !welcome() || (binding.action !== undefined && WELCOME_ACTIONS.has(binding.action));
+  // A document workspace's hidden agent task can be the active one; it has
+  // no worktree to close, merge or push and no panel a shell could show in.
+  const listedTask = (id: string) =>
+    !projectPageOpen() && store.tasks[id] !== undefined && !isHiddenAgentTaskId(id);
+  // Filled in on mount; the switcher only runs actions after that.
+  let actionHandlers: Record<string, (e: KeyboardEvent) => void> = {};
+  // The same actions the shortcuts reach right now, unbound ones included,
+  // less those whose handler would do nothing without an active item.
+  const paletteActions = createMemo(() => {
+    const id = store.activeTaskId;
+    return switcherActions(allBindings().filter(fitsScreen), {
+      activeName: id && !projectPageOpen() ? openItemName(id) : null,
+      taskActive: id !== null && listedTask(id),
+      documentOpen: store.activeDocumentProjectId !== null && isDocumentAgentTaskId(id),
+    });
+  });
   const bare = () => !stateLoaded() || welcome();
   let dragCounter = 0;
 
@@ -727,12 +754,7 @@ function App() {
     });
     setCloseHandlerReady(true);
 
-    // A document workspace's hidden agent task can be the active one; it has
-    // no worktree to close, merge or push and no panel a shell could show in.
-    const listedTask = (id: string) =>
-      !projectPageOpen() && store.tasks[id] !== undefined && !isHiddenAgentTaskId(id);
-
-    const actionHandlers: Record<string, (e: KeyboardEvent) => void> = {
+    actionHandlers = {
       // The board takes these first while it, rather than its side panel, has the keyboard.
       'navigateRow:up': () => navigateBoard('up') || navigateRow('up'),
       'navigateRow:down': () => navigateBoard('down') || navigateRow('down'),
@@ -879,9 +901,6 @@ function App() {
     const boardOnly = (binding: { action?: string }) =>
       binding.action?.startsWith('navigateBoardTask:') === true;
     createEffect(() => {
-      // The welcome screen hides the workspace; only shortcuts that open their own UI work there.
-      const fitsScreen = (binding: { action?: string }) =>
-        !welcome() || (binding.action !== undefined && WELCOME_ACTIONS.has(binding.action));
       const bindings = resolvedBindings().filter(
         (binding) => !boardOnly(binding) && fitsScreen(binding),
       );
@@ -1102,7 +1121,13 @@ function App() {
         </Show>
         <IdeaDialog />
         <HelpDialog open={store.showHelpDialog} onClose={() => toggleHelpDialog(false)} />
-        <TaskSwitcher open={taskSwitcherOpen()} onClose={() => setTaskSwitcherOpen(false)} />
+        <TaskSwitcher
+          open={taskSwitcherOpen()}
+          onClose={() => setTaskSwitcherOpen(false)}
+          actions={paletteActions()}
+          // A fresh event: no handler sees auto-repeat from a palette pick.
+          onAction={(action) => actionHandlers[action]?.(new KeyboardEvent('keydown'))}
+        />
         <SettingsDialog
           open={store.showSettingsDialog}
           onClose={() => toggleSettingsDialog(false)}
