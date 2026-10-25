@@ -19,8 +19,8 @@ The theme comes from one place: `darkThemePreset` in `scripts/showcase/demo-work
 
 1. **Stills.** `npm run showcase:capture` (builds the app, then runs every scene; a few minutes). → verify: open each of `.tmp/showcase/{overview,focus,diff-review,change-tour,reasoning,mind-map}.png` and check the theme, that no text is cut off, and that nothing private shows.
 2. **Videos (only those the user asked for, or whose UI visibly changed).** In `../yt-content-factory`: `npm run yt -- render <slug>`, leaving `PC_REPO` unset so it uses this checkout (the `.tmp/parallel-code` copy in its README is stale). Follow that repo's `/render` skill for review. A scene that fails after a UI change needs fixing in its `scenes.spec.ts` or in `apps/parallel-code/src/ui.ts`. → verify: extract frames at a few timestamps (`ffmpeg -ss T -i out/<slug>.mp4 -frames:v 1 f.jpg`) and look at them.
-3. **Copy.** `bash scripts/showcase/publish-media.sh`. It refuses stills older than the last build, converts WebP and the intro's captions to VTT. → verify: `git status` here and in `../pc-landing-page` lists only the expected media.
-4. **Commit** per repo (`docs(readme): …`, `content: …`, `feat(showcase): …`). Never upload or publish a video; YouTube changes go through the user via yt-content-factory's `/publish`.
+3. **Copy.** `bash scripts/showcase/publish-media.sh`. It checks tools, paths and that every still is newer than the build and the harness before copying anything; it converts WebP, re-encodes the intro to 1080p and its captions to VTT. The landing page adds a content hash to these URLs (`versioned()` in `src/lib/assets.ts`), so no cache version needs bumping. → verify: `git status` here and in `../pc-landing-page` lists only the expected media.
+4. **Commit** per repo (`docs(readme): …`, `content: …`, `feat(showcase): …`). Never upload or publish a video; YouTube changes go through the user via yt-content-factory's `/publish`; tell them which published videos are now out of date.
 
 ## Not covered
 
