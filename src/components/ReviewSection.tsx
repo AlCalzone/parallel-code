@@ -170,6 +170,8 @@ export function ReviewSection(props: {
   verifyFailed: boolean;
   /** Follow-ups that share the review's row, such as the change tour. */
   companion?: JSX.Element;
+  /** Follow-ups after the review in its row, such as the retro, which widens when opened. */
+  trailing?: JSX.Element;
   /** Shown above the follow-ups row, such as the verify result. */
   lead?: JSX.Element;
   /** Called once a rework prompt is staged, so the dialog can close. */
@@ -663,6 +665,7 @@ export function ReviewSection(props: {
           </button>
         </div>
       </Show>
+      {props.trailing}
     </FollowUps>
   );
 }

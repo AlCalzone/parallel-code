@@ -17,6 +17,7 @@ import { PushSection } from './PushSection';
 import { ReadinessSection } from './ReadinessSection';
 import { FollowUps } from './FollowUps';
 import { ReviewSection } from './ReviewSection';
+import { RetroButton } from './RetroButton';
 import { createMergeState } from './merge-state';
 import { PR_MERGE_ACTIONS, createFinishPr, taskPrUrl } from './pr-actions';
 import { createPushRun } from './push-run';
@@ -242,6 +243,14 @@ export function FinishDialog(props: FinishDialogProps) {
     </div>
   );
 
+  const retroBox = () => (
+    <RetroButton
+      task={props.task}
+      // The retro happens in the agent's session, so Finish steps aside like Keep working.
+      onSent={() => props.onClose()}
+    />
+  );
+
   // The verify result, which leads "Before you merge". Opening its details or
   // running a check there is taking the tip.
   const readiness = () => (
@@ -328,11 +337,10 @@ export function FinishDialog(props: FinishDialogProps) {
             <Show
               when={store.finishReview}
               fallback={
-                <Show when={showReadiness() || tourShown()}>
-                  <FollowUps lead={readiness()}>
-                    <Show when={tourShown()}>{tourBox()}</Show>
-                  </FollowUps>
-                </Show>
+                <FollowUps lead={readiness()}>
+                  <Show when={tourShown()}>{tourBox()}</Show>
+                  {retroBox()}
+                </FollowUps>
               }
             >
               <ReviewSection
@@ -340,6 +348,7 @@ export function FinishDialog(props: FinishDialogProps) {
                 verifyFailed={verifyFailed()}
                 lead={readiness()}
                 companion={<Show when={tourShown()}>{tourBox()}</Show>}
+                trailing={retroBox()}
                 onReworkStaged={() => {
                   showNotification('Rework prompt staged in the task input. Review it, then send.');
                   props.onClose();
