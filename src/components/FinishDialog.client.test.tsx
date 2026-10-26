@@ -298,7 +298,7 @@ describe('FinishDialog merge', () => {
     );
     expect(report?.open).toBe(false);
     expect(report?.textContent).toContain('Implemented the result');
-    expect(confirmButton()?.textContent).toBe('Merge into main');
+    expect(confirmButton()?.textContent).toBe('Merge into local main');
     confirmButton()?.click();
     expect(mergeTask).toHaveBeenCalled();
   });
@@ -371,7 +371,7 @@ describe('FinishDialog push', () => {
     await flush();
     // A local merge needs no push, so Merge stays the main action.
     expect(button('Push')?.className).toContain('btn-secondary');
-    expect(confirmButton()?.textContent).toBe('Merge into main');
+    expect(confirmButton()?.textContent).toBe('Merge into local main');
   });
 
   it('keeps Push for conflicts, but not for a worktree on another branch or one still being read', async () => {
@@ -467,7 +467,7 @@ describe('FinishDialog base sync', () => {
       'They also change 1 file this branch changed: src/a.ts. Test again after bringing in main.',
     );
     expect(button('Rebase onto main')).toBeDefined();
-    expect(confirmButton()?.textContent).toBe('Merge into main');
+    expect(confirmButton()?.textContent).toBe('Merge into local main');
     button('Merge main into branch')?.click();
     expect(invoke).toHaveBeenCalledWith(IPC.MergeBaseIntoTask, {
       worktreePath: '/repo/.worktrees/parent',
@@ -796,7 +796,7 @@ describe('FinishDialog with an open PR', () => {
     vi.mocked(mergePullRequestForTask).mockResolvedValueOnce(true);
     const handlers = mount({ task: task({ prUrl: PR_URL }) });
     await flush();
-    expect(confirmButton()?.textContent).toBe('Squash and merge');
+    expect(confirmButton()?.textContent).toBe('Squash and merge on GitHub');
     // Local merge options would describe a merge that will not happen.
     expect(document.body.textContent).not.toContain('Squash commits');
     optOutOfClose();
@@ -903,7 +903,7 @@ describe('FinishDialog with an open PR', () => {
     );
     bypassCheckbox()?.click();
     expect(confirmButton()?.disabled).toBe(false);
-    expect(confirmButton()?.textContent).toBe('Squash and merge as admin');
+    expect(confirmButton()?.textContent).toBe('Squash and merge on GitHub as admin');
     confirmButton()?.click();
     await flush();
     expect(mergePullRequestForTask).toHaveBeenCalledWith('parent', {
@@ -919,9 +919,9 @@ describe('FinishDialog with an open PR', () => {
     mount({ task: task({ prUrl: PR_URL }) });
     await flush();
     button('Merge locally instead')?.click();
-    expect(confirmButton()?.textContent).toBe('Merge into main');
+    expect(confirmButton()?.textContent).toBe('Merge into local main');
     button('Use PR #42 instead')?.click();
-    expect(confirmButton()?.textContent).toBe('Squash and merge');
+    expect(confirmButton()?.textContent).toBe('Squash and merge on GitHub');
     button('Merge locally instead')?.click();
     confirmButton()?.click();
     expect(mergeTask).toHaveBeenCalled();
@@ -933,7 +933,7 @@ describe('FinishDialog with an open PR', () => {
     mount({ task: task({ prUrl: PR_URL }) });
     await flush();
     await flush();
-    expect(confirmButton()?.textContent).toBe('Merge into main');
+    expect(confirmButton()?.textContent).toBe('Merge into local main');
     expect(document.body.textContent).toContain('gh: not logged in');
   });
 
@@ -1001,7 +1001,7 @@ describe('FinishDialog with an open PR', () => {
     vi.mocked(getPullRequestDetails).mockResolvedValue(prDetails(overrides));
     mount({ task: task({ githubUrl: PR_URL }) });
     await flush();
-    expect(confirmButton()?.textContent).toBe('Merge into main');
+    expect(confirmButton()?.textContent).toBe('Merge into local main');
     expect(document.body.textContent).toContain(note);
   });
 
@@ -1015,7 +1015,7 @@ describe('FinishDialog with an open PR', () => {
     await flush();
     await flush();
     expect(confirmButton()?.disabled).toBe(false);
-    expect(confirmButton()?.textContent).toBe('Squash and merge');
+    expect(confirmButton()?.textContent).toBe('Squash and merge on GitHub');
   });
 
   it('retries loading the PR after a failure', async () => {
@@ -1025,7 +1025,7 @@ describe('FinishDialog with an open PR', () => {
     await flush();
     button('Retry')?.click();
     await flush();
-    expect(confirmButton()?.textContent).toBe('Squash and merge');
+    expect(confirmButton()?.textContent).toBe('Squash and merge on GitHub');
   });
 
   it('offers agent hand-offs only when CI fails or changes are requested', async () => {
@@ -1045,7 +1045,7 @@ describe('FinishDialog with an open PR', () => {
     expect(confirmButton()?.textContent).toBe('Close task');
     expect(document.body.textContent).toContain('commits that are not in PR #42');
     button('Merge locally instead')?.click();
-    expect(confirmButton()?.textContent).toBe('Merge into main');
+    expect(confirmButton()?.textContent).toBe('Merge into local main');
   });
 });
 

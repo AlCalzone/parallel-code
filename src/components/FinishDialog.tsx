@@ -141,12 +141,13 @@ export function FinishDialog(props: FinishDialogProps) {
     if (merge.merging() || prMerging()) return 'Merging...';
     const method = pr.method();
     if (pr.mode() === 'pr') {
-      // The PR number heads its section; the button names only the action.
-      const action = method ? PR_MERGE_ACTIONS[method] : 'Merge';
+      // The PR number heads its section; the button names the action and where it runs.
+      const action = `${method ? PR_MERGE_ACTIONS[method] : 'Merge'} on GitHub`;
       return pr.bypassing() ? `${action} as admin` : action;
     }
     // The target lives on the button, so the dialog needs no sentence restating it.
-    return `${merge.squash() ? 'Squash merge' : 'Merge'} into ${merge.baseBranchName()}`;
+    // "local" because nothing is fetched before or pushed after this merge.
+    return `${merge.squash() ? 'Squash merge' : 'Merge'} into local ${merge.baseBranchName()}`;
   };
   // Said elsewhere in this dialog: merge safety by the notices on top, the
   // verify command in the check list, evidence by the panel these rows sit in.

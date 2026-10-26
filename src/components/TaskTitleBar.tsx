@@ -58,7 +58,9 @@ export function TaskTitleBar(props: TaskTitleBarProps) {
   };
   const finishTitle = () => {
     const base = props.task.baseBranch ?? 'base';
-    return props.pushing ? 'Pushing… (open to see output)' : `Finish: merge into ${base} or push`;
+    return props.pushing
+      ? 'Pushing… (open to see output)'
+      : `Finish: merge into ${base} (locally or via PR) or push`;
   };
 
   // The actions overlay the title's end so inactive columns can show the whole

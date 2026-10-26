@@ -74,7 +74,7 @@ const button = (name: string) =>
 
 it('offers Finish as a labelled action that reflects push progress', () => {
   const finish = button('Finish');
-  expect(finish?.title).toBe('Finish: merge into main or push');
+  expect(finish?.title).toBe('Finish: merge into main (locally or via PR) or push');
   finish?.click();
   expect(onFinish).toHaveBeenCalledOnce();
 
