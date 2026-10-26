@@ -633,26 +633,6 @@ export function ReviewSection(props: {
             onChange={(model) => setTaskReviewModel(props.task.id, model)}
           />
         </div>
-        {/* A button, not a hint: told only that they may leave, people wait. */}
-        <Show when={running()}>
-          <p
-            style={{
-              margin: '0',
-              padding: '4px 10px 0',
-              color: theme.fgMuted,
-              'font-size': sf(11),
-            }}
-          >
-            It runs in the background and tells you when it is ready.{' '}
-            <button
-              type="button"
-              style={{ ...linkButton, 'font-size': 'inherit' }}
-              onClick={() => props.onKeepWorking()}
-            >
-              Keep working
-            </button>
-          </p>
-        </Show>
         <Show when={!props.task.confidence && failure()}>
           {(message) => (
             <p
@@ -669,6 +649,20 @@ export function ReviewSection(props: {
           )}
         </Show>
       </div>
+      {/* A button, not a hint: told only that they may leave, people wait. Its own
+          box beside the review, so the review's button keeps its shape. */}
+      <Show when={running()}>
+        <div class="finish-followup">
+          <button
+            type="button"
+            class="change-tour-action"
+            title="Closes this dialog. The review runs on and tells you when it is ready."
+            onClick={() => props.onKeepWorking()}
+          >
+            <span class="change-tour-action-label">Keep working</span>
+          </button>
+        </div>
+      </Show>
     </FollowUps>
   );
 }
