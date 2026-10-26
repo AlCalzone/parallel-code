@@ -6,6 +6,7 @@ import { showNotification } from './notification';
 import { prBabysitStatus, startPrBabysit, startPrBabysitWatcher } from './pr-babysit';
 import { removePrChecks, setPrChecks, type PrChecksState } from './pr-checks-state';
 import { sendPrompt } from './tasks';
+import { isAgentIdle } from './taskStatus';
 import type { PullRequestDetails } from '../ipc/types';
 import type { Agent, Task } from './types';
 
@@ -13,7 +14,10 @@ vi.mock('../lib/ipc', () => ({ invoke: vi.fn(), fireAndForget: vi.fn() }));
 vi.mock('./persistence', () => ({ saveState: vi.fn(() => Promise.resolve()) }));
 vi.mock('./notification', () => ({ showNotification: vi.fn() }));
 vi.mock('./tasks', () => ({ sendPrompt: vi.fn(() => Promise.resolve()) }));
-vi.mock('./taskStatus', () => ({ isAgentIdle: () => true, isAgentAskingQuestion: () => false }));
+vi.mock('./taskStatus', () => ({
+  isAgentIdle: vi.fn(() => true),
+  isAgentAskingQuestion: () => false,
+}));
 vi.mock('./github', () => ({
   getPullRequestDetails: vi.fn(),
   loadFailedChecksPrompt: vi.fn(() => Promise.resolve('fix CI')),
@@ -72,6 +76,7 @@ afterEach(() => {
   setStore('tasks', reconcile({}));
   setStore('agents', reconcile({}));
   vi.clearAllMocks();
+  vi.mocked(isAgentIdle).mockReturnValue(true);
   vi.useRealTimers();
 });
 
@@ -87,6 +92,28 @@ it('sends each failing commit to the agent once', async () => {
   await tick();
   expect(sendPrompt).toHaveBeenCalledTimes(2);
   expect(store.tasks['task-1']?.prBabysit).toEqual({ attempts: 2, lastSentSha: 'b' });
+});
+
+it('tells the user when the agent does not start on the sent failures', async () => {
+  setPrChecks('task-1', failing('a'));
+  stop = startPrBabysitWatcher();
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(showNotification).toHaveBeenLastCalledWith(
+    expect.stringContaining('the agent did not start'),
+  );
+});
+
+it('stays quiet when the agent starts on the sent failures', async () => {
+  vi.mocked(sendPrompt).mockImplementationOnce(() => {
+    vi.mocked(isAgentIdle).mockReturnValue(false);
+    return Promise.resolve();
+  });
+  setPrChecks('task-1', failing('a'));
+  stop = startPrBabysitWatcher();
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(showNotification).not.toHaveBeenCalledWith(
+    expect.stringContaining('the agent did not start'),
+  );
 });
 
 it('holds the failures while the user has an unsent draft', async () => {

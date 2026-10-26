@@ -21,6 +21,8 @@ import { sendPrompt } from './tasks';
 // shortcut: polling store reads is cheap and CI moves in minutes; an effect
 // plus timers for typing holds would only matter if latency did.
 const BABYSIT_TICK_MS = 5_000;
+// An agent starts a turn within a second or two of Enter; fixing CI takes far longer.
+const START_CHECK_MS = 10_000;
 
 export function getPrBabysit(taskId: string): PrBabysit | undefined {
   return store.tasks[taskId]?.prBabysit;
@@ -114,6 +116,15 @@ async function deliverFailures(taskId: string, headSha: string): Promise<void> {
   setPrBabysit(taskId, { attempts, lastSentSha: headSha });
   await sendPrompt(taskId, agentId, prompt, { appPrompt: true });
   showNotification(`Babysit sent CI failures to the agent (${attempts}/${MAX_BABYSIT_ATTEMPTS}).`);
+  // A paste the agent holds instead of submitting would otherwise fail silently.
+  // shortcut: one late look — a turn that ends inside the window is a false alarm.
+  await new Promise((r) => setTimeout(r, START_CHECK_MS));
+  if (store.agents[agentId]?.status === 'running' && isAgentIdle(agentId)) {
+    const name = store.tasks[taskId]?.name ?? 'the task';
+    showNotification(
+      `Babysit pasted CI failures into “${name}”, but the agent did not start. Check its terminal; it may need Enter.`,
+    );
+  }
 }
 
 /** Watches babysat tasks; returns a stop function. */
