@@ -224,7 +224,7 @@ export type { WorkspaceView } from './ui';
 export { setShellLayoutOverride, setTaskShellAutoLayout, getTaskShellLayout } from './shell-layout';
 export { getTaskAgentHookStatus, isTaskUnread, noteAgentTerminalInput } from './agentHookStatus';
 export type { TaskAgentHookStatus } from './agentHookStatus';
-export { showNotification, clearNotification } from './notification';
+export { showNotification, clearNotification, notificationAction } from './notification';
 export { startPrChecksSubscription, getPrChecks, type PrChecksState } from './pr-checks';
 export {
   backgroundVerifyEnabled,

@@ -345,6 +345,7 @@ export function FinishDialog(props: FinishDialogProps) {
                   props.onClose();
                 }}
                 onOpenFile={(file, line) => setReviewLocation({ file, line, side: 'new' })}
+                onKeepWorking={() => props.onClose()}
               />
             </Show>
             {/* Without a PR the section would only say so; local merging needs no word on PRs. */}

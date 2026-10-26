@@ -11,8 +11,8 @@ vi.mock('../lib/load-task-diff', () => ({
   loadTaskDiff: mockLoadTaskDiff,
   getTaskDiffBaseBranch: (_mode: string, base?: string) => base,
 }));
-vi.mock('./notification', () => ({ showNotification: mockNotify }));
-vi.mock('./tasks', () => ({ sendPrompt: vi.fn() }));
+vi.mock('./notification', () => ({ showNotification: mockNotify, NOTIFICATION_ERROR_MS: 10_000 }));
+vi.mock('./tasks', () => ({ sendPrompt: vi.fn(), uncollapseTask: vi.fn() }));
 vi.mock('./projects', () => ({ getProjectPath: () => '/repo' }));
 vi.mock('./agentHookStatus', () => ({ getAgentHookStatus: () => null }));
 vi.mock('./agent-chat', () => ({ isAgentChat: () => false }));
@@ -108,7 +108,10 @@ describe('startTaskReview', () => {
       fingerprint: expect.any(String),
     });
     expect(task().reviewStatus).toBeUndefined();
-    expect(mockNotify).toHaveBeenCalledWith(expect.stringContaining('“Fix login” is ready'));
+    expect(mockNotify).toHaveBeenCalledWith(
+      expect.stringContaining('“Fix login” is ready'),
+      expect.objectContaining({ action: expect.objectContaining({ label: 'Open review' }) }),
+    );
   });
 
   it('asks the reviewer only once the checks started with it have ended', async () => {

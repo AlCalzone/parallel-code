@@ -159,7 +159,12 @@ function DirectBranchBadge(props: { branchName: string }) {
 /** Task name, wrapping to at most two lines so long names stay readable in a
  *  narrow sidebar. Full name always available as a tooltip. Bold, not badged,
  *  when an agent finished while the task was off screen. */
-function TaskName(props: { name: string; unread?: boolean; backgrounded?: boolean }) {
+function TaskName(props: {
+  name: string;
+  unread?: boolean;
+  backgrounded?: boolean;
+  reviewing?: boolean;
+}) {
   return (
     <>
       <span
@@ -175,6 +180,16 @@ function TaskName(props: { name: string; unread?: boolean; backgrounded?: boolea
           size={11}
           title="Snoozed"
           style={{ color: theme.fgSubtle, 'flex-shrink': '0' }}
+        />
+      </Show>
+      <Show when={props.reviewing}>
+        {/* Muted, not a badge: the review is routine work the user can leave running. */}
+        <span
+          class="inline-spinner"
+          role="img"
+          aria-label="Reviewing"
+          title="Reviewing"
+          style={{ color: theme.fgSubtle, 'flex-shrink': '0', width: '10px', height: '10px' }}
         />
       </Show>
     </>
@@ -1129,6 +1144,7 @@ function CoordinatorFolder(props: TaskEntryProps) {
                 name={t().name}
                 unread={isTaskUnread(props.taskId)}
                 backgrounded={isTaskBackgrounded(props.taskId)}
+                reviewing={t().reviewStatus?.state === 'running'}
               />
               <Show when={childCount() > 0}>
                 <span
@@ -1249,7 +1265,7 @@ function CollapsedTaskEntry(props: {
                 size="sm"
                 attention={getTaskAttentionState(props.taskId)}
               />
-              <TaskName name={t().name} />
+              <TaskName name={t().name} reviewing={t().reviewStatus?.state === 'running'} />
               <Show when={t().gitIsolation === 'direct'}>
                 <DirectBranchBadge branchName={t().branchName} />
               </Show>
@@ -1356,6 +1372,7 @@ function TaskRow(props: TaskRowProps) {
                 name={t().name}
                 unread={isTaskUnread(props.taskId)}
                 backgrounded={isTaskBackgrounded(props.taskId)}
+                reviewing={t().reviewStatus?.state === 'running'}
               />
               <Show when={t().gitIsolation === 'direct'}>
                 <DirectBranchBadge branchName={t().branchName} />

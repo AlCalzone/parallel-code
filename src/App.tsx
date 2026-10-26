@@ -57,7 +57,7 @@ import { TaskBoardControls } from './components/TaskBoardControls';
 import { FocusModeTaskIndicators } from './components/FocusModeTaskIndicators';
 import { UsageStatusBar } from './components/UsageStatusBar';
 import { WelcomeScreen } from './components/WelcomeScreen';
-import { theme } from './lib/theme';
+import { linkButtonStyle, theme } from './lib/theme';
 import * as log from './lib/log';
 import {
   store,
@@ -87,6 +87,7 @@ import {
   spawnShellForTask,
   closeShell,
   clearNotification,
+  notificationAction,
   setWindowState,
   createTerminal,
   closeTerminal,
@@ -1139,6 +1140,23 @@ function App() {
                 </span>
               </Show>
               {store.notification}
+              <Show when={notificationAction()}>
+                {(action) => (
+                  <button
+                    type="button"
+                    style={{ ...linkButtonStyle, color: theme.fg, 'font-size': 'inherit' }}
+                    onClick={(e) => {
+                      // The notice dismisses on any click; clear it before running, so a notice the action shows stays up.
+                      e.stopPropagation();
+                      const { run } = action();
+                      clearNotification();
+                      run();
+                    }}
+                  >
+                    {action().label}
+                  </button>
+                )}
+              </Show>
             </div>
           </Show>
         </div>

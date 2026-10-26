@@ -11,7 +11,9 @@ const {
   mockSetChecks,
   mockSetModel,
   mockStage,
+  mockTakeUnseen,
 } = vi.hoisted(() => ({
+  mockTakeUnseen: vi.fn((_taskId: string) => false),
   mockSetModel: vi.fn(),
   mockCancel: vi.fn(),
   mockDismiss: vi.fn(),
@@ -28,6 +30,7 @@ vi.mock('../store/task-review', () => ({
   reviewerName: () => 'opus',
   taskReviewModel: () => ({ provider: 'claude', model: 'opus' }),
   setTaskReviewModel: mockSetModel,
+  takeUnseenReview: mockTakeUnseen,
 }));
 
 // Stands in for the model call: answers with a fixed setup at once.
@@ -157,6 +160,7 @@ function mount(task: Task, verifyFailed = false) {
   const [state, setState] = createStore(task);
   const onReworkStaged = vi.fn();
   const onOpenFile = vi.fn();
+  const onKeepWorking = vi.fn();
   const root = document.createElement('div');
   document.body.append(root);
   dispose = render(
@@ -166,11 +170,12 @@ function mount(task: Task, verifyFailed = false) {
         verifyFailed={verifyFailed}
         onReworkStaged={onReworkStaged}
         onOpenFile={onOpenFile}
+        onKeepWorking={onKeepWorking}
       />
     ),
     root,
   );
-  return { root, setState, onReworkStaged, onOpenFile };
+  return { root, setState, onReworkStaged, onOpenFile, onKeepWorking };
 }
 
 const buttons = (root: HTMLElement) => Array.from(root.querySelectorAll('button'));
@@ -408,11 +413,14 @@ describe('ReviewSection', () => {
   });
 
   it('says it runs in the background on the reviewer model, and can be cancelled', () => {
-    const { root, setState } = mount(
+    const { root, setState, onKeepWorking } = mount(
       baseTask({ confidence: undefined, reviewStatus: { state: 'running', startedAt: 5_000 } }),
     );
     expect(heading(root)).toBe('Reviewing with opus');
-    expect(toggle(root).textContent).toContain('You can close this dialog');
+    expect(root.textContent).toContain('It runs in the background');
+    button(root, 'Keep working').click();
+    expect(onKeepWorking).toHaveBeenCalled();
+    expect(mockCancel).not.toHaveBeenCalled();
     expect(toggle(root).title).toBe('Cancel the review');
     expect(buttons(root).some((b) => /Run review/.test(b.textContent ?? ''))).toBe(false);
     toggle(root).click();
@@ -421,7 +429,19 @@ describe('ReviewSection', () => {
     if (!rated) throw new Error('Missing rating');
     setState({ confidence: { ...rated, publishedAt: 6_000 }, reviewStatus: undefined });
     expect(heading(root)).toBe('Review · 50% · 1 open');
-    expect(toggle(root).textContent).not.toContain('You can close this dialog');
+    expect(buttons(root).some((b) => b.textContent === 'Keep working')).toBe(false);
+  });
+
+  it('opens a review that finished while the dialog was closed', () => {
+    mockTakeUnseen.mockReturnValueOnce(true);
+    const { root } = mount(baseTask({ codeFingerprint: { fingerprint: 'same', at: 4_000 } }));
+    expect(mockTakeUnseen).toHaveBeenCalledWith('task');
+    expect(toggle(root).getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('keeps an already seen review folded', () => {
+    const { root } = mount(baseTask({ codeFingerprint: { fingerprint: 'same', at: 4_000 } }));
+    expect(toggle(root).getAttribute('aria-expanded')).toBe('false');
   });
 
   it('says why a review failed and offers it again, with another reviewer', () => {

@@ -160,7 +160,8 @@ export function TaskPanel(props: TaskPanelProps) {
   // A running push is what the reopened dialog should show, whatever opened it.
   const [finishCloses, setFinishCloses] = createSignal(false);
   const openFinish = (action: FinishAction, closeAfter = false) => {
-    if (!canFinish()) return;
+    // Already open: a new seed would reset what the user set in it, e.g. via a review notice.
+    if (!canFinish() || finishAction() !== null) return;
     batch(() => {
       setFinishCloses(closeAfter);
       setFinishAction(pushing() ? 'push' : action);

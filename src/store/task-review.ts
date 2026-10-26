@@ -11,12 +11,41 @@ import {
   type ReviewModelSettings,
 } from '../lib/task-review';
 import { store, setStore } from './core';
-import { showNotification } from './notification';
+import { setPendingAction } from './focus';
+import { isLandedTaskState } from './landing';
+import { setActiveTask } from './navigation';
+import { showNotification, NOTIFICATION_ERROR_MS } from './notification';
 import { getReviewDismissals } from './review';
 import { isLiveTask, noteCodeFingerprint, promptsSince, readTaskDiff } from './task-brief';
+import { uncollapseTask } from './tasks';
 import type { Task } from './types';
 
 const inFlight = new Map<string, () => void>();
+/** Tasks whose latest review finished and has not been shown yet. */
+const unseen = new Set<string>();
+
+/**
+ * Whether a review finished since the task's review was last shown; asking
+ * counts as showing it. The user asked for that review, so it opens unfolded.
+ */
+export function takeUnseenReview(taskId: string): boolean {
+  return unseen.delete(taskId);
+}
+
+/** Finish opens only on a worktree task that has not landed; see TaskPanel. */
+function canFinish(task: Task | undefined): task is Task {
+  return task?.gitIsolation === 'worktree' && !isLandedTaskState(task.landingState);
+}
+
+/** Brings a task forward with its Finish dialog open, where the review is read. */
+export function openTaskReview(taskId: string): void {
+  const task = store.tasks[taskId];
+  // Gone or landed since the notice went up: no panel would take the request.
+  if (!canFinish(task)) return;
+  if (task.collapsed) uncollapseTask(taskId);
+  setActiveTask(taskId);
+  setPendingAction({ type: 'finish', taskId });
+}
 
 /** Replaces the status whole; a store merge would carry fields over from the last one. */
 function setReviewStatus(taskId: string, status: Task['reviewStatus']): void {
@@ -112,6 +141,8 @@ export async function startTaskReview(
     const response = await request.result;
     if (cancelled || !isLiveTask(store.tasks[taskId])) return;
     const payload = parseTaskReviewResponse(response, `Review by ${reviewer}`);
+    // Before the status clears: an open review section takes the flag as the run ends.
+    unseen.add(taskId);
     // Replaced, not merged: a field the new rating leaves out must not survive from the old one.
     // Dated when it started, so code changed while the model read counts as newer.
     setStore(
@@ -127,7 +158,23 @@ export async function startTaskReview(
       }),
     );
     logInfo('taskReview', 'Review finished', { taskId, durationMs: Date.now() - startedAt });
-    showNotification(`The review of “${task.name}” is ready.`);
+    // The review is read in the Finish dialog; where that is off or cannot open, or a
+    // section on screen already took the flag, a plain notice says it is done.
+    showNotification(`The review of “${task.name}” is ready.`, {
+      durationMs: NOTIFICATION_ERROR_MS,
+      ...(store.finishReview &&
+        canFinish(store.tasks[taskId]) &&
+        unseen.has(taskId) && {
+          action: {
+            // Uncollapsing starts the task's agents, so the label says so. A getter,
+            // so a task collapsed while the notice is up relabels it.
+            get label() {
+              return store.tasks[taskId]?.collapsed ? 'Resume and open review' : 'Open review';
+            },
+            run: () => openTaskReview(taskId),
+          },
+        }),
+    });
   } catch (error) {
     if (cancelled || !store.tasks[taskId]) return;
     const message = errMessage(error);

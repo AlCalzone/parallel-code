@@ -29,7 +29,12 @@ import {
 import { refreshCodeFingerprint } from '../store/task-brief';
 import { getProject } from '../store/projects';
 import { cancelReview, startReview } from '../store/review-run';
-import { reviewerName, setTaskReviewModel, taskReviewModel } from '../store/task-review';
+import {
+  reviewerName,
+  setTaskReviewModel,
+  takeUnseenReview,
+  taskReviewModel,
+} from '../store/task-review';
 import type { Task } from '../store/types';
 import { CheckIcon, PlusIcon, ReviewIcon } from './icons';
 import { createHeightTransition } from './understanding/create-height-transition';
@@ -171,6 +176,8 @@ export function ReviewSection(props: {
   onReworkStaged: () => void;
   /** Opens a changed file at a line, above the dialog. */
   onOpenFile: (file: string, line?: number) => void;
+  /** Closes the dialog while the review runs on. */
+  onKeepWorking: () => void;
 }) {
   const bodyId = createUniqueId();
   const summary = createMemo(() =>
@@ -204,7 +211,10 @@ export function ReviewSection(props: {
     const scores = summary().scores;
     return !!scores && !scores.stale && !!props.task.codeFingerprint;
   };
-  const [open, setOpenSignal] = createSignal(untrack(urgent));
+  // A review that finished while the dialog was closed opens too: the user asked for it.
+  const [open, setOpenSignal] = createSignal(
+    untrack(() => (takeUnseenReview(props.task.id) && current()) || urgent()),
+  );
   let userToggled = false;
   const setOpen = (next: boolean | ((prev: boolean) => boolean)) => {
     userToggled = true;
@@ -216,7 +226,10 @@ export function ReviewSection(props: {
   // A review the user watched finish is of the code as it is now, and they asked for it.
   createEffect(
     on(running, (now, was) => {
-      if (was && !now) openUnlessToggled();
+      if (was && !now) {
+        takeUnseenReview(props.task.id);
+        openUnlessToggled();
+      }
     }),
   );
 
@@ -609,14 +622,7 @@ export function ReviewSection(props: {
             <Show when={running()} fallback={<ReviewIcon size={14} />}>
               <span class="inline-spinner" aria-hidden="true" />
             </Show>
-            <span class="change-tour-action-label">
-              {actionLabel()}
-              <Show when={running()}>
-                <span style={{ display: 'block', color: theme.fgMuted, 'font-size': sf(11) }}>
-                  You can close this dialog
-                </span>
-              </Show>
-            </span>
+            <span class="change-tour-action-label">{actionLabel()}</span>
           </button>
           {/* Like the tour's model; waits while a review runs or the settings carry their own pick. */}
           <ReviewerMenu
@@ -627,6 +633,26 @@ export function ReviewSection(props: {
             onChange={(model) => setTaskReviewModel(props.task.id, model)}
           />
         </div>
+        {/* A button, not a hint: told only that they may leave, people wait. */}
+        <Show when={running()}>
+          <p
+            style={{
+              margin: '0',
+              padding: '4px 10px 0',
+              color: theme.fgMuted,
+              'font-size': sf(11),
+            }}
+          >
+            It runs in the background and tells you when it is ready.{' '}
+            <button
+              type="button"
+              style={{ ...linkButton, 'font-size': 'inherit' }}
+              onClick={() => props.onKeepWorking()}
+            >
+              Keep working
+            </button>
+          </p>
+        </Show>
         <Show when={!props.task.confidence && failure()}>
           {(message) => (
             <p

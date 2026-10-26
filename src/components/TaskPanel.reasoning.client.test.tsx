@@ -10,7 +10,7 @@ import {
 } from 'solid-js';
 import { render } from 'solid-js/web';
 import { createStore } from 'solid-js/store';
-import { afterEach, beforeAll, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, expect, it, onTestFinished, vi } from 'vitest';
 import { TaskPanel } from './TaskPanel';
 import { IPC } from '../../electron/ipc/channels';
 import type { CommitInfo } from '../ipc/types';
@@ -43,6 +43,8 @@ const fileInventory = vi.hoisted(() => ({
 }));
 
 const parentNavigation = vi.hoisted(() => ({ setCollapsed: (_value: boolean) => {} }));
+const pending = vi.hoisted(() => ({ set: (_action: unknown) => {} }));
+const projectStub = vi.hoisted(() => ({ value: undefined as unknown }));
 const viewport = vi.hoisted(() => ({ set: (_taskId: string, _visibility: string) => {} }));
 
 const channels = vi.hoisted(
@@ -68,14 +70,16 @@ vi.mock('../store/store', () => {
     askCodeProvider: 'minimax',
     agentEnvFiles: {},
     taskBriefs: true,
+    pendingAction: null as unknown,
   });
+  pending.set = (action: unknown) => setStore('pendingAction', action);
   parentNavigation.setCollapsed = (value: boolean) =>
     setStore('tasks', 'parent', 'collapsed', value);
   viewport.set = (taskId: string, visibility: string) =>
     setStore('taskViewportVisibility', taskId, visibility);
   return {
     store,
-    getProject: () => undefined,
+    getProject: () => projectStub.value,
     isPanelFocused: () => false,
     openCanvasReasoning: vi.fn(),
     openCanvasMindMap: vi.fn(),
@@ -99,6 +103,7 @@ vi.mock('../store/store', () => {
     setActiveTask: (id: string) => setStore('activeTaskId', id),
     activateTaskFromPointer: (id: string) => setStore('activeTaskId', id),
     uncollapseTask: vi.fn(),
+    clearPendingAction: () => setStore('pendingAction', null),
     toggleFocusMode: (on?: boolean) => setStore('focusMode', on ?? !store.focusMode),
     setTaskBriefs: (on: boolean) => setStore('taskBriefs', on),
   };
@@ -140,6 +145,7 @@ vi.mock('./CloseTaskDialog', () => ({ CloseTaskDialog: () => null }));
 vi.mock('./FinishDialog', () => ({
   FinishDialog: (props: ComponentProps<typeof FinishDialog>) => (
     <Show when={props.open}>
+      <output class="test-finish-cleanup">{String(props.initialCleanup)}</output>
       <button
         class="test-evidence-review"
         onClick={() => {
@@ -892,4 +898,32 @@ it.each([false, true])('labels parent navigation explicitly when collapsed=%s', 
   expect(store.activeTaskId).toBe('parent');
   if (collapsed) expect(uncollapseTask).toHaveBeenCalledWith('parent');
   else expect(uncollapseTask).not.toHaveBeenCalled();
+});
+
+it('keeps an open Finish as it is when Finish is asked for again', () => {
+  const task: Task = {
+    id: 'task',
+    name: 'Task',
+    projectId: 'project',
+    agentIds: ['agent'],
+    shellAgentIds: [],
+    notes: '',
+    gitIsolation: 'worktree',
+    branchName: 'task/x',
+    worktreePath: '/tmp/task',
+    lastPrompt: '',
+  };
+  projectStub.value = { id: 'project', deleteBranchOnClose: false };
+  onTestFinished(() => {
+    projectStub.value = undefined;
+  });
+  const container = document.createElement('div');
+  document.body.append(container);
+  dispose = render(() => <TaskPanel task={task} isActive />, container);
+  const cleanup = () => container.querySelector('.test-finish-cleanup')?.textContent;
+  pending.set({ type: 'finish', taskId: 'task', closeAfter: true });
+  expect(cleanup()).toBe('true');
+  // Such as "Open review" on a review notice: the dialog keeps what the user set in it.
+  pending.set({ type: 'finish', taskId: 'task' });
+  expect(cleanup()).toBe('true');
 });
