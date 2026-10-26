@@ -54,6 +54,7 @@ import {
 } from '../lib/coordinator-limits';
 import { computeSidebarDraggableTaskOrder, getCoordinatorChildren } from './sidebar-order';
 import { isLandedTaskState } from './landing';
+import { cleanPasteText } from '../lib/paste-text';
 import { forgetAgentPublication } from './reasoning-activity';
 import { armSpCompletion, fireSpCompletion, onTaskRenamed } from './superProductivity';
 
@@ -828,13 +829,15 @@ export async function sendPrompt(
   // guard treating rapid synthetic keystrokes plus Enter as a paste.
   setTaskLastInputAt(taskId);
   const useBracketed = isAgentBracketedPasteEnabled(agentId);
+  // Claude Code holds a paste with control or invisible characters instead of submitting it.
+  const body = cleanPasteText(effectiveText);
   await writeToAgentWhenReady(
     taskId,
     agentId,
-    useBracketed ? `${BRACKETED_PASTE_START}${effectiveText}${BRACKETED_PASTE_END}` : effectiveText,
+    useBracketed ? `${BRACKETED_PASTE_START}${body}${BRACKETED_PASTE_END}` : body,
     options.signal,
   );
-  await new Promise((r) => setTimeout(r, pasteDelayMs(effectiveText)));
+  await new Promise((r) => setTimeout(r, pasteDelayMs(body)));
   await writeToAgentWhenReady(taskId, agentId, '\r', options.signal);
   // App sends bypass xterm's onData handler, which normally clears this flag on Enter.
   if (agentId === task?.agentIds[0]) setTaskTerminalInputPending(taskId, false);

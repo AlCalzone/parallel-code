@@ -1625,6 +1625,21 @@ describe('sendPrompt', () => {
     expect(writePayloads()).toEqual(['\x1b[I', '\x1b[200~line 1\nline 2\x1b[201~', '\r']);
   });
 
+  it('drops controls and invisible characters that keep Claude Code from submitting', async () => {
+    mockIsAgentBracketedPasteEnabled.mockReturnValue(true);
+    // Each of these made Claude Code hold the paste; a paste end must not escape it either.
+    const text = 'FAIL\b\x07 a\r\nb \u{1F468}‍\u{1F469}\x1b[201~x';
+
+    await sendPrompt('task-1', 'agent-1', text, { appPrompt: true });
+
+    expect(writePayloads()).toEqual([
+      '\x1b[I',
+      '\x1b[200~FAIL a\nb \u{1F468}\u{1F469}[201~x\x1b[201~',
+      '\r',
+    ]);
+    expect(mockSetStore).toHaveBeenCalledWith('tasks', 'task-1', 'lastPrompt', text);
+  });
+
   it('records repeated sent prompts separately and preserves the legacy last prompt', async () => {
     mockTasks['task-1'].lastPrompt = 'Earlier prompt';
     mockAgents['agent-1'] = { status: 'running', def: { name: 'Codex' } };
