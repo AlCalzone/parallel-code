@@ -417,7 +417,7 @@ describe('ReviewSection', () => {
       baseTask({ confidence: undefined, reviewStatus: { state: 'running', startedAt: 5_000 } }),
     );
     expect(heading(root)).toBe('Reviewing with opus');
-    expect(root.textContent).toContain('It runs in the background');
+    expect(button(root, 'Keep working').title).toContain('runs on and tells you when it is ready');
     button(root, 'Keep working').click();
     expect(onKeepWorking).toHaveBeenCalled();
     expect(mockCancel).not.toHaveBeenCalled();
