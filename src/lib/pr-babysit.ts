@@ -42,3 +42,18 @@ export function nextBabysitStep(
   if (babysit.attempts >= MAX_BABYSIT_ATTEMPTS) return { kind: 'give-up' };
   return { kind: 'send', headSha: checks.headSha };
 }
+
+/** Why babysitting is waiting on CI itself, as shown on its toggle; null when
+ *  CI has a failure to send and only the agent's readiness decides. */
+export function babysitCiWaitReason(
+  babysit: PrBabysit,
+  checks: BabysitChecks | undefined,
+): string | null {
+  if (!checks) return 'Waiting for the PR checks to load';
+  if (checks.overall === 'pending') return 'Waiting for CI to finish';
+  if (checks.overall === 'none') return 'Waiting for CI checks to start';
+  if (checks.overall === 'success') return 'CI is passing';
+  if (!checks.headSha) return 'Waiting for the PR checks to load';
+  if (checks.headSha === babysit.lastSentSha) return 'Waiting for a new push';
+  return null;
+}

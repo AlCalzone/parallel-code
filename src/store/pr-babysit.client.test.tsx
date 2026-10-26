@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { setStore, store } from './core';
 import { getPullRequestDetails, loadFailedChecksPrompt } from './github';
 import { showNotification } from './notification';
-import { startPrBabysit, startPrBabysitWatcher } from './pr-babysit';
+import { prBabysitStatus, startPrBabysit, startPrBabysitWatcher } from './pr-babysit';
 import { removePrChecks, setPrChecks, type PrChecksState } from './pr-checks-state';
 import { sendPrompt } from './tasks';
 import type { PullRequestDetails } from '../ipc/types';
@@ -99,6 +99,31 @@ it('holds the failures while the user has an unsent draft', async () => {
   setStore('tasks', 'task-1', 'promptDraft', undefined);
   await tick();
   expect(sendPrompt).toHaveBeenCalledTimes(1);
+});
+
+it('says what it is waiting for', async () => {
+  setStore('tasks', 'task-1', 'promptDraft', 'half-typed');
+  setPrChecks('task-1', failing('a'));
+  expect(prBabysitStatus('task-1')).toBe(
+    'CI failed; waiting: Your draft in the task prompt is unsent',
+  );
+
+  setStore('tasks', 'task-1', 'promptDraft', undefined);
+  stop = startPrBabysitWatcher();
+  await tick();
+  expect(prBabysitStatus('task-1')).toBe('Waiting for a new push');
+});
+
+it('tells the user when a failing commit has nothing to send', async () => {
+  vi.mocked(loadFailedChecksPrompt).mockResolvedValueOnce(null);
+  setPrChecks('task-1', failing('a'));
+  stop = startPrBabysitWatcher();
+  await tick();
+  expect(sendPrompt).not.toHaveBeenCalled();
+  expect(store.tasks['task-1']?.prBabysit).toEqual({ attempts: 0, lastSentSha: 'a' });
+  expect(showNotification).toHaveBeenCalledWith(
+    expect.stringContaining('could not load a failing check'),
+  );
 });
 
 it('stops and tells the user after the last attempt fails', async () => {

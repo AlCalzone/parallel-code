@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { promisify } from 'util';
 
 const { mockStat } = vi.hoisted(() => ({
@@ -475,6 +475,7 @@ describe('refreshPrChecksWatcher', () => {
         watchId: 't1',
         prUrl: 'https://github.com/a/b/pull/1',
         taskName: 'test',
+        babysit: false,
       });
       await flushPromises();
       expect(send.mock.calls[send.mock.calls.length - 1]?.[1]).toMatchObject({
@@ -520,6 +521,7 @@ describe('refreshPrChecksWatcher', () => {
       watchId: 't1',
       prUrl: 'https://github.com/a/b/pull/1',
       taskName: 'test',
+      babysit: false,
     });
     refreshPrChecksWatcher('t1');
     await flushPromises();
@@ -565,6 +567,7 @@ describe('refreshPrChecksWatcher', () => {
       watchId: 't1',
       prUrl: 'https://github.com/a/b/pull/1',
       taskName: 'test',
+      babysit: false,
     });
     await flushPromises();
     expect(send).toHaveBeenCalledTimes(1);
@@ -618,6 +621,7 @@ describe('refreshPrChecksWatcher', () => {
         watchId: 't1',
         prUrl: 'https://github.com/a/b/pull/1',
         taskName: 'test',
+        babysit: false,
       });
       await flushPromises();
       refreshPrChecksWatcher('t1');
@@ -664,6 +668,7 @@ describe('refreshPrChecksWatcher', () => {
         watchId: 't1',
         prUrl: 'https://github.com/a/b/pull/1',
         taskName: 'test',
+        babysit: false,
       });
       await flushPromises();
       expect(send).toHaveBeenCalledTimes(1);
@@ -703,6 +708,7 @@ describe('refreshPrChecksWatcher', () => {
       watchId: 't1',
       prUrl: 'https://github.com/a/b/pull/1',
       taskName: 'test',
+      babysit: false,
     });
     await flushPromises();
 
@@ -743,12 +749,14 @@ describe('startPrChecksWatcher — several PRs per task', () => {
       watchId: 't1',
       prUrl: 'https://github.com/a/b/pull/1',
       taskName: 'T',
+      babysit: false,
     });
     startPrChecksWatcher({
       taskId: 't1',
       prUrl: 'https://github.com/a/api/pull/2',
       taskName: 'T · api #2',
       watchId: 't1:api',
+      babysit: false,
     });
     await flushPromises();
 
@@ -788,7 +796,7 @@ describe('startPrChecksWatcher — several PRs per task', () => {
       ),
     );
     const watch = (watchId: string, prUrl: string) =>
-      startPrChecksWatcher({ taskId: 't1', watchId, prUrl, taskName: 'T' });
+      startPrChecksWatcher({ taskId: 't1', watchId, prUrl, taskName: 'T', babysit: false });
     watch('t1', 'https://github.com/a/b/pull/1');
     watch('t1:b', 'https://github.com/a/b/pull/3');
     watch('t1:api', 'https://github.com/a/api/pull/2');
@@ -805,6 +813,51 @@ describe('startPrChecksWatcher — several PRs per task', () => {
   });
 });
 
+describe('startPrChecksWatcher — hidden window', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetForTests();
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+  });
+
+  afterEach(() => {
+    __resetForTests();
+    vi.useRealTimers();
+  });
+
+  it('keeps polling only babysat PRs while the window is hidden', async () => {
+    initPrChecks(fakeWindow(vi.fn()));
+    const calls = stubGh((_args, cb) =>
+      cb(
+        null,
+        JSON.stringify({
+          state: 'OPEN',
+          headRefOid: 'sha',
+          statusCheckRollup: [{ name: 'build', status: 'IN_PROGRESS' }],
+        }),
+        '',
+      ),
+    );
+    const watch = (watchId: string, babysit: boolean) =>
+      startPrChecksWatcher({
+        taskId: watchId,
+        watchId,
+        prUrl: `https://github.com/a/b/pull/${watchId === 'babysat' ? 1 : 2}`,
+        taskName: 'T',
+        babysit,
+      });
+    watch('plain', false);
+    watch('babysat', true);
+    await flushPromises();
+    calls.length = 0;
+
+    vi.advanceTimersByTime(30_000);
+    await flushPromises();
+
+    expect(calls.map((args) => args[2])).toEqual(['https://github.com/a/b/pull/1']);
+  });
+});
+
 describe('startPrChecksWatcher — graceful degradation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -817,6 +870,7 @@ describe('startPrChecksWatcher — graceful degradation', () => {
       watchId: 't1',
       prUrl: 'https://github.com/a/b/issues/1',
       taskName: 'test',
+      babysit: false,
     });
     expect(__getStateForTests().taskIds).toEqual([]);
   });
@@ -832,6 +886,7 @@ describe('startPrChecksWatcher — graceful degradation', () => {
       watchId: 't1',
       prUrl: 'https://github.com/a/b/pull/1',
       taskName: 'test',
+      babysit: false,
     });
     // Allow the fire-and-forget refresh to settle.
     await new Promise((resolve) => setImmediate(resolve));
@@ -854,6 +909,7 @@ describe('startPrChecksWatcher — graceful degradation', () => {
       watchId: 't1',
       prUrl: 'https://github.com/a/b/pull/1',
       taskName: 'test',
+      babysit: false,
     });
     await new Promise((resolve) => setImmediate(resolve));
     expect(__getStateForTests().disabled).toBe(true);

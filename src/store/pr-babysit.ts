@@ -1,7 +1,12 @@
 /** PR babysitting: sends a task's failing PR checks to its agent until CI passes. */
 import { errMessage, warn as logWarn } from '../lib/log';
 import { parseGitHubUrl } from '../lib/github-url';
-import { MAX_BABYSIT_ATTEMPTS, nextBabysitStep, type PrBabysit } from '../lib/pr-babysit';
+import {
+  MAX_BABYSIT_ATTEMPTS,
+  babysitCiWaitReason,
+  nextBabysitStep,
+  type PrBabysit,
+} from '../lib/pr-babysit';
 import { setStore, store } from './core';
 import { composerInputBlocker } from './delegation';
 import { getPullRequestDetails, loadFailedChecksPrompt } from './github';
@@ -54,18 +59,35 @@ function setPrBabysit(taskId: string, next: PrBabysit | undefined): void {
   void saveState();
 }
 
-/** The task's first agent when it can take an automatic prompt now. */
-function readyAgentId(taskId: string): string | null {
+/** Why the task's first agent cannot take an automatic prompt now; null when it can. */
+export function babysitAgentBlocker(taskId: string): string | null {
   const task = store.tasks[taskId];
   const agentId = task?.agentIds[0];
   const agent = agentId ? store.agents[agentId] : undefined;
-  if (!task || !agentId || agent?.status !== 'running') return null;
+  if (!task || !agentId || agent?.status !== 'running') return 'The agent is not running';
   // A paused task holds all automatic input, babysit included.
-  if (task.delegationPaused) return null;
-  if (task.closingStatus === 'closing' || task.closingStatus === 'removing') return null;
-  if (isLandedTaskState(task.landingState)) return null;
-  if (!isAgentIdle(agentId) || isAgentAskingQuestion(agentId)) return null;
-  return composerInputBlocker(task, true) === null ? agentId : null;
+  if (task.delegationPaused) return 'The task is paused';
+  if (task.closingStatus === 'closing' || task.closingStatus === 'removing')
+    return 'The task is closing';
+  if (isLandedTaskState(task.landingState)) return 'The task has landed';
+  if (!isAgentIdle(agentId)) return 'The agent is busy';
+  if (isAgentAskingQuestion(agentId)) return 'The agent seems to be waiting for an answer';
+  return composerInputBlocker(task, true);
+}
+
+/** The task's first agent when it can take an automatic prompt now. */
+function readyAgentId(taskId: string): string | null {
+  return babysitAgentBlocker(taskId) === null ? (store.tasks[taskId]?.agentIds[0] ?? null) : null;
+}
+
+/** What babysitting is waiting for, shown on its toggle; null when it is off. */
+export function prBabysitStatus(taskId: string): string | null {
+  const babysit = getPrBabysit(taskId);
+  if (!babysit) return null;
+  const ciReason = babysitCiWaitReason(babysit, getPrChecks(taskId));
+  if (ciReason) return ciReason;
+  const blocker = babysitAgentBlocker(taskId);
+  return blocker ? `CI failed; waiting: ${blocker}` : 'Sending CI failures to the agent';
 }
 
 async function deliverFailures(taskId: string, headSha: string): Promise<void> {
@@ -80,6 +102,9 @@ async function deliverFailures(taskId: string, headSha: string): Promise<void> {
   if (prompt === null) {
     // Nothing the agent can act on, such as only a merge conflict; skip this commit.
     setPrBabysit(taskId, { ...babysit, lastSentSha: headSha });
+    showNotification(
+      'Babysit could not load a failing check to send (a merge conflict alone has none). It waits for the next push.',
+    );
     return;
   }
   const agentId = readyAgentId(taskId);

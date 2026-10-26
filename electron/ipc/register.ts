@@ -1319,6 +1319,7 @@ export function registerAllHandlers(win: BrowserWindow): void {
       prUrl: args.prUrl,
       taskName: args.taskName,
       watchId: args.watchId,
+      babysit: args.babysit === true,
     });
   });
   ipcMain.handle(IPC.StopPrChecksWatcher, (_e, args) => {
