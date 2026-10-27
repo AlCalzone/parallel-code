@@ -958,33 +958,136 @@ describe('FinishDialog with an open PR', () => {
     expect(bypassCheckbox()).toBeNull();
   });
 
-  it.each([
-    [{ mergeable: 'CONFLICTING' as const }, 'conflicts'],
-    [{ isDraft: true }, 'Draft'],
-  ])('keeps other blockers when bypassing: %j', async (overrides, note) => {
-    vi.mocked(getPullRequestDetails).mockResolvedValue(
-      prDetails({ mergeStateStatus: 'BLOCKED', ...overrides }),
+  it('keeps a conflict blocking when bypassing', async () => {
+    vi.mocked(getPullRequestDetails).mockResolvedValueOnce(
+      prDetails({ mergeStateStatus: 'BLOCKED', mergeable: 'CONFLICTING' }),
     );
     mount({ task: task({ prUrl: PR_URL }) });
     await flush();
     bypassCheckbox()?.click();
     expect(confirmButton()?.disabled).toBe(true);
-    expect(document.querySelector('[data-testid="footer-note"]')?.textContent).toContain(note);
+    expect(document.querySelector('[data-testid="footer-note"]')?.textContent).toContain(
+      'conflicts',
+    );
   });
 
-  it('marks a draft PR ready for review, then allows the merge', async () => {
-    vi.mocked(getPullRequestDetails).mockResolvedValueOnce(prDetails({ isDraft: true }));
+  it('marks a draft PR ready for review without merging it', async () => {
+    vi.mocked(getPullRequestDetails).mockResolvedValueOnce(
+      prDetails({ isDraft: true, mergeStateStatus: 'DRAFT' }),
+    );
     vi.mocked(getPullRequestDetails).mockResolvedValueOnce(prDetails());
     vi.mocked(markPullRequestReadyForTask).mockResolvedValueOnce(undefined);
     mount({ task: task({ prUrl: PR_URL }) });
     await flush();
-    expect(confirmButton()?.disabled).toBe(true);
     button('Mark ready for review')?.click();
     await flush();
     await flush();
     expect(markPullRequestReadyForTask).toHaveBeenCalledWith('parent', PR_URL);
     expect(button('Mark ready for review')).toBeUndefined();
-    expect(confirmButton()?.disabled).toBe(false);
+    expect(document.querySelector('[data-testid="footer-note"]')?.textContent ?? '').not.toContain(
+      'Marks the draft ready',
+    );
+    expect(mergePullRequestForTask).not.toHaveBeenCalled();
+  });
+
+  it('marks a draft PR ready for review when merging it', async () => {
+    vi.mocked(getPullRequestDetails).mockResolvedValueOnce(
+      prDetails({ isDraft: true, mergeStateStatus: 'DRAFT' }),
+    );
+    vi.mocked(getPullRequestDetails).mockResolvedValueOnce(prDetails());
+    vi.mocked(markPullRequestReadyForTask).mockResolvedValueOnce(undefined);
+    vi.mocked(mergePullRequestForTask).mockResolvedValueOnce(false);
+    mount({ task: task({ prUrl: PR_URL }) });
+    await flush();
+    expect(document.querySelector('[data-testid="footer-note"]')?.textContent).toContain(
+      'Marks the draft ready for review first',
+    );
+    confirmButton()?.click();
+    await flush();
+    await flush();
+    expect(markPullRequestReadyForTask).toHaveBeenCalledWith('parent', PR_URL);
+    expect(mergePullRequestForTask).toHaveBeenCalledWith('parent', {
+      prUrl: PR_URL,
+      method: 'squash',
+      headSha: 'local',
+    });
+  });
+
+  it('stops after marking a draft ready when GitHub then blocks the merge', async () => {
+    vi.mocked(getPullRequestDetails).mockResolvedValueOnce(
+      prDetails({ isDraft: true, mergeStateStatus: 'DRAFT' }),
+    );
+    // Once after marking ready, once more after the merge is refused.
+    vi.mocked(getPullRequestDetails).mockResolvedValueOnce(
+      prDetails({ mergeStateStatus: 'BLOCKED' }),
+    );
+    vi.mocked(getPullRequestDetails).mockResolvedValueOnce(
+      prDetails({ mergeStateStatus: 'BLOCKED' }),
+    );
+    vi.mocked(markPullRequestReadyForTask).mockResolvedValueOnce(undefined);
+    mount({ task: task({ prUrl: PR_URL }) });
+    await flush();
+    confirmButton()?.click();
+    await flush();
+    await flush();
+    expect(markPullRequestReadyForTask).toHaveBeenCalled();
+    expect(mergePullRequestForTask).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain('Marked ready for review, but not merged');
+    expect(bypassCheckbox()).not.toBeNull();
+  });
+
+  it('refetches a draft marked ready whose merge GitHub then rejects', async () => {
+    vi.mocked(getPullRequestDetails).mockResolvedValueOnce(
+      prDetails({ isDraft: true, mergeStateStatus: 'DRAFT' }),
+    );
+    // GitHub computes the merge state lazily, so right after `gh pr ready` it may be unknown.
+    vi.mocked(getPullRequestDetails).mockResolvedValueOnce(
+      prDetails({ mergeStateStatus: 'UNKNOWN' }),
+    );
+    vi.mocked(getPullRequestDetails).mockResolvedValueOnce(
+      prDetails({ mergeStateStatus: 'BLOCKED' }),
+    );
+    vi.mocked(markPullRequestReadyForTask).mockResolvedValueOnce(undefined);
+    vi.mocked(mergePullRequestForTask).mockRejectedValueOnce(new Error('protected branch'));
+    mount({ task: task({ prUrl: PR_URL }) });
+    await flush();
+    confirmButton()?.click();
+    await flush();
+    await flush();
+    expect(document.body.textContent).toContain(
+      'Marked ready for review, but not merged: protected branch',
+    );
+    expect(bypassCheckbox()).not.toBeNull();
+  });
+
+  it('says a draft was marked ready when reloading it then fails', async () => {
+    vi.mocked(getPullRequestDetails).mockResolvedValueOnce(
+      prDetails({ isDraft: true, mergeStateStatus: 'DRAFT' }),
+    );
+    vi.mocked(getPullRequestDetails).mockRejectedValueOnce(new Error('offline'));
+    vi.mocked(getPullRequestDetails).mockRejectedValueOnce(new Error('offline'));
+    vi.mocked(markPullRequestReadyForTask).mockResolvedValueOnce(undefined);
+    mount({ task: task({ prUrl: PR_URL }) });
+    await flush();
+    confirmButton()?.click();
+    await flush();
+    await flush();
+    expect(mergePullRequestForTask).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain('Marked ready for review, but not merged');
+  });
+
+  it('does not merge a draft that could not be marked ready', async () => {
+    vi.mocked(getPullRequestDetails).mockResolvedValueOnce(
+      prDetails({ isDraft: true, mergeStateStatus: 'DRAFT' }),
+    );
+    vi.mocked(markPullRequestReadyForTask).mockRejectedValueOnce(new Error('gh failed'));
+    mount({ task: task({ prUrl: PR_URL }) });
+    await flush();
+    confirmButton()?.click();
+    await flush();
+    expect(mergePullRequestForTask).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain('gh failed');
+    expect(document.body.textContent).not.toContain('Marked ready for review');
   });
 
   it('merges a protection-blocked PR only after opting into the admin bypass', async () => {

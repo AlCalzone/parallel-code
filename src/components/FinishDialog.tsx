@@ -164,7 +164,10 @@ export function FinishDialog(props: FinishDialogProps) {
   const footerNote = () => {
     if (merge.merging() || prMerging() || pr.mode() === 'merged') return undefined;
     if (pushFirst()) return pushBlocker() ?? 'The PR is missing your latest commits.';
-    return pr.mode() === 'pr' ? pr.blocker() : merge.mergeBlocker();
+    if (pr.mode() !== 'pr') return merge.mergeBlocker();
+    return (
+      pr.blocker() ?? (pr.pr()?.isDraft ? 'Marks the draft ready for review first.' : undefined)
+    );
   };
   const pushDisabled = () => push.pushing() || merge.merging() || prMerging();
   /**
@@ -427,7 +430,7 @@ export function FinishDialog(props: FinishDialogProps) {
                 type="button"
                 class="btn-secondary"
                 disabled={pushDisabled() || !!pr.busy() || !!pr.blocker(true)}
-                title={`Merge PR #${pr.number()} as it is on GitHub; the task stays open for the rest`}
+                title={`Merge PR #${pr.number()} as it is on GitHub; the task stays open for the rest${pr.pr()?.isDraft ? '. Marks the draft ready for review first.' : ''}`}
                 onClick={() => void mergePr(true)}
               >
                 Merge as is
