@@ -45,6 +45,27 @@ function initRepository(): string {
   return root;
 }
 
+/** A repo with a tracked workspace package whose own install lives in the package dir. */
+function initWorkspaceRepository(): string {
+  const root = initRepository();
+  fs.writeFileSync(path.join(root, '.gitignore'), 'node_modules/\n', 'utf8');
+  fs.mkdirSync(path.join(root, 'packages', 'core'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'packages', 'core', 'package.json'), '{}\n', 'utf8');
+  git(root, ['add', '.gitignore', 'packages/core/package.json']);
+  git(root, [
+    '-c',
+    'user.name=Parallel Code Tests',
+    '-c',
+    'user.email=tests@parallel-code.local',
+    'commit',
+    '-m',
+    'workspace',
+  ]);
+  fs.mkdirSync(path.join(root, 'node_modules', 'left-pad'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'packages', 'core', 'node_modules', 'vitest'), { recursive: true });
+  return root;
+}
+
 beforeEach(() => {
   for (const name of localGitEnvVars) {
     inheritedGitEnv.set(name, process.env[name]);
@@ -442,6 +463,20 @@ describe('createWorktree', () => {
     expect(git(result.path, ['status', '--porcelain'])).not.toContain('node_modules');
   });
 
+  it('links the node_modules of tracked workspace packages too', async () => {
+    const root = initWorkspaceRepository();
+    // Ignored in the main checkout and absent from the worktree: nothing to link into.
+    fs.mkdirSync(path.join(root, 'scratch', 'node_modules', 'tmp'), { recursive: true });
+
+    const result = await createWorktree(root, 'task-nm-nested', ['node_modules']);
+    const nested = path.join(result.path, 'packages', 'core', 'node_modules');
+
+    expect(fs.lstatSync(nested).isDirectory()).toBe(true);
+    expect(fs.lstatSync(path.join(nested, 'vitest')).isSymbolicLink()).toBe(true);
+    expect(fs.existsSync(path.join(result.path, 'scratch'))).toBe(false);
+    expect(git(result.path, ['status', '--porcelain'])).not.toContain('node_modules');
+  });
+
   it('silently rejects selected names nested below the repository root', async () => {
     const root = initRepository();
     fs.mkdirSync(path.join(root, 'foo', 'bar'), { recursive: true });
@@ -603,6 +638,17 @@ describe('refreshWorktreeNodeModules', () => {
     expect(fs.lstatSync(target).isSymbolicLink()).toBe(false);
     expect(fs.lstatSync(path.join(target, 'pkg-a')).isSymbolicLink()).toBe(true);
     expect(fs.lstatSync(path.join(target, 'pkg-b')).isSymbolicLink()).toBe(true);
+  });
+
+  it('backfills workspace package installs added after the worktree was created', async () => {
+    const root = initWorkspaceRepository();
+    const result = await createWorktree(root, 'task-nm-nested-refresh', ['node_modules']);
+    const nested = path.join(result.path, 'packages', 'core', 'node_modules');
+    fs.mkdirSync(path.join(root, 'packages', 'core', 'node_modules', 'tinybench'));
+
+    refreshWorktreeNodeModules(result.path, root);
+
+    expect(fs.lstatSync(path.join(nested, 'tinybench')).isSymbolicLink()).toBe(true);
   });
 
   it('leaves the main checkout and unmanaged worktree installs untouched', async () => {

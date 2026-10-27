@@ -21,6 +21,7 @@ import {
 import {
   ensureNodeModulesEntryLinks,
   isManagedNodeModules,
+  linkNestedNodeModules,
   realpathOrNull,
 } from './worktree-node-modules.js';
 import type {
@@ -1366,6 +1367,7 @@ export async function createWorktree(
         // (vite's `.vite-temp`/`.vite`, `.cache`) land inside the worktree —
         // the only path agent sandboxes allow writes to.
         if (!ensureNodeModulesEntryLinks(source, target)) continue;
+        linkNestedNodeModules(repoRoot, worktreePath);
       } else {
         fs.symlinkSync(source, target);
       }
@@ -1791,7 +1793,8 @@ export function detectRepoRoot(worktreePath: string): string | null {
 /**
  * Spawn-time backfill for a worktree's `node_modules`: converts the legacy
  * whole-dir symlink to per-entry links and tops up links for packages
- * installed in the main checkout since the worktree was created. Only acts on
+ * installed in the main checkout since the worktree was created, including
+ * workspace packages' own installs. Only acts on
  * a `node_modules` this app manages (`isManagedNodeModules`) — the main
  * checkout's real install, a worktree-local `npm ci`, and a foreign symlink
  * are all left untouched. The ownership check also backstops the main-repo
@@ -1813,6 +1816,7 @@ export function refreshWorktreeNodeModules(worktreePath: string, repoRoot?: stri
   const target = path.join(worktreePath, 'node_modules');
   if (!isManagedNodeModules(source, target)) return;
   ensureNodeModulesEntryLinks(source, target);
+  linkNestedNodeModules(root, worktreePath);
 }
 
 export async function removeWorktree(
