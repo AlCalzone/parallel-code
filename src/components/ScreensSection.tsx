@@ -196,6 +196,42 @@ const linkButton: JSX.CSSProperties = {
   'text-underline-offset': '3px',
 };
 
+// CLI stderr can run long; the rest is one click away.
+const SHORT_FAILURE_CHARS = 300;
+
+/** Why the capture failed, shortened until the user asks for all of it. */
+function CaptureFailure(props: { message: string }) {
+  const [full, setFull] = createSignal(false);
+  const long = () => props.message.length > SHORT_FAILURE_CHARS;
+  const shown = () =>
+    long() && !full() ? `${props.message.slice(0, SHORT_FAILURE_CHARS)}…` : props.message;
+  return (
+    <p
+      role="alert"
+      style={{
+        margin: '8px 0 0',
+        color: theme.error,
+        'font-size': sf(12),
+        'white-space': 'pre-wrap',
+        'overflow-wrap': 'anywhere',
+      }}
+    >
+      Screens could not be captured: {shown()}
+      <Show when={long()}>
+        {' '}
+        <button
+          type="button"
+          style={linkButton}
+          aria-expanded={full()}
+          onClick={() => setFull((value) => !value)}
+        >
+          {full() ? 'Show less' : 'Show full error'}
+        </button>
+      </Show>
+    </p>
+  );
+}
+
 /** The captured screens, before beside after, folded under the screens button. */
 function ScreensGallery(props: ScreensProps & { open: boolean; bodyId: string }) {
   const failure = () => {
@@ -212,22 +248,7 @@ function ScreensGallery(props: ScreensProps & { open: boolean; bodyId: string })
     setViewing(images().findIndex((image) => image.shot === shot && image.side === side));
   return (
     <>
-      <Show when={failure()}>
-        {(message) => (
-          <p
-            role="alert"
-            style={{
-              margin: '8px 0 0',
-              color: theme.error,
-              'font-size': sf(12),
-              'white-space': 'pre-wrap',
-              'overflow-wrap': 'anywhere',
-            }}
-          >
-            Screens could not be captured: {message()}
-          </p>
-        )}
-      </Show>
+      <Show when={failure()}>{(message) => <CaptureFailure message={message()} />}</Show>
       <Show when={result()}>
         {(done) => (
           <section

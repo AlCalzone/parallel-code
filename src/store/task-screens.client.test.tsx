@@ -271,11 +271,11 @@ describe('captureTaskScreens', () => {
     );
   });
 
-  it('shortens a long CLI error', async () => {
+  it('keeps all of a long CLI error', async () => {
     mockInvoke.mockRejectedValue(new Error('x'.repeat(2000)));
     await captureTaskScreens('t1');
     const status = taskScreens('t1');
-    expect(status?.state === 'failed' && status.message.length).toBe(301);
+    expect(status?.state === 'failed' && status.message.length).toBe(2000);
   });
 });
 
@@ -294,6 +294,18 @@ describe('ScreensFollowUp', () => {
   };
   const toggle = (view: HTMLElement) =>
     view.querySelector<HTMLButtonElement>('.change-tour-action');
+
+  it('shortens a long failure until the user asks for all of it', async () => {
+    mockInvoke.mockRejectedValue(new Error(`${'x'.repeat(400)}END`));
+    await captureTaskScreens('t1');
+    const view = mount(() => <ScreensFollowUp taskId="t1" headSha="h1" />);
+    const alert = () => view.querySelector('[role="alert"]')?.textContent ?? '';
+    expect(alert()).not.toContain('END');
+    button(view, 'Show full error')?.click();
+    expect(alert()).toContain('END');
+    button(view, 'Show less')?.click();
+    expect(alert()).not.toContain('END');
+  });
 
   it('opens screens that finished while Finish was closed, once', async () => {
     await captured();

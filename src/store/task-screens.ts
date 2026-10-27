@@ -28,7 +28,6 @@ const cancelled = new Set<string>();
 const watchers = new Map<string, () => void>();
 /** Tasks whose latest screens arrived and have not been shown yet. */
 const unseen = new Set<string>();
-const MAX_FAILURE_CHARS = 300;
 
 /**
  * Whether screens arrived since the task's screens were last shown; asking
@@ -106,10 +105,8 @@ function finished(taskId: string, name: string, result: CapturedTaskScreens): vo
 function failed(taskId: string, error: unknown): void {
   const message = errMessage(error);
   logWarn('taskScreens', 'Capture failed', { taskId, error: message });
-  // CLI stderr can run long; the log keeps all of it.
-  const short =
-    message.length > MAX_FAILURE_CHARS ? `${message.slice(0, MAX_FAILURE_CHARS)}…` : message;
-  setScreens(taskId, reconcile({ state: 'failed', message: short }));
+  // Kept whole so the user can read all of a long CLI error; the view shortens it.
+  setScreens(taskId, reconcile({ state: 'failed', message }));
 }
 
 /** Lets the run start the app with the commands it asked about, and only those. */
