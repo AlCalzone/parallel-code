@@ -28,7 +28,7 @@ export interface ToolDef {
 }
 
 export const APP_TASK_INSTRUCTIONS =
-  'You are running inside Parallel Code. When the user asks to create a Parallel Code task (or PC task), use this server’s create_task MCP tool. It creates a visible task in the app with its own Git worktree and agent terminal. Native sub-agent tools such as spawn_agent do not create Parallel Code tasks and must not substitute for this request. Only report a task as created after create_task succeeds and returns its taskId. If the tool is missing or rejected, explain the limitation instead of silently using a native sub-agent. Task creation requires orchestration enabled in Settings > Agents, a top-level Git worktree task or project page agent, and an app-managed MCP session. After enabling tools, restart and resume the session where supported.';
+  'You are running inside Parallel Code. When the user asks to create a Parallel Code task (or PC task), use this server’s create_task MCP tool. It creates a visible task in the app with its own Git worktree and agent terminal. Native sub-agent tools such as spawn_agent do not create Parallel Code tasks and must not substitute for this request. Only report a task as created after create_task succeeds and returns its taskId. If the tool is missing or rejected, explain the limitation instead of silently using a native sub-agent. Task creation requires orchestration enabled in Settings > Agents, a top-level task (worktree or direct) or project page agent, and an app-managed MCP session. After enabling tools, restart and resume the session where supported.';
 
 /**
  * Without this, "list them in Parallel Code" matches the canvas guidance and the

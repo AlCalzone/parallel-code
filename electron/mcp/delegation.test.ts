@@ -400,6 +400,28 @@ describe('delegation authority and creation', () => {
     expect(service.capabilities(pageTask)).toBeUndefined();
   });
 
+  it('lets a top-level task working in the checkout create independent tasks only', async () => {
+    await register('direct', { gitIsolation: 'direct', worktreePath: '/repo', branchName: 'main' });
+    const capabilities = service.capabilities('direct');
+    expect(capabilities).toEqual({ profile: 'page', canCreate: true, peers: false });
+    if (!capabilities) throw new Error('missing capabilities');
+    const caller: SessionCaller = {
+      taskId: 'direct',
+      agentId: 'agent-direct',
+      sessionInstanceId: 'instance-direct',
+      capabilities,
+    };
+    sessions.push(caller);
+    const base = { requestId: 'direct-request', name: 'Fix #2', prompt: 'Fix issue #2' };
+    await expect(
+      service.callTool(caller, 'create_task', { ...base, relation: 'independent' }),
+    ).resolves.toEqual({ taskId: 'sibling', relation: 'independent' });
+    await expect(
+      service.callTool(caller, 'create_task', { ...base, requestId: 'r2', relation: 'child' }),
+    ).rejects.toThrow('independent');
+    expect(core.createTask).not.toHaveBeenCalled();
+  });
+
   it('gives no task tools to a checkout task that is not a page agent', async () => {
     await register('plain', { gitIsolation: 'none', worktreePath: '/repo', branchName: '' });
     expect(service.capabilities('plain')).toBeUndefined();

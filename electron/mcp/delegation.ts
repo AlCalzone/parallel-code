@@ -108,6 +108,14 @@ function isPageAgent(task: Authority): boolean {
   return isProjectPageAgentTaskId(task.taskId) && task.gitIsolation === 'none';
 }
 
+/**
+ * Works in the project checkout, so it may only start tasks the user reviews on their own:
+ * it has no worktree branch for children to build on or land into.
+ */
+function isCheckoutCreator(task: Authority): boolean {
+  return isPageAgent(task) || (task.gitIsolation === 'direct' && !task.parentTaskId);
+}
+
 export class DelegationError extends Error {
   constructor(
     message: string,
@@ -317,7 +325,7 @@ export class DelegationService {
   capabilities(taskId: string): SessionCapabilities | undefined {
     const task = this.tasks.get(taskId);
     if (!task || task.closed || task.closing) return undefined;
-    if (isPageAgent(task))
+    if (isCheckoutCreator(task))
       return this.orchestrationEnabled
         ? { profile: 'page', canCreate: true, peers: false }
         : undefined;
@@ -365,8 +373,8 @@ export class DelegationService {
   private creationGuard(taskId: string, caller?: SessionCaller, independent = false): void {
     this.assertOrchestrationEnabled();
     const task = this.requireTask(taskId);
-    // Page agents share the project checkout, so they get no children to supervise or land.
-    const pageCreator = independent && isPageAgent(task);
+    // Page agents and direct tasks share the project checkout, so they get no children to supervise or land.
+    const pageCreator = independent && isCheckoutCreator(task);
     if (task.parentTaskId || (task.gitIsolation !== 'worktree' && !pageCreator))
       throw new DelegationError('Only top-level worktree tasks may delegate', 403);
     if (task.delegationPaused)
@@ -609,7 +617,7 @@ export class DelegationService {
       if (name === 'create_task' && params.relation === 'independent')
         return this.createIndependent(task.taskId, params, caller);
       throw new DelegationError(
-        "A page agent can only create tasks with relation 'independent'",
+        "A session working in the project checkout can only create tasks with relation 'independent'",
         403,
       );
     }
