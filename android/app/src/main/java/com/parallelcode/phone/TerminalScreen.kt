@@ -113,7 +113,8 @@ class TerminalScreen(cols: Int = 80, rows: Int = 24) {
                 val n = minOf(newCols, src.chars.size)
                 src.chars.copyInto(line.chars, 0, 0, n)
                 src.styles.copyInto(line.styles, 0, 0, n)
-                line.wrapped = src.wrapped
+                // Without reflow, a row of another width no longer continues the one above.
+                line.wrapped = src.wrapped && src.chars.size == newCols
             }
             line
         }
@@ -164,20 +165,23 @@ class TerminalScreen(cols: Int = 80, rows: Int = 24) {
     }
 
     /**
-     * The newest [maxLines] lines of history then screen as plain text to copy from, with rows the
-     * terminal wrapped joined back into their line, so a long URL or command copies whole.
+     * The newest [maxLines] lines, at most [maxChars] characters, of history then screen as plain
+     * text to copy from, with rows the terminal wrapped joined back into their line, so a long URL
+     * or command copies whole.
      */
-    fun copyText(maxLines: Int): String {
+    fun copyText(maxLines: Int, maxChars: Int): String {
         val rows = (if (alternateScreen) emptyList() else history.snapshot()) + grid.map(::pastLine)
         val lines = ArrayList<StringBuilder>()
         rows.forEachIndexed { i, row ->
             val text = row.spans.joinToString("") { it.text }
             // A row the next one continues keeps its trailing blanks: they sit between two words.
-            val cell = if (rows.getOrNull(i + 1)?.wrapped == true) text.padEnd(row.width) else text
+            val cell = if (rows.getOrNull(i + 1)?.wrapped == true) text.padEnd(row.width) else text.trimEnd()
             if (row.wrapped && lines.isNotEmpty()) lines.last().append(cell) else lines.add(StringBuilder(cell))
         }
         while (lines.lastOrNull()?.isBlank() == true) lines.removeAt(lines.lastIndex)
-        return lines.takeLast(maxLines).joinToString("\n").trimEnd()
+        val text = lines.takeLast(maxLines).joinToString("\n").trimEnd().takeLast(maxChars)
+        // The cut may fall inside a surrogate pair; its lone half would show as a broken glyph.
+        return if (text.firstOrNull()?.isLowSurrogate() == true) text.drop(1) else text
     }
 
     private fun pastLine(line: Line) = PastLine(spans(line), line.wrapped, line.chars.size)
@@ -267,9 +271,6 @@ class TerminalScreen(cols: Int = 80, rows: Int = 24) {
             carriageReturn()
             lineFeed()
             grid[row].wrapped = true
-        } else if (col == 0) {
-            // A row repainted from its start, as TUIs do without erasing, holds a line of its own.
-            grid[row].wrapped = false
         }
         grid[row].chars[col] = c
         grid[row].styles[col] = style
@@ -432,8 +433,9 @@ class TerminalScreen(cols: Int = 80, rows: Int = 24) {
             1 -> grid[row].fill(0, col + 1, erase)
             2 -> grid[row].fill(0, cols, erase)
         }
-        // A row erased from its start no longer holds the rest of the line above.
-        if (mode != 0 || col == 0) grid[row].wrapped = false
+        // A row erased whole no longer holds the rest of the line above; as in xterm.js, erasing
+        // only up to the cursor leaves the rest of the row continuing it.
+        if (mode == 2 || (mode == 0 && col == 0)) grid[row].wrapped = false
     }
 
     private fun insertLines(n: Int) {

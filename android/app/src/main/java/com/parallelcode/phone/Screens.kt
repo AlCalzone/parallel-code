@@ -852,6 +852,7 @@ fun AgentScreen(
     BackHandler(enabled = terminalExpanded) { terminalExpanded = false }
     // The live terminal's gestures zoom and scroll, so selection works on a plain-text snapshot.
     var selectableText by remember(agentId) { mutableStateOf<String?>(null) }
+    val fontScale = LocalDensity.current.fontScale
     BackHandler(enabled = selectableText != null) { selectableText = null }
     // A task minimized on the desktop shows no terminal, so nothing would offer the way back.
     LaunchedEffect(agent?.collapsed) {
@@ -950,7 +951,8 @@ fun AgentScreen(
                             IconToggleButton(
                                 checked = selectableText != null,
                                 onCheckedChange = { on ->
-                                    selectableText = if (on) buffer.screen.copyText(SELECTABLE_TERMINAL_LINES) else null
+                                    val (maxLines, maxChars) = selectableTerminalCaps(fontScale)
+                                    selectableText = if (on) buffer.screen.copyText(maxLines, maxChars) else null
                                 },
                             ) {
                                 Icon(Icons.Filled.ContentCopy, contentDescription = "Select terminal text")
@@ -1050,7 +1052,11 @@ fun AgentScreen(
                         Box(Modifier.fillMaxSize()) {
                             val selectable = selectableText
                             if (selectable != null) {
-                                TerminalSelectableText(selectable, Modifier.fillMaxSize())
+                                TerminalSelectableText(
+                                    selectable,
+                                    Modifier.fillMaxSize(),
+                                    bottomInset = if (nextNeedingYou != null) 44.dp else 0.dp,
+                                )
                             } else {
                                 TerminalText(
                                     lines,
@@ -1505,8 +1511,17 @@ internal class AgentWheel : NestedScrollConnection {
 private val TERMINAL_PADDING_H = 12.dp
 private val TERMINAL_FONT = 11.sp
 
-// One Text lays out the whole snapshot, and Compose cannot measure it much past 262,000 px tall.
-private const val SELECTABLE_TERMINAL_LINES = 2_000
+/**
+ * Lines and characters for the selectable snapshot. One Text lays it all out, and Compose clips a
+ * layout much past 262,000 px tall. At the default font both caps bound it to about 4,000
+ * soft-wrapped rows on a narrow phone: blank lines cost a row each, long ones about one per 50
+ * characters. A larger font makes rows taller and holds fewer characters per row, so the caps shrink
+ * to keep the same height.
+ */
+internal fun selectableTerminalCaps(fontScale: Float): Pair<Int, Int> {
+    val scale = fontScale.coerceAtLeast(1f)
+    return (2_000 / scale).toInt() to (100_000 / (scale * scale)).toInt()
+}
 private const val MAX_TERMINAL_ZOOM = 4f
 
 /**
@@ -1526,7 +1541,7 @@ private fun ZoomResetPill(zoom: () -> Float, onClick: () -> Unit, modifier: Modi
 
 /** A snapshot of the terminal's text for long-press selection and the system Copy menu. */
 @Composable
-private fun TerminalSelectableText(text: String, modifier: Modifier) {
+private fun TerminalSelectableText(text: String, modifier: Modifier, bottomInset: Dp) {
     val look = AppTheme.palette
     val palette = remember(look) { TerminalPalette.forLook(look) }
     // Open at the newest output, as the terminal shows it: the scroll clamps to the text's end.
@@ -1539,7 +1554,7 @@ private fun TerminalSelectableText(text: String, modifier: Modifier) {
         SelectionContainer {
             Text(
                 text,
-                Modifier.padding(horizontal = TERMINAL_PADDING_H, vertical = 8.dp),
+                Modifier.padding(start = TERMINAL_PADDING_H, end = TERMINAL_PADDING_H, top = 8.dp, bottom = 8.dp + bottomInset),
                 color = Color(palette.foreground),
                 fontFamily = AppFonts.mono,
                 fontSize = TERMINAL_FONT,
