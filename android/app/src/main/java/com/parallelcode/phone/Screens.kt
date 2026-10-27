@@ -55,10 +55,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.History
@@ -79,6 +81,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -847,8 +850,16 @@ fun AgentScreen(
     var viewSize by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var terminalExpanded by rememberSaveable { mutableStateOf(false) }
     BackHandler(enabled = terminalExpanded) { terminalExpanded = false }
+    // The live terminal's gestures zoom and scroll, so selection works on a plain-text snapshot.
+    var selectableText by remember(agentId) { mutableStateOf<String?>(null) }
+    BackHandler(enabled = selectableText != null) { selectableText = null }
     // A task minimized on the desktop shows no terminal, so nothing would offer the way back.
-    LaunchedEffect(agent?.collapsed) { if (agent?.collapsed == true) terminalExpanded = false }
+    LaunchedEffect(agent?.collapsed) {
+        if (agent?.collapsed == true) {
+            terminalExpanded = false
+            selectableText = null
+        }
+    }
 
     // With "Fit the terminal to this phone" on and paired, the PTY takes this screen's size so
     // full-screen TUIs fill the phone; leaving
@@ -936,6 +947,14 @@ fun AgentScreen(
                     },
                     actions = {
                         if (tab == AgentTab.TERMINAL && agent?.collapsed != true) {
+                            IconToggleButton(
+                                checked = selectableText != null,
+                                onCheckedChange = { on ->
+                                    selectableText = if (on) buffer.screen.copyText(SELECTABLE_TERMINAL_LINES) else null
+                                },
+                            ) {
+                                Icon(Icons.Filled.ContentCopy, contentDescription = "Select terminal text")
+                            }
                             IconButton(onClick = { terminalExpanded = true }) {
                                 Icon(Icons.Filled.Fullscreen, contentDescription = "Expand terminal")
                             }
@@ -975,7 +994,10 @@ fun AgentScreen(
                 AgentTab.entries.forEach {
                     Tab(
                         selected = tab == it,
-                        onClick = { tab = it },
+                        onClick = {
+                            tab = it
+                            selectableText = null
+                        },
                         text = {
                             Text(
                                 it.label,
@@ -1026,22 +1048,27 @@ fun AgentScreen(
                         }
                     } else {
                         Box(Modifier.fillMaxSize()) {
-                            TerminalText(
-                                lines,
-                                buffer.screen.cols,
-                                Modifier.fillMaxSize(),
-                                alwaysFollow = alwaysFollowOutput,
-                                fitToView = sizeTerminal,
-                                onViewSize = { cols, rows -> viewSize = cols to rows },
-                                onZoomedChange = onZoomedChange,
-                                onWheel = if (fullScreen && state.canControl) {
-                                    { wheelLines: Int -> client.scrollTerminal(agentId, wheelLines) }
-                                } else {
-                                    null
-                                },
-                                // Keeps an agent's prompt clear of the Next task pill below it.
-                                bottomInset = if (nextNeedingYou != null) 44.dp else 0.dp,
-                            )
+                            val selectable = selectableText
+                            if (selectable != null) {
+                                TerminalSelectableText(selectable, Modifier.fillMaxSize())
+                            } else {
+                                TerminalText(
+                                    lines,
+                                    buffer.screen.cols,
+                                    Modifier.fillMaxSize(),
+                                    alwaysFollow = alwaysFollowOutput,
+                                    fitToView = sizeTerminal,
+                                    onViewSize = { cols, rows -> viewSize = cols to rows },
+                                    onZoomedChange = onZoomedChange,
+                                    onWheel = if (fullScreen && state.canControl) {
+                                        { wheelLines: Int -> client.scrollTerminal(agentId, wheelLines) }
+                                    } else {
+                                        null
+                                    },
+                                    // Keeps an agent's prompt clear of the Next task pill below it.
+                                    bottomInset = if (nextNeedingYou != null) 44.dp else 0.dp,
+                                )
+                            }
                             // Jump straight to the next task waiting on you, as the phone web UI does.
                             nextNeedingYou?.let { next ->
                                 TerminalPill(
@@ -1477,6 +1504,9 @@ internal class AgentWheel : NestedScrollConnection {
 
 private val TERMINAL_PADDING_H = 12.dp
 private val TERMINAL_FONT = 11.sp
+
+// One Text lays out the whole snapshot, and Compose cannot measure it much past 262,000 px tall.
+private const val SELECTABLE_TERMINAL_LINES = 2_000
 private const val MAX_TERMINAL_ZOOM = 4f
 
 /**
@@ -1492,6 +1522,31 @@ internal fun clampPan(pan: Offset, zoom: Float, width: Float, height: Float): Of
 @Composable
 private fun ZoomResetPill(zoom: () -> Float, onClick: () -> Unit, modifier: Modifier = Modifier) {
     TerminalPill("${(zoom() * 100).roundToInt()}% · Reset", onClick, modifier)
+}
+
+/** A snapshot of the terminal's text for long-press selection and the system Copy menu. */
+@Composable
+private fun TerminalSelectableText(text: String, modifier: Modifier) {
+    val look = AppTheme.palette
+    val palette = remember(look) { TerminalPalette.forLook(look) }
+    // Open at the newest output, as the terminal shows it: the scroll clamps to the text's end.
+    val scroll = rememberScrollState(Int.MAX_VALUE)
+    Box(
+        modifier
+            .background(Color(palette.background))
+            .verticalScroll(scroll),
+    ) {
+        SelectionContainer {
+            Text(
+                text,
+                Modifier.padding(horizontal = TERMINAL_PADDING_H, vertical = 8.dp),
+                color = Color(palette.foreground),
+                fontFamily = AppFonts.mono,
+                fontSize = TERMINAL_FONT,
+                lineHeight = TERMINAL_FONT * 1.27f,
+            )
+        }
+    }
 }
 
 /** A small floating button over the terminal, quiet like the rest of the routine controls. */

@@ -152,4 +152,41 @@ class TerminalScreenTest {
         s.feed("\u001b[4;1Hz".toByteArray())
         assertEquals("abc\n\n\nz", s.text())
     }
+
+    @Test
+    fun copyTextRejoinsWrappedRowsIntoTheirLine() {
+        // A URL wider than the terminal must copy as one line, also once it scrolled into history.
+        val s = screen(cols = 4, rows = 2, data = "https://x.io\r\nok\r\nnext")
+        assertEquals("https://x.io\nok\nnext", s.copyText(100))
+    }
+
+    @Test
+    fun copyTextKeepsTheSpaceAtAWrapBoundary() {
+        assertEquals("abc def", screen(cols = 4, data = "abc def").copyText(100))
+    }
+
+    @Test
+    fun copyTextKeepsExplicitLineBreaksAtFullWidth() {
+        assertEquals("abcd\nef", screen(cols = 4, data = "abcd\r\nef").copyText(100))
+    }
+
+    @Test
+    fun copyTextForgetsAWrapOnceTheRowIsRewritten() {
+        // A TUI moving the cursor up and writing a fresh line must not inherit the old wrap.
+        val s = screen(cols = 4, rows = 3, data = "abcdef\u001b[2;1H\u001b[2Kxy\r\nz")
+        assertEquals("abcd\nxy\nz", s.copyText(100))
+    }
+
+    @Test
+    fun copyTextForgetsAWrapOnceARowIsRepaintedFromItsStart() {
+        // TUIs repaint rows by moving the cursor and writing, without erasing first.
+        val s = screen(cols = 4, rows = 3, data = "abcdef\u001b[2;1Hxy")
+        assertEquals("abcd\nxy", s.copyText(100))
+    }
+
+    @Test
+    fun copyTextKeepsOnlyTheNewestLines() {
+        val s = screen(cols = 4, rows = 2, data = "1\r\nabcdef\r\n3")
+        assertEquals("abcdef\n3", s.copyText(2))
+    }
 }
