@@ -15,6 +15,7 @@ import {
 } from '../lib/branch-divergence';
 import { warn as logWarn, info as logInfo, errMessage } from '../lib/log';
 import { adoptTaskBranch } from './task-branch';
+import { forgetPrintedPrLink, notePrintedPrLink } from './printed-pr-links';
 import {
   clearAgentHookStatus,
   formatAgentHookTooltip,
@@ -879,6 +880,9 @@ export function markAgentOutput(agentId: string, data: Uint8Array, taskId?: stri
     combined.length > TAIL_BUFFER_MAX
       ? combined.slice(combined.length - TAIL_BUFFER_MAX)
       : combined;
+  if (state.taskId) {
+    notePrintedPrLink(agentId, state.taskId, { tail: state.outputTailBuffer, chunk: text });
+  }
 
   // Expensive analysis (regex, ANSI strip) now runs for all task agents, with a
   // slower cadence for background tasks so off-screen attention still updates.
@@ -1024,6 +1028,7 @@ export function markAgentBusy(agentId: string): void {
 /** Clean up timers when an agent exits. */
 export function clearAgentActivity(agentId: string): void {
   setLastOutputAt(agentId, undefined);
+  forgetPrintedPrLink(agentId);
   const state = agentStates.get(agentId);
   if (state) {
     clearAutoTrustState(agentId);

@@ -1,10 +1,12 @@
-import { createEffect, onCleanup } from 'solid-js';
+import { createEffect, onCleanup, untrack } from 'solid-js';
 import { setStore, store } from './core';
 import { fireAndForget, invoke } from '../lib/ipc';
 import { IPC } from '../../electron/ipc/channels';
 import { parseGitHubUrl, sameGitHubIssue } from '../lib/github-url';
 import { recordRemotePrMerged } from './completion';
 import { saveState } from './persistence';
+import { isTaskWorking } from './taskStatus';
+import { printedPrLink } from './printed-pr-links';
 import {
   checksFromUpdate,
   extraPrWatchId,
@@ -356,6 +358,29 @@ export function startPrChecksSubscription(): () => void {
   createEffect(() => {
     syncWatchers();
     scanForBranchPrs();
+  });
+
+  // New PRs show up at once instead of after the retry window: agents usually
+  // open them during a turn, and `gh pr create` prints the link, which also
+  // covers `!` commands that run outside any agent hook.
+  const workingTaskIds = new Set<string>();
+  createEffect(() => {
+    let probeDue = false;
+    for (const taskId of [...store.taskOrder, ...store.collapsedTaskOrder]) {
+      if (isTaskWorking(taskId)) {
+        workingTaskIds.add(taskId);
+      } else if (workingTaskIds.delete(taskId)) {
+        branchProbeByTaskId.delete(taskId);
+        probeDue = true;
+      }
+    }
+    if (probeDue) untrack(scanForBranchPrs);
+  });
+  createEffect(() => {
+    const link = printedPrLink();
+    if (!link) return;
+    branchProbeByTaskId.delete(link.taskId);
+    untrack(scanForBranchPrs);
   });
 
   const branchPrDetectTimer = window.setInterval(scanForBranchPrs, BRANCH_PR_DETECT_INTERVAL_MS);
