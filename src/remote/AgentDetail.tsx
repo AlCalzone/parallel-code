@@ -34,6 +34,10 @@ interface AgentDetailProps {
   onNextTask: (taskId: string) => void;
 }
 
+// Rows of swipe per wheel notch in a full-screen agent UI. Agents scroll about
+// three lines per notch, so this keeps the transcript roughly under the finger.
+const ROWS_PER_WHEEL_NOTCH = 3;
+
 const openRemoteHttpLink = createTerminalHttpLinkHandler({
   isMac: false,
   openExternal: (url) => {
@@ -311,13 +315,15 @@ export function AgentDetail(props: AgentDetailProps) {
       );
       return dy - (terminalScroller.scrollTop - previousTop);
     };
-    // The agent redraws its own screen, so it can only move by whole wheel lines.
+    // The agent redraws its own screen, so it can only move by whole wheel notches.
+    // Agents scroll several lines per notch, so a notch per row outran the finger.
     const turnWheel = (dy: number, x: number, y: number) => {
+      const notchPixels = terminalLineHeight * ROWS_PER_WHEEL_NOTCH;
       wheelPixels += dy;
-      const lines = Math.trunc(wheelPixels / terminalLineHeight);
-      if (!lines) return;
-      scrollFullScreen(lines, x, y);
-      wheelPixels -= lines * terminalLineHeight;
+      const notches = Math.trunc(wheelPixels / notchPixels);
+      if (!notches) return;
+      scrollFullScreen(notches, x, y);
+      wheelPixels -= notches * notchPixels;
     };
     const scrollHistory = (dy: number, x: number, y: number) => {
       // Nothing to move, and redrawing from the other row would flip the blank strip's edge.

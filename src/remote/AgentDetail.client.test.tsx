@@ -1083,8 +1083,11 @@ describe('phone terminal viewport', () => {
     mount();
     const { scroller } = viewport(300);
     touch(scroller, 'touchstart', 100, 200);
+    // Under three rows of swipe is less than one wheel notch.
+    touch(scroller, 'touchmove', 100, 240);
+    expect(scrollAgent).not.toHaveBeenCalled();
     touch(scroller, 'touchmove', 100, 260);
-    expect(scrollAgent).toHaveBeenCalledWith('a1', -3, 11, 17);
+    expect(scrollAgent).toHaveBeenCalledWith('a1', -1, 11, 17);
     // Past the grid, the nearest edge cell still gets the wheel.
     touch(scroller, 'touchmove', 900, 1100);
     expect(scrollAgent).toHaveBeenLastCalledWith('a1', expect.any(Number), 80, 24);
