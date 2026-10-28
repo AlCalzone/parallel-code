@@ -200,6 +200,24 @@ export async function refreshCodeFingerprint(taskId: string): Promise<void> {
   if (rawDiff !== undefined) noteCodeFingerprint(taskId, diffFingerprint(rawDiff), at);
 }
 
+/**
+ * Forgets the brief's question once the agent works again: the user answered
+ * it, but the brief is only rewritten after the turn, so until then it would
+ * show the old question again. The reply fingerprint goes too, so an agent
+ * that asks the same question again still gets it into the next brief.
+ */
+export function dropAnsweredQuestion(taskId: string): void {
+  if (!store.tasks[taskId]?.brief?.brief.needsYou) return;
+  setStore(
+    produce((s) => {
+      const record = s.tasks[taskId]?.brief;
+      if (!record) return;
+      delete record.brief.needsYou;
+      delete record.messageFingerprint;
+    }),
+  );
+}
+
 /** Stops the brief being written for a task, and the one queued after it. */
 function cancelTaskBrief(taskId: string): void {
   rerun.delete(taskId);
@@ -249,8 +267,10 @@ export function startTaskBriefWatcher(): () => void {
         const now = isTaskWorking(taskId);
         const was = untrack(() => working.get(taskId)) ?? false;
         working.set(taskId, now);
-        if (now) clearTimer(taskId);
-        else if (was) schedule(taskId);
+        if (now) {
+          clearTimer(taskId);
+          if (!was) untrack(() => dropAnsweredQuestion(taskId));
+        } else if (was) schedule(taskId);
       }
       for (const taskId of [...working.keys()]) {
         if (ids.has(taskId)) continue;

@@ -26,7 +26,12 @@ vi.mock('./taskStatus', () => ({
 
 import { store, setStore } from './core';
 import type { Task } from './types';
-import { publishTaskConfidence, refreshCodeFingerprint, refreshTaskBrief } from './task-brief';
+import {
+  dropAnsweredQuestion,
+  publishTaskConfidence,
+  refreshCodeFingerprint,
+  refreshTaskBrief,
+} from './task-brief';
 
 const DIFF = 'diff --git a/src/a.ts b/src/a.ts\n+change';
 
@@ -238,6 +243,31 @@ describe('refreshTaskBrief', () => {
     await first;
     await vi.waitFor(() => expect(task().brief?.brief.now).toBe('second'));
     expect(mockStartRequest).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('dropAnsweredQuestion', () => {
+  it('forgets the question once the agent works again, and briefs its next reply', () => {
+    setStore('tasks', 't1', 'brief', {
+      brief: { goal: 'Fix login', now: 'Asking', needsYou: 'Keep the old route?' },
+      generatedAt: 100,
+      fingerprint: 'f',
+      messageFingerprint: 'm',
+    });
+    dropAnsweredQuestion('t1');
+    expect(task().brief?.brief).toEqual({ goal: 'Fix login', now: 'Asking' });
+    expect(task().brief?.messageFingerprint).toBeUndefined();
+  });
+
+  it('leaves a brief without a question alone', () => {
+    setStore('tasks', 't1', 'brief', {
+      brief: { goal: 'Fix login', now: 'Working' },
+      generatedAt: 100,
+      fingerprint: 'f',
+      messageFingerprint: 'm',
+    });
+    dropAnsweredQuestion('t1');
+    expect(task().brief?.messageFingerprint).toBe('m');
   });
 });
 
