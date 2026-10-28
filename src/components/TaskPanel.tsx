@@ -58,7 +58,7 @@ import { TaskChangedFilesSection } from './TaskChangedFilesSection';
 import { isCommitHashSelection, type CommitSelection } from './CommitNavBar';
 import { TaskShellSection, shellSectionMinHeight } from './TaskShellSection';
 import { TaskCanvasPanel } from './TaskCanvasPanel';
-import { TaskBriefBar } from './TaskBrief';
+import { TaskBriefBar, needsYouNow } from './TaskBrief';
 import { TaskAITerminal } from './TaskAITerminal';
 import { isAgentChat } from '../store/agent-chat';
 import { TaskClosingOverlay } from './TaskClosingOverlay';
@@ -726,6 +726,8 @@ export function TaskPanel(props: TaskPanelProps) {
   );
   // Prompt wrapper carries its own intrinsic height so the flex-first panel
   // tree sizes it to 72 px by default and lets a user-drag pin override.
+  const promptBoxShown = () =>
+    !isAgentChat(props.task, firstAgentId()) && (store.showPromptInput || autoSendChildUpdates());
   const promptInputEl = (
     <div
       onClick={() => setTaskFocusedPanel(props.task.id, 'prompt')}
@@ -742,6 +744,7 @@ export function TaskPanel(props: TaskPanelProps) {
         autoSendChildUpdates={autoSendChildUpdates()}
         controlledBy={props.task.controlledBy}
         stagedNotification={props.task.stagedNotification}
+        needsYou={needsYouNow(props.task)}
         nowMs={nowMs}
         initialPrompt={props.task.initialPrompt}
         prefillPrompt={props.task.prefillPrompt}
@@ -853,10 +856,7 @@ export function TaskPanel(props: TaskPanelProps) {
                 notesAndFilesChild,
                 shellSectionChild,
                 aiTerminalChild,
-                ...(!isAgentChat(props.task, firstAgentId()) &&
-                (store.showPromptInput || autoSendChildUpdates())
-                  ? [promptInputChild]
-                  : []),
+                ...(promptBoxShown() ? [promptInputChild] : []),
               ]}
             />
           }
@@ -874,13 +874,7 @@ export function TaskPanel(props: TaskPanelProps) {
                     direction="vertical"
                     persistKey={`task:${props.task.id}:split-left`}
                     absorberIds={['ai-terminal']}
-                    children={[
-                      aiTerminalChild,
-                      ...(!isAgentChat(props.task, firstAgentId()) &&
-                      (store.showPromptInput || autoSendChildUpdates())
-                        ? [promptInputChild]
-                        : []),
-                    ]}
+                    children={[aiTerminalChild, ...(promptBoxShown() ? [promptInputChild] : [])]}
                   />
                 ),
               },
@@ -999,6 +993,7 @@ export function TaskPanel(props: TaskPanelProps) {
               task={props.task}
               onWalkThrough={openOrGenerateTour}
               walkThroughDisabled={changedFileCount() === 0}
+              questionInPrompt={promptBoxShown()}
             />
           </div>
         </Show>

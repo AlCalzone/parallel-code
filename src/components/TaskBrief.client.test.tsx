@@ -53,12 +53,12 @@ function baseTask(overrides: Partial<Task> = {}): Task {
   };
 }
 
-function mount(task: Task) {
+function mount(task: Task, questionInPrompt = false) {
   const [state, setState] = createStore(task);
   lastSetState = setState;
   const root = document.createElement('div');
   document.body.append(root);
-  dispose = render(() => <TaskBriefBar task={state} />, root);
+  dispose = render(() => <TaskBriefBar task={state} questionInPrompt={questionInPrompt} />, root);
   const bar = root.querySelector<HTMLButtonElement>('.task-brief-bar');
   if (!bar) throw new Error('Missing brief bar');
   return { bar };
@@ -102,6 +102,16 @@ describe('TaskBriefBar', () => {
     expect(bar.textContent).toContain('Needs you');
     expect(bar.textContent).toContain('Deduplicate by event ID or invoice ID?');
     expect(bar.textContent).not.toContain('Stop webhook timeouts.');
+    bar.click();
+    const terms = Array.from(card()?.querySelectorAll('dt') ?? []).map((dt) => dt.textContent);
+    expect(terms).toEqual(['Goal', 'Now', 'Needs you']);
+  });
+
+  it('keeps to the goal when the prompt box shows the question', () => {
+    const { bar } = mount(baseTask(), true);
+    lastSetState?.('brief', 'brief', 'needsYou', 'Deduplicate by event ID or invoice ID?');
+    expect(bar.hasAttribute('data-urgent')).toBe(false);
+    expect(bar.textContent).toContain('Stop webhook timeouts.');
     bar.click();
     const terms = Array.from(card()?.querySelectorAll('dt') ?? []).map((dt) => dt.textContent);
     expect(terms).toEqual(['Goal', 'Now', 'Needs you']);

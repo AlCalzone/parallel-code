@@ -78,6 +78,8 @@ interface PromptInputProps {
   autoSendChildUpdates?: boolean;
   controlledBy?: 'human' | 'coordinator';
   stagedNotification?: StagedNotification;
+  /** The task brief's question for the user, shown where the answer is typed. */
+  needsYou?: string;
   nowMs?: () => number;
   initialPrompt?: string;
   prefillPrompt?: string;
@@ -931,6 +933,13 @@ export function PromptInput(props: PromptInputProps) {
     }
   }
 
+  const staged = () =>
+    !!props.autoSendChildUpdates &&
+    !!props.stagedNotification &&
+    !props.stagedNotification.userEdited;
+  // A question waiting in the terminal is answered there, and the staged label owns the same spot.
+  const question = () => (questionActive() || staged() ? '' : (props.needsYou ?? ''));
+
   return (
     <div
       class="focusable-panel prompt-input-panel"
@@ -943,13 +952,7 @@ export function PromptInput(props: PromptInputProps) {
       }}
     >
       <div style={{ position: 'relative', flex: '1', display: 'flex' }}>
-        <Show
-          when={
-            props.autoSendChildUpdates &&
-            !!props.stagedNotification &&
-            !props.stagedNotification.userEdited
-          }
-        >
+        <Show when={staged()}>
           <div
             style={{
               position: 'absolute',
@@ -965,6 +968,41 @@ export function PromptInput(props: PromptInputProps) {
             }}
           >
             {store.mcpOrchestrationEnabled ? 'Staged for auto-send' : 'Ready for review'}
+          </div>
+        </Show>
+        <Show when={question()}>
+          <div
+            class="prompt-needs-you"
+            style={{
+              position: 'absolute',
+              top: '4px',
+              left: '10px',
+              right: '36px',
+              display: 'flex',
+              gap: '6px',
+              'align-items': 'baseline',
+              'font-size': sf(11),
+              color: theme.fgMuted,
+              overflow: 'hidden',
+              'white-space': 'nowrap',
+              'pointer-events': 'none',
+              'z-index': '1',
+            }}
+          >
+            <span
+              style={{
+                color: theme.warning,
+                'font-size': sf(10),
+                'letter-spacing': '0.06em',
+                'text-transform': 'uppercase',
+                'flex-shrink': '0',
+              }}
+            >
+              Needs you
+            </span>
+            <span style={{ overflow: 'hidden', 'text-overflow': 'ellipsis', 'min-width': '0' }}>
+              {question()}
+            </span>
           </div>
         </Show>
         <textarea
@@ -1001,19 +1039,10 @@ export function PromptInput(props: PromptInputProps) {
           style={{
             flex: '1',
             background: theme.bgInput,
-            border:
-              props.autoSendChildUpdates &&
-              props.stagedNotification &&
-              !props.stagedNotification.userEdited
-                ? `1px solid ${theme.accent}60`
-                : `1px solid ${theme.border}`,
+            border: staged() ? `1px solid ${theme.accent}60` : `1px solid ${theme.border}`,
             'border-radius': 'var(--radius-lg)',
-            padding:
-              props.autoSendChildUpdates &&
-              props.stagedNotification &&
-              !props.stagedNotification.userEdited
-                ? '20px 36px 6px 10px'
-                : '6px 36px 6px 10px',
+            // shortcut: the labels push the text down a line when they appear — reserve the line if that jars.
+            padding: staged() || question() ? '20px 36px 6px 10px' : '6px 36px 6px 10px',
             color: theme.fg,
             'font-size': sf(13),
             'font-family': "'JetBrains Mono', monospace",

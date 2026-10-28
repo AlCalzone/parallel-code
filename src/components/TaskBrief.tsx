@@ -35,7 +35,7 @@ const cardButton: JSX.CSSProperties = {
  * briefs are only rewritten after a turn, so the last one still asks a
  * question the user may have just answered.
  */
-function needsYouNow(task: Task): string {
+export function needsYouNow(task: Task): string {
   const needsYou = task.brief?.brief.needsYou;
   return needsYou && !isTaskWorking(task.id) ? needsYou : '';
 }
@@ -44,6 +44,8 @@ interface TaskBriefBarProps {
   task: Task;
   onWalkThrough?: () => void;
   walkThroughDisabled?: boolean;
+  /** The prompt box shows the brief's question, so the bar keeps to the goal. */
+  questionInPrompt?: boolean;
 }
 
 /**
@@ -103,11 +105,12 @@ export function TaskBriefBar(props: TaskBriefBarProps) {
     document.removeEventListener('keydown', onKeyDown, true);
   });
   // Routine briefs stay quiet; an agent waiting on the user needs a look now.
-  const urgent = () => needsYouNow(props.task) !== '';
+  const question = () => (props.questionInPrompt ? '' : needsYouNow(props.task));
+  const urgent = () => question() !== '';
 
   const headline = () => {
     const brief = props.task.brief?.brief;
-    if (brief) return needsYouNow(props.task) || brief.goal || brief.now;
+    if (brief) return question() || brief.goal || brief.now;
     if (props.task.briefStatus?.state === 'generating') return 'Writing the brief…';
     return 'The brief appears after the agent finishes a turn';
   };
