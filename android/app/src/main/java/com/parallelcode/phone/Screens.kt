@@ -1343,9 +1343,9 @@ private fun TerminalText(
             },
     ) {
         // The PTY keeps the desktop's size, which rarely matches the phone. Size the font so its
-        // columns span the screen width (within readable bounds), wrap lines still too wide at the
-        // smallest font, and anchor a screen shorter than the view to the bottom, next to the
-        // reply box, as a terminal window would.
+        // columns span the screen width, and anchor a screen shorter than the view to the bottom,
+        // next to the reply box, as a terminal window would. Rows never wrap: a wrapped row breaks
+        // the agent's layout mid-line, so a wide terminal shrinks instead and pinching reads it.
         val density = LocalDensity.current
         val measurer = rememberTextMeasurer()
         val paddingPx = with(density) { (TERMINAL_PADDING_H * 2).roundToPx() }
@@ -1353,7 +1353,7 @@ private fun TerminalText(
         val charPxAt10 = remember(measurer) {
             measurer.measure("0".repeat(10), TextStyle(fontFamily = AppFonts.mono, fontSize = 10.sp)).size.width / 10f
         }
-        val autoFont = (10f * textWidthPx / (cols.coerceAtLeast(1) * charPxAt10)).coerceIn(8f, 14f).sp
+        val autoFont = fittedTerminalFont(textWidthPx, cols, charPxAt10).sp
         val phoneFont = TERMINAL_FONT
         val fontSize = if (fitToView) phoneFont else autoFont
         SideEffect { wheel.linePx = with(density) { (fontSize * 1.27f).toPx() } }
@@ -1402,6 +1402,7 @@ private fun TerminalText(
                     fontFamily = AppFonts.mono,
                     fontSize = fontSize,
                     lineHeight = fontSize * 1.27f,
+                    softWrap = false,
                 )
             }
         }
@@ -1523,6 +1524,10 @@ internal fun selectableTerminalCaps(fontScale: Float): Pair<Int, Int> {
     return (2_000 / scale).toInt() to (100_000 / (scale * scale)).toInt()
 }
 private const val MAX_TERMINAL_ZOOM = 4f
+
+/** The font size, in sp, at which [cols] monospace columns fill [textWidthPx], at most 14sp. */
+internal fun fittedTerminalFont(textWidthPx: Int, cols: Int, charPxAt10: Float): Float =
+    (10f * textWidthPx / (cols.coerceAtLeast(1) * charPxAt10)).coerceIn(1f, 14f)
 
 /**
  * Keeps a terminal magnified by [zoom] (from its top-left corner) covering its whole view, so a pan
