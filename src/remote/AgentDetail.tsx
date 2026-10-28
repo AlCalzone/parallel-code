@@ -755,93 +755,109 @@ export function AgentDetail(props: AgentDetailProps) {
         when={view() === 'notes'}
         fallback={
           <Show when={view() === 'terminal'}>
-            <div class="mobile-composer">
-              <Show when={inputText().includes('\n') && !multilinePaste()}>
-                <p class="muted">This terminal sends line breaks as spaces.</p>
-              </Show>
-              <Show when={sendError()}>
-                <p class="mobile-error" role="alert">
-                  {sendError()}
-                </p>
-              </Show>
-              <div class="mobile-composer-row">
-                <Show when={bashMode()}>
-                  <button
-                    class="mobile-button mobile-bash"
-                    aria-label="Shell command mode"
-                    aria-pressed="true"
-                    disabled={sending()}
-                    onClick={() => {
-                      setBashMode(false);
-                      inputRef?.focus();
-                    }}
-                  >
-                    !
-                  </button>
+            <div class="mobile-composer-dock">
+              {/* Notices float above the composer instead of growing it, so the
+                  terminal keeps its rows and nothing jumps while typing. */}
+              <div class="mobile-composer-notices">
+                <Show when={inputText().includes('\n') && !multilinePaste()}>
+                  <p class="muted">This terminal sends line breaks as spaces.</p>
                 </Show>
-                <textarea
-                  ref={(element) => {
-                    inputRef = element;
-                    queueMicrotask(() => {
-                      if (!disposed) resizeComposer();
-                    });
-                  }}
-                  class="mobile-input"
-                  rows={1}
-                  maxlength={4000}
-                  aria-label="Message agent"
-                  placeholder={composerPlaceholder()}
-                  value={inputText()}
-                  onInput={(e) => composerInput(e.currentTarget)}
-                  disabled={sending()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.isComposing) {
-                      e.preventDefault();
-                      void handleSend();
-                    }
-                  }}
-                />
-                <button
-                  class="mobile-button primary"
-                  disabled={!inputText().trim() || sending() || status() !== 'connected'}
-                  onClick={() => void handleSend()}
-                >
-                  {sending() ? 'Sending…' : canControl() ? 'Send' : 'Authorize'}
-                </button>
+                <Show when={sendError()}>
+                  <p class="mobile-error" role="alert">
+                    {sendError()}
+                  </p>
+                </Show>
+                <Show when={inputText().length >= 3600}>
+                  <p class="muted" role="status">
+                    {4000 - inputText().length} characters remaining
+                  </p>
+                </Show>
               </div>
-              <Show when={inputText().length >= 3600}>
-                <p class="muted" role="status">
-                  {4000 - inputText().length} characters remaining
-                </p>
-              </Show>
-              <Show when={sent()}>
-                <p class="muted mobile-success" role="status">
-                  Accepted by terminal
-                </p>
-              </Show>
-              <div id="terminal-keys" class="mobile-keys" role="group" aria-label="Terminal keys">
-                <For
-                  each={[
-                    { label: 'Enter', name: 'Enter', data: '\r' },
-                    { label: '/', name: 'Slash', data: '/' },
-                    { label: 'Tab', name: 'Tab', data: '\t' },
-                    { label: '↑', name: 'Arrow up', data: '\x1b[A' },
-                    { label: '↓', name: 'Arrow down', data: '\x1b[B' },
-                    { label: 'Esc', name: 'Escape', data: '\x1b' },
-                    { label: 'Ctrl+C', name: 'Interrupt agent (Control C)', data: '\x03' },
-                  ]}
-                >
-                  {(key) => (
+              <div class="mobile-composer">
+                <div class="mobile-composer-row">
+                  <Show when={bashMode()}>
                     <button
-                      class="mobile-button"
-                      aria-label={key.name}
-                      disabled={!canControl() || sending()}
-                      onClick={() => void quickKey(key.data)}
+                      class="mobile-button mobile-bash"
+                      aria-label="Shell command mode"
+                      aria-pressed="true"
+                      disabled={sending()}
+                      onClick={() => {
+                        setBashMode(false);
+                        inputRef?.focus();
+                      }}
                     >
-                      {key.label}
+                      !
                     </button>
-                  )}
-                </For>
+                  </Show>
+                  <textarea
+                    ref={(element) => {
+                      inputRef = element;
+                      queueMicrotask(() => {
+                        if (!disposed) resizeComposer();
+                      });
+                    }}
+                    class="mobile-input"
+                    rows={1}
+                    maxlength={4000}
+                    aria-label="Message agent"
+                    placeholder={composerPlaceholder()}
+                    value={inputText()}
+                    onInput={(e) => composerInput(e.currentTarget)}
+                    disabled={sending()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.isComposing) {
+                        e.preventDefault();
+                        void handleSend();
+                      }
+                    }}
+                  />
+                  <button
+                    class="mobile-button primary"
+                    classList={{ 'mobile-success': sent() }}
+                    disabled={!inputText().trim() || sending() || status() !== 'connected'}
+                    // Keep focus in the field: a blur would close the keyboard and
+                    // bring back the key row, moving Send before the tap lands.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => void handleSend()}
+                  >
+                    {sending()
+                      ? 'Sending…'
+                      : !canControl()
+                        ? 'Authorize'
+                        : sent()
+                          ? 'Sent'
+                          : 'Send'}
+                  </button>
+                </div>
+                <Show when={sent()}>
+                  <span class="mobile-sr-only" role="status">
+                    Accepted by terminal
+                  </span>
+                </Show>
+                <div id="terminal-keys" class="mobile-keys" role="group" aria-label="Terminal keys">
+                  <For
+                    each={[
+                      { label: 'Enter', name: 'Enter', data: '\r' },
+                      { label: '/', name: 'Slash', data: '/' },
+                      { label: 'Tab', name: 'Tab', data: '\t' },
+                      { label: '↑', name: 'Arrow up', data: '\x1b[A' },
+                      { label: '↓', name: 'Arrow down', data: '\x1b[B' },
+                      { label: 'Esc', name: 'Escape', data: '\x1b' },
+                      { label: 'Ctrl+C', name: 'Interrupt agent (Control C)', data: '\x03' },
+                    ]}
+                  >
+                    {(key) => (
+                      <button
+                        class="mobile-button"
+                        aria-label={key.name}
+                        disabled={!canControl() || sending()}
+                        onClick={() => void quickKey(key.data)}
+                      >
+                        {key.label}
+                      </button>
+                    )}
+                  </For>
+                </div>
               </div>
             </div>
           </Show>

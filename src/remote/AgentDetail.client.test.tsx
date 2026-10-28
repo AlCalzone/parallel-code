@@ -276,6 +276,12 @@ describe('phone reply composer', () => {
     await vi.waitFor(() => expect(composer().value).toBe(''));
     expect(localStorage.getItem('parallel-mobile:reply:a1')).toBeNull();
     expect(host.textContent).toContain('Accepted by terminal');
+    // The confirmation lives on the Send button rather than a line that grows the composer.
+    const labels = () => [...host.querySelectorAll('button')].map((b) => b.textContent);
+    expect(labels()).toContain('Sent');
+    type('Next');
+    expect(labels()).toContain('Send');
+    expect(host.textContent).not.toContain('Accepted by terminal');
   });
   it('sends a shell command as one request the server can keep ordered', async () => {
     vi.mocked(sendInput).mockResolvedValue(undefined);

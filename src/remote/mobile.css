@@ -572,13 +572,35 @@ textarea.mobile-input {
   background: var(--bg-elevated);
   box-shadow: var(--shadow-pop);
 }
-.mobile-composer {
-  border-top: 1px solid var(--border);
-  background: var(--island-bg);
-  padding: 10px 12px max(10px, env(safe-area-inset-bottom));
+.mobile-composer-dock {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   flex-shrink: 1;
   min-height: 0;
   max-height: 60%;
+}
+.mobile-composer-notices {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  inset-inline: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+.mobile-composer-notices > p {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-pop);
+}
+.mobile-composer {
+  border-top: 1px solid var(--border);
+  background: var(--island-bg);
+  padding: 6px 10px max(6px, env(safe-area-inset-bottom));
+  min-height: 0;
   overflow-y: auto;
 }
 .mobile-composer-row {
@@ -587,7 +609,11 @@ textarea.mobile-input {
   align-items: flex-end;
 }
 .mobile-composer-row > button {
-  min-height: 48px;
+  min-height: 40px;
+  padding-block: 6px;
+}
+.mobile-composer-row > .mobile-button.primary.mobile-success {
+  color: var(--success);
 }
 .mobile-bash {
   flex: 0 0 auto;
@@ -603,23 +629,37 @@ textarea.mobile-input {
 .mobile-composer textarea {
   flex: 1;
   min-width: 0;
+  min-height: 40px;
   max-height: 160px;
+  padding-block: 7px;
   resize: none;
-}
-.mobile-composer > .mobile-error {
-  margin-bottom: 8px;
 }
 .mobile-keys {
   display: flex;
   gap: 3px;
-  padding-top: 8px;
+  padding-top: 6px;
   overflow-x: auto;
+}
+/* While typing, the keyboard takes the space; these keys answer agent menus,
+   which need no keyboard, and / and Tab can be typed. */
+.mobile-composer:has(.mobile-input:focus) .mobile-keys {
+  display: none;
 }
 .mobile-keys .mobile-button {
   flex: 1 0 auto;
   min-width: 30px;
-  padding: 8px 4px;
+  min-height: 34px;
+  padding: 4px;
   font-size: 12px;
+  white-space: nowrap;
+}
+.mobile-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
   white-space: nowrap;
 }
 .mobile-form {
