@@ -69,6 +69,7 @@ it('offers every Markdown destination for a worktree file', () => {
     'Edit as document',
     'Open in editor',
     'Show in folder',
+    'Copy Markdown',
     'Copy path',
   ]);
   run(menu, 'Open in side panel');
@@ -131,6 +132,7 @@ it('leaves out destinations a path or the app cannot use', () => {
     'Open in dialog',
     'Open in editor',
     'Show in folder',
+    'Copy Markdown',
     'Copy path',
   ]);
 });
@@ -142,6 +144,7 @@ it('opens home-relative paths everywhere, leaving ~ for main to expand', () => {
     'Open in dialog',
     'Open in editor',
     'Show in folder',
+    'Copy Markdown',
     'Copy path',
   ]);
   run(menu, 'Open in editor');
@@ -217,6 +220,34 @@ it('reveals and copies the resolved path', async () => {
   await vi.waitFor(() =>
     expect(mocks.showNotification).toHaveBeenCalledWith('Path copied to clipboard'),
   );
+});
+
+it('copies the raw Markdown of the clicked file', async () => {
+  const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+  mocks.invoke.mockResolvedValue('# Plan\n');
+  run(fileLinkMenu('/repo/wt/docs/plan.md', undefined, context()), 'Copy Markdown');
+  await vi.waitFor(() =>
+    expect(mocks.showNotification).toHaveBeenCalledWith('Markdown copied to clipboard'),
+  );
+  expect(mocks.invoke).toHaveBeenCalledWith(IPC.ReadFileText, {
+    filePath: '/repo/wt/docs/plan.md',
+  });
+  expect(write).toHaveBeenCalledWith('# Plan\n');
+});
+
+it('reports why copying the Markdown failed', async () => {
+  const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
+  mocks.invoke.mockRejectedValue(new Error('ENOENT'));
+  run(fileLinkMenu('/repo/wt/gone.md', undefined, context()), 'Copy Markdown');
+  await vi.waitFor(() =>
+    expect(mocks.showNotification).toHaveBeenCalledWith('Could not copy the Markdown: ENOENT'),
+  );
+  expect(write).not.toHaveBeenCalled();
+});
+
+it('offers Markdown copying only for Markdown files', () => {
+  for (const filePath of ['/repo/wt/a.html', '/repo/wt/a.ts', '/repo/wt/a.png', '/repo/wt/d/'])
+    expect(labels(filePath)).not.toContain('Copy Markdown');
 });
 
 it('treats .markdown like .md', () => {

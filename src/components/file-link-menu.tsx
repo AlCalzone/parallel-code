@@ -103,6 +103,13 @@ function copyPath(filePath: string): void {
     .catch((err: unknown) => showNotification(`Could not copy the path: ${errMessage(err)}`));
 }
 
+function copyMarkdown(filePath: string): void {
+  invoke<string>(IPC.ReadFileText, { filePath })
+    .then((text) => navigator.clipboard.writeText(text))
+    .then(() => showNotification('Markdown copied to clipboard'))
+    .catch((err: unknown) => showNotification(`Could not copy the Markdown: ${errMessage(err)}`));
+}
+
 const shortcut = `${isMac ? 'Cmd' : 'Ctrl'}+click`;
 
 /** Opens a file the task changed in the changes dialog, or undefined when it isn't listed. */
@@ -240,6 +247,15 @@ export function fileLinkMenu(
       ...changesItems,
       ...primary,
       ...revealItems,
+      ...(kind === 'markdown'
+        ? [
+            {
+              label: 'Copy Markdown',
+              icon: () => <CopyIcon size={14} />,
+              run: () => copyMarkdown(filePath),
+            },
+          ]
+        : []),
       { label: 'Copy path', icon: () => <CopyIcon size={14} />, run: () => copyPath(filePath) },
     ],
     open,
