@@ -46,7 +46,7 @@ const messageFieldStyle = {
 const commitLabel = (count: number) => `${count} commit${count === 1 ? '' : 's'}`;
 
 /** What stops or changes a merge; shown first so it is read before anything else. */
-export function MergeBlockers(props: MergeSectionProps) {
+export function MergeBlockers(props: MergeSectionProps & { showBaseSync: boolean }) {
   return (
     <>
       <Show when={props.state.hasBranchMismatch()}>
@@ -150,7 +150,9 @@ export function MergeBlockers(props: MergeSectionProps) {
           {props.state.baseBranchName()}.
         </div>
       </Show>
-      <MergeConflictBanner task={props.task} state={props.state} onDone={props.onDone} />
+      <Show when={props.showBaseSync}>
+        <MergeConflictBanner task={props.task} state={props.state} onDone={props.onDone} />
+      </Show>
       {/* Outside the conflict banner: that one hides once the base is in. */}
       <Show when={props.state.syncDone()}>
         {(kind) => (

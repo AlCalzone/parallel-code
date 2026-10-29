@@ -121,6 +121,18 @@ export function FinishDialog(props: FinishDialogProps) {
     headSha: () => (merge.worktreeStatus.error ? null : merge.worktreeStatus()?.head_sha),
   });
   const prMerging = () => pr.busy() === 'merge';
+  // A PR merges on GitHub, so a base that moved on locally matters only where
+  // it conflicts or GitHub asks for the branch to be updated.
+  const showBaseSync = () => {
+    const mode = pr.mode();
+    if (mode !== 'pr') return mode === 'local';
+    const details = pr.pr();
+    return (
+      merge.hasConflicts() ||
+      details?.mergeStateStatus === 'BEHIND' ||
+      details?.mergeable === 'CONFLICTING'
+    );
+  };
   // Only a failure on the current commit counts; an older run is said in readiness below.
   const verifyFailed = () => {
     const run = props.task.verificationRun;
@@ -323,6 +335,7 @@ export function FinishDialog(props: FinishDialogProps) {
             <MergeBlockers
               task={props.task}
               state={merge}
+              showBaseSync={showBaseSync()}
               open={props.open}
               onDone={() => props.onClose()}
               onDiffFileClick={props.onDiffFileClick}

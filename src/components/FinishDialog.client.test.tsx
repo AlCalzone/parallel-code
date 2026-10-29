@@ -916,6 +916,61 @@ function prDetails(overrides: Partial<PullRequestDetails> = {}): PullRequestDeta
   };
 }
 
+describe('FinishDialog base sync with an open PR', () => {
+  const baseMovedOn = (conflicting_files: string[] = []) =>
+    mockInvoke((channel) => {
+      if (channel === IPC.GetBranchLog) return '';
+      if (channel === IPC.CheckMergeStatus)
+        return { conflicting_files, main_ahead_count: 3, overlapping_files: [] };
+      return { current_branch: 'task/parent', has_committed_changes: true, head_sha: 'local' };
+    });
+
+  it('leaves a moved base alone while GitHub can still merge the PR', async () => {
+    vi.mocked(getPullRequestDetails).mockResolvedValue(prDetails());
+    baseMovedOn();
+    mount({ task: task({ baseBranch: 'main', prUrl: PR_URL }) });
+    await flush();
+    expect(document.body.textContent).not.toContain('new commits');
+    expect(button('Rebase')).toBeUndefined();
+  });
+
+  it.each([
+    ['GitHub wants the branch updated', { mergeStateStatus: 'BEHIND' }],
+    ['GitHub sees conflicts', { mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' }],
+  ] as const)('offers to bring the base in when %s', async (_, overrides) => {
+    vi.mocked(getPullRequestDetails).mockResolvedValue(prDetails(overrides));
+    baseMovedOn();
+    mount({ task: task({ baseBranch: 'main', prUrl: PR_URL }) });
+    await flush();
+    expect(document.body.textContent).toContain('main has 3 new commits');
+    expect(button('Merge')).toBeDefined();
+  });
+
+  it('leaves a moved base alone once the PR merged', async () => {
+    vi.mocked(getPullRequestDetails).mockResolvedValue(prDetails({ state: 'MERGED' }));
+    baseMovedOn();
+    mount({ task: task({ baseBranch: 'main', prUrl: PR_URL }) });
+    await flush();
+    expect(document.body.textContent).not.toContain('new commits');
+  });
+
+  it('offers to bring the base in when a closed PR leaves the merge local', async () => {
+    vi.mocked(getPullRequestDetails).mockResolvedValue(prDetails({ state: 'CLOSED' }));
+    baseMovedOn();
+    mount({ task: task({ baseBranch: 'main', prUrl: PR_URL }) });
+    await flush();
+    expect(document.body.textContent).toContain('main has 3 new commits');
+  });
+
+  it('shows local conflicts with the base even while GitHub can merge', async () => {
+    vi.mocked(getPullRequestDetails).mockResolvedValue(prDetails());
+    baseMovedOn(['src/a.ts']);
+    mount({ task: task({ baseBranch: 'main', prUrl: PR_URL }) });
+    await flush();
+    expect(document.body.textContent).toContain('Conflicts with main in 1 file');
+  });
+});
+
 describe('FinishDialog with an open PR', () => {
   it('merges the PR on GitHub and closes the task', async () => {
     vi.mocked(getPullRequestDetails).mockResolvedValue(prDetails());
