@@ -2110,6 +2110,61 @@ html:not(
   z-index: 1;
 }
 
+/* In the side column the seams between changed files, notes and shells
+   would read like the hairlines inside each section, so they become a
+   visible gutter with a grip and take real space. */
+html:not(
+    [data-look^='obsidian'],
+    [data-look^='islands-'],
+    [data-look='workbench'],
+    [data-look='noir']
+  )
+  .task-column
+  .task-side-stack
+  > .resize-handle-v {
+  height: 7px;
+  margin: 0;
+  box-sizing: border-box;
+  border-block: 1px solid var(--border);
+  background: var(--task-container-bg);
+  /* The grip draws in currentColor so hover can keep it visible on the accent. */
+  color: var(--border);
+}
+
+html:not(
+    [data-look^='obsidian'],
+    [data-look^='islands-'],
+    [data-look='workbench'],
+    [data-look='noir']
+  )
+  .task-column
+  .task-side-stack
+  > .resize-handle-v::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 50%;
+  width: 28px;
+  height: 3px;
+  margin-left: -14px;
+  border-radius: 2px;
+  background: currentColor;
+  pointer-events: none;
+}
+
+html:not(
+    [data-look^='obsidian'],
+    [data-look^='islands-'],
+    [data-look='workbench'],
+    [data-look='noir']
+  )
+  .task-column
+  .task-side-stack
+  > :is(.resize-handle-v:hover, .resize-handle-v.dragging) {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  color: var(--fg);
+}
+
 /* The focused pane's ring already marks the active task; a column glow too
    would double the signal. Shadowed looks keep their resting shadow. */
 html:not([data-look^='obsidian'], [data-look^='islands-'], [data-look='workbench'])

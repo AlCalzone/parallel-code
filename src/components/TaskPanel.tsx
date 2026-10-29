@@ -886,6 +886,7 @@ export function TaskPanel(props: TaskPanelProps) {
                 content: () => (
                   <ResizablePanel
                     direction="vertical"
+                    class="task-side-stack"
                     persistKey={`task:${props.task.id}:split-right`}
                     // An empty shell is just its toolbar, so without shells the
                     // changed files (or notes, without git) take the free height
