@@ -980,20 +980,20 @@ export function PromptInput(props: PromptInputProps) {
               display: 'flex',
               gap: '6px',
               'align-items': 'baseline',
-              'font-size': sf(11),
-              color: theme.fgMuted,
+              'font-size': sf(14),
+              color: theme.fg,
               overflow: 'hidden',
               'white-space': 'nowrap',
               'pointer-events': 'none',
               'z-index': '1',
               'padding-bottom': '3px',
-              'border-bottom': `1px solid ${theme.border}`,
+              'border-bottom': `1px solid color-mix(in srgb, ${theme.warning} 55%, transparent)`,
             }}
           >
             <span
               style={{
                 color: theme.warning,
-                'font-size': sf(10),
+                'font-weight': '700',
                 'letter-spacing': '0.06em',
                 'text-transform': 'uppercase',
                 'flex-shrink': '0',
@@ -1006,7 +1006,7 @@ export function PromptInput(props: PromptInputProps) {
                 overflow: 'hidden',
                 'text-overflow': 'ellipsis',
                 'min-width': '0',
-                'font-size': sf(12),
+                'font-weight': '600',
               }}
             >
               {question()}

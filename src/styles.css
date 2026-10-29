@@ -2206,7 +2206,7 @@ html:not([data-look^='obsidian'], [data-look^='islands-'], [data-look='workbench
    html body outranks every look's !important padding above.
    shortcut: the labels push the text down a line when they appear — reserve the line if that jars. */
 html body .prompt-textarea.prompt-textarea--labelled {
-  padding-top: 26px !important;
+  padding-top: 30px !important;
 }
 
 /* Start the Needs you line where the typed text starts, which each look sets
