@@ -79,6 +79,10 @@ export interface WorktreeStatus {
   /** HEAD commit sha; lets consumers tell whether a verification run still
    *  describes the current tree. Absent from older senders, null when unreadable. */
   head_sha?: string | null;
+  /** Lines added/removed by the branch's commits since the merge base.
+   *  Absent from older senders and when unreadable. */
+  lines_added?: number;
+  lines_removed?: number;
 }
 
 export type VerificationRunStatus =

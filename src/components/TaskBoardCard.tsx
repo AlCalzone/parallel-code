@@ -4,12 +4,13 @@ import { isTaskBackgrounded } from '../store/background-tasks';
 import { store } from '../store/core';
 import { getPrChecks } from '../store/pr-checks-state';
 import { getProject } from '../store/projects';
+import { ClockIcon } from './icons';
 import { ProjectSwatch } from './ProjectSwatch';
 import { getTaskAttentionState, getTaskOpenQuestion } from '../store/taskStatus';
 import { retryCloseTask } from '../store/tasks';
 import type { Task } from '../store/types';
 import { activityLine, agentName, boardNow, stateLabel } from './board/task-state';
-import { ASK_ACTION, AskRow, TaskGlyph, TaskPr, openBeside } from './board/TaskStatus';
+import { ASK_ACTION, AskRow, TaskGlyph, TaskLine, TaskPr, openBeside } from './board/TaskStatus';
 import { focusBoardCard } from './task-board-keys';
 import { boardCheckLabel, boardTaskState, type BoardLaneId } from './task-board-lanes';
 import { createTaskContextMenu } from './task-context-menu';
@@ -65,26 +66,28 @@ function parentTask(task: Task): Task | undefined {
   return task.coordinatedBy ? store.tasks[task.coordinatedBy] : undefined;
 }
 
-function CardMeta(props: {
-  task: Task;
-  since: number | undefined;
-  waiting: boolean;
-  checking: string;
-}) {
-  const busy = () =>
-    props.checking ||
-    (getTaskAttentionState(props.task.id) === 'shell_busy' ? 'Terminal busy' : '');
+/** Lines the branch's commits changed since the base, or nothing when none are known or changed. */
+function DiffCount(props: { taskId: string }) {
+  const git = () => store.taskGitStatus[props.taskId];
+  const added = () => git()?.lines_added ?? 0;
+  const removed = () => git()?.lines_removed ?? 0;
+  return (
+    <Show when={added() + removed() > 0}>
+      <span
+        class="task-board-diff"
+        title={`${added()} lines added, ${removed()} removed by the branch's commits`}
+      >
+        <span class="add">+{added()}</span> <span class="rem">−{removed()}</span>
+      </span>
+    </Show>
+  );
+}
+
+function CardMeta(props: { task: Task; since: number | undefined; waiting: boolean }) {
   return (
     <div class="task-board-meta">
       <BoardProjectLabel projectId={props.task.projectId} />
-      {/* Names the cause of a card's spinner in the agent's slot, so the row never reflows. */}
-      <Show when={busy()} fallback={<span class="task-board-agent">{agentName(props.task)}</span>}>
-        {(label) => (
-          <span class="task-board-agent busy" title={agentName(props.task)}>
-            {label()}
-          </span>
-        )}
-      </Show>
+      <span class="task-board-agent">{agentName(props.task)}</span>
       <Show when={props.since}>
         {(since) => (
           // The card's "Needs input" row already says it waits; the age says how long.
@@ -93,6 +96,7 @@ function CardMeta(props: {
           </span>
         )}
       </Show>
+      <DiffCount taskId={props.task.id} />
     </div>
   );
 }
@@ -109,12 +113,15 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
     props.task.closingStatus === 'closing' || props.task.closingStatus === 'removing';
   const closeErrorText = () =>
     props.task.closingStatus === 'error' ? props.task.closingError : undefined;
+  // Names the cause of a card's spinner where its activity goes, so no row reflows.
+  const busy = () =>
+    checking() || (getTaskAttentionState(props.task.id) === 'shell_busy' ? 'Terminal busy' : '');
   const activityText = () => {
     if (closing()) return 'Closing…';
     // Spelled out on the card, not only in a tooltip, so keyboard users see why.
     const closeError = closeErrorText();
     if (closeError) return closeError;
-    return fromAgent() ? props.task.branchName : activity().text;
+    return busy() || (fromAgent() ? props.task.branchName : activity().text);
   };
   const shown = () => store.boardPeek && store.activeTaskId === props.task.id;
   const question = () => getTaskOpenQuestion(props.task.id);
@@ -164,19 +171,26 @@ export function TaskBoardCard(props: { task: Task; lane: BoardLaneId }) {
         task={props.task}
         since={question()?.since ?? activity().since}
         waiting={question() !== null}
-        checking={checking()}
       />
-      {/* Always rendered so a task starting or stopping never changes the card's height. */}
-      <p
-        class="task-board-activity"
-        classList={{ branch: fromAgent() && !closing() && !closeErrorText() }}
-        title={activityText()}
-      >
-        {activityText() || ' '}
-      </p>
+      <TaskLine
+        text={activityText()}
+        classList={{
+          branch: fromAgent() && !closing() && !closeErrorText() && !busy(),
+          busy: !closing() && !closeErrorText() && !!busy(),
+        }}
+        prUrl={props.task.prUrl}
+        issueUrl={props.task.githubUrl}
+      />
       <Show when={props.task.prUrl}>{(url) => <TaskPr taskId={props.task.id} url={url()} />}</Show>
       <Show when={props.lane === 'snoozed' && setAsideLabel(props.task)}>
-        {(label) => <p class="task-board-row">{label()}</p>}
+        {(label) => (
+          <p class="task-board-ask">
+            <span class="task-board-status muted">
+              <ClockIcon size={12} />
+              <span class="task-board-status-text">{label()}</span>
+            </span>
+          </p>
+        )}
       </Show>
       <Show when={props.task.closingStatus === 'error'}>
         <CloseFailed task={props.task} />

@@ -141,8 +141,8 @@ export function StatusDot(props: {
   const color = () => {
     if (props.checking) return REVIEW_COLOR;
     if (glyph() === 'ci_failed') return theme.error;
-    // A failed check turns the pie red before the whole run finishes.
-    if (glyph() === 'ci_running') return ci()?.failing ? theme.error : theme.warning;
+    // A running pie is a routine wait, so it stays neutral; a failed check turns it red early.
+    if (glyph() === 'ci_running') return ci()?.failing ? theme.error : theme.fgMuted;
     return getDotColor(props.status, props.attention);
   };
   const ciSweep = () => Math.max(MIN_CI_SWEEP, ci()?.progress ?? 0);

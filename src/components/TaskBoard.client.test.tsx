@@ -134,7 +134,7 @@ it('sorts tasks into lanes by what they need', () => {
   expect(cardNames('Needs you')).toEqual(['Fix login redirect']);
   expect(cardNames('In pull request')).toEqual(['Add dark mode']);
   expect(cardNames('Stopped')).toEqual(['Update docs']);
-  expect(lane('In pull request')?.textContent).toContain('PR #42');
+  expect(lane('In pull request')?.textContent).toContain('#42');
 });
 
 it('offers Babysit beside an open pull request', () => {
@@ -203,19 +203,47 @@ it('does not hold work that stopped while the board was closed', () => {
 });
 
 it('says why a stopped card spins when only its terminal is busy', () => {
-  const meta = () => lane('Stopped')?.querySelector('.task-board-meta')?.textContent ?? '';
-  expect(meta()).not.toContain('Terminal busy');
+  const activity = () => lane('Stopped')?.querySelector('.task-board-activity')?.textContent ?? '';
+  expect(activity()).not.toContain('Terminal busy');
   attention.force({ idle: 'shell_busy' });
   expect(cardNames('Stopped')).toEqual(['Update docs']);
   expect(lane('Stopped')?.querySelector('.task-board-glyph .status-glyph')).not.toBeNull();
-  expect(meta()).toContain('Terminal busy');
+  expect(activity()).toContain('Terminal busy');
+});
+
+it("links a task's source issue at the end of its line", () => {
+  const links = () =>
+    [
+      ...(lane('Stopped')?.querySelectorAll<HTMLElement>('.task-board-line .task-board-link') ??
+        []),
+    ].map((b) => b.title);
+  expect(links()).toEqual([]);
+  setStore('tasks', 'idle', 'githubUrl', 'https://github.com/o/r/issues/9');
+  expect(links()).toEqual(['Open issue #9']);
+});
+
+it('shows how many lines a task changed, and nothing for an unchanged one', () => {
+  const diff = () => lane('Stopped')?.querySelector('.task-board-meta .task-board-diff');
+  expect(diff()).toBeNull();
+  setStore('taskGitStatus', 'idle', {
+    has_committed_changes: true,
+    has_uncommitted_changes: false,
+    current_branch: 'task/idle',
+    base_branch: 'main',
+    lines_added: 120,
+    lines_removed: 8,
+    refreshedAt: 1,
+  });
+  expect(diff()?.textContent).toBe('+120 −8');
+  setStore('taskGitStatus', 'idle', { lines_added: 0, lines_removed: 0 });
+  expect(diff()).toBeNull();
 });
 
 it('moves a card into Working while a Finish check runs, with its own spinner', () => {
   setStore('tasks', 'review', 'reviewStatus', { state: 'running', startedAt: 1 });
   expect(cardNames('Working')).toEqual(['Fix login redirect']);
   const card = lane('Working')?.querySelector('.task-board-card');
-  expect(card?.querySelector('.task-board-meta')?.textContent).toContain('Reviewing');
+  expect(card?.querySelector('.task-board-activity')?.textContent).toContain('Reviewing');
   const glyph = card?.querySelector<HTMLElement>('.task-board-glyph .status-glyph');
   expect(glyph?.querySelector('.status-glyph-spinner')).not.toBeNull();
   expect(glyph?.title).toContain('Reviewing');
@@ -234,7 +262,7 @@ it('leaves a card that asks a question in Needs you while its checks run', () =>
   attention.force({ review: 'needs_input' });
   setStore('tasks', 'review', 'reviewStatus', { state: 'running', startedAt: 1 });
   expect(cardNames('Needs you')).toEqual(['Fix login redirect']);
-  expect(lane('Needs you')?.querySelector('.task-board-meta')?.textContent).not.toContain(
+  expect(lane('Needs you')?.querySelector('.task-board-activity')?.textContent).not.toContain(
     'Reviewing',
   );
 });
@@ -446,11 +474,11 @@ it('does not read agents killed by a close as a failure', () => {
 it('moves a task whose close failed to Needs you, with a retry', () => {
   setStore('tasks', 'pr', { closingStatus: 'error', closingError: 'worktree is locked' });
   expect(cardNames('Needs you')).toContain('Add dark mode');
-  const ask = host.querySelector('[data-board-task-id="pr"] .task-board-ask');
-  expect(ask?.querySelector('.task-board-ask-label')?.textContent).toBe('Close failed');
-  expect(ask?.querySelector('.task-board-ask-label')?.getAttribute('title')).toBe(
-    'worktree is locked',
-  );
+  // The card's PR row comes first; the close failure has its own ask row.
+  const label = host.querySelector('[data-board-task-id="pr"] .task-board-ask-label');
+  const ask = label?.closest('.task-board-ask');
+  expect(label?.textContent).toBe('Close failed');
+  expect(label?.getAttribute('title')).toBe('worktree is locked');
   // The reason is readable without hovering.
   expect(host.querySelector('[data-board-task-id="pr"]')?.textContent).toContain(
     'worktree is locked',

@@ -639,10 +639,9 @@ html[data-look^='islands-'] .task-board {
   text-overflow: ellipsis;
 }
 /* Narrow cards, such as beside the side panel, drop the agent's name instead
-   of cutting it to a letter; "Terminal busy" is state, so it stays. The query
-   measures the content box, inside the padding. */
+   of cutting it to a letter. The query measures the content box, inside the padding. */
 @container (max-width: 200px) {
-  .task-board-agent:not(.busy) {
+  .task-board-agent {
     display: none;
   }
 }
@@ -650,6 +649,21 @@ html[data-look^='islands-'] .task-board {
   flex-shrink: 0;
   margin-left: auto;
   font-variant-numeric: tabular-nums;
+}
+/* Lines changed: muted, so a big diff reads as size, not as a warning. */
+.task-board-diff {
+  flex-shrink: 0;
+  font: 11px var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+}
+.task-board-meta > :not(.task-board-age) + .task-board-diff {
+  margin-left: auto;
+}
+.task-board-diff .add {
+  color: color-mix(in srgb, var(--success) 75%, var(--fg-muted));
+}
+.task-board-diff .rem {
+  color: color-mix(in srgb, var(--error) 65%, var(--fg-muted));
 }
 /* One line tall even when empty, so cards never grow or shrink. */
 .task-board-activity {
@@ -663,6 +677,41 @@ html[data-look^='islands-'] .task-board {
 .task-board-activity.branch {
   color: var(--fg-subtle, var(--fg-muted));
 }
+/* The activity, then the task's issue and PR badges at its right end. */
+.task-board-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 16px;
+  margin: 0;
+  padding-left: 17px;
+  min-width: 0;
+}
+.task-board-line > .task-board-activity {
+  flex: 1;
+  padding-left: 0;
+}
+.task-board-links {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.task-board-chip.task-board-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+  padding: 0 5px;
+  font-variant-numeric: tabular-nums;
+}
+.task-board-link svg {
+  opacity: 0.8;
+}
+/* Why the spinner turns is a state, not output: the label font, not mono. */
+.task-board-activity.busy {
+  font-family: inherit;
+  font-size: 12px;
+}
 .task-board-row {
   display: flex;
   align-items: center;
@@ -672,36 +721,51 @@ html[data-look^='islands-'] .task-board {
   color: var(--fg-muted);
   white-space: nowrap;
 }
-/* The PR's merge state sits on its badge. Failure is urgent and keeps its tint;
-   ready and merged are states to read at a glance, so they get colour, no fill. */
-.task-board-pr {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.task-board-pr.ready,
-.task-board-pr.ready:hover {
-  color: var(--success);
-  font-weight: 600;
-}
-.task-board-pr.merged,
-.task-board-pr.merged:hover {
-  /* GitHub's merged purple, as on the task's PR chip. */
-  color: #8957e5;
-  font-weight: 600;
-}
-/* On a narrow card the status gives way, so the PR and Babysit chips stay whole. */
-.task-board-pr-status {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .task-board-row > .task-board-chip {
   flex-shrink: 0;
 }
-.task-board-pr-status.failed {
+/* A status row's label (PR state, snooze reason), toned like the ask labels:
+   colour only for what needs the user now. It gives way first on narrow cards. */
+.task-board-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  white-space: nowrap;
+  color: var(--fg-muted);
+}
+.task-board-status > svg {
+  flex-shrink: 0;
+}
+.task-board-status-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.task-board-status.warning {
+  color: var(--warning);
+  font-weight: 500;
+}
+.task-board-status.error {
   color: var(--error);
-  font-weight: 600;
+  font-weight: 500;
+}
+.task-board-status.strong {
+  color: var(--fg);
+  font-weight: 500;
+}
+.task-board-status.subtle {
+  color: var(--fg-subtle, var(--fg-muted));
+}
+.task-board-ok {
+  display: inline-flex;
+  color: var(--success);
+}
+.task-board-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .task-board-chip,
@@ -725,14 +789,12 @@ html[data-look^='islands-'] .task-board {
   align-items: center;
   gap: 4px;
 }
-.task-board-chip.failure {
-  background: color-mix(in srgb, var(--error) 14%, transparent);
-  color: var(--error);
-}
+/* Every status row (ask, PR, snooze) is as tall as its button, with or without one. */
 .task-board-ask {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 24px;
   padding-top: 2px;
   font-size: 12px;
 }
@@ -770,9 +832,6 @@ html[data-look^='islands-'] .task-board {
 }
 .task-board-chip.task-pr-babysit[aria-pressed='true']:hover {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
-}
-.task-board-chip.failure:hover {
-  color: var(--error);
 }
 /* The empty state ignores the pointer so lanes stay droppable; its one action opts back in. */
 .task-board-empty .task-board-act {

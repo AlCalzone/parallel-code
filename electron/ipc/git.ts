@@ -2393,7 +2393,41 @@ export async function getWorktreeStatus(
     current_branch: currentBranch,
     base_branch: resolvedBaseBranch,
     head_sha: headSha,
+    ...(await countChangedLines(worktreePath, mergeBase)),
   };
+}
+
+/** Parse `git diff --shortstat` output, e.g. " 2 files changed, 5 insertions(+), 1 deletion(-)". */
+function parseShortstat(out: string): { lines_added: number; lines_removed: number } {
+  const added = /(\d+) insertions?\(\+\)/.exec(out);
+  const removed = /(\d+) deletions?\(-\)/.exec(out);
+  return {
+    lines_added: added ? Number(added[1]) : 0,
+    lines_removed: removed ? Number(removed[1]) : 0,
+  };
+}
+
+/** Lines the branch's commits change since the merge base; uncommitted work counts once committed. */
+async function countChangedLines(
+  worktreePath: string,
+  mergeBase: string,
+): Promise<{ lines_added?: number; lines_removed?: number }> {
+  try {
+    // Tree to tree: never reads the working tree or the index an agent may be locking.
+    // -M: a renamed file counts its edits, not its whole content twice.
+    const { stdout } = await exec(
+      'git',
+      ['diff-tree', '-r', '-M', '--shortstat', mergeBase, 'HEAD'],
+      {
+        cwd: worktreePath,
+        maxBuffer: MAX_BUFFER,
+      },
+    );
+    return parseShortstat(stdout);
+  } catch {
+    // Unknown counts stay absent rather than claiming zero.
+    return {};
+  }
 }
 
 export async function listImportableWorktrees(projectRoot: string): Promise<

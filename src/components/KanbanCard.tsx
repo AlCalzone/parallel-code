@@ -34,7 +34,7 @@ import {
   stateLabel,
   type CardTaskState,
 } from './board/task-state';
-import { ASK_ACTION, AskRow, TaskGlyph, TaskPr, openBeside } from './board/TaskStatus';
+import { ASK_ACTION, AskRow, TaskGlyph, TaskLine, TaskPr, openBeside } from './board/TaskStatus';
 import { createTaskContextMenu } from './task-context-menu';
 
 /** The open task of this project working on `branch`, if any. */
@@ -108,10 +108,12 @@ function TaskRow(props: { task: Task }) {
           />
         )}
       </Show>
-      {/* Always rendered so a task starting or stopping never changes the card's height. */}
-      <p class="task-board-activity" classList={{ branch: fromAgent() }} title={activityText()}>
-        {activityText() || ' '}
-      </p>
+      {/* The card shows its issue already, so the line links only the PR. */}
+      <TaskLine
+        text={activityText()}
+        classList={{ branch: fromAgent() }}
+        prUrl={props.task.prUrl}
+      />
       <Show when={props.task.prUrl}>{(url) => <TaskPr taskId={props.task.id} url={url()} />}</Show>
       <menu.Menu />
     </li>

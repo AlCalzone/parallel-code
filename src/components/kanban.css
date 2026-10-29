@@ -578,7 +578,7 @@
   gap: 2px;
   min-width: 0;
 }
-.plan-tasks :is(.task-board-activity, .task-board-row, .task-board-ask) {
+.plan-tasks :is(.task-board-line, .task-board-row, .task-board-ask) {
   padding-left: 0;
 }
 /* A branch with no open task is one line: the name, then its copy button. */
